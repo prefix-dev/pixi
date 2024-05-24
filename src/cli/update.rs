@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{
     cmp::Ordering,
     collections::HashSet,
@@ -14,8 +15,11 @@ use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
 use tabwriter::TabWriter;
 
+use crate::consts::{CondaEmoji, PypiEmoji};
+use crate::project::grouped_environment::GroupedEnvironment;
 use crate::{
-    config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, EnvironmentName, Project,
+    config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, EnvironmentName,
+    HasFeatures, Project,
 };
 
 /// Update dependencies as recorded in the local lock file
@@ -57,22 +61,26 @@ pub struct UpdateSpecsArgs {
 }
 
 /// A distilled version of `UpdateSpecsArgs`.
+/// TODO: In the future if we want to add `--recursive` this datastructure could
+///     be used to store information about recursive packages.
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
     environments: Option<HashSet<EnvironmentName>>,
     platforms: Option<HashSet<Platform>>,
 }
 
-impl UpdateSpecs {
-    fn from_args(args: UpdateSpecsArgs) -> Self {
+impl From<UpdateSpecsArgs> for UpdateSpecs {
+    fn from(args: UpdateSpecsArgs) -> Self {
         Self {
             packages: args.packages.map(|args| args.into_iter().collect()),
             environments: args.environments.map(|args| args.into_iter().collect()),
             platforms: args.platforms.map(|args| args.into_iter().collect()),
         }
     }
+}
 
-    /// Returns true if the package should be relaxed.
+impl UpdateSpecs {
+    /// Returns true if the package should be relaxed according to the user input.
     fn should_relax(&self, environment_name: &str, platform: Platform, package: &Package) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms {
@@ -95,6 +103,13 @@ impl UpdateSpecs {
             }
         }
 
+        tracing::debug!(
+            "relaxing package: {}, env={}, platform={}",
+            package.name(),
+            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+            consts::PLATFORM_STYLE.apply_to(platform),
+        );
+
         true
     }
 }
@@ -104,7 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
 
-    let specs = UpdateSpecs::from_args(args.specs);
+    let specs = UpdateSpecs::from(args.specs);
 
     // If the user specified an environment name, check to see if it exists.
     if let Some(env) = &specs.environments {
@@ -127,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Unlock dependencies in the lock-file that we want to update.
-    let relaxed_lock_file = unlock_packages(&loaded_lock_file, &specs);
+    let relaxed_lock_file = unlock_packages(&project, &loaded_lock_file, &specs);
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&project)
@@ -158,6 +173,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+/// Checks if the specified package exists and returns a helpful error message
+/// if it doesn't.
 fn check_package_exists(
     lock_file: &LockFile,
     package_name: &str,
@@ -227,15 +244,24 @@ fn check_package_exists(
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
-fn unlock_packages(lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
+fn unlock_packages(project: &Project, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     let mut builder = LockFileBuilder::new();
 
     for (environment_name, environment) in lock_file.environments() {
-        // Copy channels and indexes
+        // Find the environment in the project
+        let Some(project_env) = project.environment(environment_name) else {
+            continue;
+        };
+
+        // Copy the channels
         builder.set_channels(environment_name, environment.channels().to_vec());
-        if let Some(indexes) = environment.pypi_indexes().cloned() {
-            builder.set_pypi_indexes(environment_name, indexes);
-        }
+
+        // Copy the indexes
+        let indexes = environment
+            .pypi_indexes()
+            .cloned()
+            .unwrap_or_else(|| GroupedEnvironment::from(project_env).pypi_options().into());
+        builder.set_pypi_indexes(environment_name, indexes);
 
         // Copy all packages that don't need to be relaxed
         for (platform, packages) in environment.packages_by_platform() {
@@ -265,6 +291,7 @@ impl PackagesDiff {
     }
 }
 
+/// Contains the changes between two lock-files.
 pub struct LockFileDiff {
     pub environment: IndexMap<String, IndexMap<Platform, PackagesDiff>>,
 }
@@ -408,12 +435,85 @@ impl LockFileDiff {
         result
     }
 
+    /// Returns true if the diff is empty.
     pub fn is_empty(&self) -> bool {
         self.environment.is_empty()
     }
 
-    // Format the lock-file
+    // Format the lock-file diff.
     pub fn print(&self) -> std::io::Result<()> {
+        let mut writer = TabWriter::new(stdout());
+        for (idx, (environment_name, environment)) in self
+            .environment
+            .iter()
+            .sorted_by(|(a, _), (b, _)| a.cmp(b))
+            .enumerate()
+        {
+            // Find the changes that happened in all platforms.
+            let changes_by_platform = environment
+                .into_iter()
+                .map(|(platform, packages)| {
+                    let changes = Self::format_changes(packages)
+                        .into_iter()
+                        .collect::<HashSet<_>>();
+                    (platform, changes)
+                })
+                .collect::<Vec<_>>();
+
+            // Find the changes that happened in all platforms.
+            let common_changes = changes_by_platform
+                .iter()
+                .fold(None, |acc, (_, changes)| match acc {
+                    None => Some(changes.clone()),
+                    Some(acc) => Some(acc.intersection(changes).cloned().collect()),
+                })
+                .unwrap_or_default();
+
+            // Add a new line between environments
+            if idx > 0 {
+                writeln!(writer, "\t\t\t",)?;
+            }
+
+            writeln!(
+                writer,
+                "{}: {}\t\t\t",
+                console::style("Environment").underlined(),
+                consts::ENVIRONMENT_STYLE.apply_to(environment_name)
+            )?;
+
+            // Print the common changes.
+            for (_, line) in common_changes.iter().sorted_by_key(|(name, _)| name) {
+                writeln!(writer, "  {}", line)?;
+            }
+
+            // Print the per-platform changes.
+            for (platform, changes) in changes_by_platform {
+                let mut changes = changes
+                    .iter()
+                    .filter(|change| !common_changes.contains(change))
+                    .sorted_by_key(|(name, _)| name)
+                    .peekable();
+                if changes.peek().is_some() {
+                    writeln!(
+                        writer,
+                        "{}: {}:{}\t\t\t",
+                        console::style("Platform").underlined(),
+                        consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+                        consts::PLATFORM_STYLE.apply_to(platform),
+                    )?;
+                    for (_, line) in changes {
+                        writeln!(writer, "  {}", line)?;
+                    }
+                }
+            }
+        }
+
+        writer.flush()?;
+
+        Ok(())
+    }
+
+    fn format_changes(packages: &PackagesDiff) -> Vec<(Cow<'_, str>, String)> {
         enum Change<'i> {
             Added(&'i Package),
             Removed(&'i Package),
@@ -431,122 +531,94 @@ impl LockFileDiff {
             }
         }
 
-        let mut writer = TabWriter::new(stdout());
-        for (environment_name, environment) in
-            self.environment.iter().sorted_by(|(a, _), (b, _)| a.cmp(b))
-        {
-            writeln!(
-                writer,
-                "Environment: {}\t\t\t",
-                consts::ENVIRONMENT_STYLE.apply_to(environment_name),
-            )?;
-            for (platform, packages) in environment {
-                writeln!(
-                    writer,
-                    "  Platform: {}\t\t\t",
-                    consts::PLATFORM_STYLE.apply_to(platform)
-                )?;
-
-                for p in itertools::chain!(
-                    packages.added.iter().map(Change::Added),
-                    packages.removed.iter().map(Change::Removed),
-                    packages.changed.iter().map(|a| Change::Changed(&a.0, &a.1))
-                )
-                .sorted_by_key(|c| match c {
-                    Change::Added(p) => p.name(),
-                    Change::Removed(p) => p.name(),
-                    Change::Changed(p, _) => p.name(),
-                }) {
+        itertools::chain!(
+            packages.added.iter().map(Change::Added),
+            packages.removed.iter().map(Change::Removed),
+            packages.changed.iter().map(|a| Change::Changed(&a.0, &a.1))
+        )
+        .sorted_by_key(|c| match c {
+            Change::Added(p) => p.name(),
+            Change::Removed(p) => p.name(),
+            Change::Changed(p, _) => p.name(),
+        })
+        .map(|p| match p {
+            Change::Added(p) => (
+                p.name(),
+                format!(
+                    "{} {} {}\t{}\t\t",
+                    console::style("+").green(),
                     match p {
-                        Change::Added(p) => {
-                            writeln!(
-                                writer,
-                                "    {} {}\t{}\t\t",
-                                console::style("+").green(),
-                                p.name(),
-                                format_package_identifier(p)
-                            )?;
-                        }
-                        Change::Removed(p) => {
-                            writeln!(
-                                writer,
-                                "    {} {}\t{}\t\t",
-                                console::style("-").red(),
-                                p.name(),
-                                format_package_identifier(p)
-                            )?;
-                        }
-                        Change::Changed(previous, current) => {
-                            write!(
-                                writer,
-                                "    {} {}\t",
-                                console::style("~").yellow(),
-                                previous.name()
-                            )?;
-
-                            fn choose_style<'a>(
-                                a: &'a str,
-                                b: &'a str,
-                            ) -> console::StyledObject<&'a str> {
-                                if a == b {
-                                    console::style(a).dim()
-                                } else {
-                                    console::style(a)
-                                }
-                            }
-
-                            match (previous, current) {
-                                (Package::Conda(previous), Package::Conda(current)) => {
-                                    let previous = previous.package_record();
-                                    let current = current.package_record();
-
-                                    writeln!(
-                                        writer,
-                                        "{} {}\t->\t{} {}",
-                                        choose_style(
-                                            &previous.version.as_str(),
-                                            &current.version.as_str()
-                                        ),
-                                        choose_style(
-                                            previous.build.as_str(),
-                                            current.build.as_str()
-                                        ),
-                                        choose_style(
-                                            &current.version.as_str(),
-                                            &previous.version.as_str()
-                                        ),
-                                        choose_style(
-                                            current.build.as_str(),
-                                            previous.build.as_str()
-                                        ),
-                                    )?;
-                                }
-                                (Package::Pypi(previous), Package::Pypi(current)) => {
-                                    let previous = previous.data().package;
-                                    let current = current.data().package;
-
-                                    writeln!(
-                                        writer,
-                                        "{}\t->\t{}",
-                                        choose_style(
-                                            &previous.version.to_string(),
-                                            &current.version.to_string()
-                                        ),
-                                        choose_style(
-                                            &current.version.to_string(),
-                                            &previous.version.to_string()
-                                        ),
-                                    )?;
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
+                        Package::Conda(_) => CondaEmoji.to_string(),
+                        Package::Pypi(_) => PypiEmoji.to_string(),
+                    },
+                    p.name(),
+                    format_package_identifier(p)
+                ),
+            ),
+            Change::Removed(p) => (
+                p.name(),
+                format!(
+                    "{} {} {}\t{}\t\t",
+                    console::style("-").red(),
+                    match p {
+                        Package::Conda(_) => CondaEmoji.to_string(),
+                        Package::Pypi(_) => PypiEmoji.to_string(),
+                    },
+                    p.name(),
+                    format_package_identifier(p)
+                ),
+            ),
+            Change::Changed(previous, current) => {
+                fn choose_style<'a>(a: &'a str, b: &'a str) -> console::StyledObject<&'a str> {
+                    if a == b {
+                        console::style(a).dim()
+                    } else {
+                        console::style(a)
                     }
                 }
-            }
-            writer.flush()?;
-        }
 
-        Ok(())
+                let name = previous.name();
+                let line = match (previous, current) {
+                    (Package::Conda(previous), Package::Conda(current)) => {
+                        let previous = previous.package_record();
+                        let current = current.package_record();
+
+                        format!(
+                            "{} {} {}\t{} {}\t->\t{} {}",
+                            console::style("~").yellow(),
+                            CondaEmoji,
+                            name,
+                            choose_style(&previous.version.as_str(), &current.version.as_str()),
+                            choose_style(previous.build.as_str(), current.build.as_str()),
+                            choose_style(&current.version.as_str(), &previous.version.as_str()),
+                            choose_style(current.build.as_str(), previous.build.as_str()),
+                        )
+                    }
+                    (Package::Pypi(previous), Package::Pypi(current)) => {
+                        let previous = previous.data().package;
+                        let current = current.data().package;
+
+                        format!(
+                            "{} {} {}\t{}\t->\t{}",
+                            console::style("~").yellow(),
+                            PypiEmoji,
+                            name,
+                            choose_style(
+                                &previous.version.to_string(),
+                                &current.version.to_string()
+                            ),
+                            choose_style(
+                                &current.version.to_string(),
+                                &previous.version.to_string()
+                            ),
+                        )
+                    }
+                    _ => unreachable!(),
+                };
+
+                (name, line)
+            }
+        })
+        .collect()
     }
 }
