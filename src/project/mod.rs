@@ -295,6 +295,19 @@ impl Project {
         self.root.join(consts::PIXI_DIR)
     }
 
+    /// Create the detached-environments path for this project if it is set in the config
+    fn detached_environments_path(&self) -> Option<PathBuf> {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+            Some(detached_environments_path.join(format!(
+                "{}-{}",
+                self.name(),
+                xxh3_64(self.root.to_string_lossy().as_bytes())
+            )))
+        } else {
+            None
+        }
+    }
+
     /// Returns the environment directory
     pub fn environments_dir(&self) -> PathBuf {
         let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
@@ -305,13 +318,9 @@ impl Project {
         }
 
         // If the detached-environments path is set, use it instead of the default directory.
-        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
-            let environments_dir_name = detached_environments_path.join(format!(
-                "{}-{}",
-                self.name(),
-                xxh3_64(self.root.to_string_lossy().as_bytes())
-            ));
-
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            let detached_environments_path =
+                detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
 
                 #[cfg(not(windows))]
@@ -319,19 +328,19 @@ impl Project {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
-                        detached_environments_path.display(),
+                        detached_environments_path.parent().expect("path should have parent").display(),
                         format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
                 } else {
-                    create_symlink(&environments_dir_name, &default_envs_dir);
+                    create_symlink(&detached_environments_path, &default_envs_dir);
                 }
 
                 #[cfg(windows)]
-                write_warning_file(&default_envs_dir, &environments_dir_name);
+                write_warning_file(&default_envs_dir, &detached_environments_path);
             });
 
-            return environments_dir_name;
+            return detached_environments_path;
         }
 
         tracing::debug!(
@@ -342,8 +351,12 @@ impl Project {
         default_envs_dir
     }
 
-    /// Returns the solve group directory
+    /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
+        // If the detached-environments path is set, use it instead of the default directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        }
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
