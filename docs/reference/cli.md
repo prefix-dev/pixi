@@ -142,7 +142,7 @@ It will only update the lock file if the dependencies in the [manifest file](con
 1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](./configuration.md), by default it searches for one in the parent directories.
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
