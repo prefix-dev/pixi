@@ -2202,20 +2202,31 @@ Programs and libraries installed by these dependencies will be executed on the b
 <p>For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your <em>build</em> platform is <code>osx-arm64</code> and your <em>host</em> platform is <code>linux-64</code>.</p>
 </div>
 <h2 id="the-activation-table">The <code>activation</code> table<a class="headerlink" href="#the-activation-table" title="Permanent link">#</a></h2>
-<p>If you want to run an activation script inside the environment when either doing a <code>pixi run</code> or <code>pixi shell</code> these can be defined here.
-The scripts defined in this table will be sourced when the environment is activated using <code>pixi run</code> or <code>pixi shell</code></p>
+<p>The activation table is used for specialized activation operations that need to be run when the environment is activated.</p>
+<p>There are two types of activation operations a user can modify in the manifest:</p>
+<ul>
+<li><code>scripts</code>: A list of scripts that are run when the environment is activated.</li>
+<li><code>env</code>: A mapping of environment variables that are set when the environment is activated.</li>
+</ul>
+<p>These activation operations will be run before the <code>pixi run</code> and <code>pixi shell</code> commands.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The activation scripts are run by the system shell interpreter as they run before an environment is available.
+<p>The activation operations are run by the system shell interpreter as they run before an environment is available.
 This means that it runs as <code>cmd.exe</code> on windows and <code>bash</code> on linux and osx (Unix).
 Only <code>.sh</code>, <code>.bash</code> and <code>.bat</code> files are supported.</p>
-<p>If you have scripts per platform use the <a href="#the-target-table">target</a> table.</p>
+<p>And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. <code>$</code> or <code>%</code>.</p>
+<p>If you have scripts or env variable per platform use the <a href="#the-target-table">target</a> table.</p>
 </div>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="k">[activation]</span>
 </span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;env_setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="c1"># To support windows platforms as well add the following</span>
-</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;env_setup.bat&quot;</span><span class="p">]</span>
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ENV_VAR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>
+</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="c1"># To support windows platforms as well add the following</span>
+</span><span id="__span-37-6"><a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="k">[target.win-64.activation]</span>
+</span><span id="__span-37-7"><a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;env_setup.bat&quot;</span><span class="p">]</span>
+</span><span id="__span-37-8"><a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a>
+</span><span id="__span-37-9"><a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a><span class="k">[target.linux-64.activation.env]</span>
+</span><span id="__span-37-10"><a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a><span class="n">ENV_VAR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;linux-value&quot;</span>
 </span></code></pre></div>
 <h2 id="the-target-table">The <code>target</code> table<a class="headerlink" href="#the-target-table" title="Permanent link">#</a></h2>
 <p>The target table is a table that allows for platform specific configuration.
