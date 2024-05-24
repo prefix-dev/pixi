@@ -402,7 +402,7 @@ impl Project {
     pub fn pypi_name_mapping_source(&self) -> &MappingSource {
         self.mapping_source.get_or_init(|| {
             self.manifest
-                .pypi_name_mapping_source()
+                .pypi_name_mapping_source(&self.config)
                 .expect("mapping source should be ok")
         })
     }

@@ -398,11 +398,9 @@ impl Manifest {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> miette::Result<MappingSource> {
+    pub fn pypi_name_mapping_source(&self, config: &Config) -> miette::Result<MappingSource> {
         match self.parsed.project.conda_pypi_map.clone() {
             Some(url) => {
-                let config = Config::load_global();
-
                 // transform user defined channels into rattler::Channel
                 let channels = url
                     .keys()
