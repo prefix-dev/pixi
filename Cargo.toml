@@ -188,7 +188,6 @@ rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", bra
 rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
 rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
 rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-
 # rattler_conda_types = { path = "../rattler-1/crates/rattler_conda_types" }
 # rattler_digest = { path = "../rattler-1/crates/rattler_digest" }
 # rattler_networking = { path = "../rattler-1/crates/rattler_networking" }
@@ -199,7 +198,6 @@ rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", bra
 # rattler_lock = { path = "../rattler-1/crates/rattler_lock" }
 # rattler_package_streaming = { path = "../rattler-1/crates/rattler_package_streaming" }
 # rattler = { path = "../rattler-1/crates/rattler" }
-
 # Change these lines if you want a patched version of uv
 # [patch.'https://github.com/astral-sh/uv']
 # pep440_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
