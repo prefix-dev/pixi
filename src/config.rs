@@ -1,11 +1,12 @@
 use clap::{ArgAction, Parser};
-use miette::{Context, IntoDiagnostic};
+use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet as Set, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::str::FromStr;
 
 use url::Url;
 
@@ -132,8 +133,8 @@ pub enum KeyringProvider {
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize, Default, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
@@ -147,6 +148,35 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum DetachedEnvironments {
+    Boolean(bool),
+    Path(PathBuf),
+}
+impl DetachedEnvironments {
+    pub fn is_false(&self) -> bool {
+        matches!(self, DetachedEnvironments::Boolean(false))
+    }
+
+    // Get the path to the detached-environments directory. None means the default directory.
+    pub fn path(&self) -> miette::Result<Option<PathBuf>> {
+        match self {
+            DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
+            DetachedEnvironments::Boolean(b) if *b => {
+                let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
+                Ok(Some(path))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+impl Default for DetachedEnvironments {
+    fn default() -> Self {
+        DetachedEnvironments::Boolean(false)
+    }
 }
 
 impl PyPIConfig {
@@ -232,6 +262,13 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
+
+    /// The option to specify the directory where detached environments are stored.
+    /// When using 'true', it defaults to the cache directory.
+    /// When using a path, it uses the specified path.
+    /// When using 'false', it disables detached environments, meaning it moves it back to the .pixi folder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detached_environments: Option<DetachedEnvironments>,
 }
 
 impl Default for Config {
@@ -246,6 +283,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: None,
             pypi_config: PyPIConfig::default(),
+            detached_environments: Some(DetachedEnvironments::default()),
         }
     }
 }
@@ -259,6 +297,7 @@ impl From<ConfigCli> for Config {
                 .pypi_keyring_provider
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
+            detached_environments: None,
             ..Default::default()
         }
     }
@@ -277,14 +316,23 @@ impl Config {
     ///
     /// # Returns
     ///
-    /// The parsed config
+    /// The parsed config, and the unused keys
     ///
     /// # Errors
     ///
     /// Parsing errors
     #[inline]
-    pub fn from_toml(toml: &str) -> miette::Result<Config> {
-        toml_edit::de::from_str(toml).into_diagnostic()
+    pub fn from_toml(toml: &str) -> miette::Result<(Config, Set<String>)> {
+        let de = toml_edit::de::Deserializer::from_str(toml).into_diagnostic()?;
+
+        // Deserialize the config and collect unused keys
+        let mut unused_keys = Set::new();
+        let config: Config = serde_ignored::deserialize(de, |path| {
+            unused_keys.insert(path.to_string());
+        })
+        .into_diagnostic()?;
+
+        Ok((config, unused_keys))
     }
 
     /// Load the config from the given path.
@@ -301,9 +349,28 @@ impl Config {
         let s = fs::read_to_string(path)
             .into_diagnostic()
             .wrap_err(format!("failed to read config from '{}'", path.display()))?;
-        let mut config = Config::from_toml(&s)?;
+
+        let (mut config, unused_keys) = Config::from_toml(&s)?;
+
+        if !unused_keys.is_empty() {
+            tracing::warn!(
+                "Ignoring '{}' in at {}",
+                console::style(
+                    unused_keys
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .yellow(),
+                path.display()
+            );
+        }
+
         config.loaded_from.push(path.to_path_buf());
         tracing::info!("Loaded config from: {}", path.display());
+
+        config.validate()?;
 
         Ok(config)
     }
@@ -336,6 +403,26 @@ impl Config {
             );
             Self::default()
         })
+    }
+
+    /// Validate the config file.
+    pub fn validate(&self) -> miette::Result<()> {
+        // Validate the detached environments directory is set correctly
+        if let Some(detached_environments) = self.detached_environments.clone() {
+            match detached_environments {
+                DetachedEnvironments::Boolean(_) => {}
+                DetachedEnvironments::Path(path) => {
+                    if !path.is_absolute() {
+                        return Err(miette!(
+                            "The `detached-environments` path must be an absolute path: {}",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Load the global config file from various global paths.
@@ -416,6 +503,7 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
+            detached_environments: other.detached_environments.or(self.detached_environments),
         }
     }
 
@@ -478,6 +566,11 @@ impl Config {
         &self.mirrors
     }
 
+    /// Retrieve the value for the target_environments_directory field.
+    pub fn detached_environments(&self) -> DetachedEnvironments {
+        self.detached_environments.clone().unwrap_or_default()
+    }
+
     /// Modify this config with the given key and value
     ///
     /// # Note
@@ -491,6 +584,7 @@ impl Config {
                 "authentication-override-file",
                 "tls-no-verify",
                 "mirrors",
+                "detached-environments",
                 "repodata-config",
                 "repodata-config.disable-jlap",
                 "repodata-config.disable-bzip2",
@@ -528,6 +622,13 @@ impl Config {
                     .transpose()
                     .into_diagnostic()?
                     .unwrap_or_default();
+            }
+            "detached-environments" => {
+                self.detached_environments = value.map(|v| match v.as_str() {
+                    "true" => DetachedEnvironments::Boolean(true),
+                    "false" => DetachedEnvironments::Boolean(false),
+                    _ => DetachedEnvironments::Path(PathBuf::from(v)),
+                });
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -661,13 +762,32 @@ mod tests {
 
     #[test]
     fn test_config_parse() {
-        let toml = r#"
-        default_channels = ["conda-forge"]
-        tls_no_verify = true
-        "#;
-        let config = Config::from_toml(toml).unwrap();
+        let toml = format!(
+            r#"default-channels = ["conda-forge"]
+tls-no-verify = true
+detached-environments = "{}"
+UNUSED = "unused"
+        "#,
+            env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
+        );
+        let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.detached_environments().path().unwrap(),
+            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        );
+        assert!(unused.contains(&"UNUSED".to_string()));
+
+        let toml = r"detached-environments = true";
+        let (config, _) = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.detached_environments().path().unwrap().unwrap(),
+            get_cache_dir()
+                .unwrap()
+                .join(consts::ENVIRONMENTS_DIR)
+                .as_path()
+        );
     }
 
     #[test]
@@ -706,7 +826,7 @@ mod tests {
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let config = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
@@ -725,11 +845,34 @@ mod tests {
             default_channels: vec!["conda-forge".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             ..Default::default()
         };
         config = config.merge_config(other);
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.detached_environments().path().unwrap(),
+            Some(PathBuf::from("/path/to/envs"))
+        );
+
+        let other2 = Config {
+            default_channels: vec!["channel".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir2")),
+            tls_no_verify: Some(false),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
+                "/path/to/envs2",
+            ))),
+            ..Default::default()
+        };
+
+        config = config.merge_config(other2);
+        assert_eq!(config.default_channels, vec!["channel"]);
+        assert_eq!(config.tls_no_verify, Some(false));
+        assert_eq!(
+            config.detached_environments().path().unwrap(),
+            Some(PathBuf::from("/path/to/envs2"))
+        );
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -739,6 +882,7 @@ mod tests {
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
         let config_2 = Config {
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            detached_environments: Some(DetachedEnvironments::Boolean(true)),
             ..config_2
         };
 
@@ -768,7 +912,7 @@ mod tests {
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let config = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
@@ -826,6 +970,25 @@ mod tests {
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("/path/to/your/override.json"))
+        );
+
+        config
+            .set("detached-environments", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.detached_environments().path().unwrap().unwrap(),
+            get_cache_dir()
+                .unwrap()
+                .join(consts::ENVIRONMENTS_DIR)
+                .as_path()
+        );
+
+        config
+            .set("detached-environments", Some("/path/to/envs".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.detached_environments().path().unwrap(),
+            Some(PathBuf::from("/path/to/envs"))
         );
 
         config
