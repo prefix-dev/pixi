@@ -1,5 +1,5 @@
 use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
-use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrl};
+use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc, time::Duration};

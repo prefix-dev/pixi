@@ -143,7 +143,7 @@ uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 xxhash-rust = "0.8.10"
-zip = { version = "1.3.1", default-features = false, features = [
+zip = { version = "0.6.6", default-features = false, features = [
     "deflate",
     "time",
 ] }
@@ -172,8 +172,7 @@ pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch
 # If you change this also change the versions in the the patch section for uv
 pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
-# deno_task_shell = { path = "../deno_task_shell" }#rattler = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
+# deno_task_shell = { path = "../deno_task_shell" }#rattler = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }#rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }

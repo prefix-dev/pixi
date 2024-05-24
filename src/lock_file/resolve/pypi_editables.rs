@@ -134,7 +134,9 @@ pub async fn build_editables(
     let editables: Vec<LocalEditable> = editables
         .iter()
         .map(|editable| {
-            let EditableRequirement { url, extras, path } = editable;
+            let EditableRequirement {
+                url, extras, path, ..
+            } = editable;
             LocalEditable {
                 url: url.clone(),
                 extras: extras.clone(),

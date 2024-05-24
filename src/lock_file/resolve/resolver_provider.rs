@@ -1,10 +1,12 @@
 use std::{
     collections::{BTreeMap, HashMap},
     future::ready,
+    sync::Arc,
 };
 
 use distribution_types::{
-    DirectUrlSourceDist, Dist, IndexLocations, PrioritizedDist, SourceDist, SourceDistCompatibility,
+    DirectUrlSourceDist, Dist, HashComparison, IndexLocations, PrioritizedDist, SourceDist,
+    SourceDistCompatibility,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -19,7 +21,7 @@ use uv_types::BuildContext;
 
 use crate::lock_file::PypiPackageIdentifier;
 
-pub(super) struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
+pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
@@ -31,7 +33,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io PackageName,
-    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + Send + 'io {
+    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
             // If we encounter a package that was installed by conda we simply return a single
@@ -42,12 +44,14 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
             let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
                 name: identifier.name.as_normalized().clone(),
                 url: VerbatimUrl::unknown(repodata_record.url.clone()),
+                location: repodata_record.url.clone(),
+                subdirectory: None,
             }));
 
             let prioritized_dist = PrioritizedDist::from_source(
                 dist,
                 Vec::new(),
-                SourceDistCompatibility::Compatible(distribution_types::Hash::Matched),
+                SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
@@ -65,7 +69,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     fn get_or_build_wheel_metadata<'io>(
         &'io self,
         dist: &'io Dist,
-    ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
+    ) -> impl Future<Output = WheelMetadataResult> + 'io {
         if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we

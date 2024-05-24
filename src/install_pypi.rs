@@ -907,7 +907,7 @@ pub async fn update_python_distributions(
 
         let distribution_database = DistributionDatabase::new(
             registry_client.as_ref(),
-            build_dispatch,
+            &build_dispatch,
             uv_context.concurrency.downloads,
         );
 

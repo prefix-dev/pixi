@@ -311,10 +311,12 @@ pub async fn resolve_pypi(
         LinkMode::default(),
         &context.no_build,
         &context.no_binary,
+        context.concurrency,
     )
     .with_options(options)
     .with_build_extra_env_vars(env_variables.iter());
 
+    // Constrain the conda packages to the specific python packages
     let constraints = conda_python_packages
         .values()
         .map(|(repo, p)| Requirement {
@@ -324,6 +326,7 @@ pub async fn resolve_pypi(
                 repo.url.clone(),
             ))),
             marker: None,
+            origin: None,
         })
         .collect::<Vec<_>>();
 
@@ -335,6 +338,7 @@ pub async fn resolve_pypi(
         .collect_vec();
 
     // Create preferences from the locked pypi packages
+    // This will ensure minimal lock file updates
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
@@ -342,11 +346,12 @@ pub async fn resolve_pypi(
             let version =
                 VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
                     .expect("invalid version specifier");
-            let requirement = Requirement {
+            let requirement = distribution_types::Requirement {
                 name: package_data.name.clone(),
-                extras: environment_data.clone().extras.into_iter().collect_vec(),
-                version_or_url: Some(VersionOrUrl::VersionSpecifier(version.into())),
+                extras: vec![],
                 marker: None,
+                source: todo!(),
+                origin: None,
             };
             Preference::from_requirement(requirement)
         })
@@ -364,11 +369,14 @@ pub async fn resolve_pypi(
     );
 
     let fallback_provider = DefaultResolverProvider::new(
-        &registry_client,
-        DistributionDatabase::new(&registry_client, &build_dispatch),
+        DistributionDatabase::new(
+            &registry_client,
+            &build_dispatch,
+            context.concurrency.downloads,
+        ),
         &flat_index,
         &tags,
-        PythonRequirement::new(&interpreter, &marker_environment),
+        PythonRequirement::new(&interpreter, interpreter.python_full_version()),
         AllowedYanks::default(),
         &context.hash_strategy,
         options.exclude_newer,
@@ -384,11 +392,11 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        &marker_environment,
-        PythonRequirement::new(&interpreter, &marker_environment),
+        Some(&marker_environment),
+        &PythonRequirement::new(&interpreter, interpreter.python_full_version()),
         &in_memory_index,
         provider,
-        &EmptyInstalledPackages,
+        EmptyInstalledPackages,
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
@@ -429,6 +437,7 @@ pub async fn resolve_pypi(
         flat_index_locations,
         resolution,
         built_editables,
+        context.concurrency.downloads,
     )
     .await
 }
@@ -441,10 +450,11 @@ async fn lock_pypi_packages<'a>(
     flat_index_locations: Vec<FindLinksLocation>,
     resolution: Resolution,
     built_editables: Vec<(LocalEditable, Metadata23)>,
+    concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(registry_client, build_dispatch);
-    for dist in resolution.into_distributions() {
+    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
+    for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
             continue;
@@ -458,16 +468,17 @@ async fn lock_pypi_packages<'a>(
             ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
-                        let url = match &dist.file.url {
+                        let url = match &dist.best_wheel().file.url {
                             FileLocation::AbsoluteUrl(url) => {
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
-                                let flat_index = find_links_for(&dist.index, &flat_index_locations)
-                                    .expect("flat index does not exist for resolved ids");
+                                let flat_index =
+                                    find_links_for(&dist.best_wheel().index, &flat_index_locations)
+                                        .expect("flat index does not exist for resolved ids");
                                 UrlOrPath::Path(convert_flat_index_path(
-                                    &dist.index,
+                                    &dist.best_wheel().index,
                                     path,
                                     &flat_index.given_path,
                                 ))
@@ -480,7 +491,7 @@ async fn lock_pypi_packages<'a>(
                             }
                         };
 
-                        let hash = parse_hashes_from_hash_vec(&dist.file.hashes);
+                        let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes);
                         (url, hash)
                     }
                     BuiltDist::DirectUrl(dist) => {
@@ -574,7 +585,29 @@ async fn lock_pypi_packages<'a>(
                         // instead of from the source path to copy the path that was passed in from
                         // the requirement.
                         let url_or_path = UrlOrPath::Path(given_path);
-                        (url_or_path, hash, path.editable)
+                        (url_or_path, hash, false)
+                    }
+                    SourceDist::Directory(dir) => {
+                        // Compute the hash of the package based on the source tree.
+                        let hash = if dir.path.is_dir() {
+                            Some(
+                                PypiSourceTreeHashable::from_directory(&dir.path)
+                                    .into_diagnostic()
+                                    .context("failed to compute hash of pypi source tree")?
+                                    .hash(),
+                            )
+                        } else {
+                            None
+                        };
+
+                        // process the path or url that we get back from uv
+                        let given_path = process_uv_path_url(&dir.url);
+
+                        // Create the url for the lock file. This is based on the passed in URL
+                        // instead of from the source path to copy the path that was passed in from
+                        // the requirement.
+                        let url_or_path = UrlOrPath::Path(given_path);
+                        (url_or_path, hash, dir.editable)
                     }
                 };
 
