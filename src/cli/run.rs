@@ -19,7 +19,7 @@ use crate::task::{
 };
 use crate::Project;
 
-use crate::activation::get_windows_isolated_environment_variables;
+use crate::activation::get_windows_clean_environment_variables;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -51,8 +51,11 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
+    /// Use a clean environment to run the task
+    ///
+    /// Using this flag will ignore your current shell environment and use bare minimum environment to activate the pixi environment in.
     #[arg(long)]
-    pub isolated: bool,
+    pub clean_env: bool,
 }
 
 /// CLI entry point for `pixi run`
@@ -115,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph =
-        TaskGraph::from_cmd_args(&project, &search_environment, task_args, args.isolated)?;
+        TaskGraph::from_cmd_args(&project, &search_environment, task_args, args.clean_env)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -179,7 +182,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let command_env = get_task_env(
                     &mut lock_file,
                     &executable_task.run_environment,
-                    args.isolated || executable_task.task().is_isolated(),
+                    args.clean_env || executable_task.task().clean_env(),
                 )
                 .await?;
                 entry.insert(command_env)
@@ -244,7 +247,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
 pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
-    isolated: bool,
+    clean_env: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -254,14 +257,14 @@ pub async fn get_task_env<'p>(
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", |_| {
-        crate::activation::run_activation(environment, isolated)
+        crate::activation::run_activation(environment, clean_env)
     })
     .await
     .wrap_err("failed to activate environment")?;
 
-    if isolated {
+    if clean_env {
         if cfg!(windows) {
-            let mut win_env = get_windows_isolated_environment_variables();
+            let mut win_env = get_windows_clean_environment_variables();
             win_env.extend(activation_env);
             return Ok(win_env);
         }

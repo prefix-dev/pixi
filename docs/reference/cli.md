@@ -150,7 +150,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
-
+- `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets.
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
@@ -164,6 +164,10 @@ pixi run task argument1 argument2
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
+
+# If you want to run a command in a clean environment you can use the --clean-env flag.
+# The PATH should only contain the pixi environment here.
+pixi run --clean-env "echo \$PATH"
 ```
 
 !!! info

@@ -155,12 +155,12 @@ impl Task {
         matches!(self, Task::Custom(_))
     }
 
-    /// True if this task is isolated.
-    pub fn is_isolated(&self) -> bool {
+    /// True if this task is meant to run in a clean environment, stripped of all non required variables.
+    pub fn clean_env(&self) -> bool {
         match self {
             Task::Plain(_) => false,
-            Task::Custom(custom) => custom.isolated,
-            Task::Execute(execute) => execute.isolated,
+            Task::Custom(custom) => custom.clean_env,
+            Task::Execute(execute) => execute.clean_env,
             Task::Alias(_) => false,
         }
     }
@@ -169,7 +169,7 @@ impl Task {
 /// A command script executes a single command from the environment
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
     /// an array of strings and a single string are supported.
@@ -195,7 +195,7 @@ pub struct Execute {
 
     /// Isolate the task from the running machine
     #[serde(default)]
-    pub isolated: bool,
+    pub clean_env: bool,
 }
 
 impl From<Execute> for Task {
@@ -215,7 +215,7 @@ pub struct Custom {
     pub cwd: Option<PathBuf>,
 
     /// Isolate the task from the running machine
-    pub isolated: bool,
+    pub clean_env: bool,
 }
 impl From<Custom> for Task {
     fn from(value: Custom) -> Self {

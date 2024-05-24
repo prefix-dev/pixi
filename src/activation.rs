@@ -130,7 +130,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
-    isolated: bool,
+    clean_env: bool,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -140,7 +140,7 @@ pub async fn run_activation(
         ))
     })?;
 
-    let path_modification_behavior = if isolated {
+    let path_modification_behavior = if clean_env {
         PathModificationBehavior::Replace
     } else {
         PathModificationBehavior::Prepend
@@ -216,7 +216,7 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
-pub fn get_windows_isolated_environment_variables() -> HashMap<String, String> {
+pub fn get_windows_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
     let default_keys = vec![
         "APPDATA",
@@ -358,8 +358,8 @@ mod tests {
     }
 
     #[test]
-    fn test_get_windows_isolated_environment_variables() {
-        let env = get_windows_isolated_environment_variables();
+    fn test_get_windows_clean_environment_variables() {
+        let env = get_windows_clean_environment_variables();
         dbg!(env);
     }
 }

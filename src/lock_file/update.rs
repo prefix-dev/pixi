@@ -938,7 +938,6 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
-
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
