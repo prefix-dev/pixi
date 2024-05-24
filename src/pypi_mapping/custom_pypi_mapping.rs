@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use async_once_cell::OnceCell;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
@@ -13,7 +12,6 @@ use super::{
     build_pypi_purl_from_package_record, is_conda_forge_record, prefix_pypi_name_mapping,
     CustomMapping, Reporter,
 };
-use crate::pypi_mapping::MappingLocation;
 
 pub async fn fetch_mapping_from_url<T>(
     client: &ClientWithMiddleware,
