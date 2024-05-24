@@ -41,7 +41,7 @@ impl EnvironmentName {
 
     /// Returns a styled version of the environment name for display in the console.
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
-        console::style(self.as_str()).magenta()
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
     }
 
     /// Tries to read the environment name from an argument, then it will try

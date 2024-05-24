@@ -171,7 +171,7 @@ pixi run hello
     - You can add [`depends-on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
     - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
     - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
-    - You can use the [`target`](../reference/configuration.md#the-target-table) syntax to run specific tasks on specific machines.
+    - You can use the [`target`](../reference/project_configuration.md#the-target-table) syntax to run specific tasks on specific machines.
 
 ```toml
 [tasks]
