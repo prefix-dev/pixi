@@ -30,12 +30,12 @@ pub enum MappingLocation {
     Url(Url),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// Struct with a mapping of channel names to their respective mapping locations
 /// location could be a remote url or local file
 pub struct CustomMapping {
     pub mapping: MappingMap,
-    mapping_value: Arc<AsyncCell<MappingByChannel>>,
+    mapping_value: AsyncCell<MappingByChannel>,
 }
 
 impl CustomMapping {
@@ -111,14 +111,14 @@ impl CustomMapping {
 /// or from prefix.dev ( prefix )
 #[derive(Debug, Clone)]
 pub enum MappingSource {
-    Custom(CustomMapping),
+    Custom(Arc<CustomMapping>),
     Prefix,
 }
 
 impl MappingSource {
     /// Return the custom `MappingMap`
     /// for `MappingSource::Custom`
-    pub fn custom(&self) -> Option<CustomMapping> {
+    pub fn custom(&self) -> Option<Arc<CustomMapping>> {
         match self {
             MappingSource::Custom(mapping) => Some(mapping.clone()),
             _ => None,

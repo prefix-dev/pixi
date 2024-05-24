@@ -452,7 +452,7 @@ impl Manifest {
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
-                Ok(MappingSource::Custom(CustomMapping::new(mapping)))
+                Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
             }
             None => Ok(MappingSource::Prefix),
         }
