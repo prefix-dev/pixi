@@ -1,16 +1,16 @@
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
+use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
-
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -101,7 +101,8 @@ pub async fn conda_pypi_name_mapping(
         let reporter = reporter.clone();
         let concurrency_limit = concurrency_limit.clone();
 
-        // Create a future that fetches the mapping for the record's hash concurrently with the rest of the requests.
+        // Create a future that fetches the mapping for the record's hash concurrently
+        // with the rest of the requests.
         pending_futures.push(async move {
             // Acquire a permit to limit the number of concurrent requests
             let _permit = concurrency_limit
@@ -174,12 +175,14 @@ pub async fn amend_pypi_purls(
     Ok(())
 }
 
-/// Updates the specified repodata record to include an optional PyPI package name if it is missing.
+/// Updates the specified repodata record to include an optional PyPI package
+/// name if it is missing.
 ///
 /// This function resolves package pypi purl using the following approach:
 /// 1. Tries to find a mapping by package hash.
 /// 2. If the mapping is missing, tries to find a .json mapping by name.
-/// 3. If both mappings are missing and it's a conda-forge record, assumes it is a PyPI package.
+/// 3. If both mappings are missing and it's a conda-forge record, assumes it is
+///    a PyPI package.
 pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
@@ -248,14 +251,17 @@ pub fn amend_pypi_purls_for_record(
     // package is not in our mapping yet
     // so we assume that it is the same as the one from conda-forge
     if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
-        // Convert the conda package names to pypi package names. If the conversion fails we
-        // just assume that its not a valid python package.
+        // Convert the conda package names to pypi package names. If the conversion
+        // fails we just assume that its not a valid python package.
         if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
             purls.push(purl);
         }
     }
 
-    let package_purls = record.package_record.purls.get_or_insert_with(Vec::new);
+    let package_purls = record
+        .package_record
+        .purls
+        .get_or_insert_with(BTreeSet::new);
     package_purls.extend(purls);
 
     Ok(())
