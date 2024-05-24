@@ -3,7 +3,6 @@ mod common;
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
-use itertools::Itertools;
 use pixi::{util::default_channel_config, HasFeatures, Project};
 use rattler_conda_types::{Channel, Platform};
 use tempfile::TempDir;
