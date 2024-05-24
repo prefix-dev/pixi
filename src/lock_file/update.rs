@@ -1424,7 +1424,7 @@ async fn spawn_solve_conda_environment_task(
                 pb.set_message("extracting pypi packages");
                 pypi_mapping::amend_pypi_purls(
                     client,
-                    pypi_name_mapping_location,
+                    &pypi_name_mapping_location,
                     &mut records,
                     Some(pb.purl_amend_reporter()),
                 )
@@ -1657,7 +1657,7 @@ async fn spawn_solve_pypi_task(
 
     pypi_mapping::amend_pypi_purls(
         environment.project().client().clone(),
-        pypi_name_mapping_location,
+        &pypi_name_mapping_location,
         &mut conda_records,
         None,
     )

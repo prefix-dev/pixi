@@ -65,7 +65,7 @@ pub async fn amend_pypi_purls(
     // to request from the prefix_mapping. This will avoid fetching unwanted
     // URLs, e.g. behind corporate firewalls
     if packages_for_prefix_mapping.is_empty() {
-        _amend_only_custom_pypi_purls(conda_packages, custom_mapping)?;
+        _amend_only_custom_pypi_purls(conda_packages, &custom_mapping)?;
     } else {
         let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
             client,
@@ -84,7 +84,7 @@ pub async fn amend_pypi_purls(
                     &compressed_mapping,
                 )?;
             } else {
-                amend_pypi_purls_for_record(record, custom_mapping)?;
+                amend_pypi_purls_for_record(record, &custom_mapping)?;
             }
         }
     }
@@ -99,7 +99,7 @@ pub async fn amend_pypi_purls(
 /// the record refers to a conda-forge package.
 fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
-    custom_mapping: &'static HashMap<String, HashMap<String, Option<String>>>,
+    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -151,7 +151,7 @@ fn amend_pypi_purls_for_record(
 
 pub fn _amend_only_custom_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
-    custom_mapping: &'static HashMap<String, HashMap<String, Option<String>>>,
+    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
 ) -> miette::Result<()> {
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, custom_mapping)?;

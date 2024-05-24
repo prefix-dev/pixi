@@ -11,6 +11,7 @@ pub mod virtual_packages;
 use async_once_cell::OnceCell as AsyncCell;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
 
 use rattler_conda_types::Version;
 use reqwest_middleware::ClientWithMiddleware;
@@ -102,6 +103,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The cache that contains mapping
+    mapping_source: Arc<OnceCell<MappingSource>>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
@@ -132,6 +135,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         }
@@ -217,6 +221,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         })
@@ -394,10 +399,14 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
-        self.manifest
-            .pypi_name_mapping_source()
-            .expect("mapping source should be ok")
+    pub fn pypi_name_mapping_source(&self) -> MappingSource {
+        self.mapping_source
+            .get_or_init(|| {
+                self.manifest
+                    .pypi_name_mapping_source()
+                    .expect("mapping source should be ok")
+            })
+            .clone()
     }
 
     /// Returns the reqwest client used for http networking

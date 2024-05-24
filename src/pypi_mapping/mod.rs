@@ -22,6 +22,7 @@ pub trait Reporter: Send + Sync {
 pub type ChannelName = String;
 
 pub type MappingMap = HashMap<ChannelName, MappingLocation>;
+pub type MappingByChannel = HashMap<String, HashMap<String, Option<String>>>;
 
 #[derive(Debug, Clone)]
 pub enum MappingLocation {
@@ -34,25 +35,26 @@ pub enum MappingLocation {
 /// location could be a remote url or local file
 pub struct CustomMapping {
     pub mapping: MappingMap,
+    mapping_value: Arc<AsyncCell<MappingByChannel>>,
 }
 
 impl CustomMapping {
     /// Create a new `CustomMapping` with the specified mapping.
     pub fn new(mapping: MappingMap) -> Self {
-        Self { mapping }
+        Self {
+            mapping,
+            mapping_value: Default::default(),
+        }
     }
 
     /// Fetch the custom mapping from the server or load from the local
     pub async fn fetch_custom_mapping(
         &self,
         client: &ClientWithMiddleware,
-    ) -> miette::Result<&'static HashMap<String, HashMap<String, Option<String>>>> {
-        static MAPPING: AsyncCell<HashMap<String, HashMap<String, Option<String>>>> =
-            AsyncCell::new();
-        MAPPING
+    ) -> miette::Result<MappingByChannel> {
+        self.mapping_value
             .get_or_try_init(async {
-                let mut mapping_url_to_name: HashMap<String, HashMap<String, Option<String>>> =
-                    Default::default();
+                let mut mapping_url_to_name: MappingByChannel = Default::default();
 
                 for (name, url) in self.mapping.iter() {
                     // Fetch the mapping from the server or from the local
@@ -100,12 +102,14 @@ impl CustomMapping {
                 Ok(mapping_url_to_name)
             })
             .await
+            .cloned()
     }
 }
 
 /// This enum represents the source of mapping
 /// it can be user-defined ( custom )
 /// or from prefix.dev ( prefix )
+#[derive(Debug, Clone)]
 pub enum MappingSource {
     Custom(CustomMapping),
     Prefix,
