@@ -1356,7 +1356,7 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source();
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
 
     tokio::spawn(
         async move {
@@ -1657,7 +1657,7 @@ async fn spawn_solve_pypi_task(
 
     pypi_mapping::amend_pypi_purls(
         environment.project().client().clone(),
-        &pypi_name_mapping_location,
+        pypi_name_mapping_location,
         &mut conda_records,
         None,
     )

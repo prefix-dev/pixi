@@ -399,14 +399,12 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> MappingSource {
-        self.mapping_source
-            .get_or_init(|| {
-                self.manifest
-                    .pypi_name_mapping_source()
-                    .expect("mapping source should be ok")
-            })
-            .clone()
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        self.mapping_source.get_or_init(|| {
+            self.manifest
+                .pypi_name_mapping_source()
+                .expect("mapping source should be ok")
+        })
     }
 
     /// Returns the reqwest client used for http networking
