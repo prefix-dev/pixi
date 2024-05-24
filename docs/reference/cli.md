@@ -132,6 +132,34 @@ This action ensures that your project's dependencies are reset and updated accor
 In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
 This command will allow you to update the lock file directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
 
+## `update`
+
+The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
+It will only update the lock file if the dependencies in the [manifest file](project_configuration.md) are still compatible with the new versions.
+
+##### Arguments
+
+1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
+
+##### Options
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
+- `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
+- `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
+- `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
+
+```shell
+pixi update numpy
+pixi update numpy pandas
+pixi update --manifest-path ~/myproject/pixi.toml numpy
+pixi update --environment lint python
+pixi update -e lint -e schema -e docs pre-commit
+pixi update --platform osx-arm64 mlx
+pixi update -p linux-64 -p osx-64 numpy
+pixi update --dry-run
+pixi update --no-install boto3
+```
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.

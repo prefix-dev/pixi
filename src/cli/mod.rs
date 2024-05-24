@@ -1,13 +1,16 @@
-use super::util::IndicatifWriter;
-use crate::progress;
-use crate::progress::global_multi_progress;
+use std::{env, io::IsTerminal};
+
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
-use std::{env, io::IsTerminal};
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+    filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
+    EnvFilter,
+};
+
+use super::util::IndicatifWriter;
+use crate::{progress, progress::global_multi_progress};
 
 pub mod add;
 pub mod completion;
@@ -27,6 +30,7 @@ pub mod shell;
 pub mod shell_hook;
 pub mod task;
 pub mod tree;
+pub mod update;
 pub mod upload;
 
 #[derive(Parser, Debug)]
@@ -62,7 +66,8 @@ struct Args {
     command: Command,
 
     /// The verbosity level
-    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for
+    /// quiet)
     #[command(flatten)]
     verbose: Verbosity,
 
@@ -86,6 +91,7 @@ pub enum Command {
     Remove(remove::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    Update(update::Args),
 
     // Execution commands
     #[clap(visible_alias = "r")]
@@ -120,10 +126,12 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file.
+    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
+    // up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
-    /// Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file.
+    /// Check if lockfile is up-to-date before installing the environment,
+    /// aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
@@ -276,12 +284,13 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
+        Command::Update(cmd) => update::execute(cmd).await,
     }
 }
 
 /// Whether to use colored log format.
-/// Option `Auto` enables color output only if the logging is done to a terminal and  `NO_COLOR`
-/// environment variable is not set.
+/// Option `Auto` enables color output only if the logging is done to a terminal
+/// and  `NO_COLOR` environment variable is not set.
 #[derive(clap::ValueEnum, Debug, Clone, Default)]
 pub enum ColorOutput {
     Always,
