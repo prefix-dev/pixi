@@ -193,6 +193,23 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "env": {
+          "title": "Env",
+          "description": "A map of environment variables to values, used in the activation of the environment. These will be set in the shell. Thus these variables are shell specific. Using '$' might not expand to a value in different shells.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "key": "value"
+            },
+            {
+              "ARGUMENT": "value"
+            }
+          ]
+        },
         "scripts": {
           "title": "Scripts",
           "description": "The scripts to run when the environment is activated",
