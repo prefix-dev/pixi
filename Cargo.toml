@@ -79,7 +79,7 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
-pyproject-toml = "0.10.0"
+pyproject-toml = "0.11.0"
 rattler = { version = "0.24.1", default-features = false, features = [
     "cli-tools",
 ] }
@@ -168,7 +168,7 @@ tokio = { version = "1.37.0", features = ["rt"] }
 
 [patch.crates-io]
 # For pyproject-toml
-pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
+# pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
 pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
