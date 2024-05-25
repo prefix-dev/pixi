@@ -140,7 +140,7 @@ pub async fn run_activation(
         ))
     })?;
 
-    let path_modification_behavior = if clean_env && !cfg!(target_os = "windows") {
+    let path_modification_behavior = if clean_env {
         PathModificationBehavior::Replace
     } else {
         PathModificationBehavior::Prepend
@@ -279,43 +279,90 @@ pub fn get_clean_environment_variables() -> HashMap<String, String> {
             "USERPROFILE",
             "USERDOMAIN_ROAMINGPROFILE",
             "USERDOMAIN",
-            "windir",
+            "WINDIR",
         ]
+        // vec![
+        //     "!C:",
+        //     "!D:",
+        //     "=::",
+        //     "ALLUSERSPROFILE",
+        //     "APPDATA",
+        //     "CMD_DURATION_MS",
+        //     "COMMONPROGRAMFILES",
+        //     "COMMONPROGRAMFILES(\"X86\")",
+        //     "COMMONPROGRAMW6432",
+        //     "COMPUTERNAME",
+        //     "COMSPEC",
+        //     "CONDA_PREFIX",
+        //     "CURRENT_FILE",
+        //     "DIRS_POSITION",
+        //     "DriverData",
+        //     "EFC_5504",
+        //     "FILE_PWD",
+        //     "HOMEDRIVE",
+        //     "HOMEPATH",
+        //     "IDEA_INITIAL_DIRECTORY",
+        //     "LAST_EXIT_CODE",
+        //     "LOCALAPPDATA",
+        //     "LOGONSERVER",
+        //     "NUMBER_OF_PROCESSORS",
+        //     "NU_LOG_DATE_FORMAT",
+        //     "NU_LOG_FORMAT",
+        //     "NU_VERSION",
+        //     "OLDPWD",
+        //     "OneDrive",
+        //     "OneDriveConsumer",
+        //     "OS",
+        //     "PATH",
+        //     "PATHEXT",
+        //     "PROCESSOR_ARCHITECTURE",
+        //     "PROCESSOR_IDENTIFIER",
+        //     "PROCESSOR_LEVEL",
+        //     "PROCESSOR_REVISION",
+        //     "PROGRAMDATA",
+        //     "PROGRAMFILES",
+        //     "PROGRAMFILES(\"X86\")",
+        //      "PROGRAMW6432",
+        //      "PROMPT",
+        //      "PROMPT_INDICATOR",
+        //      "PROMPT_MULTILINE_INDICATOR",
+        //      "PSMODULEPATH",
+        //      "PUBLIC",
+        //      "PWD",
+        //      "SESSIONNAME",
+        //      "STARSHIP_SESSION_KEY",
+        //      "STARSHIP_SHELL",
+        //      "SYSTEMDRIVE",
+        //      "SYSTEMROOT",
+        //      "TEMP",
+        //      "TERMINAL_EMULATOR",
+        //      "TERM_SESSION_ID",
+        //      "TMP",
+        //      "USERDOMAIN",
+        //      "USERDOMAIN_ROAMINGPROFILE",
+        //      "USERNAME",
+        //      "USERPROFILE",
+        //      "WINDIR",
+        //      "WIX",
+        //      "TERM",
+        //      "HOME",
+        // ]
     } else {
         vec![]
     };
-
-    #[cfg(target_os = "windows")]
-    let path = env
-        .get("Path")
-        .map(|path| {
-            let path = path.split(';').collect::<Vec<_>>();
-            let path = path
-                .iter()
-                .filter(|p| p.to_lowercase().contains(":\\windows"))
-                .join(";");
-            path
-        })
-        .expect("Could not find PATH in environment variables");
 
     let keys = unix_keys
         .into_iter()
         .chain(macos_keys)
         .chain(windows_keys)
+        .map(|s| s.to_string().to_uppercase())
         .collect_vec();
 
-    let env = env
-        .into_iter()
-        .filter(|(key, _)| keys.contains(&key.as_str()))
-        .collect();
-
-    #[cfg(target_os = "windows")]
-    let env = env
-        .into_iter()
-        .chain(vec![("PATH".to_string(), path)])
-        .collect();
-
     env
+        .into_iter()
+        .filter(|(key, _)| keys.contains(&key.to_string().to_uppercase()))
+        .collect::<HashMap<String, String>>()
+
 }
 
 /// Determine the environment variables that need to be set in an interactive shell to make it

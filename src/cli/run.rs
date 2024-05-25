@@ -263,7 +263,33 @@ pub async fn get_task_env<'p>(
 
     if clean_env {
         let mut env = get_clean_environment_variables();
+
+        // Extend with the activation environment
         env.extend(activation_env);
+
+        // On Windows we need to keep part of the old path and insert the newly generate path from activation script
+        if cfg!(target_os = "windows") {
+            let pixi_path = env
+                .get("Path")
+                .into_iter()
+                .flat_map(|p| std::env::split_paths(p));
+            // dbg!(&pixi_path);
+            let path = std::env::var_os("Path")
+                .map(|path| {
+                    let path = std::env::split_paths(&path)
+                        .filter(|p| p.to_string_lossy().contains(":\\Windows"))
+                        .chain(pixi_path.into_iter());
+                    std::env::join_paths(path).expect("Could not join paths")
+                })
+                .expect("Could not find PATH in environment variables");
+            env.insert(
+                "PATH".to_string(),
+                path.to_str()
+                    .expect("Path contains non-utf8 paths")
+                    .to_string(),
+            );
+        }
+
         return Ok(env);
     }
 
