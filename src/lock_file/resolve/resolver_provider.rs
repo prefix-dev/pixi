@@ -29,9 +29,7 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
 }
 
-impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
-    for CondaResolverProvider<'a, Context>
-{
+impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io PackageName,

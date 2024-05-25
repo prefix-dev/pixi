@@ -1,8 +1,9 @@
 use std::{path::Path, str::FromStr, sync::Arc};
 
 use distribution_filename::WheelFilename;
-use distribution_types::LocalEditable;
+use distribution_types::{LocalEditable, ParsedUrlError, Requirements};
 use futures::StreamExt;
+use indexmap::IndexMap;
 use install_wheel_rs::metadata::read_archive_metadata;
 use itertools::Itertools;
 use pypi_types::{Metadata23, MetadataError};
@@ -11,6 +12,7 @@ use uv_cache::Cache;
 use uv_configuration::BuildKind;
 use uv_dispatch::BuildDispatch;
 use uv_installer::DownloadReporter;
+use uv_resolver::BuiltEditableMetadata;
 use uv_types::{BuildContext, SourceBuildTrait};
 use zip::ZipArchive;
 
@@ -63,6 +65,12 @@ pub enum BuildEditablesError {
     WheelFilename {
         #[from]
         source: distribution_filename::WheelFilenameError,
+    },
+
+    #[error("error during conversion to distribution_types::Requirements")]
+    RequirementsConversion {
+        #[from]
+        source: Box<ParsedUrlError>,
     },
 }
 
@@ -124,7 +132,7 @@ pub async fn build_editables(
     editables: &[EditableRequirement],
     cache: &Cache,
     build_dispatch: &BuildDispatch<'_>,
-) -> Result<Vec<(LocalEditable, Metadata23)>, BuildEditablesError> {
+) -> Result<Vec<BuiltEditableMetadata>, BuildEditablesError> {
     let options = UvReporterOptions::new()
         .with_length(editables.len() as u64)
         .with_capacity(editables.len() + 30)
@@ -160,7 +168,24 @@ pub async fn build_editables(
     let reporter_clone = reporter.clone();
     while let Some((local_editable, metadata, task)) = build_stream.next().await.transpose()? {
         reporter_clone.on_editable_build_complete(&local_editable, task);
-        editables_and_metadata.push((local_editable, metadata));
+
+        // Convert the metadata into a set of requirements
+        let requirements = Requirements {
+            dependencies: metadata
+                .requires_dist
+                .iter()
+                .cloned()
+                .map(distribution_types::Requirement::from_pep508)
+                .collect::<Result<_, _>>()?,
+            optional_dependencies: IndexMap::default(),
+        };
+
+        let built = BuiltEditableMetadata {
+            built: local_editable,
+            metadata,
+            requirements,
+        };
+        editables_and_metadata.push(built);
     }
 
     Ok(editables_and_metadata)

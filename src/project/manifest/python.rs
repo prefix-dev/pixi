@@ -1,3 +1,4 @@
+use distribution_types::ParsedUrlError;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
@@ -450,6 +451,14 @@ impl RequirementOrEditable {
             RequirementOrEditable::Pep508Requirement(e) => Some(e),
             _ => None,
         }
+    }
+
+    /// Returns an extended pep508 requirement if it is a pep508 requirement.
+    pub fn into_distribution_types_requirement(
+        self,
+    ) -> Option<Result<distribution_types::Requirement, Box<ParsedUrlError>>> {
+        self.into_requirement()
+            .map(distribution_types::Requirement::from_pep508)
     }
 
     /// Returns an editable requirement if it is an editable requirement.

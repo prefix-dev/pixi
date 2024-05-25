@@ -1685,30 +1685,36 @@ async fn spawn_solve_pypi_task(
 
         let start = Instant::now();
 
-        let records = lock_file::resolve_pypi(
-            resolution_context,
-            &pypi_options,
-            dependencies
-                .into_iter()
-                .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
-                .collect(),
-            system_requirements,
-            &conda_records,
-            locked_pypi_packages,
-            platform,
-            &pb.pb,
-            &python_path,
-            env_variables,
-            &project_root,
-        )
-        .await
-        .with_context(|| {
-            format!(
-                "failed to solve the pypi requirements of '{}' '{}'",
-                environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(platform)
-            )
-        })?;
+        let local = tokio::task::LocalSet::new();
+
+        let records = local
+            .run_until(async {
+                lock_file::resolve_pypi(
+                    resolution_context,
+                    &pypi_options,
+                    dependencies
+                        .into_iter()
+                        .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
+                        .collect(),
+                    system_requirements,
+                    &conda_records,
+                    locked_pypi_packages,
+                    platform,
+                    &pb.pb,
+                    &python_path,
+                    env_variables,
+                    &project_root,
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to solve the pypi requirements of '{}' '{}'",
+                        environment_name.fancy_display(),
+                        consts::PLATFORM_STYLE.apply_to(platform)
+                    )
+                })
+            })
+            .await?;
 
         let end = Instant::now();
 

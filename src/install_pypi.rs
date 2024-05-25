@@ -166,7 +166,7 @@ fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> miette::Resul
             Dist::from_url(
                 pkg.name.clone(),
                 VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::try_from(url_without_direct.into_owned())
+                    parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
                         .into_diagnostic()?,
                     verbatim: VerbatimUrl::from(url_without_direct.into_owned()),
                 },
@@ -206,8 +206,8 @@ fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> miette::Resul
                 pkg.name.clone(),
                 VerbatimParsedUrl {
                     parsed_url: ParsedUrl::Path(ParsedPathUrl {
-                        url: Url::from_file_path(path).expect("could not convert path to url"),
-                        path,
+                        url: Url::from_file_path(&path).expect("could not convert path to url"),
+                        path: path.clone(),
                         editable: pkg.editable,
                     }),
                     verbatim: VerbatimUrl::from_path(&path)
