@@ -64,7 +64,6 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                     .parse()
                     .expect("could not convert to pypi version"),
                 file: Box::new(file),
-                // TODO: correct this later with the correct index
                 index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
                 wheels: vec![],
             };
@@ -91,7 +90,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
         &'io self,
         dist: &'io Dist,
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
-        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
+        if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
