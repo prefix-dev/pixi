@@ -409,7 +409,7 @@ mod tests {
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&requirement, &[], &FeatureName::Default, None)
+            .add_pypi_dependency(&requirement, &[], &FeatureName::Default, None, None)
             .unwrap();
 
         assert!(manifest
@@ -430,6 +430,7 @@ mod tests {
                 &requirement,
                 &[],
                 &FeatureName::Named("test".to_string()),
+                None,
                 None,
             )
             .unwrap();

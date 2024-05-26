@@ -1,6 +1,6 @@
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use std::{fmt, str::FromStr};
-use toml_edit::{value, Array, InlineTable, Item, Table, Value};
+use toml_edit::{value, Array, Decor, InlineTable, Item, Key, Table, Value};
 
 use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
@@ -208,13 +208,18 @@ impl ManifestSource {
         spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        comment: Option<&str>,
     ) -> Result<(), TomlError> {
         let dependency_table =
             self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-        dependency_table.insert(
-            name.as_normalized(),
-            Item::Value(nameless_match_spec_to_toml(spec)),
-        );
+
+        let mut key = Key::from(name.as_normalized());
+        if let Some(comment) = comment {
+            let dec = Decor::new(format!("# {}\n", comment), "");
+            key = key.with_leaf_decor(dec);
+        }
+
+        dependency_table.insert_formatted(&key, Item::Value(nameless_match_spec_to_toml(spec)));
         Ok(())
     }
 
@@ -226,6 +231,7 @@ impl ManifestSource {
         requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        comment: Option<&str>,
     ) -> Result<(), TomlError> {
         match self {
             ManifestSource::PyProjectToml(_) => {
@@ -236,18 +242,33 @@ impl ManifestSource {
                     platform,
                     feature_name,
                 )?;
+                let val = Value::from(requirement.to_string());
                 if let FeatureName::Named(name) = feature_name {
                     self.get_or_insert_toml_array("project.optional-dependencies", name)?
-                        .push(requirement.to_string())
+                        .push(val)
                 } else {
                     self.get_or_insert_toml_array("project", "dependencies")?
-                        .push(requirement.to_string())
+                        .push(val)
+                }
+
+                if comment.is_some() {
+                    tracing::warn!(
+                        "Adding comments is not supported for pypi dependencies in '{}'.",
+                        consts::PYPROJECT_MANIFEST
+                    )
                 }
             }
             ManifestSource::PixiToml(_) => {
+                let mut key = Key::from(requirement.name.as_ref());
+
+                if let Some(comment) = comment {
+                    let dec = Decor::new(format!("# {}\n", comment), "");
+                    key = key.with_leaf_decor(dec);
+                }
+
                 self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
-                    .insert(
-                        requirement.name.as_ref(),
+                    .insert_formatted(
+                        &key,
                         Item::Value(PyPiRequirement::from(requirement.clone()).into()),
                     );
             }

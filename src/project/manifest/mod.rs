@@ -312,6 +312,7 @@ impl Manifest {
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
+        comment: Option<&str>,
     ) -> miette::Result<()> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -322,8 +323,14 @@ impl Manifest {
             self.get_or_insert_target_mut(platform, Some(feature_name))
                 .try_add_dependency(&name, &spec, spec_type)?;
             // and to the TOML document
-            self.document
-                .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+            self.document.add_dependency(
+                &name,
+                &spec,
+                spec_type,
+                platform,
+                feature_name,
+                comment,
+            )?;
         }
         Ok(())
     }
@@ -335,6 +342,7 @@ impl Manifest {
         platforms: &[Platform],
         feature_name: &FeatureName,
         editable: Option<bool>,
+        comment: Option<&str>,
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Add the pypi dependency to the manifest
@@ -342,7 +350,7 @@ impl Manifest {
                 .try_add_pypi_dependency(requirement, editable)?;
             // and to the TOML document
             self.document
-                .add_pypi_dependency(requirement, platform, feature_name)?;
+                .add_pypi_dependency(requirement, platform, feature_name, comment)?;
         }
         Ok(())
     }
@@ -2501,6 +2509,7 @@ bar = "*"
                 SpecType::Run,
                 &[],
                 &FeatureName::Default,
+                None,
             )
             .unwrap();
         assert_eq!(
@@ -2522,6 +2531,7 @@ bar = "*"
                 SpecType::Run,
                 &[],
                 &FeatureName::Named("test".to_string()),
+                None,
             )
             .unwrap();
 
@@ -2546,6 +2556,7 @@ bar = "*"
                 SpecType::Run,
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
+                None,
             )
             .unwrap();
 
@@ -2571,6 +2582,7 @@ bar = "*"
                 SpecType::Build,
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
+                None,
             )
             .unwrap();
 

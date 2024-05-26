@@ -107,6 +107,10 @@ pub struct DependencyConfig {
     /// The feature for which the dependency should be modified
     #[arg(long, short)]
     pub feature: Option<String>,
+
+    /// The comment to add above the dependency in the manifest file.
+    #[arg(long)]
+    pub comment: Option<String>,
 }
 
 impl DependencyConfig {
@@ -195,6 +199,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 args.no_install,
                 args.lock_file_usage(),
                 &args.platform,
+                args.comment.as_deref(),
             )
             .await
         }
@@ -208,6 +213,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 args.lock_file_usage(),
                 args.no_install,
                 Some(editable),
+                args.comment.as_deref(),
             )
             .await
         }
@@ -219,6 +225,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn add_pypi_requirements_to_project(
     project: &mut Project,
     feature_name: &FeatureName,
@@ -227,13 +234,18 @@ pub async fn add_pypi_requirements_to_project(
     lock_file_usage: LockFileUsage,
     no_install: bool,
     editable: Option<bool>,
+    comment: Option<&str>,
 ) -> miette::Result<()> {
     for requirement in &requirements {
         // TODO: Get best version
         // Add the dependency to the project
-        project
-            .manifest
-            .add_pypi_dependency(requirement, platforms, feature_name, editable)?;
+        project.manifest.add_pypi_dependency(
+            requirement,
+            platforms,
+            feature_name,
+            editable,
+            comment,
+        )?;
     }
 
     get_up_to_date_prefix(&project.default_environment(), lock_file_usage, no_install).await?;
@@ -243,6 +255,7 @@ pub async fn add_pypi_requirements_to_project(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn add_conda_specs_to_project(
     project: &mut Project,
     feature_name: &FeatureName,
@@ -251,6 +264,7 @@ pub async fn add_conda_specs_to_project(
     no_install: bool,
     lock_file_usage: LockFileUsage,
     specs_platforms: &[Platform],
+    comment: Option<&str>,
 ) -> miette::Result<()> {
     // Determine the best version per platform
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
@@ -323,9 +337,13 @@ pub async fn add_conda_specs_to_project(
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
 
         // Add the dependency to the project
-        project
-            .manifest
-            .add_dependency(&spec, spec_type, specs_platforms, feature_name)?;
+        project.manifest.add_dependency(
+            &spec,
+            spec_type,
+            specs_platforms,
+            feature_name,
+            comment,
+        )?;
     }
 
     // Update the prefix

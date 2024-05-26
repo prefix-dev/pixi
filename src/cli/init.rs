@@ -190,6 +190,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 crate::SpecType::Run,
                 &platforms,
                 &FeatureName::default(),
+                None,
             )?;
         }
         for requirement in pypi_deps {
@@ -197,6 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &requirement,
                 &platforms,
                 &FeatureName::default(),
+                None,
                 None,
             )?;
         }
