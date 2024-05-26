@@ -316,36 +316,34 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
-            } else {
-                if args.summary {
-                    print_heading("Tasks per environment:");
-                    for env in project.environments() {
-                        let formatted: String = env
-                            .get_filtered_tasks()
-                            .iter()
-                            .sorted()
-                            .map(|name| format!("{}, ", name.fancy_display()))
-                            .collect();
-
-                        println!(
-                            "{:>WIDTH$}: {}",
-                            env.name().fancy_display().bold(),
-                            formatted
-                        );
-                    }
-                } else {
-                    let formatted: String = available_tasks
+            } else if args.summary {
+                print_heading("Tasks per environment:");
+                for env in project.environments() {
+                    let formatted: String = env
+                        .get_filtered_tasks()
                         .iter()
                         .sorted()
-                        .map(|name| format!("{}, ", name.fancy_display(),))
+                        .map(|name| format!("{}, ", name.fancy_display()))
                         .collect();
-                    print_heading("Tasks from all environments:");
+
                     println!(
                         "{:>WIDTH$}: {}",
-                        console::Style::new().bold().apply_to("Tasks"),
+                        env.name().fancy_display().bold(),
                         formatted
                     );
                 }
+            } else {
+                let formatted: String = available_tasks
+                    .iter()
+                    .sorted()
+                    .map(|name| format!("{}, ", name.fancy_display(),))
+                    .collect();
+                print_heading("Tasks from all environments:");
+                println!(
+                    "{:>WIDTH$}: {}",
+                    console::Style::new().bold().apply_to("Tasks"),
+                    formatted
+                );
             }
         }
     };
