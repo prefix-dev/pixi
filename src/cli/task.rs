@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
 
+static WIDTH: usize = 18;
+
 #[derive(Parser, Debug)]
 pub enum Operation {
     /// Add a command to the project
@@ -182,6 +184,11 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
+fn print_heading(value: &str) {
+    let bold = console::Style::new().bold();
+    println!("{}\n{:-<2$}", bold.apply_to(value), "", value.len() + 4);
+}
+
 pub fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     match args.operation {
@@ -310,19 +317,35 @@ pub fn execute(args: Args) -> miette::Result<()> {
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {
-                let formatted: String = available_tasks
-                    .iter()
-                    .sorted()
-                    .map(|name| {
-                        if args.summary {
-                            format!("{} ", name.as_str(),)
-                        } else {
-                            format!("* {}\n", name.fancy_display().bold(),)
-                        }
-                    })
-                    .collect();
+                if args.summary {
+                    print_heading("Tasks per environment:");
+                    for env in project.environments() {
+                        let formatted: String = env
+                            .get_filtered_tasks()
+                            .iter()
+                            .sorted()
+                            .map(|name| format!("{}, ", name.fancy_display()))
+                            .collect();
 
-                println!("{}", formatted);
+                        println!(
+                            "{:>WIDTH$}: {}",
+                            env.name().fancy_display().bold(),
+                            formatted
+                        );
+                    }
+                } else {
+                    let formatted: String = available_tasks
+                        .iter()
+                        .sorted()
+                        .map(|name| format!("{}, ", name.fancy_display(),))
+                        .collect();
+                    print_heading("Tasks from all enviroments:");
+                    println!(
+                        "{:>WIDTH$}: {}",
+                        console::Style::new().bold().apply_to("Tasks"),
+                        formatted
+                    );
+                }
             }
         }
     };
