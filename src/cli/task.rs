@@ -339,7 +339,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         .sorted()
                         .map(|name| format!("{}, ", name.fancy_display(),))
                         .collect();
-                    print_heading("Tasks from all enviroments:");
+                    print_heading("Tasks from all environments:");
                     println!(
                         "{:>WIDTH$}: {}",
                         console::Style::new().bold().apply_to("Tasks"),
