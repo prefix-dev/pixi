@@ -9,6 +9,7 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 use std::collections::HashSet;
 use std::error::Error;
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
@@ -319,12 +320,13 @@ pub fn execute(args: Args) -> miette::Result<()> {
             } else if args.summary {
                 print_heading("Tasks per environment:");
                 for env in project.environments() {
-                    let formatted: String = env
-                        .get_filtered_tasks()
-                        .iter()
-                        .sorted()
-                        .map(|name| format!("{}, ", name.fancy_display()))
-                        .collect();
+                    let formatted: String = env.get_filtered_tasks().iter().sorted().fold(
+                        String::new(),
+                        |mut output, name| {
+                            let _ = write!(output, "{}, ", name.fancy_display());
+                            output
+                        },
+                    );
 
                     println!(
                         "{:>WIDTH$}: {}",
@@ -333,11 +335,14 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     );
                 }
             } else {
-                let formatted: String = available_tasks
-                    .iter()
-                    .sorted()
-                    .map(|name| format!("{}, ", name.fancy_display(),))
-                    .collect();
+                let formatted: String =
+                    available_tasks
+                        .iter()
+                        .sorted()
+                        .fold(String::new(), |mut output, name| {
+                            let _ = write!(output, "{}, ", name.fancy_display());
+                            output
+                        });
                 print_heading("Tasks from all environments:");
                 println!(
                     "{:>WIDTH$}: {}",
