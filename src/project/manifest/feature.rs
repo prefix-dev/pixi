@@ -1,29 +1,48 @@
-use super::pypi_options::PypiOptions;
-use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
-use crate::consts;
-use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
-use crate::project::manifest::python::PyPiPackageName;
-use crate::project::manifest::target::Targets;
-use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_map};
-use crate::project::SpecType;
-use crate::task::{Task, TaskName};
-use crate::utils::spanned::PixiSpanned;
+use std::{
+    borrow::{Borrow, Cow},
+    collections::HashMap,
+    fmt,
+    hash::{Hash, Hasher},
+};
+
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
-use serde::de::Error;
-use serde::{Deserialize, Deserializer};
+use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::{serde_as, SerializeDisplay};
-use std::borrow::{Borrow, Cow};
-use std::collections::HashMap;
-use std::fmt;
 
-/// The name of a feature. This is either a string or default for the default feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, SerializeDisplay, Default)]
+use super::{
+    pypi_options::PypiOptions, Activation, PyPiRequirement, SystemRequirements, Target,
+    TargetSelector,
+};
+use crate::{
+    consts,
+    project::{
+        manifest::{
+            channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
+            deserialize_opt_package_map, deserialize_package_map,
+            python::PyPiPackageName,
+            target::Targets,
+        },
+        SpecType,
+    },
+    task::{Task, TaskName},
+    utils::spanned::PixiSpanned,
+};
+
+/// The name of a feature. This is either a string or default for the default
+/// feature.
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, SerializeDisplay, Default)]
 pub enum FeatureName {
     #[default]
     Default,
     Named(String),
+}
+
+impl Hash for FeatureName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
 }
 
 impl<'de> Deserialize<'de> for FeatureName {
@@ -49,7 +68,8 @@ impl<'s> From<&'s str> for FeatureName {
     }
 }
 impl FeatureName {
-    /// Returns the name of the feature or `None` if this is the default feature.
+    /// Returns the name of the feature or `None` if this is the default
+    /// feature.
     pub fn name(&self) -> Option<&str> {
         match self {
             FeatureName::Default => None,
@@ -103,11 +123,11 @@ impl fmt::Display for FeatureName {
     }
 }
 
-/// A feature describes a set of functionalities. It allows us to group functionality and its
-/// dependencies together.
+/// A feature describes a set of functionalities. It allows us to group
+/// functionality and its dependencies together.
 ///
-/// Individual features cannot be used directly, instead they are grouped together into
-/// environments. Environments are then locked and installed.
+/// Individual features cannot be used directly, instead they are grouped
+/// together into environments. Environments are then locked and installed.
 #[derive(Debug, Clone)]
 pub struct Feature {
     /// The name of the feature or `None` if the feature is the default feature.
@@ -115,14 +135,14 @@ pub struct Feature {
 
     /// The platforms this feature is available on.
     ///
-    /// This value is `None` if this feature does not specify any platforms and the default
-    /// platforms from the project should be used.
+    /// This value is `None` if this feature does not specify any platforms and
+    /// the default platforms from the project should be used.
     pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
 
     /// Channels specific to this feature.
     ///
-    /// This value is `None` if this feature does not specify any channels and the default
-    /// channels from the project should be used.
+    /// This value is `None` if this feature does not specify any channels and
+    /// the default channels from the project should be used.
     pub channels: Option<IndexSet<PrioritizedChannel>>,
 
     /// Additional system requirements
@@ -153,25 +173,29 @@ impl Feature {
         self.name == FeatureName::Default
     }
 
-    /// Returns a mutable reference to the platforms of the feature. Create them if needed
+    /// Returns a mutable reference to the platforms of the feature. Create them
+    /// if needed
     pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
         self.platforms
             .get_or_insert_with(Default::default)
             .get_mut()
     }
 
-    /// Returns a mutable reference to the channels of the feature. Create them if needed
+    /// Returns a mutable reference to the channels of the feature. Create them
+    /// if needed
     pub fn channels_mut(&mut self) -> &mut IndexSet<PrioritizedChannel> {
         self.channels.get_or_insert_with(Default::default)
     }
 
-    /// Returns the dependencies of the feature for a given `spec_type` and `platform`.
+    /// Returns the dependencies of the feature for a given `spec_type` and
+    /// `platform`.
     ///
-    /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by
-    /// multiple targets than this function returns a reference to the internal dependencies.
+    /// This function returns a [`Cow`]. If the dependencies are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal dependencies.
     ///
-    /// Returns `None` if this feature does not define any target that has any of the requested
-    /// dependencies.
+    /// Returns `None` if this feature does not define any target that has any
+    /// of the requested dependencies.
     pub fn dependencies(
         &self,
         spec_type: Option<SpecType>,
@@ -202,11 +226,12 @@ impl Feature {
 
     /// Returns the PyPi dependencies of the feature for a given `platform`.
     ///
-    /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by
-    /// multiple targets than this function returns a reference to the internal dependencies.
+    /// This function returns a [`Cow`]. If the dependencies are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal dependencies.
     ///
-    /// Returns `None` if this feature does not define any target that has any of the requested
-    /// dependencies.
+    /// Returns `None` if this feature does not define any target that has any
+    /// of the requested dependencies.
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
@@ -230,10 +255,11 @@ impl Feature {
             })
     }
 
-    /// Returns the activation scripts for the most specific target that matches the given
-    /// `platform`.
+    /// Returns the activation scripts for the most specific target that matches
+    /// the given `platform`.
     ///
-    /// Returns `None` if this feature does not define any target with an activation.
+    /// Returns `None` if this feature does not define any target with an
+    /// activation.
     pub fn activation_scripts(&self, platform: Option<Platform>) -> Option<&Vec<String>> {
         self.targets
             .resolve(platform)
@@ -242,10 +268,11 @@ impl Feature {
             .next()
     }
 
-    /// Returns the activation environment for the most specific target that matches the given
-    /// `platform`.
+    /// Returns the activation environment for the most specific target that
+    /// matches the given `platform`.
     ///
-    /// Returns `None` if this feature does not define any target with an activation.
+    /// Returns `None` if this feature does not define any target with an
+    /// activation.
     pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
         self.targets
             .resolve(platform)
@@ -254,7 +281,8 @@ impl Feature {
             .next()
     }
 
-    /// Returns true if the feature contains any reference to a pypi dependencies.
+    /// Returns true if the feature contains any reference to a pypi
+    /// dependencies.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.targets
             .targets()
@@ -344,10 +372,12 @@ impl<'de> Deserialize<'de> for Feature {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use assert_matches::assert_matches;
+
     use super::*;
     use crate::project::manifest::Manifest;
-    use assert_matches::assert_matches;
-    use std::path::Path;
 
     #[test]
     fn test_dependencies_borrowed() {

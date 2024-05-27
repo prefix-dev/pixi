@@ -23,20 +23,6 @@ use std::{
     str::FromStr,
 };
 
-use crate::{
-    config::Config,
-    consts,
-    project::{
-        manifest::{
-            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
-            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
-        },
-        SpecType,
-    },
-    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
-    task::{Task, TaskName},
-    utils::spanned::PixiSpanned,
-};
 pub use activation::Activation;
 use document::ManifestSource;
 pub use environment::{Environment, EnvironmentName};
@@ -45,7 +31,6 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
-
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
@@ -65,6 +50,20 @@ use toml_edit::DocumentMut;
 use url::{ParseError, Url};
 
 use self::error::TomlError;
+use crate::{
+    config::Config,
+    consts,
+    project::{
+        manifest::{
+            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
+            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
+        },
+        SpecType,
+    },
+    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
+    task::{Task, TaskName},
+    utils::spanned::PixiSpanned,
+};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -2780,6 +2779,30 @@ bar = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
         manifest
             .add_environment(String::from("test"), Some(Vec::new()), None, false)
+            .unwrap();
+        assert!(manifest.environment("test").is_some());
+    }
+
+    #[test]
+    fn test_add_environment_with_feature() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.foobar]
+
+        [environments]
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        manifest
+            .add_environment(
+                String::from("test"),
+                Some(vec![String::from("foobar")]),
+                None,
+                false,
+            )
             .unwrap();
         assert!(manifest.environment("test").is_some());
     }
