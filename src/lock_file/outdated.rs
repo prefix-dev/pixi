@@ -21,7 +21,29 @@ pub struct OutdatedEnvironments<'p> {
 
     /// Records the environments for which the lock-file content should also be discarded. This is
     /// the case for instance when the order of the channels changed.
-    pub disregard_locked_content: HashSet<Environment<'p>>,
+    pub disregard_locked_content: DisregardLockedContent<'p>,
+}
+
+/// A struct that stores whether the locked content of certain environments
+/// should be disregarded.
+#[derive(Debug, Default)]
+pub struct DisregardLockedContent<'p> {
+    conda: HashSet<Environment<'p>>,
+    pypi: HashSet<Environment<'p>>,
+}
+
+impl<'p> DisregardLockedContent<'p> {
+    /// Returns true if the conda locked content should be ignored for the given
+    /// environment.
+    pub fn should_disregard_conda(&self, env: &Environment<'p>) -> bool {
+        self.conda.contains(env)
+    }
+
+    /// Returns true if the pypi locked content should be ignored for the given
+    /// environment.
+    pub fn should_disregard_pypi(&self, env: &Environment<'p>) -> bool {
+        self.conda.contains(env) || self.pypi.contains(env)
+    }
 }
 
 impl<'p> OutdatedEnvironments<'p> {
@@ -30,7 +52,7 @@ impl<'p> OutdatedEnvironments<'p> {
     pub fn from_project_and_lock_file(project: &'p Project, lock_file: &LockFile) -> Self {
         let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
         let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
-        let mut disregard_locked_content = HashSet::new();
+        let mut disregard_locked_content = DisregardLockedContent::default();
 
         // Find all targets that are not satisfied by the lock-file
         find_unsatisfiable_targets(
@@ -102,7 +124,7 @@ fn find_unsatisfiable_targets<'p>(
     lock_file: &LockFile,
     outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
-    disregard_locked_content: &mut HashSet<Environment<'p>>,
+    disregard_locked_content: &mut DisregardLockedContent<'p>,
 ) {
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -135,9 +157,14 @@ fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
-                EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::IndexesMismatch => {
+                EnvironmentUnsat::ChannelsMismatch => {
                     // If the channels mismatched we also cannot trust any of the locked content.
-                    disregard_locked_content.insert(environment.clone());
+                    disregard_locked_content.conda.insert(environment.clone());
+                }
+
+                EnvironmentUnsat::IndexesMismatch(_) => {
+                    // If the indexes mismatched we also cannot trust any of the locked content.
+                    disregard_locked_content.pypi.insert(environment.clone());
                 }
             }
 

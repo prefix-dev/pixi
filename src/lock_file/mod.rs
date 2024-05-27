@@ -17,7 +17,7 @@ pub use resolve::{
     conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
 };
 pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
-pub use update::{LockFileDerivedData, UpdateLockFileOptions};
+pub use update::{LockFileDerivedData, UpdateContext, UpdateLockFileOptions};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<RepoDataRecord>;

@@ -1313,6 +1313,121 @@ mod tests {
     }
 
     #[test]
+    fn test_activation_env() {
+        let contents = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = ["win-64", "linux-64"]
+
+            [activation.env]
+            FOO = "main"
+
+            [target.win-64.activation]
+            env = { FOO = "win-64" }
+
+            [target.linux-64.activation.env]
+            FOO = "linux-64"
+
+            [feature.bar.activation]
+            env = { FOO = "bar" }
+
+            [feature.bar.target.win-64.activation]
+            env = { FOO = "bar-win-64" }
+
+            [feature.bar.target.linux-64.activation]
+            env = { FOO = "bar-linux-64" }
+            "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let default_targets = &manifest.default_feature().targets;
+        let default_activation_env = default_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let win64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let linux64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            default_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("main")
+            )]))
+        );
+        assert_eq!(
+            win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("win-64")
+            )]))
+        );
+        assert_eq!(
+            linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("linux-64")
+            )]))
+        );
+
+        // Check that the feature activation env is set correctly
+        let feature_targets = &manifest
+            .feature(&FeatureName::Named(String::from("bar")))
+            .unwrap()
+            .targets;
+        let feature_activation_env = feature_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_win64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_linux64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            feature_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar")
+            )]))
+        );
+        assert_eq!(
+            feature_win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-win-64")
+            )]))
+        );
+        assert_eq!(
+            feature_linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-linux-64")
+            )]))
+        );
+    }
+
+    #[test]
     fn test_target_specific_tasks() {
         let contents = format!(
             r#"
