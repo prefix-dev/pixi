@@ -247,7 +247,7 @@ impl<'p> LockFileDerivedData<'p> {
     }
 }
 
-struct UpdateContext<'p> {
+pub struct UpdateContext<'p> {
     project: &'p Project,
 
     /// Repodata records from the lock-file. This contains the records that
@@ -257,6 +257,9 @@ struct UpdateContext<'p> {
 
     /// Repodata records from the lock-file grouped by solve-group.
     locked_grouped_repodata_records: PerGroupAndPlatform<'p, Arc<RepoDataRecordsByName>>,
+
+    /// Pypi  records from the lock-file grouped by solve-group.
+    locked_grouped_pypi_records: PerGroupAndPlatform<'p, Arc<PypiRecordsByName>>,
 
     /// Repodata records from the lock-file. This contains the records that
     /// actually exist in the lock-file. If the lock-file is missing or
@@ -541,7 +544,7 @@ pub async fn ensure_up_to_date_lock_file(
     Ok(lock_file_derived_data)
 }
 
-struct UpdateContextBuilder<'p> {
+pub struct UpdateContextBuilder<'p> {
     /// The project
     project: &'p Project,
 
@@ -693,7 +696,7 @@ impl<'p> UpdateContextBuilder<'p> {
                 // disregard the locked content.
                 if group
                     .environments()
-                    .any(|e| outdated.disregard_locked_content.contains(&e))
+                    .any(|e| outdated.disregard_locked_content.should_disregard_conda(&e))
                 {
                     return None;
                 }
@@ -732,6 +735,47 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
+        let locked_grouped_pypi_records = all_grouped_environments
+            .iter()
+            .filter_map(|group| {
+                // If any content of the environments in the group are outdated we need to
+                // disregard the locked content.
+                if group
+                    .environments()
+                    .any(|e| outdated.disregard_locked_content.should_disregard_pypi(&e))
+                {
+                    return None;
+                }
+
+                let records = match group {
+                    GroupedEnvironment::Environment(env) => locked_pypi_records.get(env)?.clone(),
+                    GroupedEnvironment::Group(group) => {
+                        let mut by_platform = HashMap::new();
+                        for env in group.environments() {
+                            let Some(records) = locked_pypi_records.get(&env) else {
+                                continue;
+                            };
+
+                            for (platform, records) in records.iter() {
+                                by_platform
+                                    .entry(*platform)
+                                    .or_insert_with(Vec::new)
+                                    .extend(records.records.iter().cloned());
+                            }
+                        }
+
+                        by_platform
+                            .into_iter()
+                            .map(|(platform, records)| {
+                                (platform, Arc::new(PypiRecordsByName::from_iter(records)))
+                            })
+                            .collect()
+                    }
+                };
+                Some((group.clone(), records))
+            })
+            .collect();
+
         let max_concurrent_solves = self
             .max_concurrent_solves
             .unwrap_or_else(default_max_concurrent_solves);
@@ -741,6 +785,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
             locked_repodata_records,
             locked_grouped_repodata_records,
+            locked_grouped_pypi_records,
             locked_pypi_records,
             outdated_envs: outdated,
 
@@ -967,14 +1012,12 @@ impl<'p> UpdateContext<'p> {
             // Get environment variables from the activation
             let env_variables = project.get_env_variables(&environment).await?;
 
-            // Get the previously locked pypi records
-            let locked_pypi_records = Arc::new(
-                self.locked_pypi_records
-                    .get(&environment)
-                    .and_then(|records| records.get(&platform))
-                    .map(|records| records.records.clone())
-                    .unwrap_or_default(),
-            );
+            let locked_group_records = self
+                .locked_grouped_pypi_records
+                .get(&group)
+                .and_then(|records| records.get(&platform))
+                .cloned()
+                .unwrap_or_default();
 
             // Spawn a task to solve the pypi environment
             let pypi_solve_future = spawn_solve_pypi_task(
@@ -986,7 +1029,7 @@ impl<'p> UpdateContext<'p> {
                 env_variables,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
-                locked_pypi_records,
+                locked_group_records,
             );
 
             pending_futures.push(pypi_solve_future.boxed_local());
@@ -1640,7 +1683,7 @@ async fn spawn_solve_pypi_task(
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
-    locked_pypi_packages: Arc<Vec<PypiRecord>>,
+    locked_pypi_packages: Arc<PypiRecordsByName>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1665,6 +1708,7 @@ async fn spawn_solve_pypi_task(
     let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
 
     let mut conda_records = repodata_records.records.clone();
+    let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
         environment.project().client().clone(),
@@ -1705,7 +1749,7 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &conda_records,
-            locked_pypi_packages,
+            &locked_pypi_records,
             platform,
             &pb.pb,
             &python_path,

@@ -329,6 +329,11 @@ class Activation(StrictBaseModel):
         description="The scripts to run when the environment is activated",
         examples=["activate.sh", "activate.bat"],
     )
+    env: dict[NonEmptyStr, NonEmptyStr] | None = Field(
+        None,
+        description="A map of environment variables to values, used in the activation of the environment. These will be set in the shell. Thus these variables are shell specific. Using '$' might not expand to a value in different shells.",
+        examples=[{"key": "value"}, {"ARGUMENT": "value"}],
+    )
 
 
 ##################
