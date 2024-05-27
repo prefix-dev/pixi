@@ -322,6 +322,11 @@
                 "minLength": 1
               },
               {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
                 "$ref": "#/$defs/ChannelInlineTable"
               }
             ]
@@ -574,6 +579,11 @@
             "anyOf": [
               {
                 "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
                 "minLength": 1
               },
               {

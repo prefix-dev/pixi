@@ -119,7 +119,7 @@ test = "*"
 
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
-channels = ["nvidia"] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+channels = ["nvidia" , { channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
