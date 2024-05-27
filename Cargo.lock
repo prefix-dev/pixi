@@ -1385,7 +1385,7 @@ checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 [[package]]
 name = "file_url"
 version = "0.1.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "itertools 0.12.1",
  "percent-encoding",
@@ -3670,7 +3670,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.25.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3682,6 +3682,7 @@ dependencies = [
  "fs-err",
  "futures",
  "fxhash",
+ "humantime",
  "indexmap 2.2.6",
  "indicatif",
  "itertools 0.12.1",
@@ -3712,7 +3713,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.23.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "chrono",
  "file_url",
@@ -3741,7 +3742,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "blake2",
  "digest",
@@ -3757,7 +3758,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "chrono",
  "file_url",
@@ -3781,7 +3782,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "quote",
  "syn 2.0.65",
@@ -3790,7 +3791,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.20.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3820,7 +3821,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.20.10"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3845,7 +3846,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.20.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3896,7 +3897,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.20.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3913,7 +3914,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.22.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "chrono",
  "futures",
@@ -3930,7 +3931,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.11"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "archspec",
  "libloading",
@@ -4885,7 +4886,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/installer#d025b487b7839843a141c40e8893e3d669baaf45"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f33f7e1303f28991bf2e5324fe6c81fd9642bc5d"
 dependencies = [
  "tokio",
 ]

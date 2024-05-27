@@ -179,15 +179,15 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 # rattler_conda_types = { path = "../rattler-1/crates/rattler_conda_types" }
 # rattler_digest = { path = "../rattler-1/crates/rattler_digest" }
 # rattler_networking = { path = "../rattler-1/crates/rattler_networking" }
