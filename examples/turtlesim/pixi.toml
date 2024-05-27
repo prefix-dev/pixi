@@ -1,6 +1,5 @@
 [project]
 name = "turtlesim"
-version = "0.1.0"
 description = "ultra fast turtlesim installation on multiple platforms"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge", "robostack-staging"]

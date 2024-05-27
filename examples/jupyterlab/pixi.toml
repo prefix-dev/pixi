@@ -1,6 +1,5 @@
 [project]
 name = "jupyterlab"
-version = "0.1.0"
 description = "Jupyter Lab examples"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]

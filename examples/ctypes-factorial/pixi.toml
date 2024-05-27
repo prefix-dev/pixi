@@ -1,7 +1,5 @@
 [project]
 name = "ctypes-examples"
-version = "0.2.0"
-description = "Add a short description here"
 authors = ["liquidcarbon <akscrps@gmail.com>"]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
