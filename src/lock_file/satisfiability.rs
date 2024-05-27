@@ -336,7 +336,6 @@ pub fn pypi_satifisfies_editable(
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
-    tracing::error!("{:?} == {:?}", locked_data.name, spec.name);
     if spec.name != locked_data.name {
         return false;
     }
@@ -394,7 +393,6 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
-                tracing::error!("{:?} == {:?}", spec_path_or_url, locked_path_or_url);
                 spec_path_or_url == locked_path_or_url
             }
         }
