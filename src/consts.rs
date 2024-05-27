@@ -26,6 +26,7 @@ pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 lazy_static! {
     pub static ref TASK_STYLE: Style = Style::new().blue();
     pub static ref PLATFORM_STYLE: Style = Style::new().yellow();
+    pub static ref FEATURE_STYLE: Style = Style::new().cyan();
     pub static ref SOLVE_GROUP_STYLE: Style = Style::new().cyan();
     pub static ref DEFAULT_PYPI_INDEX_URL: Url = Url::parse("https://pypi.org/simple").unwrap();
 }

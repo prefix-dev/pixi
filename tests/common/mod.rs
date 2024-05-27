@@ -275,7 +275,7 @@ impl PixiControl {
             manifest_path: Some(self.manifest_path()),
             args: project::environment::add::Args {
                 name: name.to_string(),
-                features: vec![],
+                features: None,
                 solve_group: None,
                 no_default_feature: false,
                 force: false,

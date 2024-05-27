@@ -68,7 +68,7 @@ impl FeatureName {
 
     /// Returns a styled version of the feature name for display in the console.
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
-        console::style(self.as_str()).cyan()
+        consts::FEATURE_STYLE.apply_to(self.as_str())
     }
 }
 

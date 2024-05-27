@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use crate::{EnvironmentName, FeatureName, Project};
+use crate::{EnvironmentName, Project};
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -8,7 +8,7 @@ pub struct Args {
     pub name: String,
 
     /// Features to add to the environment.
-    pub features: Vec<FeatureName>,
+    pub features: Option<Vec<String>>,
 
     /// The solve-group to add the environment to.
     #[clap(long)]
@@ -37,9 +37,9 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
 
     // Add the platforms to the lock-file
     project.manifest.add_environment(
-        &args.name,
-        &args.features,
-        args.solve_group.as_deref(),
+        args.name.clone(),
+        args.features,
+        args.solve_group,
         args.no_default_feature,
     )?;
 

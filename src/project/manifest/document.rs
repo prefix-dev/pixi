@@ -311,19 +311,19 @@ impl ManifestSource {
     }
 
     /// Adds an environment to the manifest
-    pub fn add_environment<'f>(
+    pub fn add_environment(
         &mut self,
-        name: &str,
-        features: impl IntoIterator<Item = &'f FeatureName>,
-        solve_group: Option<&str>,
+        name: impl Into<String>,
+        features: Option<Vec<String>>,
+        solve_group: Option<String>,
         no_default_features: bool,
     ) -> Result<(), TomlError> {
-        let features = Array::from_iter(features.into_iter().map(|f| f.to_string()));
-
         // Construct the TOML item
         let item = if solve_group.is_some() || no_default_features {
             let mut table = toml_edit::InlineTable::new();
-            table.insert("features", features.into());
+            if let Some(features) = features {
+                table.insert("features", Array::from_iter(features).into());
+            }
             if let Some(solve_group) = solve_group {
                 table.insert("solve-group", solve_group.into());
             }
@@ -332,12 +332,14 @@ impl ManifestSource {
             }
             Item::Value(table.into())
         } else {
-            Item::Value(Value::Array(features))
+            Item::Value(Value::Array(Array::from_iter(
+                features.into_iter().flatten(),
+            )))
         };
 
         // Get the environment table
         self.get_or_insert_toml_table(None, &FeatureName::Default, "environments")?
-            .insert(name, item);
+            .insert(&name.into(), item);
 
         Ok(())
     }
@@ -557,28 +559,35 @@ platforms = ["linux-64", "win-64"]
     #[case::pixi_toml(ManifestSource::empty_pixi())]
     #[case::pyproject_toml(ManifestSource::empty_pyproject())]
     fn test_add_environment(#[case] mut source: ManifestSource) {
-        source.add_environment("foo", [], None, false).unwrap();
         source
-            .add_environment("bar", &[FeatureName::Default], None, false)
+            .add_environment("foo", Some(vec![]), None, false)
             .unwrap();
         source
-            .add_environment("baz", &[FeatureName::Default], Some("group1"), false)
+            .add_environment("bar", Some(vec![String::from("default")]), None, false)
             .unwrap();
         source
-            .add_environment("foobar", &[FeatureName::Default], Some("group1"), true)
+            .add_environment(
+                "baz",
+                Some(vec![String::from("default")]),
+                Some(String::from("group1")),
+                false,
+            )
             .unwrap();
         source
-            .add_environment("barfoo", &[FeatureName::Default], None, true)
+            .add_environment(
+                "foobar",
+                Some(vec![String::from("default")]),
+                Some(String::from("group1")),
+                true,
+            )
+            .unwrap();
+        source
+            .add_environment("barfoo", Some(vec![String::from("default")]), None, true)
             .unwrap();
 
         // Overwrite
         source
-            .add_environment(
-                "bar",
-                &[FeatureName::Named(String::from("not-default"))],
-                None,
-                false,
-            )
+            .add_environment("bar", Some(vec![String::from("not-default")]), None, false)
             .unwrap();
 
         assert_snapshot!(
@@ -592,14 +601,14 @@ platforms = ["linux-64", "win-64"]
     #[case::pyproject_toml(ManifestSource::empty_pyproject())]
     fn test_remove_environment(#[case] mut source: ManifestSource) {
         source
-            .add_environment("foo", &[FeatureName::Default], None, false)
+            .add_environment("foo", Some(vec![String::from("default")]), None, false)
             .unwrap();
         source
-            .add_environment("bar", &[FeatureName::Default], None, false)
+            .add_environment("bar", Some(vec![String::from("default")]), None, false)
             .unwrap();
         assert_eq!(source.remove_environment("default").unwrap(), false);
         source
-            .add_environment("default", &[FeatureName::Default], None, false)
+            .add_environment("default", Some(vec![String::from("default")]), None, false)
             .unwrap();
         assert_eq!(source.remove_environment("default").unwrap(), true);
         assert_eq!(source.remove_environment("foo").unwrap(), true);

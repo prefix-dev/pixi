@@ -33,7 +33,7 @@ use futures::FutureExt;
 use pixi::{
     cli::{add, add::DependencyConfig, init, install, project, remove, task},
     task::TaskName,
-    DependencyType, FeatureName, SpecType,
+    DependencyType, SpecType,
 };
 use rattler_conda_types::Platform;
 use url::Url;
@@ -318,8 +318,11 @@ pub struct ProjectEnvironmentAddBuilder {
 }
 
 impl ProjectEnvironmentAddBuilder {
-    pub fn with_feature(mut self, feature: impl Into<FeatureName>) -> Self {
-        self.args.features.push(feature.into());
+    pub fn with_feature(mut self, feature: impl Into<String>) -> Self {
+        self.args
+            .features
+            .get_or_insert_with(Vec::new)
+            .push(feature.into());
         self
     }
 

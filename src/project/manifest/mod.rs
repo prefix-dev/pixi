@@ -13,6 +13,7 @@ mod target;
 mod validation;
 
 use std::{
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     ffi::OsStr,
     fmt::{self, Display},
@@ -56,7 +57,7 @@ use crate::{
     project::{
         manifest::{
             channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
-            pypi_options::PypiOptions, python::PyPiPackageName,
+            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
         },
         SpecType,
     },
@@ -108,6 +109,12 @@ pub struct Manifest {
 
     /// The parsed manifest
     pub parsed: ProjectManifest,
+}
+
+impl Borrow<ProjectManifest> for Manifest {
+    fn borrow(&self) -> &ProjectManifest {
+        &self.parsed
+    }
 }
 
 impl Manifest {
@@ -227,21 +234,30 @@ impl Manifest {
 
     /// Adds an environment to the project. Overwrites the entry if it already
     /// exists.
-    pub fn add_environment<'f>(
+    pub fn add_environment(
         &mut self,
-        name: &str,
-        features: impl IntoIterator<Item = &'f FeatureName>,
-        solve_group: Option<&str>,
+        name: String,
+        features: Option<Vec<String>>,
+        solve_group: Option<String>,
         no_default_feature: bool,
     ) -> miette::Result<()> {
-        let features = features.into_iter().cloned().collect_vec();
+        // Make sure the features exist
+        for feature in features.iter().flatten() {
+            if self.feature(feature.as_str()).is_none() {
+                return Err(UnknownFeature::new(feature.to_string(), &self.parsed).into());
+            }
+        }
 
-        self.document
-            .add_environment(name, &features, solve_group, no_default_feature)?;
+        self.document.add_environment(
+            name.clone(),
+            features.clone(),
+            solve_group.clone(),
+            no_default_feature,
+        )?;
 
         let environment_idx = self.parsed.environments.add(Environment {
-            name: EnvironmentName::Named(name.to_string()),
-            features: features.into_iter().map(|f| f.to_string()).collect(),
+            name: EnvironmentName::Named(name),
+            features: features.unwrap_or_default(),
             features_source_loc: None,
             solve_group: None,
             no_default_feature,
@@ -788,8 +804,8 @@ impl SolveGroups {
     /// If the solve-group does not exist, it is created
     ///
     /// Returns the index of the solve-group
-    fn add(&mut self, name: &str, environment_idx: usize) -> usize {
-        match self.by_name.get(name) {
+    fn add(&mut self, name: String, environment_idx: usize) -> usize {
+        match self.by_name.get(&name) {
             Some(idx) => {
                 // The solve-group exists, add the environment index to it
                 self.solve_groups[*idx].environments.push(environment_idx);
@@ -800,10 +816,10 @@ impl SolveGroups {
                 // and initialise it with the environment index
                 let idx = self.solve_groups.len();
                 self.solve_groups.push(SolveGroup {
-                    name: name.to_string(),
+                    name: name.clone(),
                     environments: vec![environment_idx],
                 });
-                self.by_name.insert(name.to_string(), idx);
+                self.by_name.insert(name, idx);
                 idx
             }
         }
@@ -1118,7 +1134,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 name,
                 features,
                 features_source_loc,
-                solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
+                solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
         }
@@ -1137,6 +1153,7 @@ mod tests {
     use std::str::FromStr;
 
     use insta::{assert_snapshot, assert_yaml_snapshot};
+    use miette::NarratableReportHandler;
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
     use tempfile::tempdir;
@@ -2649,8 +2666,42 @@ bar = "*"
         [environments]
         "#;
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
-        manifest.add_environment("test", [], None, false).unwrap();
+        manifest
+            .add_environment(String::from("test"), Some(Vec::new()), None, false)
+            .unwrap();
         assert!(manifest.environment("test").is_some());
+    }
+
+    #[test]
+    fn test_add_environment_non_existing_feature() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.existing]
+
+        [environments]
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let err = manifest
+            .add_environment(
+                String::from("test"),
+                Some(vec![String::from("non-existing")]),
+                None,
+                false,
+            )
+            .unwrap_err();
+
+        let mut s = String::new();
+        let report_handler = NarratableReportHandler::new().with_cause_chain();
+        report_handler.render_report(&mut s, err.as_ref()).unwrap();
+        assert_snapshot!(s, @r###"
+        the feature 'non-existing' is not defined in the project manifest
+            Diagnostic severity: error
+        diagnostic help: Did you mean 'existing'?
+        "###);
     }
 
     #[test]
