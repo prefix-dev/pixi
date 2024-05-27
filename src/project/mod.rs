@@ -44,7 +44,6 @@ use manifest::{EnvironmentName, Manifest};
 use self::manifest::{pyproject::PyProjectToml, Environments};
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
-use once_cell::sync::OnceCell;
 pub use solve_group::SolveGroup;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
