@@ -12,7 +12,10 @@ use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use platform_tags::Tags;
-use pypi_types::{HashAlgorithm, HashDigest};
+use pypi_types::{
+    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError,
+    VerbatimParsedUrl,
+};
 use tempfile::{tempdir, TempDir};
 use url::Url;
 
@@ -21,15 +24,14 @@ use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_resolver::InMemoryIndex;
 use uv_types::HashStrategy;
 
-use crate::consts::{PIXI_UV_INSTALLER, PROJECT_MANIFEST};
+use crate::consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST};
 use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
     BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RegistryBuiltDist, RegistryBuiltWheel,
-    RegistrySourceDist, SourceDist, VerbatimParsedUrl,
+    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -203,8 +205,12 @@ fn convert_to_dist(
                     wheels: vec![RegistryBuiltWheel {
                         filename,
                         file: Box::new(file),
-                        // TODO: this should be the index url of the package
-                        index: IndexUrl::Pypi(VerbatimUrl::from_url(url.clone())),
+                        // This should be fine because currently it is only used for caching
+                        // When upgrading uv and running into problems we would need to sort this out
+                        // but it would require adding the indexes to the lock file
+                        index: IndexUrl::Pypi(VerbatimUrl::from_url(
+                            DEFAULT_PYPI_INDEX_URL.clone(),
+                        )),
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -214,8 +220,8 @@ fn convert_to_dist(
                     name: pkg.name.clone(),
                     version: pkg.version.clone(),
                     file: Box::new(file),
-                    // TODO: this should be the index url of the package
-                    index: IndexUrl::Pypi(VerbatimUrl::from_url(url.clone())),
+                    // This should be fine because currently it is only used for caching
+                    index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
                     // I don't think this really matters for the install
                     wheels: vec![],
                 }))

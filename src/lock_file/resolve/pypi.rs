@@ -1,5 +1,5 @@
 use super::pypi_editables::build_editables;
-use crate::consts::{DEFAULT_PYPI_INDEX_URL, PROJECT_MANIFEST};
+use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
@@ -19,8 +19,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, ParsedUrl, Resolution,
-    ResolvedDist, SourceDist,
+    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
+    SourceDist,
 };
 use distribution_types::{FileLocation, RequirementSource};
 use indexmap::{IndexMap, IndexSet};
@@ -28,8 +28,9 @@ use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
-use pep508_rs::VerbatimUrl;
+use pep440_rs::{Operator, VersionSpecifier};
+use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pypi_types::VerbatimParsedUrl;
 use pypi_types::{HashAlgorithm, HashDigest};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
@@ -166,6 +167,27 @@ fn convert_flat_index_path(
 
 type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
 
+/// Convert back to PEP508 without the VerbatimParsedUrl
+/// We need this function because we need to convert to the introduced `VerbaimParsedUrl`
+/// back to crates.io `VerbatimUrl`, for the locking
+fn convert_uv_requirements_to_pep508<'req>(
+    requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
+) -> Vec<pep508_rs::Requirement> {
+    // Convert back top PEP508 Requirement<VerbatimUrl>
+    requires_dist
+        .map(|r| pep508_rs::Requirement {
+            name: r.name.clone(),
+            extras: r.extras.clone(),
+            version_or_url: r.version_or_url.clone().map(|v| match v {
+                VersionOrUrl::VersionSpecifier(v) => VersionOrUrl::VersionSpecifier(v),
+                VersionOrUrl::Url(u) => VersionOrUrl::Url(u.verbatim),
+            }),
+            marker: r.marker.clone(),
+            origin: r.origin.clone(),
+        })
+        .collect()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -243,9 +265,9 @@ pub async fn resolve_pypi(
     let requirements = requirements
         .into_iter()
         .map(|req| {
-            req.into_distribution_types_requirement()
+            req.into_requirement_with_parsed_url()
+                .map(distribution_types::Requirement::from)
                 .expect("editable requirements treated as non-editable requirements")
-                .expect("error during conversion to distribution types requirement")
         })
         .collect::<Vec<_>>();
 
@@ -354,46 +376,45 @@ pub async fn resolve_pypi(
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
-            let (package_data, environment_data) = record;
+            let (package_data, _) = record;
+            Preference::simple(package_data.name.clone(), package_data.version.clone())
 
-            let version =
-                VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
-                    .expect("invalid version specifier");
+            // let version =
+            //     VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
+            //         .expect("invalid version specifier");
 
-            let source = match &package_data.url_or_path {
-                UrlOrPath::Url(url) => {
-                    // Strop the direct+ prefix
-                    // so that we can pass the url to uv
-                    if let Some(url) = url.as_ref().strip_prefix("direct+") {
-                        let url = url.parse::<Url>().expect("could not parse direct+ url");
-                        let direct_url =
-                            ParsedUrl::try_from(url.clone()).expect("could not parse direct+ url");
-                        RequirementSource::from_parsed_url(direct_url, VerbatimUrl::from_url(url))
-                    } else {
-                        RequirementSource::Registry {
-                            specifier: VersionSpecifiers::from(version),
-                            // TODO: create correct Index
-                            index: Some(DEFAULT_PYPI_INDEX_URL.clone().to_string()),
-                        }
-                    }
-                }
-                UrlOrPath::Path(path) => RequirementSource::Path {
-                    path: path.clone(),
-                    editable: package_data.editable,
-                    url: VerbatimUrl::from_url(
-                        Url::from_file_path(path).expect("could not create file-path url"),
-                    ),
-                },
-            };
+            // let source = match &package_data.url_or_path {
+            //     UrlOrPath::Url(url) => {
+            //         // Strip the direct+ prefix
+            //         // so that we can pass the url to uv
+            //         if let Some(url) = url.as_ref().strip_prefix("direct+") {
+            //             let url = url.parse::<Url>().expect("could not parse direct+ url");
+            //             let direct_url =
+            //                 ParsedUrl::try_from(url.clone()).expect("could not parse direct+ url");
+            //             RequirementSource::from_parsed_url(direct_url, VerbatimUrl::from_url(url))
+            //         } else {
+            //             RequirementSource::Registry {
+            //                 specifier: VersionSpecifiers::from(version),
+            //                 index: None,
+            //             }
+            //         }
+            //     }
+            //     UrlOrPath::Path(path) => RequirementSource::Path {
+            //         path: path.clone(),
+            //         editable: package_data.editable,
+            //         url: VerbatimUrl::from_url(
+            //             Url::from_file_path(path).expect("could not create file-path url"),
+            //         ),
+            //     },
+            // };
 
-            let requirement = distribution_types::Requirement {
-                name: package_data.name.clone(),
-                extras: environment_data.extras.iter().cloned().collect_vec(),
-                marker: None,
-                source,
-                origin: None,
-            };
-            Preference::from_requirement(requirement)
+            // let requirement = distribution_types::Requirement {
+            //     name: package_data.name.clone(),
+            //     extras: environment_data.extras.iter().cloned().collect_vec(),
+            //     marker: None,
+            //     source,
+            //     origin: None,
+            // };
         })
         .collect::<Vec<_>>();
 
@@ -552,7 +573,7 @@ async fn lock_pypi_packages<'a>(
                 PypiPackageData {
                     name: metadata.name,
                     version: metadata.version,
-                    requires_dist: metadata.requires_dist,
+                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
                     requires_python: metadata.requires_python,
                     editable: false,
                     url_or_path,
@@ -654,7 +675,7 @@ async fn lock_pypi_packages<'a>(
                 PypiPackageData {
                     name: metadata.name,
                     version: metadata.version,
-                    requires_dist: metadata.requires_dist,
+                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
                     requires_python: metadata.requires_python,
                     url_or_path,
                     hash,
@@ -689,7 +710,9 @@ async fn lock_pypi_packages<'a>(
         let pypi_package_data = PypiPackageData {
             name: editable_metadata.metadata.name,
             version: editable_metadata.metadata.version,
-            requires_dist: editable_metadata.metadata.requires_dist,
+            requires_dist: convert_uv_requirements_to_pep508(
+                editable_metadata.metadata.requires_dist.iter(),
+            ),
             requires_python: editable_metadata.metadata.requires_python,
             url_or_path,
             hash: Some(hash),

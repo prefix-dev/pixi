@@ -1,6 +1,6 @@
-use distribution_types::ParsedUrlError;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
+use pypi_types::VerbatimParsedUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
@@ -453,12 +453,31 @@ impl RequirementOrEditable {
         }
     }
 
-    /// Returns an extended pep508 requirement if it is a pep508 requirement.
-    pub fn into_distribution_types_requirement(
+    /// Returns a pep508 requirement if it is a pep508 requirement, using the parsed url type.
+    pub fn into_requirement_with_parsed_url(
         self,
-    ) -> Option<Result<distribution_types::Requirement, Box<ParsedUrlError>>> {
-        self.into_requirement()
-            .map(distribution_types::Requirement::from_pep508)
+    ) -> Option<pep508_rs::Requirement<VerbatimParsedUrl>> {
+        if let Some(req) = self.into_requirement() {
+            let version_or_parsed_url = req.version_or_url.map(|v| match v {
+                pep508_rs::VersionOrUrl::Url(url) => {
+                    let parsed_url =
+                        VerbatimParsedUrl::try_from(url).expect("could not convert to ParsedUrl");
+                    pep508_rs::VersionOrUrl::Url(parsed_url)
+                }
+                pep508_rs::VersionOrUrl::VersionSpecifier(v) => {
+                    pep508_rs::VersionOrUrl::VersionSpecifier(v)
+                }
+            });
+            Some(pep508_rs::Requirement {
+                name: req.name,
+                version_or_url: version_or_parsed_url,
+                extras: req.extras,
+                marker: req.marker,
+                origin: req.origin,
+            })
+        } else {
+            None
+        }
     }
 
     /// Returns an editable requirement if it is an editable requirement.

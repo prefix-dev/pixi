@@ -3,11 +3,11 @@ use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
-use distribution_types::ParsedGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
+use pypi_types::ParsedGitUrl;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -302,6 +302,7 @@ pub fn pypi_satifisfies_editable(
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
+    tracing::error!("{:?} == {:?}", locked_data.name, spec.name);
     if spec.name != locked_data.name {
         return false;
     }
@@ -311,26 +312,36 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
         None => true,
         Some(VersionOrUrl::VersionSpecifier(spec)) => spec.contains(&locked_data.version),
         Some(VersionOrUrl::Url(spec_url)) => {
-            // In the case that both the spec and the locked data are direct git urls
-            // we need to compare the urls to see if they are the same
-            let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone()).ok();
-            let locked_git_url = locked_data
-                .url_or_path
-                .as_url()
-                .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
-
             // Both are git url's
-            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-                let base_is_same =
-                    spec_git_url.url.repository() == locked_data_url.url.repository();
+            if spec_url.as_str().starts_with("git+")
+                && locked_data
+                    .url_or_path
+                    .as_url()
+                    .map(|u| u.as_str().starts_with("git+"))
+                    .unwrap_or_default()
+            {
+                // In the case that both the spec and the locked data are direct git urls
+                // we need to compare the urls to see if they are the same
+                let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone());
+                let locked_git_url = locked_data
+                    .url_or_path
+                    .as_url()
+                    .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
 
-                // If the spec does not specify a revision than any will do
-                // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-                    return base_is_same;
+                if let (Ok(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
+                    let base_is_same =
+                        spec_git_url.url.repository() == locked_data_url.url.repository();
+
+                    // If the spec does not specify a revision than any will do
+                    // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                    if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                        return base_is_same;
+                    }
+                    // If the spec does specify a revision than the revision must match
+                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                } else {
+                    false
                 }
-                // If the spec does specify a revision than the revision must match
-                base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
                 let spec_path_or_url = spec_url
                     .given()
@@ -349,6 +360,7 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
+                tracing::error!("{:?} == {:?}", spec_path_or_url, locked_path_or_url);
                 spec_path_or_url == locked_path_or_url
             }
         }

@@ -1,12 +1,12 @@
 use std::{path::Path, str::FromStr, sync::Arc};
 
 use distribution_filename::WheelFilename;
-use distribution_types::{LocalEditable, ParsedUrlError, Requirements};
+use distribution_types::{LocalEditable, Requirements};
 use futures::StreamExt;
 use indexmap::IndexMap;
 use install_wheel_rs::metadata::read_archive_metadata;
 use itertools::Itertools;
-use pypi_types::{Metadata23, MetadataError};
+use pypi_types::{Metadata23, MetadataError, ParsedUrlError};
 use requirements_txt::EditableRequirement;
 use uv_cache::Cache;
 use uv_configuration::BuildKind;
@@ -175,8 +175,8 @@ pub async fn build_editables(
                 .requires_dist
                 .iter()
                 .cloned()
-                .map(distribution_types::Requirement::from_pep508)
-                .collect::<Result<_, _>>()?,
+                .map(distribution_types::Requirement::from)
+                .collect(),
             optional_dependencies: IndexMap::default(),
         };
 
