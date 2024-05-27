@@ -10,7 +10,6 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::Write as _;
 use std::io;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
