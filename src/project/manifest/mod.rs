@@ -2833,7 +2833,7 @@ bar = "*"
         let report_handler = NarratableReportHandler::new().with_cause_chain();
         report_handler.render_report(&mut s, err.as_ref()).unwrap();
         assert_snapshot!(s, @r###"
-        the feature 'non-existing' is not defined in the project manifest
+        the feature '[36mnon-existing[0m' is not defined in the project manifest
             Diagnostic severity: error
         diagnostic help: Did you mean 'existing'?
         "###);
