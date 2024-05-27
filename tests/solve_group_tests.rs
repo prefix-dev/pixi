@@ -330,16 +330,15 @@ async fn test_dont_record_not_present_package_as_purl() {
 
 #[tokio::test]
 async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
     [project]
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ 'conda-forge' = "tests/mapping_files/compressed_mapping.json" }}
-
+    conda-pypi-map = { 'conda-forge' = "tests/mapping_files/compressed_mapping.json" }
     "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -414,13 +413,12 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(
-        r#"
+    let pixi = PixiControl::from_manifest(r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "tests/mapping_files/custom_mapping.json" }}
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/mapping_files/custom_mapping.json" }
      "#,
     )
     .unwrap();
@@ -466,13 +464,12 @@ async fn test_custom_mapping_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(
-        r#"
+    let pixi = PixiControl::from_manifest(r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "tests/mapping_files/custom_mapping.json" }}
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/mapping_files/custom_mapping.json" }
      "#,
     )
     .unwrap();
