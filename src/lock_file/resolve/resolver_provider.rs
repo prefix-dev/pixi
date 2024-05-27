@@ -4,8 +4,8 @@ use std::{
 };
 
 use distribution_types::{
-    DirectUrlSourceDist, Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl,
-    PrioritizedDist, RegistrySourceDist, SourceDist, SourceDistCompatibility,
+    Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};

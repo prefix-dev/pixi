@@ -245,7 +245,7 @@ pub async fn resolve_pypi(
         .map(|req| {
             req.into_distribution_types_requirement()
                 .expect("editable requirements treated as non-editable requirements")
-                .expect("error during converstion to distribution types requirement")
+                .expect("error during conversion to distribution types requirement")
         })
         .collect::<Vec<_>>();
 
@@ -318,15 +318,14 @@ pub async fn resolve_pypi(
     .with_build_extra_env_vars(env_variables.iter());
 
     // Constrain the conda packages to the specific python packages
-    // TODO
     let constraints = conda_python_packages
         .values()
-        .map(|(repo, p)| {
+        .map(|(_, p)| {
             // Create pep440 version from the conda version
             let specifier = VersionSpecifier::from_version(Operator::Equal, p.version.clone())
                 .expect("invalid version specifier");
 
-            // Only one requirement source and we just assume thats a PyPI source
+            // Only one requirement source and we just assume that's a PyPI source
             let source = RequirementSource::Registry {
                 specifier: specifier.into(),
                 index: None,
@@ -547,7 +546,7 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 let metadata = registry_client
-                    .wheel_metadata(&dist)
+                    .wheel_metadata(dist)
                     .await
                     .expect("failed to get wheel metadata");
                 PypiPackageData {

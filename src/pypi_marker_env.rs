@@ -1,7 +1,6 @@
 use miette::IntoDiagnostic;
-use pep508_rs::{MarkerEnvironment, MarkerEnvironmentBuilder, StringVersion};
-use rattler_conda_types::{PackageRecord, Platform, VersionWithSource};
-use std::str::FromStr;
+use pep508_rs::{MarkerEnvironment, MarkerEnvironmentBuilder};
+use rattler_conda_types::{PackageRecord, Platform};
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(
@@ -75,9 +74,4 @@ pub fn determine_marker_environment(
         platform_version: "",
     })
     .into_diagnostic()
-}
-
-/// Convert a [`VersionWithSource`] to a [`StringVersion`].
-fn version_to_string_version(version: &VersionWithSource) -> StringVersion {
-    StringVersion::from_str(&version.to_string()).expect("could not convert between versions")
 }
