@@ -328,7 +328,7 @@ impl ManifestSource {
                 table.insert("solve-group", solve_group.into());
             }
             if no_default_features {
-                table.insert("no-default-features", true.into());
+                table.insert("no-default-feature", true.into());
             }
             Item::Value(table.into())
         } else {

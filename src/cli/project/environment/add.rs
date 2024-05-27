@@ -4,10 +4,11 @@ use crate::{EnvironmentName, Project};
 
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The environment name(s) to add.
+    /// The name of the environment to add.
     pub name: String,
 
     /// Features to add to the environment.
+    #[clap(long = "feature")]
     pub features: Option<Vec<String>>,
 
     /// The solve-group to add the environment to.
