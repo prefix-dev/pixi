@@ -11,6 +11,7 @@ pub mod virtual_packages;
 use async_once_cell::OnceCell as AsyncCell;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
 
 use rattler_conda_types::Version;
 use reqwest_middleware::ClientWithMiddleware;
@@ -35,6 +36,7 @@ use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
 use crate::consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST};
 use crate::project::grouped_environment::GroupedEnvironment;
+
 use crate::pypi_mapping::MappingSource;
 use crate::utils::reqwest::build_reqwest_clients;
 use manifest::{EnvironmentName, Manifest};
@@ -42,7 +44,6 @@ use manifest::{EnvironmentName, Manifest};
 use self::manifest::{pyproject::PyProjectToml, Environments};
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
-use once_cell::sync::OnceCell;
 pub use solve_group::SolveGroup;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -109,6 +110,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The cache that contains mapping
+    mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
@@ -139,6 +142,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         }
@@ -225,6 +229,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         })
@@ -457,10 +462,12 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
-        self.manifest
-            .pypi_name_mapping_source()
-            .expect("mapping source should be ok")
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        self.mapping_source.get_or_init(|| {
+            self.manifest
+                .pypi_name_mapping_source(&self.config)
+                .expect("mapping source should be ok")
+        })
     }
 
     /// Returns the reqwest client used for http networking

@@ -217,14 +217,25 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
 
         // Update the prefix with conda packages.
+        let has_existing_packages = !installed_packages.is_empty();
+        let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
         let python_status = environment::update_prefix_conda(
-            GroupedEnvironmentName::Environment(environment.name().clone()),
             &prefix,
             self.package_cache.clone(),
             environment.project().authenticated_client().clone(),
             installed_packages,
-            &records,
+            records,
             platform,
+            &format!(
+                "{} environment '{}'",
+                if has_existing_packages {
+                    "updating"
+                } else {
+                    "creating"
+                },
+                env_name.fancy_display()
+            ),
+            "",
         )
         .await?;
 
@@ -1399,7 +1410,7 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source();
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
 
     tokio::spawn(
         async move {
@@ -1445,6 +1456,7 @@ async fn spawn_solve_conda_environment_task(
             );
 
             // Solve conda packages
+            pb.reset_style();
             pb.set_message("resolving conda");
             let mut records = lock_file::resolve_conda(
                 match_specs,
@@ -1467,7 +1479,7 @@ async fn spawn_solve_conda_environment_task(
                 pb.set_message("extracting pypi packages");
                 pypi_mapping::amend_pypi_purls(
                     client,
-                    pypi_name_mapping_location,
+                    &pypi_name_mapping_location,
                     &mut records,
                     Some(pb.purl_amend_reporter()),
                 )
@@ -1809,14 +1821,24 @@ async fn spawn_create_prefix_task(
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
+            let has_existing_packages = !installed_packages.is_empty();
             let python_status = environment::update_prefix_conda(
-                group_name,
                 &prefix,
                 package_cache,
                 client,
                 installed_packages,
-                &conda_records.records,
+                conda_records.records.clone(),
                 Platform::current(),
+                &format!(
+                    "{} python environment to solve pypi packages for '{}'",
+                    if has_existing_packages {
+                        "updating"
+                    } else {
+                        "creating"
+                    },
+                    group_name.fancy_display()
+                ),
+                "  ",
             )
             .await?;
             let end = Instant::now();

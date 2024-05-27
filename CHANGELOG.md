@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2024-05-27
+### ✨ Highlights
+- This release adds two new commands `pixi config` and `pixi update`
+  - `pixi config` allows you to `edit`, `set`, `unset`, `append`, `prepend` and `list` your local/global or system configuration.
+  - `pixi update` re-solves the full lockfile or use `pixi update PACKAGE` to only update `PACKAGE`, making sure your project is using the latest versions that the manifest allows for.
+
+### 📃 Details
+#### Added
+- Add `pixi config` command by @chawyehsu in [#1339](https://github.com/prefix-dev/pixi/pull/1339)
+- Add `pixi list --explicit` flag command by @jjjermiah in [#1403](https://github.com/prefix-dev/pixi/pull/1403)
+- Add `[activation.env]` table for environment variables by @ruben-arts in [#1156](https://github.com/prefix-dev/pixi/pull/1156)
+- Allow installing multiple envs, including `--all` at once by @tdejager in [#1413](https://github.com/prefix-dev/pixi/pull/1413)
+- Add `pixi update` command to re-solve the lockfile by @baszalmstra in [#1431](https://github.com/prefix-dev/pixi/pull/1431) (fixes 20 :thumbsup:)
+- Add `detached-environments` to the config, move environments outside the project folder by @ruben-arts in [#1381](https://github.com/prefix-dev/pixi/pull/1381) (fixes 11 :thumbsup:)
+
+#### Changed
+- Use the gateway to fetch repodata by @baszalmstra in [#1307](https://github.com/prefix-dev/pixi/pull/1307)
+- Switch to compressed mapping by @nichmor in [#1335](https://github.com/prefix-dev/pixi/pull/1335)
+- Warn on pypi conda clobbering by @nichmor in [#1353](https://github.com/prefix-dev/pixi/pull/1353)
+- Align `remove` arguments with `add` by @olivier-lacroix in [#1406](https://github.com/prefix-dev/pixi/pull/1406)
+- Add backward compat logic for older lock files by @nichmor in [#1425](https://github.com/prefix-dev/pixi/pull/1425)
+
+#### Documentation
+- Fix small screen by removing getting started section. by @ruben-arts in [#1393](https://github.com/prefix-dev/pixi/pull/1393)
+- Improve caching docs by @ruben-arts in [#1422](https://github.com/prefix-dev/pixi/pull/1422)
+- Add example, python library using gcp upload by @tdejager in [#1380](https://github.com/prefix-dev/pixi/pull/1380)
+- Correct typos with `--no-lockfile-update`. by @tobiasraabe in [#1396](https://github.com/prefix-dev/pixi/pull/1396)
+
+#### Fixed
+- Trim channel url when filter packages_for_prefix_mapping by @zen-xu in [#1391](https://github.com/prefix-dev/pixi/pull/1391)
+- Use the right channels when upgrading global packages by @olivier-lacroix in [#1326](https://github.com/prefix-dev/pixi/pull/1326)
+- Fish prompt display looks wrong in tide by @tfriedel in [#1424](https://github.com/prefix-dev/pixi/pull/1424)
+- Use local mapping instead of remote by @nichmor in [#1430](https://github.com/prefix-dev/pixi/pull/1430)
+
+#### Refactor
+- Remove unused fetch_sparse_repodata by @olivier-lacroix in [#1411](https://github.com/prefix-dev/pixi/pull/1411)
+- Remove project level method that are per environment by @olivier-lacroix in [#1412](https://github.com/prefix-dev/pixi/pull/1412)
+- Update lockfile functionality for reusability by @baszalmstra in [#1426](https://github.com/prefix-dev/pixi/pull/1426)
+
+## New Contributors
+* @tfriedel made their first contribution in [#1424](https://github.com/prefix-dev/pixi/pull/1424)
+* @jjjermiah made their first contribution in [#1403](https://github.com/prefix-dev/pixi/pull/1403)
+* @tobiasraabe made their first contribution in [#1396](https://github.com/prefix-dev/pixi/pull/1396)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.22.0..v0.23.0)
+
 ## [0.22.0] - 2024-05-13
 ### ✨ Highlights
 
