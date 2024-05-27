@@ -55,8 +55,11 @@ use crate::{
     consts,
     project::{
         manifest::{
-            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
-            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
+            channel::PrioritizedChannel,
+            environment::TomlEnvironmentMapOrSeq,
+            error::{DependencyError, UnknownFeature},
+            pypi_options::PypiOptions,
+            python::PyPiPackageName,
         },
         SpecType,
     },
@@ -395,8 +398,17 @@ impl Manifest {
         };
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
-            self.get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_dependency(&name, &spec, spec_type)?;
+            match self
+                .get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_dependency(&name, &spec, spec_type)
+            {
+                Ok(()) => (),
+                Err(DependencyError::Duplicate(e)) => {
+                    tracing::debug!("Dependency `{}` already existed, overwriting", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
+
             // and to the TOML document
             self.document
                 .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
@@ -414,8 +426,16 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Add the pypi dependency to the manifest
-            self.get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pypi_dependency(requirement, editable)?;
+            match self
+                .get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_pypi_dependency(requirement, editable)
+            {
+                Ok(()) => (),
+                Err(DependencyError::Duplicate(e)) => {
+                    tracing::debug!("Dependency `{}` already existed, overwriting", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
             // and to the TOML document
             self.document
                 .add_pypi_dependency(requirement, platform, feature_name)?;
