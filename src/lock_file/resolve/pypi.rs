@@ -173,7 +173,7 @@ pub async fn resolve_pypi(
     dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
-    locked_pypi_packages: Arc<Vec<PypiRecord>>,
+    locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,

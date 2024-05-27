@@ -104,8 +104,8 @@ Running the following commands will check and automatically update the lock file
 
 All the commands that support the interaction with the lock file also include some lock file usage options:
 
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 !!! Note "Syncing the lock file with the manifest file"
     The lock file is always matched with the whole configuration in the manifest file.

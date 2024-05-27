@@ -26,6 +26,7 @@ def valid_manifest(request) -> str:
     params=[
         "empty",
         "no_channel",
+        "bad_env_variable",
     ],
 )
 def invalid_manifest(request) -> str:

@@ -242,6 +242,18 @@ impl Feature {
             .next()
     }
 
+    /// Returns the activation environment for the most specific target that matches the given
+    /// `platform`.
+    ///
+    /// Returns `None` if this feature does not define any target with an activation.
+    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
+        self.targets
+            .resolve(platform)
+            .filter_map(|t| t.activation.as_ref())
+            .filter_map(|a| a.env.as_ref())
+            .next()
+    }
+
     /// Returns true if the feature contains any reference to a pypi dependencies.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.targets

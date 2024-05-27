@@ -8,6 +8,8 @@ mod repodata;
 mod solve_group;
 pub mod virtual_packages;
 
+#[cfg(not(windows))]
+use std::os::unix::fs::symlink;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
@@ -24,10 +26,12 @@ pub use environment::Environment;
 use indexmap::Equivalent;
 use manifest::{EnvironmentName, Manifest};
 use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
 use rattler_conda_types::Version;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
+use xxhash_rust::xxh3::xxh3_64;
 
 use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
@@ -38,6 +42,8 @@ use crate::{
     pypi_mapping::MappingSource,
     utils::reqwest::build_reqwest_clients,
 };
+
+static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -104,6 +110,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The cache that contains mapping
+    mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
@@ -140,6 +148,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         }
@@ -216,6 +225,7 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        // Load the user configuration from the local project and all default locations
         let config = Config::load(root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
@@ -226,6 +236,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         })
@@ -298,13 +309,71 @@ impl Project {
         self.root.join(consts::PIXI_DIR)
     }
 
-    /// Returns the environment directory
-    pub fn environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    /// Create the detached-environments path for this project if it is set in
+    /// the config
+    fn detached_environments_path(&self) -> Option<PathBuf> {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+            Some(detached_environments_path.join(format!(
+                "{}-{}",
+                self.name(),
+                xxh3_64(self.root.to_string_lossy().as_bytes())
+            )))
+        } else {
+            None
+        }
     }
 
-    /// Returns the solve group directory
+    /// Returns the environment directory
+    pub fn environments_dir(&self) -> PathBuf {
+        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_envs_dir;
+        }
+
+        // If the detached-environments path is set, use it instead of the default
+        // directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            let detached_environments_path =
+                detached_environments_path.join(consts::ENVIRONMENTS_DIR);
+            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
+
+                #[cfg(not(windows))]
+                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                    tracing::warn!(
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_envs_dir.display(),
+                        detached_environments_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    create_symlink(&detached_environments_path, &default_envs_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_envs_dir, &detached_environments_path);
+            });
+
+            return detached_environments_path;
+        }
+
+        tracing::debug!(
+            "Using default root directory: `{}` as environments directory.",
+            default_envs_dir.display()
+        );
+
+        default_envs_dir
+    }
+
+    /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
+        // If the detached-environments path is set, use it instead of the default
+        // directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        }
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
@@ -410,10 +479,12 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
-        self.manifest
-            .pypi_name_mapping_source()
-            .expect("mapping source should be ok")
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        self.mapping_source.get_or_init(|| {
+            self.manifest
+                .pypi_name_mapping_source(&self.config)
+                .expect("mapping source should be ok")
+        })
     }
 
     /// Returns the reqwest client used for http networking
@@ -486,6 +557,72 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 }
             })
     })
+}
+
+/// Create a symlink from the default pixi directory to the custom target
+/// directory
+#[cfg(not(windows))]
+fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
+    if default_pixi_dir.exists() {
+        tracing::debug!(
+            "Symlink already exists at '{}', skipping creating symlink.",
+            default_pixi_dir.display()
+        );
+        return;
+    }
+    symlink(pixi_dir_name, default_pixi_dir)
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to create symlink from '{}' to '{}': {}",
+                pixi_dir_name.display(),
+                default_pixi_dir.display(),
+                e
+            )
+        })
+        .ok();
+}
+
+/// Write a warning file to the default pixi directory to inform the user that
+/// symlinks are not supported on this platform (Windows).
+#[cfg(windows)]
+fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
+    let warning_file = default_envs_dir.join("README.txt");
+    if warning_file.exists() {
+        tracing::debug!(
+            "Symlink warning file already exists at '{}', skipping writing warning file.",
+            warning_file.display()
+        );
+        return;
+    }
+    let warning_message = format!(
+        "Environments are installed in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
+        envs_dir_name.display()
+    );
+
+    // Create directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+        tracing::error!(
+            "Failed to create directory '{}': {}",
+            default_envs_dir.display(),
+            e
+        );
+        return;
+    }
+
+    // Write warning message to file
+    match std::fs::write(&warning_file, warning_message.clone()) {
+        Ok(_) => tracing::info!(
+            "Symlink warning file written to '{}': {}",
+            warning_file.display(),
+            warning_message
+        ),
+        Err(e) => tracing::error!(
+            "Failed to write symlink warning file to '{}': {}",
+            warning_file.display(),
+            e
+        ),
+    }
 }
 
 #[cfg(test)]

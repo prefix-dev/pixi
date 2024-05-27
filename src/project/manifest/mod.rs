@@ -23,6 +23,20 @@ use std::{
     str::FromStr,
 };
 
+use crate::{
+    config::Config,
+    consts,
+    project::{
+        manifest::{
+            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
+            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
+        },
+        SpecType,
+    },
+    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
+    task::{Task, TaskName},
+    utils::spanned::PixiSpanned,
+};
 pub use activation::Activation;
 use document::ManifestSource;
 pub use environment::{Environment, EnvironmentName};
@@ -31,7 +45,7 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
-use once_cell::sync::OnceCell;
+
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
@@ -51,20 +65,6 @@ use toml_edit::DocumentMut;
 use url::{ParseError, Url};
 
 use self::error::TomlError;
-use crate::{
-    config::Config,
-    consts,
-    project::{
-        manifest::{
-            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
-            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
-        },
-        SpecType,
-    },
-    pypi_mapping::{ChannelName, MappingLocation, MappingSource},
-    task::{Task, TaskName},
-    utils::spanned::PixiSpanned,
-};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -476,65 +476,62 @@ impl Manifest {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> miette::Result<&'static MappingSource> {
-        static MAPPING_SOURCE: OnceCell<MappingSource> = OnceCell::new();
+    pub fn pypi_name_mapping_source(&self, config: &Config) -> miette::Result<MappingSource> {
+        match self.parsed.project.conda_pypi_map.clone() {
+            Some(url) => {
+                // transform user defined channels into rattler::Channel
+                let channels = url
+                    .keys()
+                    .map(|channel_str| {
+                        Channel::from_str(channel_str, config.channel_config())
+                            .map(|channel| (channel_str, channel.canonical_name()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .into_diagnostic()?;
 
-        MAPPING_SOURCE.get_or_try_init(||
-            match self.parsed.project.conda_pypi_map.clone() {
-                Some(url) => {
-                    let config = Config::load_global();
-
-                    // transform user defined channels into rattler::Channel
-                    let channels = url
-                        .keys()
-                        .map(|channel_str| {
-                            Channel::from_str(channel_str, config.channel_config())
-                                .map(|channel| (channel_str, channel.canonical_name()))
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-
-                    let project_channels = self.parsed.project.channels
+                let project_channels = self
+                    .parsed
+                    .project
+                    .channels
                     .iter()
                     .map(|pc| pc.channel.canonical_name())
                     .collect::<HashSet<_>>();
 
+                // Throw a warning for each missing channel from project table
+                channels.iter().for_each(|(_, channel_canonical_name)| {
+                    if !project_channels.contains(channel_canonical_name) {
+                        tracing::warn!(
+                            "Defined custom mapping channel {} is missing from project channels",
+                            channel_canonical_name
+                        );
+                    }
+                });
 
-                    // Throw a warning for each missing channel from project table
-                    channels
-                    .iter()
-                    .for_each(|(_, channel_canonical_name)| {
-                        if !project_channels.contains(channel_canonical_name){
-                            tracing::warn!("Defined custom mapping channel {} is missing from project channels", channel_canonical_name);
-                        }
-                    });
+                let mapping = channels
+                        .iter()
+                        .map(|(channel_str, channel)| {
 
-                    let mapping = channels
-                            .iter()
-                            .map(|(channel_str, channel)| {
+                            let mapping_location = url.get(*channel_str).unwrap();
 
-                                let mapping_location = url.get(*channel_str).unwrap();
-
-                                let url_or_path = match Url::parse(mapping_location) {
-                                    Ok(url) => MappingLocation::Url(url),
-                                    Err(err) => {
-                                        if let ParseError::RelativeUrlWithoutBase = err {
-                                            MappingLocation::Path(PathBuf::from(mapping_location))
-                                        } else {
-                                            miette::bail!("Could not convert {mapping_location} to neither URL or Path")
-                                        }
+                            let url_or_path = match Url::parse(mapping_location) {
+                                Ok(url) => MappingLocation::Url(url),
+                                Err(err) => {
+                                    if let ParseError::RelativeUrlWithoutBase = err {
+                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                    } else {
+                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
                                     }
-                                };
+                                }
+                            };
 
-                                Ok((channel.trim_end_matches('/').into(), url_or_path))
-                            })
-                            .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+                            Ok((channel.trim_end_matches('/').into(), url_or_path))
+                        })
+                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
-                    Ok(MappingSource::Custom { mapping })
-                },
-                None => Ok(MappingSource::Prefix),
+                Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
             }
-        )
+            None => Ok(MappingSource::Prefix),
+        }
     }
 
     /// Adds the specified channels to the manifest.
@@ -1420,6 +1417,121 @@ mod tests {
                 String::from(".pixi/install/setup.sh"),
                 String::from("test")
             ])
+        );
+    }
+
+    #[test]
+    fn test_activation_env() {
+        let contents = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = ["win-64", "linux-64"]
+
+            [activation.env]
+            FOO = "main"
+
+            [target.win-64.activation]
+            env = { FOO = "win-64" }
+
+            [target.linux-64.activation.env]
+            FOO = "linux-64"
+
+            [feature.bar.activation]
+            env = { FOO = "bar" }
+
+            [feature.bar.target.win-64.activation]
+            env = { FOO = "bar-win-64" }
+
+            [feature.bar.target.linux-64.activation]
+            env = { FOO = "bar-linux-64" }
+            "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let default_targets = &manifest.default_feature().targets;
+        let default_activation_env = default_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let win64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let linux64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            default_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("main")
+            )]))
+        );
+        assert_eq!(
+            win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("win-64")
+            )]))
+        );
+        assert_eq!(
+            linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("linux-64")
+            )]))
+        );
+
+        // Check that the feature activation env is set correctly
+        let feature_targets = &manifest
+            .feature(&FeatureName::Named(String::from("bar")))
+            .unwrap()
+            .targets;
+        let feature_activation_env = feature_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_win64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_linux64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            feature_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar")
+            )]))
+        );
+        assert_eq!(
+            feature_win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-win-64")
+            )]))
+        );
+        assert_eq!(
+            feature_linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-linux-64")
+            )]))
         );
     }
 

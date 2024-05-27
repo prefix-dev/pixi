@@ -17,7 +17,7 @@ use pixi::{
         project, remove, run,
         run::get_task_env,
         task::{self, AddArgs, AliasArgs},
-        LockFileUsageArgs,
+        update, LockFileUsageArgs,
     },
     consts,
     task::TaskName,
@@ -32,7 +32,7 @@ use thiserror::Error;
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
 /// To control the pixi process
@@ -362,6 +362,20 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 all: false,
+            },
+        }
+    }
+
+    /// Returns a [`UpdateBuilder]. To execute the command and await the result
+    /// call `.await` on the return value.
+    pub fn update(&self) -> UpdateBuilder {
+        UpdateBuilder {
+            args: update::Args {
+                config: Default::default(),
+                manifest_path: Some(self.manifest_path()),
+                no_install: true,
+                dry_run: false,
+                specs: Default::default(),
             },
         }
     }

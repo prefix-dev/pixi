@@ -31,9 +31,9 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
-    cli::{add, add::DependencyConfig, init, install, project, remove, task},
+    cli::{add, add::DependencyConfig, init, install, project, remove, task, update},
     task::TaskName,
-    DependencyType, SpecType,
+    DependencyType, EnvironmentName, SpecType,
 };
 use rattler_conda_types::Platform;
 use url::Url;
@@ -157,6 +157,11 @@ pub struct AddBuilder {
 impl AddBuilder {
     pub fn set_editable(mut self, editable: bool) -> Self {
         self.args.editable = editable;
+        self
+    }
+
+    pub fn with_feature(mut self, feature: impl ToString) -> Self {
+        self.args.dependency_config.feature = Some(feature.to_string());
         self
     }
 }
@@ -351,5 +356,53 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
             command: project::environment::Command::Add(self.args),
         })
         .boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`update::exeecute()`]. Call `.await` to
+/// call the CLI execute method and await the result at the same time.
+pub struct UpdateBuilder {
+    pub args: update::Args,
+}
+
+impl UpdateBuilder {
+    pub fn with_package(mut self, package: impl ToString) -> Self {
+        self.args
+            .specs
+            .packages
+            .get_or_insert_with(Vec::new)
+            .push(package.to_string());
+        self
+    }
+
+    pub fn with_environment(mut self, env: impl Into<EnvironmentName>) -> Self {
+        self.args
+            .specs
+            .environments
+            .get_or_insert_with(Vec::new)
+            .push(env.into());
+        self
+    }
+
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args
+            .specs
+            .platforms
+            .get_or_insert_with(Vec::new)
+            .push(platform);
+        self
+    }
+
+    pub fn dry_run(mut self, dry_run: bool) -> Self {
+        self.args.dry_run = dry_run;
+        self
+    }
+}
+
+impl IntoFuture for UpdateBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+    fn into_future(self) -> Self::IntoFuture {
+        update::execute(self.args).boxed_local()
     }
 }
