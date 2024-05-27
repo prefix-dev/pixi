@@ -118,6 +118,14 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
             .into_iter()
             .flat_map(|(name, specs)| specs.into_iter().map(move |spec| (name.clone(), spec)))
     }
+
+    /// Returns true if the dependency list contains the given package name.
+    pub fn contains_key<Q: ?Sized>(&self, name: &Q) -> bool
+    where
+        Q: Hash + Equivalent<N>,
+    {
+        self.map.contains_key(name)
+    }
 }
 
 impl Dependencies<PackageName, NamelessMatchSpec> {
