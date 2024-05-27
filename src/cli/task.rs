@@ -1,6 +1,7 @@
 use crate::project::manifest::EnvironmentName;
 use crate::project::manifest::FeatureName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::project::Environment;
 use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
@@ -9,12 +10,12 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::Write;
+use std::fmt::Write as _;
+use std::io;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
-
-static WIDTH: usize = 18;
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -117,7 +118,7 @@ pub struct ListArgs {
     /// Output the list of tasks from all environments in
     /// machine readable format (space delimited)
     /// this output is used for autocomplete by `pixi run`
-    #[arg(long, short, hide(true))]
+    #[arg(long, hide(true))]
     pub machine_readable: bool,
 
     /// The environment the list should be generated for.
@@ -192,9 +193,40 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-fn print_heading(value: &str) {
+fn print_heading(value: &str) -> io::Result<()> {
     let bold = console::Style::new().bold();
-    println!("{}\n{:-<2$}", bold.apply_to(value), "", value.len() + 4);
+    let mut writer = tabwriter::TabWriter::new(stdout());
+    writeln!(
+        writer,
+        "{}\n{:-<2$}",
+        bold.apply_to(value),
+        "",
+        value.len() + 4
+    )?;
+    writer.flush()?;
+    Ok(())
+}
+
+fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
+    let mut writer = tabwriter::TabWriter::new(stdout());
+    for env in envs {
+        let formatted: String =
+            env.get_filtered_tasks()
+                .iter()
+                .sorted()
+                .fold(String::new(), |mut output, name| {
+                    let _ = write!(output, "{}, ", name.fancy_display());
+                    output
+                });
+        writeln!(
+            writer,
+            "{}\t: {}",
+            env.name().fancy_display().bold(),
+            formatted
+        )?;
+    }
+    writer.flush()?;
+    Ok(())
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
@@ -325,22 +357,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else if args.summary {
-                print_heading("Tasks per environment:");
-                for env in project.environments() {
-                    let formatted: String = env.get_filtered_tasks().iter().sorted().fold(
-                        String::new(),
-                        |mut output, name| {
-                            let _ = write!(output, "{}, ", name.fancy_display());
-                            output
-                        },
-                    );
-
-                    println!(
-                        "{:>WIDTH$}: {}",
-                        env.name().fancy_display().bold(),
-                        formatted
-                    );
-                }
+                print_heading("Tasks per environment:").expect("io error when printing heading");
+                print_tasks_per_env(project.environments()).expect("io error when printing tasks");
             } else if args.machine_readable {
                 let unformatted: String =
                     available_tasks
@@ -360,12 +378,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             let _ = write!(output, "{}, ", name.fancy_display());
                             output
                         });
-                print_heading("Tasks that can run on this machine:");
-                println!(
-                    "{:>WIDTH$}: {}",
-                    console::Style::new().bold().apply_to("Tasks"),
-                    formatted
-                );
+                print_heading("Tasks that can run on this machine:").expect("an io error occurred");
+                println!("{}", formatted);
             }
         }
     };
