@@ -2,17 +2,18 @@ mod common;
 
 use std::path::PathBuf;
 
-use crate::{common::package_database::PackageDatabase, common::PixiControl};
 use insta::assert_debug_snapshot;
 use pixi::{util::default_channel_config, HasFeatures, Project};
 use rattler_conda_types::{Channel, Platform};
 use tempfile::TempDir;
 use url::Url;
 
+use crate::common::{package_database::PackageDatabase, PixiControl};
+
 #[tokio::test]
 async fn add_channel() {
-    // Create a local package database with no entries and write it to disk. This ensures that we
-    // have a valid channel.
+    // Create a local package database with no entries and write it to disk. This
+    // ensures that we have a valid channel.
     let package_database = PackageDatabase::default();
     let initial_channel_dir = TempDir::new().unwrap();
     package_database
