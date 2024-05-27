@@ -200,14 +200,12 @@ fn print_heading(value: &str) {
 fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
     for env in envs {
-        let formatted: String =
-            env.get_filtered_tasks()
-                .iter()
-                .sorted()
-                .fold(String::new(), |mut output, name| {
-                    let _ = write!(output, "{}, ", name.fancy_display());
-                    output
-                });
+        let formatted: String = env
+            .get_filtered_tasks()
+            .iter()
+            .sorted()
+            .map(|name| name.fancy_display())
+            .join(", ");
         writeln!(
             writer,
             "{}\t: {}",
@@ -350,24 +348,18 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 print_heading("Tasks per environment:");
                 print_tasks_per_env(project.environments()).expect("io error when printing tasks");
             } else if args.machine_readable {
-                let unformatted: String =
-                    available_tasks
-                        .iter()
-                        .sorted()
-                        .fold(String::new(), |mut output, name| {
-                            let _ = write!(output, "{} ", name.as_str());
-                            output
-                        });
+                let unformatted: String = available_tasks
+                    .iter()
+                    .sorted()
+                    .map(|name| name.as_str())
+                    .join(" ");
                 eprintln!("{}", unformatted);
             } else {
-                let formatted: String =
-                    available_tasks
-                        .iter()
-                        .sorted()
-                        .fold(String::new(), |mut output, name| {
-                            let _ = write!(output, "{}, ", name.fancy_display());
-                            output
-                        });
+                let formatted: String = available_tasks
+                    .iter()
+                    .sorted()
+                    .map(|name| name.fancy_display())
+                    .join(", ");
                 print_heading("Tasks that can run on this machine:");
                 eprintln!("{}", formatted);
             }
