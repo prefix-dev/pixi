@@ -1456,6 +1456,7 @@ async fn spawn_solve_conda_environment_task(
             );
 
             // Solve conda packages
+            pb.reset_style();
             pb.set_message("resolving conda");
             let mut records = lock_file::resolve_conda(
                 match_specs,
