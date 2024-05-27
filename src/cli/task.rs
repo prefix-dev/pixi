@@ -31,7 +31,7 @@ pub enum Operation {
     #[clap(alias = "@")]
     Alias(AliasArgs),
 
-    /// List all tasks
+    /// List all tasks in the project
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
@@ -110,10 +110,17 @@ pub struct AliasArgs {
 
 #[derive(Parser, Debug, Clone)]
 pub struct ListArgs {
+    /// Tasks available for this machine per environment
     #[arg(long, short)]
     pub summary: bool,
 
-    /// The environment the list should be generated for
+    /// Output the list of tasks from all environments in
+    /// machine readable format (space delimited)
+    /// this output is used for autocomplete by `pixi run`
+    #[arg(long, short, hide(true))]
+    pub machine_readable: bool,
+
+    /// The environment the list should be generated for.
     /// If not specified, the default environment is used.
     #[arg(long, short)]
     pub environment: Option<String>,
@@ -334,6 +341,16 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         formatted
                     );
                 }
+            } else if args.machine_readable {
+                let unformatted: String =
+                    available_tasks
+                        .iter()
+                        .sorted()
+                        .fold(String::new(), |mut output, name| {
+                            let _ = write!(output, "{} ", name.as_str());
+                            output
+                        });
+                println!("{}", unformatted);
             } else {
                 let formatted: String =
                     available_tasks
@@ -343,7 +360,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             let _ = write!(output, "{}, ", name.fancy_display());
                             output
                         });
-                print_heading("Tasks from all environments:");
+                print_heading("Tasks that can run on this machine:");
                 println!(
                     "{:>WIDTH$}: {}",
                     console::Style::new().bold().apply_to("Tasks"),
