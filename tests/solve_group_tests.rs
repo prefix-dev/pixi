@@ -1,16 +1,20 @@
-use std::{collections::HashMap, str::FromStr};
-
-use crate::common::{
-    builders::HasDependencyConfig,
-    package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
+use std::{
+    collections::{BTreeSet, HashMap},
+    str::FromStr,
 };
+
 use pixi::pypi_mapping::{self};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
 use tempfile::TempDir;
 use url::Url;
+
+use crate::common::{
+    builders::HasDependencyConfig,
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 
 mod common;
 
@@ -23,7 +27,8 @@ async fn conda_solve_group_functionality() {
     package_database.add_package(Package::build("foo", "2").finish());
     package_database.add_package(Package::build("foo", "3").finish());
 
-    // Add a package `bar` with 1 version that restricts `foo` to version 2 or lower.
+    // Add a package `bar` with 1 version that restricts `foo` to version 2 or
+    // lower.
     package_database.add_package(
         Package::build("bar", "1")
             .with_dependency("foo <3")
@@ -110,7 +115,7 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(dep.as_conda().unwrap().package_record().purls.is_empty());
+                assert!(dep.as_conda().unwrap().package_record().purls.is_none());
             }
         });
 
@@ -133,7 +138,14 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(!dep.as_conda().unwrap().package_record().purls.is_empty());
+                assert!(!dep
+                    .as_conda()
+                    .unwrap()
+                    .package_record()
+                    .purls
+                    .as_ref()
+                    .unwrap()
+                    .is_empty());
             }
         });
 
@@ -183,10 +195,15 @@ async fn test_purl_are_generated_using_custom_mapping() {
     )
     .unwrap();
 
-    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+    let first_purl = repo_data_record
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
 
     // We verify that `my-test-name` is used for `foo-bar-car` package
-    assert!(first_purl.name() == "my-test-name")
+    assert_eq!(first_purl.name(), "my-test-name")
 }
 
 #[tokio::test]
@@ -226,7 +243,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     // pandoc is not a python package
     // so purls for it should be empty
-    assert!(repo_data_record.package_record.purls.is_empty())
+    assert!(repo_data_record.package_record.purls.unwrap().is_empty())
 }
 
 #[tokio::test]
@@ -237,9 +254,9 @@ async fn test_dont_record_not_present_package_as_purl() {
     let project = pixi.project().unwrap();
     let client = project.authenticated_client();
     // We use one package that is present in our mapping: `boltons`
-    // and another one that is missing from conda and our mapping: `pixi-something-new-for-test`
-    // because `pixi-something-new-for-test` is from conda-forge channel
-    // we will anyway record a purl for it
+    // and another one that is missing from conda and our mapping:
+    // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
+    // from conda-forge channel we will anyway record a purl for it
     // by assumption that it's a pypi package
     let foo_bar_package = Package::build("pixi-something-new-for-test", "2").finish();
     let boltons_package = Package::build("boltons", "2").finish();
@@ -284,32 +301,44 @@ async fn test_dont_record_not_present_package_as_purl() {
     )
     .unwrap();
 
-    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+    let first_purl = repo_data_record
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
 
     // we verify that even if this name is not present in our mapping
     // we anyway record a purl because we make an assumption
     // that it's a pypi package
-    assert!(first_purl.name() == "pixi-something-new-for-test");
+    assert_eq!(first_purl.name(), "pixi-something-new-for-test");
 
-    let boltons_purl = boltons_repo_data_record.package_record.purls.pop().unwrap();
+    let boltons_purl = boltons_repo_data_record
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
 
     // for boltons we have a mapping record
     // so we test that we also record source=conda-forge-mapping qualifier
-    assert!(boltons_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping");
+    assert_eq!(
+        boltons_purl.qualifiers().get("source").unwrap(),
+        "conda-forge-mapping"
+    );
 }
 
 #[tokio::test]
 async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
     [project]
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ 'conda-forge' = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json" }}
-
+    conda-pypi-map = { 'conda-forge' = "tests/mapping_files/compressed_mapping.json" }
     "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -317,9 +346,9 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let client = project.authenticated_client();
 
     // We use one package that is present in our mapping: `boltons`
-    // and another one that is missing from conda and our mapping: `pixi-something-new-for-test`
-    // because `pixi-something-new-for-test` is from conda-forge channel
-    // we will anyway record a purl for it
+    // and another one that is missing from conda and our mapping:
+    // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
+    // from conda-forge channel we will anyway record a purl for it
     // by assumption that it's a pypi package
     // also we are using some custom mapping
     // so we will test for other purl qualifier comparing to
@@ -345,41 +374,53 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 
-    let mut boltons_package = packages.pop().unwrap();
+    let boltons_package = packages.pop().unwrap();
 
-    let boltons_first_purl = boltons_package.package_record.purls.pop().unwrap();
+    let boltons_first_purl = boltons_package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
 
     // for boltons we have a mapping record
     // so we test that we also record source=project-defined-mapping qualifier
-    assert!(boltons_first_purl.name() == "boltons");
-    assert!(boltons_first_purl.qualifiers().get("source").unwrap() == "project-defined-mapping");
+    assert_eq!(boltons_first_purl.name(), "boltons");
+    assert_eq!(
+        boltons_first_purl.qualifiers().get("source").unwrap(),
+        "project-defined-mapping"
+    );
 
-    let mut package = packages.pop().unwrap();
+    let package = packages.pop().unwrap();
 
-    let first_purl = package.package_record.purls.pop().unwrap();
+    let first_purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
 
     // we verify that even if this name is not present in our mapping
     // we anyway record a purl because we make an assumption
     // that it's a pypi package
-    assert!(first_purl.name() == "pixi-something-new");
+    assert_eq!(first_purl.name(), "pixi-something-new");
     assert!(first_purl.qualifiers().is_empty());
 }
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
+    let pixi = PixiControl::from_manifest(r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "tests/custom_mapping.json" }}
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/mapping_files/custom_mapping.json" }
      "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -401,32 +442,36 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mapping_map = mapping_source.custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 
     let package = packages.pop().unwrap();
 
-    assert!(
-        package.package_record.purls[0]
+    assert_eq!(
+        package
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .unwrap()
             .qualifiers()
             .get("source")
-            .unwrap()
-            == "project-defined-mapping"
+            .unwrap(),
+        "project-defined-mapping"
     );
 }
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
+    let pixi = PixiControl::from_manifest(r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "tests/custom_mapping.json" }}
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/mapping_files/custom_mapping.json" }
      "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -448,16 +493,21 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mapping_map = mapping_source.custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 
     let package = packages.pop().unwrap();
-    assert!(
-        package.package_record.purls[0]
+    assert_eq!(
+        package
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .unwrap()
             .qualifiers()
             .get("source")
-            .unwrap()
-            == "project-defined-mapping"
+            .unwrap(),
+        "project-defined-mapping"
     );
 }

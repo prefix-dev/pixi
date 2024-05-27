@@ -1,0 +1,11 @@
+#:schema ./../../schema.json
+[project]
+name = "project"
+platforms = ["linux-64"]
+channels = ["conda-forge"]
+
+[activation.env]
+# It can not be a list
+test = ["pytest"]
+# It can not be a number
+test2 = 1

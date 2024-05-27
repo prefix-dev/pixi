@@ -73,6 +73,10 @@ prod = {features = ["test2"], solve-group = "test"}
 
 [activation]
 scripts = ["activate.sh", "deactivate.sh"]
+env = { TEST = "bla"}
+
+[target.unix.activation.env]
+TEST2 = "bla2"
 
 [target.win-64.activation]
 scripts = ["env_setup.bat"]

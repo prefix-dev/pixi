@@ -12,7 +12,9 @@ use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
+use rattler_lock::{
+    ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+};
 use requirements_txt::EditableRequirement;
 use std::fmt::Display;
 use std::ops::Sub;
@@ -32,10 +34,33 @@ pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
-    #[error(
-        "the indexes used to previously solve to lock file do not match the environments indexes"
-    )]
-    IndexesMismatch,
+    #[error(transparent)]
+    IndexesMismatch(#[from] IndexesMismatch),
+}
+
+#[derive(Debug, Error)]
+pub struct IndexesMismatch {
+    current: PypiIndexes,
+    previous: Option<PypiIndexes>,
+}
+
+impl Display for IndexesMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(previous) = &self.previous {
+            write!(
+                f,
+                "the indexes used to previously solve to lock file do not match the environments indexes.\n \
+                Expected: {expected:#?}\n Found: {found:#?}",
+                expected = previous,
+                found = self.current
+            )
+        } else {
+            write!(
+                f,
+                "the indexes used to previously solve to lock file are missing"
+            )
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -149,18 +174,27 @@ pub fn verify_environment_satisfiability(
 
     // Check if the indexes in the lock file match our current configuration.
     if !environment.pypi_dependencies(None).is_empty() {
+        let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
         match locked_environment.pypi_indexes() {
             None => {
                 if locked_environment
                     .version()
                     .should_pypi_indexes_be_present()
                 {
-                    return Err(EnvironmentUnsat::IndexesMismatch);
+                    return Err(IndexesMismatch {
+                        current: indexes,
+                        previous: None,
+                    }
+                    .into());
                 }
             }
-            Some(indexes) => {
-                if indexes != &rattler_lock::PypiIndexes::from(grouped_env.pypi_options()) {
-                    return Err(EnvironmentUnsat::IndexesMismatch);
+            Some(locked_indexes) => {
+                if locked_indexes != &indexes {
+                    return Err(IndexesMismatch {
+                        current: indexes,
+                        previous: Some(locked_indexes.clone()),
+                    }
+                    .into());
                 }
             }
         }
@@ -211,7 +245,7 @@ pub fn verify_platform_satisfiability(
         && pypi_packages.is_empty()
         && !conda_packages
             .iter()
-            .any(|record| !record.package_record.purls.is_empty())
+            .any(|record| record.package_record.purls.is_some())
     {
         {
             return Err(PlatformUnsat::MissingPurls);

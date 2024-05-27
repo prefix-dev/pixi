@@ -6,7 +6,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, ChannelPriority, SolverImpl, SolverTask};
+use rattler_solve::{resolvo, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
@@ -31,7 +31,8 @@ impl BinDir {
         Ok(Self(bin_dir))
     }
 
-    /// Get the Binary Executable directory, erroring if it doesn't already exist.
+    /// Get the Binary Executable directory, erroring if it doesn't already
+    /// exist.
     pub async fn from_existing() -> miette::Result<Self> {
         let bin_dir = bin_dir().ok_or(miette::miette!(
             "could not find global binary executable directory"
@@ -50,7 +51,8 @@ impl BinDir {
 pub struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
-    /// Construct the path to the env directory for the binary package `package_name`.
+    /// Construct the path to the env directory for the binary package
+    /// `package_name`.
     fn package_bin_env_dir(package_name: &PackageName) -> miette::Result<PathBuf> {
         Ok(bin_env_dir()
             .ok_or(miette::miette!(
@@ -59,7 +61,8 @@ impl BinEnvDir {
             .join(package_name.as_normalized()))
     }
 
-    /// Get the Binary Environment directory, erroring if it doesn't already exist.
+    /// Get the Binary Environment directory, erroring if it doesn't already
+    /// exist.
     pub async fn from_existing(package_name: &PackageName) -> miette::Result<Self> {
         let bin_env_dir = Self::package_bin_env_dir(package_name)?;
         if tokio::fs::try_exists(&bin_env_dir)
@@ -135,7 +138,8 @@ pub(super) fn channel_name_from_prefix(
 ///
 /// # Returns
 ///
-/// The package records (with dependencies records) for the given package MatchSpec
+/// The package records (with dependencies records) for the given package
+/// MatchSpec
 pub fn load_package_records<'a>(
     package_matchspec: MatchSpec,
     sparse_repodata: impl IntoIterator<Item = &'a SparseRepoData>,
@@ -155,12 +159,8 @@ pub fn load_package_records<'a>(
     // Construct a solver task that we can start solving.
     let task = SolverTask {
         specs: vec![package_matchspec],
-        available_packages: &available_packages,
         virtual_packages,
-        locked_packages: vec![],
-        pinned_packages: vec![],
-        timeout: None,
-        channel_priority: ChannelPriority::Strict,
+        ..SolverTask::from_iter(&available_packages)
     };
 
     // Solve it
@@ -169,8 +169,8 @@ pub fn load_package_records<'a>(
     Ok(records)
 }
 
-/// Get networking Client and fetch [`SparseRepoData`] for the given channels and
-/// current platform using the client
+/// Get networking Client and fetch [`SparseRepoData`] for the given channels
+/// and current platform using the client
 ///
 /// # Returns
 ///

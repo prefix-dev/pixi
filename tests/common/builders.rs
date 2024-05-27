@@ -1,15 +1,16 @@
 //! Contains builders for the CLI commands
 //! We are using a builder pattern here to make it easier to write tests.
-//! And are kinda abusing the `IntoFuture` trait to make it easier to execute as close
-//! as we can get to the command line args
+//! And are kinda abusing the `IntoFuture` trait to make it easier to execute as
+//! close as we can get to the command line args
 //!
 //! # Using IntoFuture
 //!
-//! When `.await` is called on an object that is not a `Future` the compiler will first check if the
-//! type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
-//! await the resulting `Future`. We can abuse this behavior in builder patterns because the
-//! `into_future` method can also be used as a `finish` function. This allows you to reduce the
-//! required code.
+//! When `.await` is called on an object that is not a `Future` the compiler
+//! will first check if the type implements `IntoFuture`. If it does it will
+//! call the `IntoFuture::into_future()` method and await the resulting
+//! `Future`. We can abuse this behavior in builder patterns because the
+//! `into_future` method can also be used as a `finish` function. This allows
+//! you to reduce the required code.
 //!
 //! ```rust
 //! impl IntoFuture for InitBuilder {
@@ -20,23 +21,21 @@
 //!         Box::pin(init::execute(self.args))
 //!     }
 //! }
-//!
 //! ```
 
-use futures::FutureExt;
-use pixi::cli::add::DependencyConfig;
-use pixi::cli::remove;
-use pixi::task::TaskName;
-use pixi::{
-    cli::{add, init, install, project, task},
-    DependencyType, SpecType,
-};
-use rattler_conda_types::Platform;
 use std::{
     future::{Future, IntoFuture},
     path::{Path, PathBuf},
     pin::Pin,
 };
+
+use futures::FutureExt;
+use pixi::{
+    cli::{add, add::DependencyConfig, init, install, project, remove, task, update},
+    task::TaskName,
+    DependencyType, EnvironmentName, SpecType,
+};
+use rattler_conda_types::Platform;
 use url::Url;
 
 /// Strings from an iterator
@@ -44,8 +43,8 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
     iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
-/// Contains the arguments to pass to [`init::execute()`]. Call `.await` to call the CLI execute
-/// method and await the result at the same time.
+/// Contains the arguments to pass to [`init::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
 pub struct InitBuilder {
     pub args: init::Args,
 }
@@ -78,7 +77,8 @@ impl IntoFuture for InitBuilder {
     }
 }
 
-/// A trait used by AddBuilder and RemoveBuilder to set their inner DependencyConfig
+/// A trait used by AddBuilder and RemoveBuilder to set their inner
+/// DependencyConfig
 pub trait HasDependencyConfig: Sized {
     fn dependency_config(&mut self) -> &mut DependencyConfig;
 
@@ -127,15 +127,16 @@ pub trait HasDependencyConfig: Sized {
         self
     }
 
-    /// Set whether to also install the environment. By default, the environment is NOT
-    /// installed to reduce test times.
+    /// Set whether to also install the environment. By default, the environment
+    /// is NOT installed to reduce test times.
     fn with_install(mut self, install: bool) -> Self {
         self.dependency_config().no_install = !install;
         self
     }
 
-    /// Skip updating lockfile, this will only check if it can add a dependencies.
-    /// If it can add it will only add it to the manifest. Install will be skipped by default.
+    /// Skip updating lockfile, this will only check if it can add a
+    /// dependencies. If it can add it will only add it to the manifest.
+    /// Install will be skipped by default.
     fn without_lockfile_update(mut self) -> Self {
         self.dependency_config().no_lockfile_update = true;
         self
@@ -147,8 +148,8 @@ pub trait HasDependencyConfig: Sized {
     }
 }
 
-/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
+/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
 pub struct AddBuilder {
     pub args: add::Args,
 }
@@ -156,6 +157,11 @@ pub struct AddBuilder {
 impl AddBuilder {
     pub fn set_editable(mut self, editable: bool) -> Self {
         self.args.editable = editable;
+        self
+    }
+
+    pub fn with_feature(mut self, feature: impl ToString) -> Self {
+        self.args.dependency_config.feature = Some(feature.to_string());
         self
     }
 }
@@ -175,8 +181,8 @@ impl IntoFuture for AddBuilder {
     }
 }
 
-/// Contains the arguments to pass to [`remove::execute()`]. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
+/// Contains the arguments to pass to [`remove::execute()`]. Call `.await` to
+/// call the CLI execute method and await the result at the same time.
 pub struct RemoveBuilder {
     pub args: remove::Args,
 }
@@ -286,8 +292,8 @@ impl IntoFuture for ProjectChannelAddBuilder {
     }
 }
 
-/// Contains the arguments to pass to [`install::execute()`]. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
+/// Contains the arguments to pass to [`install::execute()`]. Call `.await` to
+/// call the CLI execute method and await the result at the same time.
 pub struct InstallBuilder {
     pub args: install::Args,
 }
@@ -308,5 +314,53 @@ impl IntoFuture for InstallBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         install::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`update::exeecute()`]. Call `.await` to
+/// call the CLI execute method and await the result at the same time.
+pub struct UpdateBuilder {
+    pub args: update::Args,
+}
+
+impl UpdateBuilder {
+    pub fn with_package(mut self, package: impl ToString) -> Self {
+        self.args
+            .specs
+            .packages
+            .get_or_insert_with(Vec::new)
+            .push(package.to_string());
+        self
+    }
+
+    pub fn with_environment(mut self, env: impl Into<EnvironmentName>) -> Self {
+        self.args
+            .specs
+            .environments
+            .get_or_insert_with(Vec::new)
+            .push(env.into());
+        self
+    }
+
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args
+            .specs
+            .platforms
+            .get_or_insert_with(Vec::new)
+            .push(platform);
+        self
+    }
+
+    pub fn dry_run(mut self, dry_run: bool) -> Self {
+        self.args.dry_run = dry_run;
+        self
+    }
+}
+
+impl IntoFuture for UpdateBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+    fn into_future(self) -> Self::IntoFuture {
+        update::execute(self.args).boxed_local()
     }
 }
