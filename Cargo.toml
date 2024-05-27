@@ -217,6 +217,3 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-
-[profile.release]
-debug = true
