@@ -193,18 +193,9 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-fn print_heading(value: &str) -> io::Result<()> {
+fn print_heading(value: &str) {
     let bold = console::Style::new().bold();
-    let mut writer = tabwriter::TabWriter::new(stdout());
-    writeln!(
-        writer,
-        "{}\n{:-<2$}",
-        bold.apply_to(value),
-        "",
-        value.len() + 4
-    )?;
-    writer.flush()?;
-    Ok(())
+    eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
 fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
@@ -357,7 +348,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else if args.summary {
-                print_heading("Tasks per environment:").expect("io error when printing heading");
+                print_heading("Tasks per environment:");
                 print_tasks_per_env(project.environments()).expect("io error when printing tasks");
             } else if args.machine_readable {
                 let unformatted: String =
@@ -368,7 +359,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             let _ = write!(output, "{} ", name.as_str());
                             output
                         });
-                println!("{}", unformatted);
+                eprintln!("{}", unformatted);
             } else {
                 let formatted: String =
                     available_tasks
@@ -378,8 +369,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             let _ = write!(output, "{}, ", name.fancy_display());
                             output
                         });
-                print_heading("Tasks that can run on this machine:").expect("an io error occurred");
-                println!("{}", formatted);
+                print_heading("Tasks that can run on this machine:");
+                eprintln!("{}", formatted);
             }
         }
     };
