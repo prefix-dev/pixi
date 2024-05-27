@@ -375,7 +375,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 
@@ -414,7 +414,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
      [project]
      name = "test-channel-change"
@@ -422,7 +422,7 @@ async fn test_custom_mapping_channel_with_suffix() {
      platforms = ["linux-64"]
      conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "tests/mapping_files/custom_mapping.json" }}
      "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -444,7 +444,7 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mapping_map = mapping_source.custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 
@@ -466,7 +466,7 @@ async fn test_custom_mapping_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
      [project]
      name = "test-channel-change"
@@ -474,7 +474,7 @@ async fn test_repo_data_record_channel_with_suffix() {
      platforms = ["linux-64"]
      conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "tests/mapping_files/custom_mapping.json" }}
      "#,
-    ))
+    )
     .unwrap();
 
     let project = pixi.project().unwrap();
@@ -496,7 +496,7 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mapping_map = mapping_source.custom().unwrap();
 
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
 

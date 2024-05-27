@@ -403,7 +403,7 @@ mod tests {
         let task = manifest.default_environment().get_filtered_tasks();
 
         assert_eq!(task.len(), 1);
-        assert_eq!(task.contains(&"foo".into()), true);
+        assert!(task.contains(&"foo".into()));
     }
 
     fn format_dependencies(dependencies: CondaDependencies) -> String {
