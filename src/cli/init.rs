@@ -5,7 +5,6 @@ use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
@@ -180,35 +179,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &vec![],
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
+        let platforms = platforms
+            .into_iter()
+            .map(|p| p.parse().into_diagnostic())
+            .collect::<Result<Vec<Platform>, _>>()?;
         for spec in conda_deps {
-            for platform in platforms.iter() {
-                // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
-                project.manifest.add_dependency(
-                    &spec,
-                    crate::SpecType::Run,
-                    Some(platform.parse().into_diagnostic()?),
-                    &FeatureName::default(),
-                )?;
-            }
+            // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
+            project.manifest.add_dependency(
+                &spec,
+                crate::SpecType::Run,
+                &platforms,
+                &FeatureName::default(),
+            )?;
         }
         for requirement in pypi_deps {
-            for platform in platforms.iter() {
-                project.manifest.add_pypi_dependency(
-                    &requirement,
-                    Some(platform.parse().into_diagnostic()?),
-                    &FeatureName::default(),
-                )?;
-            }
+            project.manifest.add_pypi_dependency(
+                &requirement,
+                &platforms,
+                &FeatureName::default(),
+                None,
+            )?;
         }
         project.save()?;
 
-        get_up_to_date_prefix(
-            &project.default_environment(),
-            LockFileUsage::Update,
-            false,
-            IndexMap::default(),
-        )
-        .await?;
+        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
     } else {
         let channels = if let Some(channels) = args.channels {
             channels

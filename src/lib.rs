@@ -1,16 +1,16 @@
 mod activation;
 pub mod cli;
+pub(crate) mod conda_pypi_clobber;
 pub mod config;
 pub mod consts;
 mod environment;
-mod install;
 mod install_pypi;
+mod install_wheel;
 mod lock_file;
 mod prefix;
 mod progress;
 mod project;
 mod prompt;
-mod repodata;
 pub mod task;
 #[cfg(unix)]
 pub mod unix;
@@ -22,6 +22,7 @@ mod pypi_tags;
 mod uv_reporter;
 
 pub mod pypi_mapping;
+mod repodata;
 
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;

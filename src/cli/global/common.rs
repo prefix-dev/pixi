@@ -3,11 +3,10 @@ use std::path::PathBuf;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
-    RepoDataRecord,
+    Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, ChannelPriority, SolverImpl, SolverTask};
+use rattler_solve::{resolvo, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
@@ -17,22 +16,6 @@ use crate::{
     utils::reqwest::build_reqwest_clients,
 };
 
-/// A trait to facilitate extraction of packages data from arguments
-pub(super) trait HasSpecs {
-    /// returns packages passed as arguments to the command
-    fn packages(&self) -> Vec<&str>;
-
-    fn specs(&self) -> miette::Result<IndexMap<PackageName, MatchSpec>> {
-        let mut map = IndexMap::with_capacity(self.packages().len());
-        for package in self.packages() {
-            let spec = MatchSpec::from_str(package, ParseStrictness::Strict).into_diagnostic()?;
-            let name = package_name(&spec)?;
-            map.insert(name, spec);
-        }
-
-        Ok(map)
-    }
-}
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
 
@@ -48,7 +31,8 @@ impl BinDir {
         Ok(Self(bin_dir))
     }
 
-    /// Get the Binary Executable directory, erroring if it doesn't already exist.
+    /// Get the Binary Executable directory, erroring if it doesn't already
+    /// exist.
     pub async fn from_existing() -> miette::Result<Self> {
         let bin_dir = bin_dir().ok_or(miette::miette!(
             "could not find global binary executable directory"
@@ -67,7 +51,8 @@ impl BinDir {
 pub struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
-    /// Construct the path to the env directory for the binary package `package_name`.
+    /// Construct the path to the env directory for the binary package
+    /// `package_name`.
     fn package_bin_env_dir(package_name: &PackageName) -> miette::Result<PathBuf> {
         Ok(bin_env_dir()
             .ok_or(miette::miette!(
@@ -76,7 +61,8 @@ impl BinEnvDir {
             .join(package_name.as_normalized()))
     }
 
-    /// Get the Binary Environment directory, erroring if it doesn't already exist.
+    /// Get the Binary Environment directory, erroring if it doesn't already
+    /// exist.
     pub async fn from_existing(package_name: &PackageName) -> miette::Result<Self> {
         let bin_env_dir = Self::package_bin_env_dir(package_name)?;
         if tokio::fs::try_exists(&bin_env_dir)
@@ -152,14 +138,15 @@ pub(super) fn channel_name_from_prefix(
 ///
 /// # Returns
 ///
-/// The package records (with dependencies records) for the given package MatchSpec
-pub fn load_package_records(
+/// The package records (with dependencies records) for the given package
+/// MatchSpec
+pub fn load_package_records<'a>(
     package_matchspec: MatchSpec,
-    sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
+    sparse_repodata: impl IntoIterator<Item = &'a SparseRepoData>,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let package_name = package_name(&package_matchspec)?;
     let available_packages =
-        SparseRepoData::load_records_recursive(sparse_repodata.values(), vec![package_name], None)
+        SparseRepoData::load_records_recursive(sparse_repodata, vec![package_name], None)
             .into_diagnostic()?;
     let virtual_packages = rattler_virtual_packages::VirtualPackage::current()
         .into_diagnostic()?
@@ -172,12 +159,8 @@ pub fn load_package_records(
     // Construct a solver task that we can start solving.
     let task = SolverTask {
         specs: vec![package_matchspec],
-        available_packages: &available_packages,
         virtual_packages,
-        locked_packages: vec![],
-        pinned_packages: vec![],
-        timeout: None,
-        channel_priority: ChannelPriority::Strict,
+        ..SolverTask::from_iter(&available_packages)
     };
 
     // Solve it
@@ -186,8 +169,8 @@ pub fn load_package_records(
     Ok(records)
 }
 
-/// Get networking Client and fetch [`SparseRepoData`] for the given channels and
-/// current platform using the client
+/// Get networking Client and fetch [`SparseRepoData`] for the given channels
+/// and current platform using the client
 ///
 /// # Returns
 ///

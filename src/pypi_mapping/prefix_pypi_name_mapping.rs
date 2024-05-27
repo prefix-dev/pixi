@@ -1,25 +1,27 @@
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
+use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
-
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 use url::Url;
 
-use super::{custom_pypi_mapping, Reporter};
+use super::{
+    build_pypi_purl_from_package_record, custom_pypi_mapping, is_conda_forge_record, Reporter,
+};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
 const COMPRESSED_MAPPING: &str =
-    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
+    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
@@ -71,7 +73,13 @@ pub async fn conda_pypi_name_mapping(
         // that have purls
         // here we only filter packages that don't them
         // to save some requests
-        .filter(|package| package.package_record.purls.is_empty())
+        .filter(|package| {
+            package
+                .package_record
+                .purls
+                .as_ref()
+                .is_some_and(|p| p.is_empty())
+        })
         .filter_map(|package| {
             package
                 .package_record
@@ -93,7 +101,8 @@ pub async fn conda_pypi_name_mapping(
         let reporter = reporter.clone();
         let concurrency_limit = concurrency_limit.clone();
 
-        // Create a future that fetches the mapping for the record's hash concurrently with the rest of the requests.
+        // Create a future that fetches the mapping for the record's hash concurrently
+        // with the rest of the requests.
         pending_futures.push(async move {
             // Acquire a permit to limit the number of concurrent requests
             let _permit = concurrency_limit
@@ -143,7 +152,7 @@ pub async fn conda_pypi_name_mapping(
 /// Downloads and caches prefix.dev conda-pypi mapping.
 pub async fn conda_pypi_name_compressed_mapping(
     client: &ClientWithMiddleware,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<HashMap<String, Option<String>>> {
     let compressed_mapping_url =
         Url::parse(COMPRESSED_MAPPING).expect("COMPRESSED_MAPPING static variable should be valid");
 
@@ -158,6 +167,7 @@ pub async fn amend_pypi_purls(
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
     let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
+
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
     }
@@ -165,45 +175,94 @@ pub async fn amend_pypi_purls(
     Ok(())
 }
 
-/// Updates the specified repodata record to include an optional PyPI package name if it is missing.
+/// Updates the specified repodata record to include an optional PyPI package
+/// name if it is missing.
 ///
-/// This function guesses the PyPI package name from the conda package name if the record refers to
-/// a conda-forge package.
+/// This function resolves package pypi purl using the following approach:
+/// 1. Tries to find a mapping by package hash.
+/// 2. If the mapping is missing, tries to find a .json mapping by name.
+/// 3. If both mappings are missing and it's a conda-forge record, assumes it is
+///    a PyPI package.
 pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
-    compressed_mapping: &HashMap<String, String>,
+    compressed_mapping: &HashMap<String, Option<String>>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
         .package_record
         .purls
-        .iter()
-        .any(|p| p.package_type() == "pypi")
+        .as_ref()
+        .is_some_and(|vec| vec.iter().any(|p| p.package_type() == "pypi"))
     {
         return Ok(());
     }
 
+    let mut purls = Vec::new();
+
+    let mut not_a_pypi = false;
+
+    // if package have a hash
     if let Some(sha256) = record.package_record.sha256 {
+        // we look into our mapping by it's hash
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
-            if let Some(pypi_names) = &mapped_name.versions {
-                for pypi_name in pypi_names.keys() {
-                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name);
+            // if we have pypi names in mapping
+            // we populate purls for it
+            if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
+                for pypi_name in pypi_names {
+                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
+                        .with_qualifier("source", "conda-forge-mapping")
+                        .expect("valid qualifier");
                     let built_purl = purl.build().expect("valid pypi package url");
-                    record.package_record.purls.push(built_purl);
+                    // Push the value into the vector
+                    purls.push(built_purl);
                 }
+            } else {
+                // it's not a pypi name
+                not_a_pypi = true;
             }
-        } else if let Some(mapped_name) =
-            compressed_mapping.get(record.package_record.name.as_normalized())
-        {
-            // maybe the packages is not yet updated
-            // so fallback to the one from compressed mapping
-            let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
-            let built_purl = purl.build().expect("valid pypi package url");
-            record.package_record.purls.push(built_purl);
+            // we don't have a mapping for it's hash yet
+            // so we are looking into our .json map by name
         }
-        // nothing was matched so we don't add purls for it
     }
+
+    // if we don't have a mapping for it's hash yet
+    // or this package is missing sha256
+    // we are looking into our .json map by name
+    if let Some(possible_mapped_name) =
+        compressed_mapping.get(record.package_record.name.as_normalized())
+    {
+        if !not_a_pypi && purls.is_empty() {
+            // if we have a pypi name for it
+            // we record the purl
+            if let Some(mapped_name) = possible_mapped_name {
+                let purl = PackageUrl::builder(String::from("pypi"), mapped_name)
+                    .with_qualifier("source", "conda-forge-mapping")
+                    .expect("valid qualifier");
+                let built_purl = purl.build().expect("valid pypi package url");
+                purls.push(built_purl);
+            } else {
+                // it's not a pypi name
+                not_a_pypi = true;
+            }
+        }
+    }
+
+    // package is not in our mapping yet
+    // so we assume that it is the same as the one from conda-forge
+    if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
+        // Convert the conda package names to pypi package names. If the conversion
+        // fails we just assume that its not a valid python package.
+        if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
+            purls.push(purl);
+        }
+    }
+
+    let package_purls = record
+        .package_record
+        .purls
+        .get_or_insert_with(BTreeSet::new);
+    package_purls.extend(purls);
 
     Ok(())
 }

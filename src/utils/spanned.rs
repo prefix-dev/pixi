@@ -187,7 +187,7 @@ mod tests {
 
         let t = "s = \"value\"\n";
 
-        let u: Value = toml::from_str(t).unwrap();
+        let u: Value = toml_edit::de::from_str(t).unwrap();
 
         assert_eq!(u.s.span().unwrap(), 4..11);
         assert_eq!(u.s.get_ref(), "value");

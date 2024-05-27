@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2024-05-13
+### ✨ Highlights
+
+- Support for source pypi dependencies through the cli:
+  - `pixi add --pypi 'package @ package.whl'`, perfect for adding just build wheels to your environment in CI.
+  - `pixi add --pypi 'package_from_git @ git+https://github.com/org/package.git'`, to add a package from a git repository.
+  - `pixi add --pypi 'package_from_path @ file:///path/to/package' --editable`, to add a package from a local path.
+
+
+### 📃 Details
+#### Added
+- Implement more functions for `pixi add --pypi` by @wolfv in [#1244](https://github.com/prefix-dev/pixi/pull/1244)
+
+#### Documentation
+- Update `install` cli doc by @vigneshmanick in [#1336](https://github.com/prefix-dev/pixi/pull/1336)
+- Replace empty default example with no-default-feature by @beenje in [#1352](https://github.com/prefix-dev/pixi/pull/1352)
+- Document the add & remove cli behaviour with pyproject.toml manifest by @olivier-lacroix in [#1338](https://github.com/prefix-dev/pixi/pull/1338)
+- Add environment activation to GitHub actions docs by @pavelzw in [#1371](https://github.com/prefix-dev/pixi/pull/1371)
+- Clarify in CLI that run can also take commands by @twrightsman in [#1368](https://github.com/prefix-dev/pixi/pull/1368)
+
+#### Fixed
+
+- Automated update of install script in pixi.sh by @ruben-arts in [#1351](https://github.com/prefix-dev/pixi/pull/1351)
+- Wrong description on `pixi project help` by @notPlancha in [#1358](https://github.com/prefix-dev/pixi/pull/1358)
+- Don't need a python interpreter when not having `pypi` dependencies. by @ruben-arts in [#1366](https://github.com/prefix-dev/pixi/pull/1366)
+- Don't error on not editable not path by @ruben-arts in [#1365](https://github.com/prefix-dev/pixi/pull/1365)
+- Align shell-hook cli with shell by @ruben-arts in [#1364](https://github.com/prefix-dev/pixi/pull/1364)
+- Only write prefix file if needed by @ruben-arts in [#1363](https://github.com/prefix-dev/pixi/pull/1363)
+
+
+#### Refactor
+- Lock-file resolve functionality in separated modules by @tdejager in [#1337](https://github.com/prefix-dev/pixi/pull/1337)
+- Use generic for RepoDataRecordsByName and PypiRecordsByName by @olivier-lacroix in [#1341](https://github.com/prefix-dev/pixi/pull/1341)
+
+
+## New Contributors
+* @twrightsman made their first contribution in [#1368](https://github.com/prefix-dev/pixi/pull/1368)
+* @notPlancha made their first contribution in [#1358](https://github.com/prefix-dev/pixi/pull/1358)
+* @vigneshmanick made their first contribution in [#1336](https://github.com/prefix-dev/pixi/pull/1336)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.21.1..v0.22.0)
+
+
 ## [0.21.1] - 2024-05-07
 ### 📃 Details
 #### Fixed

@@ -102,7 +102,7 @@ The JSON should follow the following format:
 
 Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
 
-Lastly you can set the authentication override file in the [global configuration file](./global_configuration.md).
+Lastly you can set the authentication override file in the [global configuration file](./../reference/pixi_configuration.md).
 
 ## PyPI authentication
 Currently, we support the following methods for authenticating against PyPI:
@@ -122,7 +122,7 @@ To enable this use the CLI flag `--pypi-keyring-provider` which can either be se
 pixi install --pypi-keyring-provider subprocess
 ```
 
-This option can also be set in the global configuration file under [pypi-config](./global_configuration.md#pypi-configuration).
+This option can also be set in the global configuration file under [pypi-config](./../reference/pixi_configuration.md#pypi-configuration).
 
 #### Installing keyring
 To install keyring you can use pixi global install:
@@ -144,17 +144,58 @@ pixi global install pipx
 pipx install keyring
 
 # For Google Artifact Registry, also install and initialize its keyring backend.
+# Inject this into the pipx environment
 pipx inject keyring keyrings.google-artifactregistry-auth --index-url https://pypi.org/simple
 gcloud auth login
 ```
 
-### Using keyring
+#### Using keyring with Basic Auth
 Use keyring to store your credentials e.g:
 
 ```shell
 keyring set https://my-index/simple your_username
 # prompt will appear for your password
 ```
+
+##### Configuration
+Make sure to include `username@` in the URL of the registry.
+An example of this would be:
+
+```toml
+[pypi-options]
+index-url = "https://username@custom-registry.com/simple"
+```
+
+#### GCP
+For Google Artifact Registry, you can use the Google Cloud SDK to authenticate.
+Make sure to have run `gcloud auth login` before using pixi.
+Another thing to note is that you need to add `oauth2accesstoken` to the URL of the registry.
+An example of this would be:
+
+##### Configuration
+
+```toml
+# rest of the pixi.toml
+#
+# Add's the following options to the default feature
+[pypi-options]
+extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
+```
+
+!!!Note
+    Include the `/simple` at the end, replace the `<location>` etc. with your project and repository and location.
+To find this URL more easily, you can use the `gcloud` command:
+
+```shell
+gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
+```
+
+#### Installing your environment
+To actually install either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag:
+```shell
+pixi install --pypi-keyring-provider subprocess
+```
+
 
 ### `.netrc` file
 

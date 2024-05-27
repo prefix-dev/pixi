@@ -4,18 +4,25 @@ pub mod errors;
 pub mod grouped_environment;
 pub mod has_features;
 pub mod manifest;
+mod repodata;
 mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
-use indexmap::{Equivalent, IndexSet};
+use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
 
-use rattler_conda_types::{Channel, Platform, Version};
+use rattler_conda_types::Version;
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
-use rattler_virtual_packages::VirtualPackage;
+use rattler_repodata_gateway::Gateway;
+
+#[cfg(not(windows))]
+use std::os::unix::fs::symlink;
+
+use std::sync::OnceLock;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -23,26 +30,23 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use xxhash_rust::xxh3::xxh3_64;
 
 use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
+use crate::consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST};
 use crate::project::grouped_environment::GroupedEnvironment;
-use crate::pypi_mapping::MappingSource;
-use crate::task::TaskName;
-use crate::utils::reqwest::build_reqwest_clients;
-use crate::{
-    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
-    task::Task,
-};
-use manifest::{EnvironmentName, Manifest, SystemRequirements};
 
-use self::{
-    has_features::HasFeatures,
-    manifest::{pyproject::PyProjectToml, Environments},
-};
+use crate::pypi_mapping::MappingSource;
+use crate::utils::reqwest::build_reqwest_clients;
+use manifest::{EnvironmentName, Manifest};
+
+use self::manifest::{pyproject::PyProjectToml, Environments};
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
+
+static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -99,10 +103,15 @@ pub struct Project {
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
     authenticated_client: ClientWithMiddleware,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The cache that contains mapping
+    mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
@@ -123,17 +132,19 @@ impl Project {
 
         let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
 
-        let config =
-            Config::load(&root.join(consts::PIXI_DIR)).unwrap_or_else(|_| Config::load_global());
+        let config = Config::load(&root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
+
         Self {
             root,
             client,
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
+            repodata_gateway: Default::default(),
         }
     }
 
@@ -207,7 +218,8 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let config = Config::load(&root.join(consts::PIXI_DIR))?;
+        // Load the user configuration from the local project and all default locations
+        let config = Config::load(root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
 
@@ -217,7 +229,9 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
+            repodata_gateway: Default::default(),
         })
     }
 
@@ -286,13 +300,68 @@ impl Project {
         self.root.join(consts::PIXI_DIR)
     }
 
-    /// Returns the environment directory of the project [consts::ENVIRONMENTS_DIR]
-    pub fn environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    /// Create the detached-environments path for this project if it is set in the config
+    fn detached_environments_path(&self) -> Option<PathBuf> {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+            Some(detached_environments_path.join(format!(
+                "{}-{}",
+                self.name(),
+                xxh3_64(self.root.to_string_lossy().as_bytes())
+            )))
+        } else {
+            None
+        }
     }
 
-    /// Returns the solve group directory of the project [consts::SOLVE_GROUP_ENVIRONMENTS_DIR]
+    /// Returns the environment directory
+    pub fn environments_dir(&self) -> PathBuf {
+        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_envs_dir;
+        }
+
+        // If the detached-environments path is set, use it instead of the default directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            let detached_environments_path =
+                detached_environments_path.join(consts::ENVIRONMENTS_DIR);
+            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
+
+                #[cfg(not(windows))]
+                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                    tracing::warn!(
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_envs_dir.display(),
+                        detached_environments_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    create_symlink(&detached_environments_path, &default_envs_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_envs_dir, &detached_environments_path);
+            });
+
+            return detached_environments_path;
+        }
+
+        tracing::debug!(
+            "Using default root directory: `{}` as environments directory.",
+            default_envs_dir.display()
+        );
+
+        default_envs_dir
+    }
+
+    /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
+        // If the detached-environments path is set, use it instead of the default directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        }
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
@@ -386,76 +455,6 @@ impl Project {
         environments.into_iter().collect()
     }
 
-    /// Returns the channels used by this project.
-    ///
-    /// TODO: Remove this function and use the channels from the default environment instead.
-    pub fn channels(&self) -> IndexSet<&Channel> {
-        self.default_environment().channels()
-    }
-
-    /// Returns the platforms this project targets
-    ///
-    /// TODO: Remove this function and use the platforms from the default environment instead.
-    pub fn platforms(&self) -> HashSet<Platform> {
-        self.default_environment().platforms()
-    }
-
-    /// Get the tasks of this project
-    ///
-    /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
-        self.default_environment()
-            .tasks(platform)
-            .unwrap_or_default()
-    }
-
-    /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
-    /// specified then the task will first be looked up in the target specific tasks for the given
-    /// platform.
-    ///
-    /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
-        self.default_environment().task(name, platform).ok()
-    }
-
-    /// TODO: Remove this method and use the one from Environment instead.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
-        self.default_environment().virtual_packages(platform)
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
-    ///
-    /// TODO: Remove this function and use the `system_requirements` function from the default environment instead.
-    pub fn system_requirements(&self) -> SystemRequirements {
-        self.default_environment().system_requirements()
-    }
-
-    /// Returns the dependencies of the project.
-    ///
-    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn dependencies(
-        &self,
-        kind: Option<SpecType>,
-        platform: Option<Platform>,
-    ) -> CondaDependencies {
-        self.default_environment().dependencies(kind, platform)
-    }
-
-    /// Returns the PyPi dependencies of the project
-    ///
-    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
-        self.default_environment().pypi_dependencies(platform)
-    }
-
-    /// Returns the all specified activation scripts that are used in the current platform.
-    ///
-    /// TODO: Remove this function and use the `activation_scripts function from the default environment instead.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
-        self.default_environment().activation_scripts(platform)
-    }
-
     /// Returns true if the project contains any reference pypi dependencies. Even if just
     /// `[pypi-dependencies]` is specified without any requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
@@ -463,10 +462,12 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
-        self.manifest
-            .pypi_name_mapping_source()
-            .expect("mapping source should be ok")
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        self.mapping_source.get_or_init(|| {
+            self.manifest
+                .pypi_name_mapping_source(&self.config)
+                .expect("mapping source should be ok")
+        })
     }
 
     /// Returns the reqwest client used for http networking
@@ -540,12 +541,78 @@ pub fn find_project_manifest() -> Option<PathBuf> {
     })
 }
 
+/// Create a symlink from the default pixi directory to the custom target directory
+#[cfg(not(windows))]
+fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
+    if default_pixi_dir.exists() {
+        tracing::debug!(
+            "Symlink already exists at '{}', skipping creating symlink.",
+            default_pixi_dir.display()
+        );
+        return;
+    }
+    symlink(pixi_dir_name, default_pixi_dir)
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to create symlink from '{}' to '{}': {}",
+                pixi_dir_name.display(),
+                default_pixi_dir.display(),
+                e
+            )
+        })
+        .ok();
+}
+
+/// Write a warning file to the default pixi directory to inform the user that symlinks are not supported on this platform (Windows).
+#[cfg(windows)]
+fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
+    let warning_file = default_envs_dir.join("README.txt");
+    if warning_file.exists() {
+        tracing::debug!(
+            "Symlink warning file already exists at '{}', skipping writing warning file.",
+            warning_file.display()
+        );
+        return;
+    }
+    let warning_message = format!(
+        "Environments are installed in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
+        envs_dir_name.display()
+    );
+
+    // Create directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+        tracing::error!(
+            "Failed to create directory '{}': {}",
+            default_envs_dir.display(),
+            e
+        );
+        return;
+    }
+
+    // Write warning message to file
+    match std::fs::write(&warning_file, warning_message.clone()) {
+        Ok(_) => tracing::info!(
+            "Symlink warning file written to '{}': {}",
+            warning_file.display(),
+            warning_message
+        ),
+        Err(e) => tracing::error!(
+            "Failed to write symlink warning file to '{}': {}",
+            warning_file.display(),
+            e
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use self::has_features::HasFeatures;
     use super::*;
     use crate::project::manifest::FeatureName;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
 
@@ -589,7 +656,10 @@ mod tests {
                 version: Version::from_str("2.12").unwrap(),
             })];
 
-            let virtual_packages = project.system_requirements().virtual_packages();
+            let virtual_packages = project
+                .default_environment()
+                .system_requirements()
+                .virtual_packages();
 
             assert_eq!(virtual_packages, expected_result);
         }
@@ -622,7 +692,9 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
-            project.dependencies(None, Some(Platform::Linux64))
+            project
+                .default_environment()
+                .dependencies(None, Some(Platform::Linux64))
         ));
     }
 
@@ -655,7 +727,9 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
-            project.dependencies(None, Some(Platform::Linux64))
+            project
+                .default_environment()
+                .dependencies(None, Some(Platform::Linux64))
         ));
     }
 
@@ -685,9 +759,21 @@ mod tests {
 
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::Linux64))),
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::Win64))),
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::OsxArm64)))
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::Linux64))
+            ),
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::Win64))
+            ),
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::OsxArm64))
+            )
         ));
     }
 

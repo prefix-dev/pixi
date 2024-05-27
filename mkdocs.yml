@@ -96,13 +96,12 @@ extra:
     provider: mike
 
 nav:
-  - Getting Started:
-      - Installation: index.md
-      - Basic Usage: basic_usage.md
-      - IDE Integration:
-          - JupyterLab: ide_integration/jupyterlab.md
-          - PyCharm: ide_integration/pycharm.md
-          - RStudio: ide_integration/r_studio.md
+  - Installation: index.md
+  - Basic Usage: basic_usage.md
+  - IDE Integration:
+      - JupyterLab: ide_integration/jupyterlab.md
+      - PyCharm: ide_integration/pycharm.md
+      - RStudio: ide_integration/r_studio.md
   - Tutorials:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
@@ -122,10 +121,10 @@ nav:
       - Info Command: advanced/explain_info_command.md
       - Channel Logic: advanced/channel_priority.md
       - GitHub Actions: advanced/github_actions.md
-      - Global Configuration: advanced/global_configuration.md
       - Pyproject.toml: advanced/pyproject_toml.md
   - Reference:
-      - Project Configuration: reference/configuration.md
+      - Project Configuration: reference/project_configuration.md
+      - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli.md
   - Misc:
       - Pixi vision: vision.md
@@ -144,7 +143,8 @@ plugins:
         "design_proposals/multi_environment_proposal.md": "features/multi_environment.md"
         "advanced/multi_platform_configuration.md": "features/multi_platform_configuration.md"
         "cli.md": "reference/cli.md"
-        "configuration.md": "reference/configuration.md"
+        "configuration.md": "reference/project_configuration.md"
+        "advanced/global_configuration.md": "reference/pixi_configuration.md"
 
   - search
   - social

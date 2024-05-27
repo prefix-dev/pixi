@@ -1,14 +1,14 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
+use crate::cli::has_specs::HasSpecs;
 use crate::config::{Config, ConfigCli};
-use crate::install::execute_transaction;
+use crate::progress::global_multi_progress;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler::install::Transaction;
+use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
@@ -20,7 +20,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, BinDir, BinEnvDir, HasSpecs,
+    load_package_records, BinDir, BinEnvDir,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -258,13 +258,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
             records,
             authenticated_client.clone(),
-            &args.platform,
+            args.platform,
         )
         .await?;
         let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
@@ -331,37 +331,34 @@ pub(super) async fn globally_install_package(
     package_name: &PackageName,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
-    platform: &Platform,
+    platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);
-    let prefix_records = prefix.find_installed_packages(None).await?;
 
-    // Create the transaction that we need
-    let transaction =
-        Transaction::from_current_and_desired(prefix_records.clone(), records, *platform)
-            .into_diagnostic()?;
+    // Install the environment
+    let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
 
-    let has_transactions = !transaction.operations.is_empty();
-
-    // Execute the transaction if there is work to do
-    if has_transactions {
-        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
-
-        // Execute the operations that are returned by the solver.
-        await_in_progress("creating virtual environment", |pb| {
-            execute_transaction(
-                package_cache,
-                &transaction,
-                &prefix_records,
-                prefix.root().to_path_buf(),
-                authenticated_client,
-                pb,
+    let result = await_in_progress("creating virtual environment", |pb| {
+        Installer::new()
+            .with_download_client(authenticated_client)
+            .with_io_concurrency_limit(100)
+            .with_execute_link_scripts(false)
+            .with_package_cache(package_cache)
+            .with_target_platform(platform)
+            .with_reporter(
+                IndicatifReporter::builder()
+                    .with_multi_progress(global_multi_progress())
+                    .with_placement(rattler::install::Placement::After(pb))
+                    .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
+                    .clear_when_done(true)
+                    .finish(),
             )
-        })
-        .await?;
-    }
+            .install(prefix.root(), records)
+    })
+    .await
+    .into_diagnostic()?;
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, package_name).await?;
@@ -392,7 +389,11 @@ pub(super) async fn globally_install_package(
         )
         .collect();
 
-    Ok((prefix_package, scripts, has_transactions))
+    Ok((
+        prefix_package,
+        scripts,
+        result.transaction.operations.is_empty(),
+    ))
 }
 
 /// Returns the string to add for all arguments passed to the script

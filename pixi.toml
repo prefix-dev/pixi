@@ -8,6 +8,7 @@ authors = [
     "Ruben Arts <ruben@prefix.dev>",
 ]
 channels = ["conda-forge"]
+#channels = ["https://fast.prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
@@ -50,6 +51,7 @@ build-docs = "mkdocs build --strict"
 docs = "mkdocs serve"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 deploy-dev = "mike deploy --push dev devel"
+mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
@@ -67,8 +69,6 @@ pyyaml = ">=6.0.1,<6.1"
 taplo = ">=0.9.1,<0.10"
 
 [environments]
-docs = ["docs"]
-schema = ["schema"]
-# Enable these after merge to avoid conflicts in ci.
-#docs = { features = ["docs"], no-default-feature = true }
-#schema = { features = ["schema"], no-default-feature = true }
+default = { features = ["docs", "schema"] }
+docs = { features = ["docs"], no-default-feature = true }
+schema = { features = ["schema"], no-default-feature = true }

@@ -112,21 +112,17 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 # Which makes sure the tested environment has the same version of the dependencies as the production environment.
 ```
 
-```toml title="Creating environments without a default environment"
+```toml title="Creating environments without including the default feature"
 [dependencies]
-# Keep empty or undefined to create an empty environment.
-
-[feature.base.dependencies]
 python = "*"
+numpy = "*"
 
 [feature.lint.dependencies]
 pre-commit = "*"
 
 [environments]
-# Create a custom default
-default = ["base"]
-# Create a custom environment which only has the `lint` feature as the default feature is empty.
-lint = ["lint"]
+# Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
+lint = {features = ["lint"], no-default-feature = true}
 ```
 
 ### lock file Structure

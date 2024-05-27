@@ -56,19 +56,8 @@ In that case, if pixi cannot find the `__cuda` virtual package on your machine t
 
 ### Cache dir
 
-Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.
-Normally the locations would be:
-
-1. XDG compliant cache folder when it's available (`$XDG_CACHE_HOME/pixi`
-   or `$HOME/.cache/pixi`)
-2. Platform-specific default cache folder:
-   - Linux: `$XDG_CACHE_HOME/rattler` or `$HOME`/.cache/rattler
-   - macOS: `$HOME`/Library/Caches/rattler
-   - Windows: `%APPDATA%\rattler`
-
-When your system is filling up you can easily remove this folder.
-It will re-download everything it needs the next time you install a project.
+The directory where pixi stores its cache.
+Checkout the [cache documentation](../features/environment.md#caching) for more information.
 
 ### Auth storage
 
@@ -83,11 +72,11 @@ The size of the previously mentioned "Cache dir" in Mebibytes.
 ## Project info
 
 Everything below `Project` is info about the project you're currently in.
-This info is only available if your path has a [manifest file](../reference/configuration.md).
+This info is only available if your path has a [manifest file](../reference/project_configuration.md).
 
 ### Manifest file
 
-The path to the [manifest file](../reference/configuration.md) that describes the project.
+The path to the [manifest file](../reference/project_configuration.md) that describes the project.
 
 ### Last updated
 

@@ -1,8 +1,5 @@
-#![deny(dead_code)]
-
 mod outdated;
 mod package_identifier;
-mod pypi_editables;
 mod records_by_name;
 mod resolve;
 mod satisfiability;
@@ -16,9 +13,11 @@ use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 pub use outdated::OutdatedEnvironments;
 pub use package_identifier::PypiPackageIdentifier;
 pub use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
-pub use resolve::{resolve_conda, resolve_pypi, UvResolutionContext};
+pub use resolve::{
+    conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
+};
 pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
-pub use update::{LockFileDerivedData, UpdateLockFileOptions};
+pub use update::{LockFileDerivedData, UpdateContext, UpdateLockFileOptions};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<RepoDataRecord>;

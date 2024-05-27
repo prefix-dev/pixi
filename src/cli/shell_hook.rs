@@ -1,5 +1,4 @@
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -10,15 +9,18 @@ use serde_json;
 use std::collections::HashMap;
 use std::{default::Default, path::PathBuf};
 
+use crate::config::ConfigCliPrompt;
 use crate::{
     activation::get_activator,
     cli::LockFileUsageArgs,
     environment::get_up_to_date_prefix,
-    project::{has_features::HasFeatures, manifest::EnvironmentName, Environment},
+    project::{has_features::HasFeatures, Environment},
     Project,
 };
 
-/// Print the activation script so users can source it in their shell, without needing the pixi executable.
+/// Print the pixi environment activation script.
+///
+/// You can source the script to activate the environment without needing pixi itself.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]
@@ -39,6 +41,9 @@ pub struct Args {
     /// Emit the environment variables set by running the activation as JSON
     #[clap(long, default_value = "false", conflicts_with = "shell")]
     json: bool,
+
+    #[clap(flatten)]
+    config: ConfigCliPrompt,
 }
 
 #[derive(Serialize)]
@@ -88,21 +93,11 @@ async fn generate_environment_json(environment: &Environment<'_>) -> miette::Res
 
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    get_up_to_date_prefix(
-        &environment,
-        args.lock_file_usage.into(),
-        false,
-        IndexMap::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
 
     let output = match args.json {
         true => generate_environment_json(&environment).await?,

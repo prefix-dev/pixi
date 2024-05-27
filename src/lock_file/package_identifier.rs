@@ -22,6 +22,7 @@ impl PypiPackageIdentifier {
     pub fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
+
         Ok(result)
     }
 
@@ -31,19 +32,33 @@ impl PypiPackageIdentifier {
         record: &RepoDataRecord,
         result: &mut Vec<Self>,
     ) -> Result<(), ConversionError> {
-        // Check the PURLs for a python package.
         let mut has_pypi_purl = false;
-        for purl in record.package_record.purls.iter() {
-            if let Some(entry) = Self::try_from_purl(purl, &record.package_record.version.as_str())?
-            {
-                result.push(entry);
-                has_pypi_purl = true;
+        // Check the PURLs for a python package.
+        if let Some(purls) = &record.package_record.purls {
+            for purl in purls.iter() {
+                if let Some(entry) =
+                    Self::convert_from_purl(purl, &record.package_record.version.as_str())?
+                {
+                    result.push(entry);
+                    has_pypi_purl = true;
+                }
             }
         }
 
-        // If there is no pypi purl, but the package is a conda-forge package, we just assume that
+        // Backwards compatibility:
+        // If lock file don't have a purl
+        // but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_mapping::is_conda_forge_record(record) {
+        // In newer versions of the lock file, we should always have a purl
+        // where empty purls means that the package is not a pypi-one.
+        if record.package_record.purls.is_none()
+            && !has_pypi_purl
+            && pypi_mapping::is_conda_forge_record(record)
+        {
+            tracing::debug!(
+                "Using backwards compatibility purl logic for conda package: {}",
+                record.package_record.name.as_source()
+            );
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = PackageName::from_str(record.package_record.name.as_source()).ok();
@@ -63,20 +78,10 @@ impl PypiPackageIdentifier {
         Ok(())
     }
 
-    // /// Given a list of conda package records, extract the python packages that will be installed
-    // /// when these conda packages are installed.
-    // pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
-    //     let mut result = Vec::new();
-    //     for record in records {
-    //         Self::from_record_into(record, &mut result)?;
-    //     }
-    //     Ok(result)
-    // }
-
     /// Tries to construct an instance from a generic PURL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub fn try_from_purl(
+    pub fn convert_from_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Option<Self>, ConversionError> {
