@@ -8,18 +8,18 @@ pub struct Args {
     pub name: String,
 
     /// Features to add to the environment.
-    #[clap(long = "feature")]
+    #[arg(short, long = "feature")]
     pub features: Option<Vec<String>>,
 
     /// The solve-group to add the environment to.
     #[clap(long)]
     pub solve_group: Option<String>,
 
-    /// Whether or not to include properties from the default feature.
+    /// Don't include the default feature in the environment.
     #[clap(default_value = "false", long)]
     pub no_default_feature: bool,
 
-    /// Whether to update the manifest even if the environment already exists.
+    /// Update the manifest even if the environment already exists.
     #[clap(default_value = "false", long)]
     pub force: bool,
 }

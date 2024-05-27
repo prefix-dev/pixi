@@ -20,13 +20,13 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Adds an environment to the project file and updates the lockfile.
+    /// Adds an environment to the manifest file.
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    /// List the environments in the project file.
+    /// List the environments in the manifest file.
     #[clap(visible_alias = "ls")]
     List,
-    /// Remove an environment from the project file and updates the lockfile.
+    /// Remove an environment from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
 }
