@@ -80,7 +80,6 @@ pub async fn conda_pypi_name_mapping(
                 .as_ref()
                 .is_some_and(|p| p.is_empty())
         })
-        .filter(|package| is_conda_forge_record(package))
         .filter_map(|package| {
             package
                 .package_record
