@@ -80,6 +80,7 @@ pub async fn conda_pypi_name_mapping(
                 .as_ref()
                 .is_some_and(|p| p.is_empty())
         })
+        .filter(|package| is_conda_forge_record(package))
         .filter_map(|package| {
             package
                 .package_record
@@ -232,7 +233,7 @@ pub fn amend_pypi_purls_for_record(
     if let Some(possible_mapped_name) =
         compressed_mapping.get(record.package_record.name.as_normalized())
     {
-        if !not_a_pypi && purls.is_empty() {
+        if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
             // if we have a pypi name for it
             // we record the purl
             if let Some(mapped_name) = possible_mapped_name {
