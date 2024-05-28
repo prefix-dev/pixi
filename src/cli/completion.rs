@@ -56,7 +56,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
                return 0
             elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(pixi task list --summary 2> /dev/null)
+               local tasks=$$(pixi task list --machine-readable 2> /dev/null)
                if [[ $$? -eq 0 ]]; then
                    COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
                    return 0
@@ -73,7 +73,7 @@ fn replace_zsh_completion(script: &str) -> Cow<str> {
     // NOTE THIS IS FORMATTED BY HAND
     let zsh_replacement = r#"$1
 local tasks
-tasks=("$${(@s/ /)$$(pixi task list --summary 2> /dev/null)}")
+tasks=("$${(@s/ /)$$(pixi task list --machine-readable 2> /dev/null)}")
 
 if [[ -n "$$tasks" ]]; then
     _values 'task' "$${tasks[@]}"
