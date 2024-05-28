@@ -817,7 +817,10 @@ pub async fn update_python_distributions(
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
-    let _lock = venv.lock().into_diagnostic()?;
+    let _lock = venv
+        .lock()
+        .into_diagnostic()
+        .with_context(|| "error locking installation directory")?;
 
     // Partition into editables and non-editables
     let (editables, python_packages) = python_packages
