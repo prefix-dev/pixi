@@ -7,6 +7,7 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64", "osx-64"]
 
 [tasks]
+start = { depends-on = ["hello"]}
 hello = "python -c 'import minimal_project.module; minimal_project.module.hello()'"
 test = "pytest ."
 
@@ -14,9 +15,9 @@ test = "pytest ."
 python = "*"
 
 [pypi-dependencies]
-
 rich = "~=13.7"
-# Lets start with some git dependencies
+
+# Let's start with some git dependencies
 # With ssh: (you need to have the correct ssh keys setup for which I (ruben) am to lazy to set up correctly)
 # flask = { git = "ssh://git@github.com/pallets/flask" }
 
