@@ -284,7 +284,9 @@ pub async fn resolve_pypi(
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
     // Construct an interpreter from the conda environment.
-    let interpreter = Interpreter::query(python_location, &context.cache).into_diagnostic()?;
+    let interpreter = Interpreter::query(python_location, &context.cache)
+        .into_diagnostic()
+        .wrap_err("failed to query python interpreter")?;
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
@@ -305,7 +307,8 @@ pub async fn resolve_pypi(
         let entries = client
             .fetch(index_locations.flat_index())
             .await
-            .into_diagnostic()?;
+            .into_diagnostic()
+            .wrap_err("failed to query find-links locations")?;
         FlatIndex::from_entries(
             entries,
             &tags,
@@ -366,7 +369,8 @@ pub async fn resolve_pypi(
     // Build any editables
     let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
         .await
-        .into_diagnostic()?
+        .into_diagnostic()
+        .wrap_err("failed to build editables")?
         .into_iter()
         .collect_vec();
 
@@ -378,43 +382,6 @@ pub async fn resolve_pypi(
         .map(|record| {
             let (package_data, _) = record;
             Preference::simple(package_data.name.clone(), package_data.version.clone())
-
-            // let version =
-            //     VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
-            //         .expect("invalid version specifier");
-
-            // let source = match &package_data.url_or_path {
-            //     UrlOrPath::Url(url) => {
-            //         // Strip the direct+ prefix
-            //         // so that we can pass the url to uv
-            //         if let Some(url) = url.as_ref().strip_prefix("direct+") {
-            //             let url = url.parse::<Url>().expect("could not parse direct+ url");
-            //             let direct_url =
-            //                 ParsedUrl::try_from(url.clone()).expect("could not parse direct+ url");
-            //             RequirementSource::from_parsed_url(direct_url, VerbatimUrl::from_url(url))
-            //         } else {
-            //             RequirementSource::Registry {
-            //                 specifier: VersionSpecifiers::from(version),
-            //                 index: None,
-            //             }
-            //         }
-            //     }
-            //     UrlOrPath::Path(path) => RequirementSource::Path {
-            //         path: path.clone(),
-            //         editable: package_data.editable,
-            //         url: VerbatimUrl::from_url(
-            //             Url::from_file_path(path).expect("could not create file-path url"),
-            //         ),
-            //     },
-            // };
-
-            // let requirement = distribution_types::Requirement {
-            //     name: package_data.name.clone(),
-            //     extras: environment_data.extras.iter().cloned().collect_vec(),
-            //     marker: None,
-            //     source,
-            //     origin: None,
-            // };
         })
         .collect::<Vec<_>>();
 
@@ -488,7 +455,8 @@ pub async fn resolve_pypi(
             })
         })
         .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("failed to canonicalize the find-links paths")?;
 
     // Collect resolution into locked packages
     lock_pypi_packages(

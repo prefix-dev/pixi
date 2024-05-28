@@ -25,13 +25,16 @@ pub struct UvResolutionContext {
 
 impl UvResolutionContext {
     pub fn from_project(project: &Project) -> miette::Result<Self> {
-        let cache = Cache::from_path(
-            get_cache_dir()
-                .expect("missing caching directory")
-                .join("uv-cache"),
-        )
-        .into_diagnostic()
-        .context("failed to create uv cache")?;
+        let uv_cache = get_cache_dir()?.join("uv-cache");
+        if !uv_cache.exists() {
+            std::fs::create_dir_all(&uv_cache)
+                .into_diagnostic()
+                .context("failed to create uv cache directory")?;
+        }
+
+        let cache = Cache::from_path(uv_cache)
+            .into_diagnostic()
+            .context("failed to create uv cache")?;
 
         let keyring_provider = match project.config().pypi_config().use_keyring() {
             config::KeyringProvider::Subprocess => {
