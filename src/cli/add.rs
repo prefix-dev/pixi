@@ -16,7 +16,7 @@ use rattler_conda_types::{
     VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
+use rattler_solve::{resolvo, SolverImpl};
 use std::time::Instant;
 use std::{
     collections::{HashMap, HashSet},
@@ -444,15 +444,8 @@ pub async fn determine_best_version<'p>(
             .iter_specs()
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
-        available_packages: available_packages
-            .iter()
-            .map(RepoDataIter)
-            .collect::<Vec<_>>(),
         virtual_packages: environment.virtual_packages(platform),
-        locked_packages: vec![],
-        pinned_packages: vec![],
-        timeout: None,
-        channel_priority: ChannelPriority::Strict,
+        ..rattler_solve::SolverTask::from_iter(&available_packages)
     };
 
     let records = resolvo::Solver.solve(task).into_diagnostic()?;

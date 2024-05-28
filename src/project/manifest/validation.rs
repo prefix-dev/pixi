@@ -1,15 +1,16 @@
-use crate::project::manifest::{Environment, FeatureName, SystemRequirements};
-use crate::project::manifest::{Feature, ProjectManifest, TargetSelector};
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
 use rattler_conda_types::Platform;
-use std::collections::HashSet;
 use std::{
+    collections::HashSet,
     ops::Range,
     path::{Path, PathBuf},
 };
 
 use super::pypi_options::PypiOptions;
+use crate::project::manifest::{
+    Environment, Feature, FeatureName, ProjectManifest, SystemRequirements, TargetSelector,
+};
 
 impl ProjectManifest {
     /// Validate the project manifest.
@@ -125,7 +126,7 @@ impl ProjectManifest {
         check_file_existence(&self.project.readme)?;
 
         // Validate the environments defined in the project
-        for env in self.environments.environments.iter() {
+        for env in self.environments.iter() {
             if let Err(report) = self.validate_environment(env, self.default_feature()) {
                 return Err(report.with_source_code(source));
             }
@@ -217,7 +218,8 @@ impl ProjectManifest {
     }
 }
 
-// Create an error report for using a platform that is not supported by the project.
+// Create an error report for using a platform that is not supported by the
+// project.
 fn create_unsupported_platform_report(
     source: NamedSource<String>,
     span: Range<usize>,
@@ -252,5 +254,6 @@ fn create_unsupported_platform_report(
 
 #[cfg(test)]
 mod tests {
-    // TODO: add a test to verify that conflicting system requirements result in an error.
+    // TODO: add a test to verify that conflicting system requirements result in
+    // an error.
 }

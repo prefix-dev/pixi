@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.22.0"
+version = "0.23.0"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -80,24 +80,25 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pyproject-toml = "0.10.0"
-rattler = { version = "0.24.1", default-features = false, features = [
+rattler = { version = "0.26.0", default-features = false, features = [
     "cli-tools",
+    "indicatif"
 ] }
-rattler_conda_types = { version = "0.23.0", default-features = false }
-rattler_digest = { version = "0.19.3", default-features = false }
-rattler_lock = { version = "=0.22.6", default-features = false }
-rattler_networking = { version = "0.20.6", default-features = false }
-rattler_repodata_gateway = { version = "0.20.1", default-features = false, features = [
+rattler_conda_types = { version = "0.24.0", default-features = false }
+rattler_digest = { version = "0.19.4", default-features = false }
+rattler_lock = { version = "0.22.8", default-features = false }
+rattler_networking = { version = "0.20.8", default-features = false }
+rattler_repodata_gateway = { version = "0.20.2", default-features = false, features = [
     "sparse",
     "gateway"
 ] }
-rattler_shell = { version = "0.20.2", default-features = false, features = [
+rattler_shell = { version = "0.20.5", default-features = false, features = [
     "sysinfo",
 ] }
-rattler_solve = { version = "0.21.2", default-features = false, features = [
+rattler_solve = { version = "0.23.0", default-features = false, features = [
     "resolvo",
 ] }
-rattler_virtual_packages = { version = "0.19.10", default-features = false }
+rattler_virtual_packages = { version = "0.19.12", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 reqwest = { version = "0.12.4", default-features = false, features = [
@@ -109,6 +110,7 @@ reqwest-retry = "0.5.0"
 self-replace = "1.3.7"
 serde = "1.0.198"
 serde-untagged = "0.1.5"
+serde_ignored = "0.1.10"
 serde_json = "1.0.116"
 serde_with = { version = "3.7.0", features = ["indexmap"] }
 serde_yaml = "0.9.34"
@@ -158,6 +160,10 @@ nix = { version = "0.28.0", default-features = false, features = [
 libc = { version = "0.2.153", default-features = false }
 signal-hook = "0.3.17"
 
+# Remove this after updating to uv >= 0.1.40
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["fileapi", "handleapi", "ioapiset", "winbase", "winioctl", "winnt"] }
+
 [dev-dependencies]
 insta = { version = "1.38.0", features = ["yaml", "glob"] }
 rattler_digest = "0.19.3"
@@ -172,28 +178,25 @@ tokio = { version = "1.37.0", features = ["rt"] }
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # deno_task_shell = { path = "../deno_task_shell" }
-
-#rattler = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler = { path = "../rattler/crates/rattler" }
-
+#rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_conda_types = { path = "../rattler-1/crates/rattler_conda_types" }
+# rattler_digest = { path = "../rattler-1/crates/rattler_digest" }
+# rattler_networking = { path = "../rattler-1/crates/rattler_networking" }
+# rattler_repodata_gateway = { path = "../rattler-1/crates/rattler_repodata_gateway" }
+# rattler_shell = { path = "../rattler-1/crates/rattler_shell" }
+# rattler_solve = { path = "../rattler-1/crates/rattler_solve" }
+# rattler_virtual_packages = { path = "../rattler-1/crates/rattler_virtual_packages" }
+# rattler_lock = { path = "../rattler-1/crates/rattler_lock" }
+# rattler_package_streaming = { path = "../rattler-1/crates/rattler_package_streaming" }
+# rattler = { path = "../rattler-1/crates/rattler" }
 # Change these lines if you want a patched version of uv
 # [patch.'https://github.com/astral-sh/uv']
 # pep440_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
@@ -214,3 +217,6 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
+
+[profile.release]
+debug = true

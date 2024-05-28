@@ -3,40 +3,37 @@
 pub mod builders;
 pub mod package_database;
 
-use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
-    TaskAliasBuilder,
-};
-use pixi::consts;
-use pixi::{
-    cli::{
-        add, init,
-        install::Args,
-        project, remove, run,
-        task::{self, AddArgs, AliasArgs},
-    },
-    EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
-    TaskGraphError,
-};
-use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-
-use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::cli::run::get_task_env;
-use pixi::cli::LockFileUsageArgs;
-use pixi::task::TaskName;
-use pixi::FeatureName;
-use pixi::TaskExecutionError;
-use pixi::UpdateLockFileOptions;
-use rattler_lock::{LockFile, Package};
 use std::{
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,
 };
+
+use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::{
+    cli::{
+        add, init,
+        install::Args,
+        project, remove, run,
+        run::get_task_env,
+        task::{self, AddArgs, AliasArgs},
+        update, LockFileUsageArgs,
+    },
+    consts,
+    task::TaskName,
+    EnvironmentName, ExecutableTask, FeatureName, Project, RunOutput, SearchEnvironments,
+    TaskExecutionError, TaskGraph, TaskGraphError, UpdateLockFileOptions,
+};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
+use rattler_lock::{LockFile, Package};
 use tempfile::TempDir;
 use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+};
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -77,7 +74,8 @@ pub trait LockFileExt {
         match_spec: impl IntoMatchSpec,
     ) -> bool;
 
-    /// Check if the pep508 requirement is contained in the lockfile for this platform
+    /// Check if the pep508 requirement is contained in the lockfile for this
+    /// platform
     fn contains_pep508_requirement(
         &self,
         environment: &str,
@@ -196,8 +194,9 @@ impl PixiControl {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
 
-    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
-    /// the command and await the result call `.await` on the return value.
+    /// Initialize pixi project inside a temporary directory. Returns a
+    /// [`InitBuilder`]. To execute the command and await the result call
+    /// `.await` on the return value.
     pub fn init(&self) -> InitBuilder {
         InitBuilder {
             args: init::Args {
@@ -210,8 +209,9 @@ impl PixiControl {
         }
     }
 
-    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
-    /// the command and await the result call `.await` on the return value.
+    /// Initialize pixi project inside a temporary directory. Returns a
+    /// [`InitBuilder`]. To execute the command and await the result call
+    /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
             args: init::Args {
@@ -266,6 +266,19 @@ impl PixiControl {
                 channel: vec![],
                 no_install: true,
                 feature: None,
+            },
+        }
+    }
+
+    pub fn project_environment_add(&self, name: &str) -> ProjectEnvironmentAddBuilder {
+        ProjectEnvironmentAddBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::environment::add::Args {
+                name: name.to_string(),
+                features: None,
+                solve_group: None,
+                no_default_feature: false,
+                force: false,
             },
         }
     }
@@ -336,7 +349,8 @@ impl PixiControl {
         Ok(result)
     }
 
-    /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
+    /// Returns a [`InstallBuilder`]. To execute the command and await the
+    /// result call `.await` on the return value.
     pub fn install(&self) -> InstallBuilder {
         InstallBuilder {
             args: Args {
@@ -352,15 +366,31 @@ impl PixiControl {
         }
     }
 
+    /// Returns a [`UpdateBuilder]. To execute the command and await the result
+    /// call `.await` on the return value.
+    pub fn update(&self) -> UpdateBuilder {
+        UpdateBuilder {
+            args: update::Args {
+                config: Default::default(),
+                manifest_path: Some(self.manifest_path()),
+                no_install: true,
+                dry_run: false,
+                specs: Default::default(),
+            },
+        }
+    }
+
     /// Load the current lock-file.
     ///
-    /// If you want to lock-file to be up-to-date with the project call [`Self::up_to_date_lock_file`].
+    /// If you want to lock-file to be up-to-date with the project call
+    /// [`Self::up_to_date_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
     }
 
-    /// Load the current lock-file and makes sure that its up to date with the project.
+    /// Load the current lock-file and makes sure that its up to date with the
+    /// project.
     pub async fn up_to_date_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.project()?;
         Ok(project
@@ -432,8 +462,8 @@ impl TasksControl<'_> {
     }
 }
 
-/// A helper trait to convert from different types into a [`MatchSpec`] to make it simpler to
-/// use them in tests.
+/// A helper trait to convert from different types into a [`MatchSpec`] to make
+/// it simpler to use them in tests.
 pub trait IntoMatchSpec {
     fn into(self) -> MatchSpec;
 }

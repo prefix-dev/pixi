@@ -8,36 +8,42 @@ mod repodata;
 mod solve_group;
 pub mod virtual_packages;
 
-use async_once_cell::OnceCell as AsyncCell;
-use indexmap::Equivalent;
-use miette::{IntoDiagnostic, NamedSource};
-
-use rattler_conda_types::Version;
-use reqwest_middleware::ClientWithMiddleware;
-use std::hash::Hash;
-
-use rattler_repodata_gateway::Gateway;
-use std::sync::OnceLock;
+#[cfg(not(windows))]
+use std::os::unix::fs::symlink;
 use std::{
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     env,
     fmt::{Debug, Formatter},
+    hash::Hash,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
-use crate::activation::{get_environment_variables, run_activation};
-use crate::config::Config;
-use crate::consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST};
-use crate::project::grouped_environment::GroupedEnvironment;
-use crate::pypi_mapping::MappingSource;
-use crate::utils::reqwest::build_reqwest_clients;
-use manifest::{EnvironmentName, Manifest};
-
-use self::manifest::{pyproject::PyProjectToml, Environments};
+use async_once_cell::OnceCell as AsyncCell;
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
+use indexmap::Equivalent;
+use manifest::{EnvironmentName, Manifest};
+use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
+use rattler_conda_types::Version;
+use rattler_repodata_gateway::Gateway;
+use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
+use xxhash_rust::xxh3::xxh3_64;
+
+use self::manifest::{pyproject::PyProjectToml, Environments};
+use crate::{
+    activation::{get_environment_variables, run_activation},
+    config::Config,
+    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
+    project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
+    pypi_mapping::MappingSource,
+    utils::reqwest::build_reqwest_clients,
+};
+
+static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -59,9 +65,11 @@ impl DependencyType {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
-    /// Host dependencies are used that are needed by the host environment when running the project
+    /// Host dependencies are used that are needed by the host environment when
+    /// running the project
     Host,
-    /// Build dependencies are used when we need to build the project, may not be required at runtime
+    /// Build dependencies are used when we need to build the project, may not
+    /// be required at runtime
     Build,
     /// Regular dependencies that are used when we need to run the project
     Run,
@@ -83,9 +91,10 @@ impl SpecType {
     }
 }
 
-/// The pixi project, this main struct to interact with the project. This struct holds the
-/// `Manifest` and has functions to modify or request information from it.
-/// This allows in the future to have multiple environments or manifests linked to a project.
+/// The pixi project, this main struct to interact with the project. This struct
+/// holds the `Manifest` and has functions to modify or request information from
+/// it. This allows in the future to have multiple environments or manifests
+/// linked to a project.
 #[derive(Clone)]
 pub struct Project {
     /// Root folder of the project
@@ -101,6 +110,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The cache that contains mapping
+    mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
@@ -111,6 +122,12 @@ impl Debug for Project {
             .field("root", &self.root)
             .field("manifest", &self.manifest)
             .finish()
+    }
+}
+
+impl Borrow<ProjectManifest> for Project {
+    fn borrow(&self) -> &ProjectManifest {
+        self.manifest.borrow()
     }
 }
 
@@ -131,6 +148,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         }
@@ -153,9 +171,10 @@ impl Project {
         Ok(Self::from_manifest(manifest))
     }
 
-    /// Discovers the project manifest file in the current directory or any of the parent
-    /// directories, or use the manifest specified by the environment.
-    /// This will also set the current working directory to the project root.
+    /// Discovers the project manifest file in the current directory or any of
+    /// the parent directories, or use the manifest specified by the
+    /// environment. This will also set the current working directory to the
+    /// project root.
     pub fn discover() -> miette::Result<Self> {
         let project_toml = find_project_manifest();
 
@@ -206,6 +225,7 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        // Load the user configuration from the local project and all default locations
         let config = Config::load(root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
@@ -216,12 +236,14 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            mapping_source: Default::default(),
             config,
             repodata_gateway: Default::default(),
         })
     }
 
-    /// Loads a project manifest file or discovers it in the current directory or any of the parent
+    /// Loads a project manifest file or discovers it in the current directory
+    /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
             Some(path) => Project::load(path)?,
@@ -230,7 +252,8 @@ impl Project {
         Ok(project)
     }
 
-    /// Warns if Pixi is using a manifest from an environment variable rather than a discovered version
+    /// Warns if Pixi is using a manifest from an environment variable rather
+    /// than a discovered version
     pub fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
         if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
             let discover_path = find_project_manifest();
@@ -286,13 +309,71 @@ impl Project {
         self.root.join(consts::PIXI_DIR)
     }
 
-    /// Returns the environment directory
-    pub fn environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    /// Create the detached-environments path for this project if it is set in
+    /// the config
+    fn detached_environments_path(&self) -> Option<PathBuf> {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+            Some(detached_environments_path.join(format!(
+                "{}-{}",
+                self.name(),
+                xxh3_64(self.root.to_string_lossy().as_bytes())
+            )))
+        } else {
+            None
+        }
     }
 
-    /// Returns the solve group directory
+    /// Returns the environment directory
+    pub fn environments_dir(&self) -> PathBuf {
+        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_envs_dir;
+        }
+
+        // If the detached-environments path is set, use it instead of the default
+        // directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            let detached_environments_path =
+                detached_environments_path.join(consts::ENVIRONMENTS_DIR);
+            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
+
+                #[cfg(not(windows))]
+                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                    tracing::warn!(
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_envs_dir.display(),
+                        detached_environments_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    create_symlink(&detached_environments_path, &default_envs_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_envs_dir, &detached_environments_path);
+            });
+
+            return detached_environments_path;
+        }
+
+        tracing::debug!(
+            "Using default root directory: `{}` as environments directory.",
+            default_envs_dir.display()
+        );
+
+        default_envs_dir
+    }
+
+    /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
+        // If the detached-environments path is set, use it instead of the default
+        // directory.
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        }
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
@@ -316,7 +397,8 @@ impl Project {
         Environment::new(self, self.manifest.default_environment())
     }
 
-    /// Returns the environment with the given name or `None` if no such environment exists.
+    /// Returns the environment with the given name or `None` if no such
+    /// environment exists.
     pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<Environment<'_>>
     where
         Q: Hash + Equivalent<EnvironmentName>,
@@ -334,7 +416,8 @@ impl Project {
             .collect()
     }
 
-    /// Returns an environment in this project based on a name or an environment variable.
+    /// Returns an environment in this project based on a name or an environment
+    /// variable.
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
@@ -357,7 +440,8 @@ impl Project {
             .collect()
     }
 
-    /// Returns the solve group with the given name or `None` if no such group exists.
+    /// Returns the solve group with the given name or `None` if no such group
+    /// exists.
     pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
         self.manifest
             .parsed
@@ -369,7 +453,8 @@ impl Project {
             })
     }
 
-    /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
+    /// Return the grouped environments, which are all solve-groups and the
+    /// environments that need to be solved.
     pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
         let mut environments = HashSet::new();
         environments.extend(
@@ -386,17 +471,20 @@ impl Project {
         environments.into_iter().collect()
     }
 
-    /// Returns true if the project contains any reference pypi dependencies. Even if just
-    /// `[pypi-dependencies]` is specified without any requirements this will return true.
+    /// Returns true if the project contains any reference pypi dependencies.
+    /// Even if just `[pypi-dependencies]` is specified without any
+    /// requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.manifest.has_pypi_dependencies()
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
-        self.manifest
-            .pypi_name_mapping_source()
-            .expect("mapping source should be ok")
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        self.mapping_source.get_or_init(|| {
+            self.manifest
+                .pypi_name_mapping_source(&self.config)
+                .expect("mapping source should be ok")
+        })
     }
 
     /// Returns the reqwest client used for http networking
@@ -414,8 +502,8 @@ impl Project {
         &self.config
     }
 
-    /// Return a combination of static environment variables generated from the project and the environment
-    /// and from running activation script
+    /// Return a combination of static environment variables generated from the
+    /// project and the environment and from running activation script
     pub async fn get_env_variables(
         &self,
         environment: &Environment<'_>,
@@ -446,8 +534,9 @@ impl Project {
     }
 }
 
-/// Iterates over the current directory and all its parent directories and returns the manifest path in the first
-/// directory path that contains the [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
+/// Iterates over the current directory and all its parent directories and
+/// returns the manifest path in the first directory path that contains the
+/// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
 pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
@@ -470,16 +559,84 @@ pub fn find_project_manifest() -> Option<PathBuf> {
     })
 }
 
+/// Create a symlink from the default pixi directory to the custom target
+/// directory
+#[cfg(not(windows))]
+fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
+    if default_pixi_dir.exists() {
+        tracing::debug!(
+            "Symlink already exists at '{}', skipping creating symlink.",
+            default_pixi_dir.display()
+        );
+        return;
+    }
+    symlink(pixi_dir_name, default_pixi_dir)
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to create symlink from '{}' to '{}': {}",
+                pixi_dir_name.display(),
+                default_pixi_dir.display(),
+                e
+            )
+        })
+        .ok();
+}
+
+/// Write a warning file to the default pixi directory to inform the user that
+/// symlinks are not supported on this platform (Windows).
+#[cfg(windows)]
+fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
+    let warning_file = default_envs_dir.join("README.txt");
+    if warning_file.exists() {
+        tracing::debug!(
+            "Symlink warning file already exists at '{}', skipping writing warning file.",
+            warning_file.display()
+        );
+        return;
+    }
+    let warning_message = format!(
+        "Environments are installed in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
+        envs_dir_name.display()
+    );
+
+    // Create directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+        tracing::error!(
+            "Failed to create directory '{}': {}",
+            default_envs_dir.display(),
+            e
+        );
+        return;
+    }
+
+    // Write warning message to file
+    match std::fs::write(&warning_file, warning_message.clone()) {
+        Ok(_) => tracing::info!(
+            "Symlink warning file written to '{}': {}",
+            warning_file.display(),
+            warning_message
+        ),
+        Err(e) => tracing::error!(
+            "Failed to write symlink warning file to '{}': {}",
+            warning_file.display(),
+            e
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use self::has_features::HasFeatures;
-    use super::*;
-    use crate::project::manifest::FeatureName;
+    use std::str::FromStr;
+
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
-    use std::str::FromStr;
+
+    use self::has_features::HasFeatures;
+    use super::*;
+    use crate::project::manifest::FeatureName;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -604,7 +761,8 @@ mod tests {
             scripts.iter().join("\n")
         }
 
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [target.linux-64.activation]
             scripts = ["Cargo.toml"]
@@ -644,7 +802,8 @@ mod tests {
 
     #[test]
     fn test_target_specific_tasks() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [tasks]
             test = "test multi"

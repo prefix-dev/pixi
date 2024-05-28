@@ -55,20 +55,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Message what's installed
+    let detached_envs_message =
+        if let Ok(Some(path)) = project.config().detached_environments().path() {
+            format!(" in '{}'", console::style(path.display()).bold())
+        } else {
+            "".to_string()
+        };
+
     if installed_envs.len() == 1 {
         eprintln!(
-            "{}The {} environment has been installed.",
+            "{}The {} environment has been installed{}.",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs[0].fancy_display(),
+            detached_envs_message
         );
     } else {
         eprintln!(
-            "{}The following environments have been installed: \n\t{}",
+            "{}The following environments have been installed{}: \n\t{}",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs
                 .iter()
                 .map(|n| n.fancy_display())
                 .join("\n\t"),
+            detached_envs_message
         );
     }
 
