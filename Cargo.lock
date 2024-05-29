@@ -1352,7 +1352,8 @@ checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 [[package]]
 name = "file_url"
 version = "0.1.1"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cd0e1a8a0c7a1829090615ebce07ebf31911031a08915ca869f1085f0e39032"
 dependencies = [
  "itertools 0.12.1",
  "percent-encoding",
@@ -3639,8 +3640,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.26.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4dbdaed42ff38c8bcccef910b960d4db52fcc3f774f485bb18de691b9e8fe94"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3682,8 +3684,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.24.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a2046a77fc9d79879f8cdd798603e6b036ed9ac5a297b5ff25e44ee23fe2fc9"
 dependencies = [
  "chrono",
  "file_url",
@@ -3712,7 +3715,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.4"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf69475918dd44152f7df690b13f2909f34cc762ae18a2e2c55824b546de161"
 dependencies = [
  "blake2",
  "digest",
@@ -3727,8 +3731,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.8"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.22.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "701ca75a920e2c142538faaed11bf3e983102d149dd50488ace153812c1e0f72"
 dependencies = [
  "chrono",
  "file_url",
@@ -3752,7 +3757,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cef20e8356ea6840294e5754c6a8663b0eb1b97f29d517642f0f99215a2483"
 dependencies = [
  "quote",
  "syn 2.0.66",
@@ -3761,7 +3767,8 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.20.8"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c582ad6d82b397d1e1522910b34dc052bbed4dedc0eed7fb640024de0dc6f5f6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3790,8 +3797,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.21.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ca9d94fb324ac9855ac5fdbbc3b53e4ca101e84a270d6a30f059e4319c45b62"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3815,8 +3823,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.20.2"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5cf314480ddf618405c8249393e55cefcbd18b65b9877ced23365519054e14f"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3866,8 +3875,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.20.5"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.20.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5710a54191836eab4063543ff41b042d12d8a79092fdb568f210b98bd39ce03"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3883,8 +3893,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.23.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b58a172466a9e7338e4fb05ebfa8b9b297de53a5735190880f9d8f17d409c2"
 dependencies = [
  "chrono",
  "futures",
@@ -3900,8 +3911,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.12"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+version = "0.19.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf0fd83b54bdb95f722b80b1ea9219e02b5c5ab4ad24b4b9bdb8b9e2ad8173a"
 dependencies = [
  "archspec",
  "libloading",
@@ -4851,7 +4863,8 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/bump-to-pep-6.0.0#465f8abebc5978cc385ffc3ba3b261955830ecd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
 dependencies = [
  "tokio",
 ]
