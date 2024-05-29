@@ -79,26 +79,26 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea
 platform-tags = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 pypi-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 pyproject-toml = "0.11.0"
-rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false, features = [
+rattler = { version = "0.26.1", default-features = false, features = [
     "cli-tools",
     "indicatif",
 ] }
-rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false }
-rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false }
-rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false }
-rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false }
-rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false, features = [
+rattler_conda_types = { version = "0.25.0", default-features = false }
+rattler_digest = { version = "0.19.4", default-features = false }
+rattler_lock = { version = "0.22.9", default-features = false }
+rattler_networking = { version = "0.20.8", default-features = false }
+rattler_repodata_gateway = { version = "0.20.3", default-features = false, features = [
     "sparse",
     "gateway",
 ] }
-rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false, features = [
+rattler_shell = { version = "0.20.6", default-features = false, features = [
     "sysinfo",
 ] }
-rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false, features = [
+rattler_solve = { version = "0.23.2", default-features = false, features = [
     "resolvo",
 ] }
 
-rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-to-pep-6.0.0", default-features = false }
+rattler_virtual_packages = { version = "0.19.3", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 reqwest = { version = "0.12.4", default-features = false, features = [
