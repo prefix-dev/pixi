@@ -22,7 +22,6 @@ use crate::Project;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
-use crate::project::manifest::EnvironmentName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use thiserror::Error;
@@ -62,17 +61,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Extract the passed in environment name.
-    let env_name = EnvironmentName::from_arg_or_env_var(args.environment).into_diagnostic()?;
+    let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if env_name.is_default() {
+    let explicit_environment = if environment.is_default() {
         None
     } else {
-        Some(
-            project
-                .environment(&env_name)
-                // Error out if the environment is not found.
-                .ok_or_else(|| miette!("unknown environment '{env_name}'"))?,
-        )
+        Some(environment)
     };
 
     // Verify that the current platform has the required virtual packages for the environment.
