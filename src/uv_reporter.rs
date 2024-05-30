@@ -1,5 +1,5 @@
 use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
-use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrl};
+use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -181,6 +181,15 @@ impl uv_installer::DownloadReporter for UvReporter {
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
         self.finish(index);
     }
+
+    // TODO: figure out how to display this nicely
+    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
+        0
+    }
+
+    fn on_download_progress(&self, _index: usize, _bytes: u64) {}
+
+    fn on_download_complete(&self, _name: &PackageName, _index: usize) {}
 }
 
 impl uv_installer::InstallReporter for UvReporter {
@@ -197,7 +206,7 @@ impl uv_installer::InstallReporter for UvReporter {
 }
 
 impl uv_resolver::ResolverReporter for UvReporter {
-    fn on_progress(&self, name: &PackageName, version: &VersionOrUrl) {
+    fn on_progress(&self, name: &PackageName, version: &VersionOrUrlRef) {
         self.pb
             .set_message(format!("resolving {}{}", name, version));
     }
@@ -221,4 +230,13 @@ impl uv_resolver::ResolverReporter for UvReporter {
     fn on_complete(&self) {
         self.finish_all()
     }
+
+    // TODO: figure out how to display this nicely
+    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
+        0
+    }
+
+    fn on_download_progress(&self, _id: usize, _bytes: u64) {}
+
+    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
 }

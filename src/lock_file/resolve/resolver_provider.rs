@@ -4,7 +4,8 @@ use std::{
 };
 
 use distribution_types::{
-    DirectUrlSourceDist, Dist, IndexLocations, PrioritizedDist, SourceDist, SourceDistCompatibility,
+    Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -17,37 +18,60 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::lock_file::PypiPackageIdentifier;
+use crate::{
+    consts::DEFAULT_PYPI_INDEX_URL,
+    lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier},
+};
 
-pub(super) struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
+pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
 }
 
-impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
-    for CondaResolverProvider<'a, Context>
-{
+impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io PackageName,
-    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + Send + 'io {
+    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
             // If we encounter a package that was installed by conda we simply return a single
             // available version in the form of a source distribution with the URL of the
             // conda package.
             //
-            // Obviously this is not a valid source distribution but it easies debugging.
-            let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
+            // Obviously this is not a valid source distribution but it eases debugging.
+
+            // Don't think this matters much
+            // so just fill it up with empty fields
+            let file = File {
+                dist_info_metadata: false,
+                filename: identifier.name.as_normalized().clone().to_string(),
+                hashes: vec![],
+                requires_python: None,
+                size: None,
+                upload_time_utc_ms: None,
+                url: FileLocation::AbsoluteUrl(repodata_record.url.to_string()),
+                yanked: None,
+            };
+
+            let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
-                url: VerbatimUrl::unknown(repodata_record.url.clone()),
-            }));
+                version: repodata_record
+                    .version()
+                    .version()
+                    .to_string()
+                    .parse()
+                    .expect("could not convert to pypi version"),
+                file: Box::new(file),
+                index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
+                wheels: vec![],
+            };
 
             let prioritized_dist = PrioritizedDist::from_source(
-                dist,
+                source_dist,
                 Vec::new(),
-                SourceDistCompatibility::Compatible(distribution_types::Hash::Matched),
+                SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
@@ -65,8 +89,8 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     fn get_or_build_wheel_metadata<'io>(
         &'io self,
         dist: &'io Dist,
-    ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
-        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
+    ) -> impl Future<Output = WheelMetadataResult> + 'io {
+        if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
