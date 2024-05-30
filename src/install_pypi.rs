@@ -1081,3 +1081,35 @@ pub async fn update_python_distributions(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, str::FromStr};
+
+    use pep440_rs::Version;
+    use rattler_lock::{PypiPackageData, UrlOrPath};
+
+    use super::convert_to_dist;
+
+    #[test]
+    /// Create locked pypi data, pass this into the convert_to_dist function
+    fn convert_special_chars_wheelname_to_dist() {
+        // Create url with special characters
+        let wheel = "torch-2.3.0%2Bcu121-cp312-cp312-win_amd64.whl";
+        let url = format!("https://example.com/{}", wheel).parse().unwrap();
+        // Pass into locked data
+        let locked = PypiPackageData {
+            name: "torch".parse().unwrap(),
+            version: Version::from_str("2.3.0+cu121").unwrap(),
+            url_or_path: UrlOrPath::Url(url),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        // Convert the locked data to a uv dist
+        // check if it does not panic
+        convert_to_dist(&locked, &PathBuf::new())
+            .expect("could not convert wheel with special chars to dist");
+    }
+}
