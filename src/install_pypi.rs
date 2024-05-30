@@ -19,6 +19,7 @@ use pypi_types::{
 use tempfile::{tempdir, TempDir};
 use url::Url;
 
+use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_resolver::InMemoryIndex;
@@ -955,6 +956,12 @@ pub async fn update_python_distributions(
             &build_dispatch,
             uv_context.concurrency.downloads,
         );
+
+        // Before hitting the network let's make sure the credentials are available to uv
+        for url in index_locations.urls() {
+            let success = store_credentials_from_url(url);
+            tracing::debug!("Stored credentials for {}: {}", url, success);
+        }
 
         let downloader = Downloader::new(
             &uv_context.cache,
