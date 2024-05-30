@@ -154,5 +154,6 @@ pub(super) async fn list_global_packages() -> miette::Result<Vec<PackageName>> {
         }
     }
 
+    packages.sort();
     Ok(packages)
 }
