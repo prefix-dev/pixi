@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::convert::identity;
-use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use crate::config::ConfigCli;
@@ -63,16 +62,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Extract the passed in environment name.
-    let explicit_environment = args
-        .environment
-        .map(|n| EnvironmentName::from_str(n.as_str()))
-        .transpose()?
-        .map(|n| {
+    let env_name = EnvironmentName::from_arg_or_env_var(args.environment).into_diagnostic()?;
+    // Find the environment to run the task in, if any were specified.
+    let explicit_environment = if env_name.is_default() {
+        None
+    } else {
+        Some(
             project
-                .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
-        })
-        .transpose()?;
+                .environment(&env_name)
+                // Error out if the environment is not found.
+                .ok_or_else(|| miette!("unknown environment '{env_name}'"))?,
+        )
+    };
 
     // Verify that the current platform has the required virtual packages for the environment.
     if let Some(ref explicit_environment) = explicit_environment {
