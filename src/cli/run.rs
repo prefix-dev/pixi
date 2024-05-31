@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::convert::identity;
-use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use crate::config::ConfigCli;
@@ -23,7 +22,6 @@ use crate::Project;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
-use crate::project::manifest::EnvironmentName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use thiserror::Error;
@@ -63,16 +61,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Extract the passed in environment name.
-    let explicit_environment = args
-        .environment
-        .map(|n| EnvironmentName::from_str(n.as_str()))
-        .transpose()?
-        .map(|n| {
-            project
-                .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
-        })
-        .transpose()?;
+    let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
+    // Find the environment to run the task in, if any were specified.
+    let explicit_environment = if environment.is_default() {
+        None
+    } else {
+        Some(environment)
+    };
 
     // Verify that the current platform has the required virtual packages for the environment.
     if let Some(ref explicit_environment) = explicit_environment {

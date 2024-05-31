@@ -1,6 +1,6 @@
-use pep508_rs::{MarkerEnvironment, StringVersion};
-use rattler_conda_types::{PackageRecord, Platform, VersionWithSource};
-use std::str::FromStr;
+use miette::IntoDiagnostic;
+use pep508_rs::{MarkerEnvironment, MarkerEnvironmentBuilder};
+use rattler_conda_types::{PackageRecord, Platform};
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(
@@ -48,34 +48,30 @@ pub fn determine_marker_environment(
         _ => "",
     };
 
-    Ok(MarkerEnvironment {
-        implementation_name: String::from(implementation_name),
-        implementation_version: version_to_string_version(&python_record.version),
-        os_name: String::from(os_name),
-        platform_python_implementation: String::from(platform_python_implementation),
-        platform_system: String::from(platform_system),
-        python_full_version: version_to_string_version(&python_record.version),
-        python_version: python_record
+    MarkerEnvironment::try_from(MarkerEnvironmentBuilder {
+        implementation_name,
+        implementation_version: python_record.version.as_str().as_ref(),
+        os_name,
+        platform_python_implementation,
+        platform_system,
+        python_full_version: python_record.version.as_str().as_ref(),
+        python_version: &python_record
             .version
             .version()
             .as_major_minor()
-            .and_then(|(major, minor)| StringVersion::from_str(&format!("{major}.{minor}")).ok())
+            .map(|(major, minor)| format!("{major}.{minor}"))
             .ok_or_else(|| {
                 miette::miette!(
                     "could not convert python version {}, to a major minor version",
                     &python_record.version
                 )
             })?,
-        sys_platform: String::from(sys_platform),
-        platform_machine: String::from(platform_machine),
+        sys_platform,
+        platform_machine,
 
         // I assume we can leave these empty
-        platform_release: "".to_string(),
-        platform_version: "".to_string(),
+        platform_release: "",
+        platform_version: "",
     })
-}
-
-/// Convert a [`VersionWithSource`] to a [`StringVersion`].
-fn version_to_string_version(version: &VersionWithSource) -> StringVersion {
-    StringVersion::from_str(&version.to_string()).expect("could not convert between versions")
+    .into_diagnostic()
 }

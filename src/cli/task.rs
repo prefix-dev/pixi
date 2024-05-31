@@ -1,6 +1,7 @@
 use crate::project::manifest::EnvironmentName;
 use crate::project::manifest::FeatureName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::project::Environment;
 use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
@@ -9,6 +10,8 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 use std::collections::HashSet;
 use std::error::Error;
+use std::io;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
@@ -28,7 +31,7 @@ pub enum Operation {
     #[clap(alias = "@")]
     Alias(AliasArgs),
 
-    /// List all tasks
+    /// List all tasks in the project
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
@@ -107,10 +110,17 @@ pub struct AliasArgs {
 
 #[derive(Parser, Debug, Clone)]
 pub struct ListArgs {
+    /// Tasks available for this machine per environment
     #[arg(long, short)]
     pub summary: bool,
 
-    /// The environment the list should be generated for
+    /// Output the list of tasks from all environments in
+    /// machine readable format (space delimited)
+    /// this output is used for autocomplete by `pixi run`
+    #[arg(long, hide(true))]
+    pub machine_readable: bool,
+
+    /// The environment the list should be generated for.
     /// If not specified, the default environment is used.
     #[arg(long, short)]
     pub environment: Option<String>,
@@ -180,6 +190,31 @@ pub struct Args {
     /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+}
+
+fn print_heading(value: &str) {
+    let bold = console::Style::new().bold();
+    eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
+}
+
+fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
+    let mut writer = tabwriter::TabWriter::new(stdout());
+    for env in envs {
+        let formatted: String = env
+            .get_filtered_tasks()
+            .iter()
+            .sorted()
+            .map(|name| name.fancy_display())
+            .join(", ");
+        writeln!(
+            writer,
+            "{}\t: {}",
+            env.name().fancy_display().bold(),
+            formatted
+        )?;
+    }
+    writer.flush()?;
+    Ok(())
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
@@ -309,20 +344,24 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
+            } else if args.summary {
+                print_heading("Tasks per environment:");
+                print_tasks_per_env(project.environments()).expect("io error when printing tasks");
+            } else if args.machine_readable {
+                let unformatted: String = available_tasks
+                    .iter()
+                    .sorted()
+                    .map(|name| name.as_str())
+                    .join(" ");
+                eprintln!("{}", unformatted);
             } else {
                 let formatted: String = available_tasks
                     .iter()
                     .sorted()
-                    .map(|name| {
-                        if args.summary {
-                            format!("{} ", name.as_str(),)
-                        } else {
-                            format!("* {}\n", name.fancy_display().bold(),)
-                        }
-                    })
-                    .collect();
-
-                println!("{}", formatted);
+                    .map(|name| name.fancy_display())
+                    .join(", ");
+                print_heading("Tasks that can run on this machine:");
+                eprintln!("{}", formatted);
             }
         }
     };

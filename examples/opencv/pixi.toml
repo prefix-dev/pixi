@@ -1,7 +1,6 @@
 [project]
 name = "opencv"
-version = "0.1.0"
-description = "Opencv examples"
+description = "Opencv example"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]

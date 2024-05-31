@@ -1,7 +1,5 @@
 [project]
 name = "solve-groups"
-version = "0.1.0"
-description = "Add a short description here"
 authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -21,6 +19,7 @@ py-rattler = "*"
 matplotlib = "*"
 
 [tasks]
+start ={ depends-on = ["test"]}
 test = "pytest -s"
 
 [environments]
