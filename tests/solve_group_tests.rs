@@ -163,7 +163,7 @@ async fn test_purl_are_added_for_pypi() {
 }
 
 #[tokio::test]
-async fn test_purl_are_generated_using_custom_mapping() {
+async fn test_purl_are_missing_for_non_conda_forge() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -176,6 +176,49 @@ async fn test_purl_are_generated_using_custom_mapping() {
         file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: "dummy-channel".to_owned(),
+    };
+
+    let packages = vec![repo_data_record.clone()];
+
+    let conda_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
+            .await
+            .unwrap();
+    // We are using custom mapping
+    let compressed_mapping =
+        HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
+
+    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+        &mut repo_data_record,
+        &conda_mapping,
+        &compressed_mapping,
+    )
+    .unwrap();
+
+    // Because foo-bar-car is not from conda-forge channel
+    // We verify that purls are missing for non-conda-forge packages
+    assert!(repo_data_record
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .is_none());
+}
+
+#[tokio::test]
+async fn test_purl_are_generated_using_custom_mapping() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.project().unwrap();
+    let client = project.authenticated_client();
+    let foo_bar_package = Package::build("foo-bar-car", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "foo-bar-car".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
     };
 
     let packages = vec![repo_data_record.clone()];
@@ -219,7 +262,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
         package_record: foo_bar_package.package_record,
         file_name: "pandoc".to_owned(),
         url: Url::parse("https://haskell.org/pandoc/").unwrap(),
-        channel: "conda-forge".to_owned(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
     };
 
     let packages = vec![repo_data_record.clone()];
