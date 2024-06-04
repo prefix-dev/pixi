@@ -453,8 +453,10 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Remove the dependency from the manifest
-            match self.target_mut(platform, feature_name)
-                .remove_dependency(dep, spec_type) {
+            match self
+                .target_mut(platform, feature_name)
+                .remove_dependency(dep, spec_type)
+            {
                 Ok(_) => (),
                 Err(DependencyError::NoDependency(e)) => {
                     tracing::warn!("Dependency `{}` doesn't exist", e);
@@ -477,8 +479,10 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Remove the dependency from the manifest
-            match self.target_mut(platform, feature_name)
-                .remove_pypi_dependency(dep) {
+            match self
+                .target_mut(platform, feature_name)
+                .remove_pypi_dependency(dep)
+            {
                 Ok(_) => (),
                 Err(DependencyError::NoDependency(e)) => {
                     tracing::warn!("Dependency `{}` doesn't exist", e);
