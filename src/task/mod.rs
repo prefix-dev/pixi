@@ -264,6 +264,9 @@ pub struct Alias {
     #[serde(alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
+
+    /// A description of the task.
+    pub description: Option<String>,
 }
 
 impl Display for Task {

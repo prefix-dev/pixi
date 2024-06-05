@@ -110,6 +110,10 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The description of the alias task
+    #[arg(long)]
+    pub description: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -133,6 +137,8 @@ pub struct ListArgs {
 impl From<AddArgs> for Task {
     fn from(value: AddArgs) -> Self {
         let depends_on = value.depends_on.unwrap_or_default();
+        // description or none
+        let description = value.description;
 
         // Convert the arguments into a single string representation
         let cmd_args = if value.commands.len() == 1 {
@@ -149,11 +155,14 @@ impl From<AddArgs> for Task {
         // Depending on whether the task has a command, and depends_on or not we create a plain or
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
-            Self::Alias(Alias { depends_on })
+            Self::Alias(Alias {
+                depends_on,
+                description,
+            })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
-            && value.description.is_none()
+            && description.is_none()
         {
             Self::Plain(cmd_args)
         } else {
@@ -167,9 +176,7 @@ impl From<AddArgs> for Task {
                 }
                 Some(env)
             };
-            // description or none
-            let description= value.description;
-            
+
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
@@ -187,6 +194,7 @@ impl From<AliasArgs> for Task {
     fn from(value: AliasArgs) -> Self {
         Self::Alias(Alias {
             depends_on: value.depends_on,
+            description: value.description,
         })
     }
 }
