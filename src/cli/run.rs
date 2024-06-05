@@ -128,7 +128,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}{} in {}{}{}",
+                "{}{}{} in {}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
                 console::style(executable_task.name().unwrap_or("unnamed"))
@@ -141,6 +141,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .bold(),
                 console::style("): ").bold(),
                 executable_task.display_command(),
+                if let Some(description) = executable_task.task().description() {
+                    console::style(format!(": ({})", description)).yellow()
+                } else {
+                    console::style("".to_string()).yellow()
+                }
             );
         }
 
