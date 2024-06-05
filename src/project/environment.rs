@@ -233,6 +233,18 @@ impl<'p> Environment<'p> {
             .collect()
     }
 
+    /// Returns the environment variables that should be set when activating this environment.
+    ///
+    /// The environment variables of all features are combined in the order they are defined for the environment.
+    pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
+        self.features()
+            .filter_map(|f| f.activation_env(platform))
+            .fold(HashMap::new(), |mut acc, env| {
+                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                acc
+            })
+    }
+
     /// Validates that the given platform is supported by this environment.
     fn validate_platform_support(
         &self,
@@ -403,7 +415,7 @@ mod tests {
         let task = manifest.default_environment().get_filtered_tasks();
 
         assert_eq!(task.len(), 1);
-        assert_eq!(task.contains(&"foo".into()), true);
+        assert!(task.contains(&"foo".into()));
     }
 
     fn format_dependencies(dependencies: CondaDependencies) -> String {

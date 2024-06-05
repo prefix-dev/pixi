@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
@@ -76,7 +78,7 @@ pub fn errored_progress_style() -> indicatif::ProgressStyle {
 
 /// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
 pub fn long_running_progress_style() -> indicatif::ProgressStyle {
-    indicatif::ProgressStyle::with_template("{spinner:.green} {msg}").unwrap()
+    indicatif::ProgressStyle::with_template("{prefix}{spinner:.green} {msg}").unwrap()
 }
 
 // /// Displays a spinner with the given message while running the specified function to completion.
@@ -95,10 +97,17 @@ pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Out
     msg: impl Into<Cow<'static, str>>,
     future: F,
 ) -> T {
+    let msg = msg.into();
+    let (prefix, msg) = match msg.find(|c: char| !c.is_whitespace()) {
+        Some(idx) if idx > 0 => msg.split_at(idx),
+        _ => ("", msg.as_ref()),
+    };
+
     let pb = global_multi_progress().add(ProgressBar::new_spinner());
     pb.enable_steady_tick(Duration::from_millis(100));
     pb.set_style(long_running_progress_style());
-    pb.set_message(msg);
+    pb.set_prefix(prefix.to_string());
+    pb.set_message(msg.to_string());
     let result = future(pb.clone()).await;
     pb.finish_and_clear();
     result
@@ -138,6 +147,7 @@ impl ScopedTask {
         }
         self.pb.clone()
     }
+
     /// Finishes the execution of the task.
     pub fn finish_sync(mut self) -> ProgressBar {
         // Send the finished operation. If this fails the receiving end was most likely already

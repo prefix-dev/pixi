@@ -1,11 +1,10 @@
 use crate::consts::PIXI_UV_INSTALLER;
 use crate::lock_file::UvResolutionContext;
-use crate::progress::await_in_progress;
-use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::progress::{await_in_progress, global_multi_progress};
 use crate::project::has_features::HasFeatures;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::{
-    consts, install, install_pypi,
+    consts, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
     progress,
@@ -19,6 +18,7 @@ use crate::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use miette::{IntoDiagnostic, WrapErr};
+use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::{
     install::{PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -27,7 +27,7 @@ use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use std::convert::identity;
-use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
+use std::{collections::HashMap, io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -262,7 +262,7 @@ pub async fn update_prefix_pypi(
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
-    uv_context: UvResolutionContext,
+    uv_context: &UvResolutionContext,
     pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
@@ -438,53 +438,52 @@ impl PythonStatus {
 }
 
 /// Updates the environment to contain the packages from the specified lock-file
+#[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
-    environment_name: GroupedEnvironmentName,
     prefix: &Prefix,
-    package_cache: Arc<PackageCache>,
+    package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
-    repodata_records: &[RepoDataRecord],
+    repodata_records: Vec<RepoDataRecord>,
     platform: Platform,
+    progress_bar_message: &str,
+    progress_bar_prefix: &str,
 ) -> miette::Result<PythonStatus> {
-    // Construct a transaction to bring the environment up to date with the lock-file content
-    let transaction = Transaction::from_current_and_desired(
-        installed_packages.clone(),
-        // TODO(baszalmstra): Can we avoid cloning here?
-        repodata_records.to_owned(),
-        platform,
-    )
-    .into_diagnostic()?;
-
-    // Execute the transaction if there is work to do
-    if !transaction.operations.is_empty() {
-        // Execute the operations that are returned by the solver.
-        progress::await_in_progress(
-            format!(
-                "updating packages in '{}'",
-                environment_name.fancy_display()
-            ),
-            |pb| async {
-                install::execute_transaction(
-                    package_cache,
-                    &transaction,
-                    &installed_packages,
-                    prefix.root().to_path_buf(),
-                    authenticated_client,
-                    pb,
+    // Execute the operations that are returned by the solver.
+    let result = progress::await_in_progress(
+        format!("{progress_bar_prefix}{progress_bar_message}",),
+        |pb| async {
+            Installer::new()
+                .with_download_client(authenticated_client)
+                .with_io_concurrency_limit(100)
+                .with_execute_link_scripts(false)
+                .with_installed_packages(installed_packages)
+                .with_target_platform(platform)
+                .with_package_cache(package_cache)
+                .with_reporter(
+                    IndicatifReporter::builder()
+                        .with_multi_progress(global_multi_progress())
+                        .with_placement(rattler::install::Placement::After(pb))
+                        .with_formatter(
+                            DefaultProgressFormatter::default()
+                                .with_prefix(format!("{progress_bar_prefix}  ")),
+                        )
+                        .clear_when_done(true)
+                        .finish(),
                 )
+                .install(prefix.root(), repodata_records)
                 .await
-            },
-        )
-        .await?;
-    }
+                .into_diagnostic()
+        },
+    )
+    .await?;
 
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
     create_history_file(prefix.root())?;
 
     // Determine if the python version changed.
-    Ok(PythonStatus::from_transaction(&transaction))
+    Ok(PythonStatus::from_transaction(&result.transaction))
 }
 
 pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;

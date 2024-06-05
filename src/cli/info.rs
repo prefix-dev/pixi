@@ -15,6 +15,7 @@ use tokio::task::spawn_blocking;
 use crate::progress::await_in_progress;
 use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
+use crate::util::default_channel_config;
 use crate::{config, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
@@ -37,6 +38,7 @@ pub struct Args {
 
 #[derive(Serialize)]
 pub struct ProjectInfo {
+    name: String,
     manifest_path: PathBuf,
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
@@ -89,7 +91,7 @@ impl Display for EnvironmentInfo {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
         if !self.channels.is_empty() {
-            let channels_list = self.channels.iter().map(|c| c.to_string()).format(", ");
+            let channels_list = self.channels.iter().format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -210,6 +212,7 @@ impl Display for Info {
 
         if let Some(pi) = self.project_info.as_ref() {
             writeln!(f, "\n{}", bold.apply_to("Project\n------------"))?;
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
             if let Some(version) = pi.version.clone() {
                 writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Version"), version)?;
             }
@@ -288,7 +291,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
-        let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
+        let env_dir = project.as_ref().map(|p| p.pixi_dir());
         let cache_dir = config::get_cache_dir()?;
         await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
@@ -304,6 +307,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = project.clone().map(|p| ProjectInfo {
+        name: p.name().to_string(),
         manifest_path: p.manifest_path(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
@@ -344,7 +348,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels: env
                             .channels()
                             .into_iter()
-                            .filter_map(|c| c.name.clone())
+                            .map(|c| {
+                                default_channel_config()
+                                    .canonical_name(c.base_url())
+                                    .to_string()
+                            })
                             .collect(),
                         prefix: env.dir(),
                         tasks,

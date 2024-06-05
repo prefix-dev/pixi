@@ -11,7 +11,7 @@ get-data = "python get_data.py"
 start = { cmd = "qgis earthquakes_example.qgz", depends-on = "get-data" }
 
 [dependencies]
-qgis = "3.32.1.*"
-requests = "2.31.0.*"
-geopandas = "0.13.2.*"
-python = "3.11.4.*"
+qgis = ">=3.36.3,<3.37"
+requests = ">=2.32.2,<2.33"
+geopandas = ">=0.14.4,<0.15"
+python = ">=3.12.3,<3.13"

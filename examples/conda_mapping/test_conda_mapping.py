@@ -50,4 +50,5 @@ if __name__ == "__main__":
 
 
     for package in expected_null_packages:
-        assert "purls" not in package
+        # The package should have an empty list of purls
+        assert package["purls"] == []

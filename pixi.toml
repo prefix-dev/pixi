@@ -7,8 +7,8 @@ authors = [
     "Tim de Jager <tim@prefix.dev>",
     "Ruben Arts <ruben@prefix.dev>",
 ]
-channels = ["conda-forge"]
-#channels = ["https://fast.prefix.dev/conda-forge"]
+# Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
+channels = ["https://fast.prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
@@ -20,21 +20,19 @@ lint = "pre-commit run --all"
 bump = "tbump --only-patch"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 
-[dependencies]
-# Dev dependencies
+[feature.dev.dependencies]
 pre-commit = "~=3.3.0"
-
-# Needed for building rattler
-rust = "~=1.77.0"
-openssl = "3.*"
-pkg-config = "0.29.*"
-git = "2.42.0.*"
-
 # Needed for the citation
 cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
-[target.linux-64.dependencies]
+[feature.build.dependencies]
+# Needed for building
+rust = "~=1.77.0"
+openssl = "3.*"
+pkg-config = "0.29.*"
+git = "2.42.0.*"
+[feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
 
 [feature.docs.dependencies]
@@ -55,8 +53,7 @@ mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
-# Using deprecated `depends_on` to avoid conflicts in ci. Changes after release.
-test-schema = { cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema" }
+test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema" }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 toml-format = "taplo fmt **/pixi.toml"
 
@@ -69,5 +66,6 @@ pyyaml = ">=6.0.1,<6.1"
 taplo = ">=0.9.1,<0.10"
 
 [environments]
-docs = { features = ["docs"], no-default-feature = true }
-schema = { features = ["schema"], no-default-feature = true }
+default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
+docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
+schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}

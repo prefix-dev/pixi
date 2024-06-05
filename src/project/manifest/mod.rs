@@ -12,14 +12,17 @@ mod system_requirements;
 mod target;
 mod validation;
 
-use crate::config::Config;
-use crate::project::manifest::channel::PrioritizedChannel;
-use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
-use crate::project::manifest::pypi_options::PypiOptions;
-use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
-use crate::task::TaskName;
-use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    fmt::{self, Display},
+    hash::Hash,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 pub use activation::Activation;
 use document::ManifestSource;
 pub use environment::{Environment, EnvironmentName};
@@ -28,36 +31,39 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
-use once_cell::sync::OnceCell;
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
-use rattler_conda_types::Channel;
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName,
+    Channel, MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
     Platform, Version,
 };
-use serde::de::{DeserializeSeed, MapAccess, Visitor};
-use serde::{Deserialize, Deserializer};
-use serde_with::serde_as;
-use std::collections::HashSet;
-use std::ffi::OsStr;
-use std::fmt::{self, Display};
-use std::hash::Hash;
-use std::marker::PhantomData;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    str::FromStr,
+use serde::{
+    de::{DeserializeSeed, MapAccess, Visitor},
+    Deserialize, Deserializer,
 };
+use serde_with::serde_as;
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
 use toml_edit::DocumentMut;
+use url::{ParseError, Url};
 
 use self::error::TomlError;
-use url::ParseError;
-use url::Url;
+use crate::{
+    config::Config,
+    consts,
+    project::{
+        manifest::{
+            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
+            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
+        },
+        SpecType,
+    },
+    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
+    task::{Task, TaskName},
+    utils::spanned::PixiSpanned,
+};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -84,11 +90,11 @@ impl ManifestKind {
 }
 
 /// Handles the project's manifest file.
-/// This struct is responsible for reading, parsing, editing, and saving the manifest.
-/// It encapsulates all logic related to the manifest's TOML format and structure.
-/// The manifest data is represented as a [`ProjectManifest`] struct for easy manipulation.
-/// Owned by the [`crate::project::Project`] struct, which governs its usage.
-///
+/// This struct is responsible for reading, parsing, editing, and saving the
+/// manifest. It encapsulates all logic related to the manifest's TOML format
+/// and structure. The manifest data is represented as a [`ProjectManifest`]
+/// struct for easy manipulation. Owned by the [`crate::project::Project`]
+/// struct, which governs its usage.
 #[derive(Debug, Clone)]
 pub struct Manifest {
     /// The path to the manifest file
@@ -102,6 +108,12 @@ pub struct Manifest {
 
     /// The parsed manifest
     pub parsed: ProjectManifest,
+}
+
+impl Borrow<ProjectManifest> for Manifest {
+    fn borrow(&self) -> &ProjectManifest {
+        &self.parsed
+    }
 }
 
 impl Manifest {
@@ -170,8 +182,9 @@ impl Manifest {
         Ok(())
     }
 
-    /// Returns a hashmap of the tasks that should run only the given platform. If the platform is
-    /// `None`, only the default targets tasks are returned.
+    /// Returns a hashmap of the tasks that should run only the given platform.
+    /// If the platform is `None`, only the default targets tasks are
+    /// returned.
     pub fn tasks(
         &self,
         platform: Option<Platform>,
@@ -216,6 +229,69 @@ impl Manifest {
             .insert(name, task);
 
         Ok(())
+    }
+
+    /// Adds an environment to the project. Overwrites the entry if it already
+    /// exists.
+    pub fn add_environment(
+        &mut self,
+        name: String,
+        features: Option<Vec<String>>,
+        solve_group: Option<String>,
+        no_default_feature: bool,
+    ) -> miette::Result<()> {
+        // Make sure the features exist
+        for feature in features.iter().flatten() {
+            if self.feature(feature.as_str()).is_none() {
+                return Err(UnknownFeature::new(feature.to_string(), &self.parsed).into());
+            }
+        }
+
+        self.document.add_environment(
+            name.clone(),
+            features.clone(),
+            solve_group.clone(),
+            no_default_feature,
+        )?;
+
+        let environment_idx = self.parsed.environments.add(Environment {
+            name: EnvironmentName::Named(name),
+            features: features.unwrap_or_default(),
+            features_source_loc: None,
+            solve_group: None,
+            no_default_feature,
+        });
+
+        if let Some(solve_group) = solve_group {
+            self.parsed.solve_groups.add(solve_group, environment_idx);
+        }
+
+        Ok(())
+    }
+
+    /// Removes an environment from the project.
+    pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
+        // Remove the environment from the TOML document
+        if !self.document.remove_environment(name)? {
+            return Ok(false);
+        }
+
+        // Remove the environment from the internal manifest
+        let environment_idx = self
+            .parsed
+            .environments
+            .by_name
+            .shift_remove(name)
+            .expect("environment should exist");
+
+        // Remove the environment from the solve groups
+        self.parsed
+            .solve_groups
+            .solve_groups
+            .iter_mut()
+            .for_each(|group| group.environments.retain(|&idx| idx != environment_idx));
+
+        Ok(true)
     }
 
     /// Remove a task from the project, and the tasks that depend on it
@@ -386,7 +462,8 @@ impl Manifest {
 
     /// Returns true if any of the features has pypi dependencies defined.
     ///
-    /// This also returns true if the `pypi-dependencies` key is defined but empty.
+    /// This also returns true if the `pypi-dependencies` key is defined but
+    /// empty.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.parsed
             .features
@@ -398,65 +475,62 @@ impl Manifest {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> miette::Result<&'static MappingSource> {
-        static MAPPING_SOURCE: OnceCell<MappingSource> = OnceCell::new();
+    pub fn pypi_name_mapping_source(&self, config: &Config) -> miette::Result<MappingSource> {
+        match self.parsed.project.conda_pypi_map.clone() {
+            Some(url) => {
+                // transform user defined channels into rattler::Channel
+                let channels = url
+                    .keys()
+                    .map(|channel_str| {
+                        Channel::from_str(channel_str, config.channel_config())
+                            .map(|channel| (channel_str, channel.canonical_name()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .into_diagnostic()?;
 
-        MAPPING_SOURCE.get_or_try_init(||
-            match self.parsed.project.conda_pypi_map.clone() {
-                Some(url) => {
-                    let config = Config::load_global();
-
-                    // transform user defined channels into rattler::Channel
-                    let channels = url
-                        .keys()
-                        .map(|channel_str| {
-                            Channel::from_str(channel_str, config.channel_config())
-                                .map(|channel| (channel_str, channel.canonical_name()))
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-
-                    let project_channels = self.parsed.project.channels
+                let project_channels = self
+                    .parsed
+                    .project
+                    .channels
                     .iter()
                     .map(|pc| pc.channel.canonical_name())
                     .collect::<HashSet<_>>();
 
+                // Throw a warning for each missing channel from project table
+                channels.iter().for_each(|(_, channel_canonical_name)| {
+                    if !project_channels.contains(channel_canonical_name) {
+                        tracing::warn!(
+                            "Defined custom mapping channel {} is missing from project channels",
+                            channel_canonical_name
+                        );
+                    }
+                });
 
-                    // Throw a warning for each missing channel from project table
-                    channels
-                    .iter()
-                    .for_each(|(_, channel_canonical_name)| {
-                        if !project_channels.contains(channel_canonical_name){
-                            tracing::warn!("Defined custom mapping channel {} is missing from project channels", channel_canonical_name);
-                        }
-                    });
+                let mapping = channels
+                        .iter()
+                        .map(|(channel_str, channel)| {
 
-                    let mapping = channels
-                            .iter()
-                            .map(|(channel_str, channel)| {
+                            let mapping_location = url.get(*channel_str).unwrap();
 
-                                let mapping_location = url.get(*channel_str).unwrap();
-
-                                let url_or_path = match Url::parse(mapping_location) {
-                                    Ok(url) => MappingLocation::Url(url),
-                                    Err(err) => {
-                                        if let ParseError::RelativeUrlWithoutBase = err {
-                                            MappingLocation::Path(PathBuf::from(mapping_location))
-                                        } else {
-                                            miette::bail!("Could not convert {mapping_location} to neither URL or Path")
-                                        }
+                            let url_or_path = match Url::parse(mapping_location) {
+                                Ok(url) => MappingLocation::Url(url),
+                                Err(err) => {
+                                    if let ParseError::RelativeUrlWithoutBase = err {
+                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                    } else {
+                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
                                     }
-                                };
+                                }
+                            };
 
-                                Ok((channel.trim_end_matches('/').into(), url_or_path))
-                            })
-                            .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+                            Ok((channel.trim_end_matches('/').into(), url_or_path))
+                        })
+                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
-                    Ok(MappingSource::Custom { mapping })
-                },
-                None => Ok(MappingSource::Prefix),
+                Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
             }
-        )
+            None => Ok(MappingSource::Prefix),
+        }
     }
 
     /// Adds the specified channels to the manifest.
@@ -572,8 +646,8 @@ impl Manifest {
 
     /// Returns the default feature.
     ///
-    /// This is the feature that is added implicitly by the tables at the root of the project
-    /// manifest.
+    /// This is the feature that is added implicitly by the tables at the root
+    /// of the project manifest.
     pub fn default_feature(&self) -> &Feature {
         self.parsed.default_feature()
     }
@@ -583,7 +657,8 @@ impl Manifest {
         self.parsed.default_feature_mut()
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not exist.
+    /// Returns the mutable feature with the given name or `None` if it does not
+    /// exist.
     pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
         Q: Hash + Equivalent<FeatureName> + Display,
@@ -594,7 +669,8 @@ impl Manifest {
             .ok_or_else(|| miette!("Feature `{name}` does not exist"))
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not exist.
+    /// Returns the mutable feature with the given name or `None` if it does not
+    /// exist.
     pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
         self.parsed
             .features
@@ -612,13 +688,15 @@ impl Manifest {
 
     /// Returns the default environment
     ///
-    /// This is the environment that is added implicitly as the environment with only the default
-    /// feature. The default environment can be overwritten by a environment named `default`.
+    /// This is the environment that is added implicitly as the environment with
+    /// only the default feature. The default environment can be overwritten
+    /// by a environment named `default`.
     pub fn default_environment(&self) -> &Environment {
         self.parsed.default_environment()
     }
 
-    /// Returns the environment with the given name or `None` if it does not exist.
+    /// Returns the environment with the given name or `None` if it does not
+    /// exist.
     pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
     where
         Q: Hash + Equivalent<EnvironmentName>,
@@ -626,7 +704,8 @@ impl Manifest {
         self.parsed.environments.find(name)
     }
 
-    /// Returns the solve group with the given name or `None` if it does not exist.
+    /// Returns the solve group with the given name or `None` if it does not
+    /// exist.
     pub fn solve_group<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
     where
         Q: Hash + Equivalent<String>,
@@ -646,26 +725,45 @@ fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
 /// The environments in the project.
 #[derive(Debug, Clone, Default)]
 pub struct Environments {
-    /// A list of all environments, in the order they are defined in the manifest.
-    pub(super) environments: Vec<Environment>,
+    /// A list of all environments, in the order they are defined in the
+    /// manifest.
+    pub(super) environments: Vec<Option<Environment>>,
 
     /// A map of all environments, indexed by their name.
     pub(super) by_name: IndexMap<EnvironmentName, usize>,
 }
 
 impl Environments {
-    /// Returns the environment with the given name or `None` if it does not exist.
+    /// Returns the environment with the given name or `None` if it does not
+    /// exist.
     pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
     where
         Q: Hash + Equivalent<EnvironmentName>,
     {
         let index = self.by_name.get(name)?;
-        Some(&self.environments[*index])
+        self.environments[*index].as_ref()
     }
 
     /// Returns an iterator over all the environments in the project.
     pub fn iter(&self) -> impl Iterator<Item = &Environment> + '_ {
-        self.environments.iter()
+        self.environments.iter().flat_map(Option::as_ref)
+    }
+
+    /// Adds a new environment to the set of environments. If the environment
+    /// already exists it is overwritten.
+    pub fn add(&mut self, environment: Environment) -> usize {
+        match self.by_name.get(&environment.name) {
+            Some(&idx) => {
+                self.environments[idx] = Some(environment);
+                idx
+            }
+            None => {
+                let idx = self.environments.len();
+                self.by_name.insert(environment.name.clone(), idx);
+                self.environments.push(Some(environment));
+                idx
+            }
+        }
     }
 }
 
@@ -683,7 +781,8 @@ pub struct SolveGroups {
 }
 
 impl SolveGroups {
-    /// Returns the solve group with the given name or `None` if it does not exist.
+    /// Returns the solve group with the given name or `None` if it does not
+    /// exist.
     pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
     where
         Q: Hash + Equivalent<String>,
@@ -701,8 +800,8 @@ impl SolveGroups {
     /// If the solve-group does not exist, it is created
     ///
     /// Returns the index of the solve-group
-    fn add(&mut self, name: &str, environment_idx: usize) -> usize {
-        match self.by_name.get(name) {
+    fn add(&mut self, name: String, environment_idx: usize) -> usize {
+        match self.by_name.get(&name) {
             Some(idx) => {
                 // The solve-group exists, add the environment index to it
                 self.solve_groups[*idx].environments.push(environment_idx);
@@ -713,10 +812,10 @@ impl SolveGroups {
                 // and initialise it with the environment index
                 let idx = self.solve_groups.len();
                 self.solve_groups.push(SolveGroup {
-                    name: name.to_string(),
+                    name: name.clone(),
                     environments: vec![environment_idx],
                 });
-                self.by_name.insert(name.to_string(), idx);
+                self.by_name.insert(name, idx);
                 idx
             }
         }
@@ -755,8 +854,8 @@ impl ProjectManifest {
 
     /// Returns the default feature.
     ///
-    /// This is the feature that is added implicitly by the tables at the root of the project
-    /// manifest.
+    /// This is the feature that is added implicitly by the tables at the root
+    /// of the project manifest.
     pub fn default_feature(&self) -> &Feature {
         self.features
             .get(&FeatureName::Default)
@@ -772,8 +871,9 @@ impl ProjectManifest {
 
     /// Returns the default environment
     ///
-    /// This is the environment that is added implicitly as the environment with only the default
-    /// feature. The default environment can be overwritten by a environment named `default`.
+    /// This is the environment that is added implicitly as the environment with
+    /// only the default feature. The default environment can be overwritten
+    /// by a environment named `default`.
     pub fn default_environment(&self) -> &Environment {
         let envs = &self.environments;
         envs.find(&EnvironmentName::Named(String::from(
@@ -783,7 +883,8 @@ impl ProjectManifest {
         .expect("default environment should always exist")
     }
 
-    /// Returns the environment with the given name or `None` if it does not exist.
+    /// Returns the environment with the given name or `None` if it does not
+    /// exist.
     pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
     where
         Q: Hash + Equivalent<EnvironmentName>,
@@ -903,8 +1004,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            // HACK: If we use `flatten`, unknown keys will point to the wrong location in the file.
-            //  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
+            // HACK: If we use `flatten`, unknown keys will point to the wrong location in the
+            // file.  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
             //
             // Instead we currently copy the keys from the Target deserialize implementation which
             // is really ugly.
@@ -1006,7 +1107,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             .environments
             .contains_key(&EnvironmentName::Default)
         {
-            environments.environments.push(Environment::default());
+            environments.environments.push(Some(Environment::default()));
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
 
@@ -1025,13 +1126,13 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             let environment_idx = environments.environments.len();
             environments.by_name.insert(name.clone(), environment_idx);
-            environments.environments.push(Environment {
+            environments.environments.push(Some(Environment {
                 name,
                 features,
                 features_source_loc,
-                solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
+                solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
-            });
+            }));
         }
 
         Ok(Self {
@@ -1045,13 +1146,16 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{project::manifest::channel::PrioritizedChannel, util::default_channel_config};
+    use std::str::FromStr;
+
     use insta::{assert_snapshot, assert_yaml_snapshot};
+    use miette::NarratableReportHandler;
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
-    use std::str::FromStr;
     use tempfile::tempdir;
+
+    use super::*;
+    use crate::{project::manifest::channel::PrioritizedChannel, util::default_channel_config};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1316,6 +1420,121 @@ mod tests {
     }
 
     #[test]
+    fn test_activation_env() {
+        let contents = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = ["win-64", "linux-64"]
+
+            [activation.env]
+            FOO = "main"
+
+            [target.win-64.activation]
+            env = { FOO = "win-64" }
+
+            [target.linux-64.activation.env]
+            FOO = "linux-64"
+
+            [feature.bar.activation]
+            env = { FOO = "bar" }
+
+            [feature.bar.target.win-64.activation]
+            env = { FOO = "bar-win-64" }
+
+            [feature.bar.target.linux-64.activation]
+            env = { FOO = "bar-linux-64" }
+            "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let default_targets = &manifest.default_feature().targets;
+        let default_activation_env = default_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let win64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let linux64_activation_env = default_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            default_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("main")
+            )]))
+        );
+        assert_eq!(
+            win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("win-64")
+            )]))
+        );
+        assert_eq!(
+            linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("linux-64")
+            )]))
+        );
+
+        // Check that the feature activation env is set correctly
+        let feature_targets = &manifest
+            .feature(&FeatureName::Named(String::from("bar")))
+            .unwrap()
+            .targets;
+        let feature_activation_env = feature_targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_win64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+        let feature_linux64_activation_env = feature_targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.env.as_ref());
+
+        assert_eq!(
+            feature_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar")
+            )]))
+        );
+        assert_eq!(
+            feature_win64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-win-64")
+            )]))
+        );
+        assert_eq!(
+            feature_linux64_activation_env,
+            Some(&IndexMap::from([(
+                String::from("FOO"),
+                String::from("bar-linux-64")
+            )]))
+        );
+    }
+
+    #[test]
     fn test_target_specific_tasks() {
         let contents = format!(
             r#"
@@ -1549,7 +1768,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_remove_target_dependencies() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1592,7 +1812,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_remove_dependencies() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1650,7 +1871,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_set_version() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1676,7 +1898,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_set_description() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1717,7 +1940,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_add_platforms() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1790,7 +2014,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_remove_platforms() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1866,7 +2091,8 @@ feature_target_dep = "*"
 
     #[test]
     fn test_add_channels() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
 [project]
 name = "foo"
@@ -2017,7 +2243,8 @@ platforms = ["linux-64", "win-64"]
 
     #[test]
     fn test_remove_channels() {
-        // Using known files in the project so the test succeed including the file check.
+        // Using known files in the project so the test succeed including the file
+        // check.
         let file_contents = r#"
             [project]
             name = "foo"
@@ -2537,5 +2764,101 @@ bar = "*"
         test = "test"
         "#;
         let _manifest = ProjectManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_add_environment() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments]
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        manifest
+            .add_environment(String::from("test"), Some(Vec::new()), None, false)
+            .unwrap();
+        assert!(manifest.environment("test").is_some());
+    }
+
+    #[test]
+    fn test_add_environment_with_feature() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.foobar]
+
+        [environments]
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        manifest
+            .add_environment(
+                String::from("test"),
+                Some(vec![String::from("foobar")]),
+                None,
+                false,
+            )
+            .unwrap();
+        assert!(manifest.environment("test").is_some());
+    }
+
+    #[test]
+    fn test_add_environment_non_existing_feature() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.existing]
+
+        [environments]
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let err = manifest
+            .add_environment(
+                String::from("test"),
+                Some(vec![String::from("non-existing")]),
+                None,
+                false,
+            )
+            .unwrap_err();
+
+        // Disable colors in tests
+        let colors_enabled = console::colors_enabled();
+        console::set_colors_enabled(false);
+
+        let mut s = String::new();
+        let report_handler = NarratableReportHandler::new().with_cause_chain();
+        report_handler.render_report(&mut s, err.as_ref()).unwrap();
+
+        console::set_colors_enabled(colors_enabled);
+
+        assert_snapshot!(s, @r###"
+        the feature 'non-existing' is not defined in the project manifest
+            Diagnostic severity: error
+        diagnostic help: Did you mean 'existing'?
+        "###);
+    }
+
+    #[test]
+    fn test_remove_environment() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments]
+        foo = []
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        assert!(manifest.remove_environment("foo").unwrap());
+        assert!(!manifest.remove_environment("default").unwrap());
     }
 }
