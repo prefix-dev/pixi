@@ -81,6 +81,10 @@ pub struct AddArgs {
     /// The environment variable to set, use --env key=value multiple times for more than one variable
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
+
+    /// A description of the task to be added.
+    #[arg(long)]
+    pub description: Option<String>,
 }
 
 /// Parse a single key-value pair
@@ -146,7 +150,11 @@ impl From<AddArgs> for Task {
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
+        } else if depends_on.is_empty()
+            && value.cwd.is_none()
+            && value.env.is_empty()
+            && value.description.is_none()
+        {
             Self::Plain(cmd_args)
         } else {
             let cwd = value.cwd;
@@ -159,6 +167,9 @@ impl From<AddArgs> for Task {
                 }
                 Some(env)
             };
+            // description or none
+            let description= value.description;
+            
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
@@ -166,6 +177,7 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env,
+                description,
             })
         }
     }
@@ -401,6 +413,9 @@ impl From<Task> for Item {
                 }
                 if let Some(env) = process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
+                }
+                if let Some(description) = process.description {
+                    table.insert("description", description.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }
