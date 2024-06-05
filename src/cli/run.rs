@@ -8,7 +8,6 @@ use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
-use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
@@ -62,6 +61,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Extract the passed in environment name.
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
+
+    let best_platform = environment.best_platform();
+
     // Find the environment to run the task in, if any were specified.
     let explicit_environment = if environment.is_default() {
         None
@@ -99,10 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
         explicit_environment.clone(),
-        explicit_environment
-            .as_ref()
-            .map(|e| e.best_platform())
-            .or(Some(Platform::current())),
+        Some(best_platform),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
