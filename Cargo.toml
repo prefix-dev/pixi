@@ -226,6 +226,3 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea
 # platform-tags = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 # pypi-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 # requirements-txt = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-
-[profile.release]
-debug = true
