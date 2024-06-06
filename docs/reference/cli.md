@@ -361,7 +361,7 @@ List all tasks in the project.
 ##### Options
 
 - `--environment`(`-e`): the environment's tasks list, if non is provided the default tasks will be listed.
-- `--summary`(`-s`): the output gets formatted to be machine parsable. (Used in the autocompletion of `pixi run`).
+- `--summary`(`-s`): list the tasks per environment.
 
 ```shell
 pixi task list

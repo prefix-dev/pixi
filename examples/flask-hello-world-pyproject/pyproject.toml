@@ -21,7 +21,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 flask-hello-world-pyproject = { path = ".", editable = true }
 
 [tool.pixi.environments]
-default = { features = [], solve-group = "default" }
+default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
 
 [tool.pixi.tasks]

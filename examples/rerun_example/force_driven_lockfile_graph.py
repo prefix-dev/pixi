@@ -12,13 +12,13 @@ lockfile_path = sys.argv[1] if len(sys.argv) > 1 else "pixi.lock"
 with open(lockfile_path) as file:
     lockfile_data = yaml.safe_load(file)
 
-package_data = lockfile_data["package"]
+package_data = lockfile_data["packages"]
 package_names = [package["name"] for package in package_data]
 
 graph = nx.DiGraph()
 for package in package_data:
     package_name = package["name"]
-    dependencies = package.get("dependencies", [])
+    dependencies = package.get("depends", [])
     graph.add_node(package_name)
     for i, dep in enumerate(dependencies):
         graph.add_edge(package_name, dep.split(" ")[0])

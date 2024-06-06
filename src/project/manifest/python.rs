@@ -1,5 +1,6 @@
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
+use pypi_types::VerbatimParsedUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
@@ -396,6 +397,8 @@ pub enum AsPep508Error {
     },
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
+    #[error("error while canonicalizing {0}")]
+    VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -450,6 +453,33 @@ impl RequirementOrEditable {
         }
     }
 
+    /// Returns a pep508 requirement if it is a pep508 requirement, using the parsed url type.
+    pub fn into_requirement_with_parsed_url(
+        self,
+    ) -> Option<pep508_rs::Requirement<VerbatimParsedUrl>> {
+        if let Some(req) = self.into_requirement() {
+            let version_or_parsed_url = req.version_or_url.map(|v| match v {
+                pep508_rs::VersionOrUrl::Url(url) => {
+                    let parsed_url =
+                        VerbatimParsedUrl::try_from(url).expect("could not convert to ParsedUrl");
+                    pep508_rs::VersionOrUrl::Url(parsed_url)
+                }
+                pep508_rs::VersionOrUrl::VersionSpecifier(v) => {
+                    pep508_rs::VersionOrUrl::VersionSpecifier(v)
+                }
+            });
+            Some(pep508_rs::Requirement {
+                name: req.name,
+                version_or_url: version_or_parsed_url,
+                extras: req.extras,
+                marker: req.marker,
+                origin: req.origin,
+            })
+        } else {
+            None
+        }
+    }
+
     /// Returns an editable requirement if it is an editable requirement.
     pub fn as_editable(&self) -> Option<&requirements_txt::EditableRequirement> {
         match self {
@@ -501,7 +531,7 @@ impl PyPiRequirement {
                     .to_str()
                     .map(|s| s.to_owned())
                     .unwrap_or_else(String::new);
-                let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
 
                 if *editable == Some(true) {
                     if !canonicalized.is_dir() {
@@ -513,7 +543,9 @@ impl PyPiRequirement {
                         requirements_txt::EditableRequirement {
                             url: verbatim,
                             extras: extras.clone(),
+                            marker: None,
                             path: canonicalized,
+                            origin: None,
                         },
                     ));
                 }
@@ -552,6 +584,7 @@ impl PyPiRequirement {
                 extras: self.extras().to_vec(),
                 version_or_url,
                 marker: None,
+                origin: None,
             },
         ))
     }

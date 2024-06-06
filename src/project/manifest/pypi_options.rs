@@ -95,6 +95,27 @@ impl PypiOptions {
         IndexLocations::new(index, extra_indexes, flat_indexes, false)
     }
 
+    /// Return an iterator over all [`Url`] entries.
+    /// In order of:
+    /// - `find_links`
+    /// - `extra_index_urls`
+    /// - `index_url`
+    pub fn urls(&self) -> impl Iterator<Item = &'_ Url> + '_ {
+        let find_links = self
+            .find_links
+            .iter()
+            .flatten()
+            .filter_map(|index| match index {
+                FindLinksUrlOrPath::Path(_) => None,
+                FindLinksUrlOrPath::Url(url) => Some(url),
+            });
+
+        let extra_indexes = self.extra_index_urls.iter().flatten();
+        find_links
+            .chain(extra_indexes)
+            .chain(std::iter::once(self.index_url.as_ref()).flatten())
+    }
+
     /// Merges two `PypiOptions` together, according to the following rules
     /// - There can only be one primary index
     /// - Extra indexes are merged and deduplicated, in the order they are provided

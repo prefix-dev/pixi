@@ -155,7 +155,8 @@ impl<'p> LockFileDerivedData<'p> {
             self.project.root(),
             environment.best_platform(),
         )
-        .await?;
+        .await
+        .with_context(|| "error updating pypi prefix")?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
@@ -1765,7 +1766,6 @@ async fn spawn_solve_pypi_task(
                 consts::PLATFORM_STYLE.apply_to(platform)
             )
         })?;
-
         let end = Instant::now();
 
         pb.finish();

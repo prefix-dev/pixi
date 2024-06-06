@@ -166,7 +166,7 @@ impl<'p> Environment<'p> {
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
     pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(Some(Platform::current()))
+        self.tasks(Some(self.best_platform()))
             .into_iter()
             .flat_map(|tasks| {
                 tasks.into_iter().filter_map(|(key, _)| {
@@ -715,5 +715,37 @@ mod tests {
                 .collect_vec(),
             vec!["https://1.com/", "https://2.com/"]
         )
+    }
+
+    #[test]
+    fn test_validate_platform() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["osx-64", "linux-64", "win-64"]
+        "#,
+        )
+        .unwrap();
+        let env = manifest.default_environment();
+        // This should also work on OsxArm64
+        assert!(env.validate_platform_support(Some(Platform::Osx64)).is_ok());
+
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["emscripten-wasm32"]
+        "#,
+        )
+        .unwrap();
+        let env = manifest.default_environment();
+        assert!(env
+            .validate_platform_support(Some(Platform::EmscriptenWasm32))
+            .is_ok());
     }
 }

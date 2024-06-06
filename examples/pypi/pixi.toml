@@ -1,11 +1,8 @@
 [project]
 name = "pypi"
-version = "0.1.0"
-description = "Add a short description here"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
-
 
 [activation]
 scripts = ["activate.sh"]
@@ -14,7 +11,7 @@ scripts = ["activate.sh"]
 scripts = ["env_setup.bat"]
 
 [tasks]
-start = "python pycosat_example.py"
+start = { depends-on = ["test"] }
 test = "python pycosat_example.py"
 
 [dependencies]
