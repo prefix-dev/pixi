@@ -428,6 +428,7 @@ impl TasksControl<'_> {
                 feature,
                 cwd: None,
                 env: Default::default(),
+                description: None,
             },
         }
     }
@@ -457,6 +458,7 @@ impl TasksControl<'_> {
                 platform,
                 alias: name,
                 depends_on: vec![],
+                description: None,
             },
         }
     }
