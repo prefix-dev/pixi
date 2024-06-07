@@ -659,8 +659,8 @@ pub enum JsonPackageType {
 }
 
 #[derive(Serialize, Clone)]
-#[serde(transparent)]
 pub struct LockFileJsonDiff {
+    pub version: usize,
     pub environment: IndexMap<String, IndexMap<Platform, Vec<JsonPackageDiff>>>,
 }
 
@@ -758,7 +758,10 @@ impl LockFileJsonDiff {
             environment.insert(environment_name, environment_diff_json);
         }
 
-        Self { environment }
+        Self {
+            version: 1,
+            environment,
+        }
     }
 }
 
