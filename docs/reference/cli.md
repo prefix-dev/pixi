@@ -147,6 +147,7 @@ It will only update the lock file if the dependencies in the [manifest file](pro
 - `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
+- `--json`: Output the changes in json format.
 
 ```shell
 pixi update numpy
