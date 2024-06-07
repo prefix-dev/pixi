@@ -380,7 +380,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             namespace: None,
             md5: None,
             sha256: None,
-            url: None
+            url: None,
         } => {
             // No other fields besides the version was specified, so we can just return the
             // version as a string.

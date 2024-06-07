@@ -204,7 +204,7 @@ pub async fn run_activation(
         cleaned_environment_variables.extend(activator_result);
 
         // Enable this when we found a better way to support windows.
-        // On Windows the path is not completly replace but we need to strip some paths to keep it as clean as possible.
+        // On Windows the path is not completely replace, but we need to strip some paths to keep it as clean as possible.
         // if cfg!(target_os = "windows") {
         //     let path = env
         //         .get("Path")
@@ -263,7 +263,7 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
 pub fn get_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
 
-    let unix_keys = if cfg!(target_os = "unix") {
+    let unix_keys = if cfg!(unix) {
         vec![
             "DISPLAY",
             "LC_ALL",
