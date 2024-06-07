@@ -376,7 +376,7 @@ impl PixiControl {
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
-                json: false
+                json: false,
             },
         }
     }
