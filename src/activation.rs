@@ -147,6 +147,7 @@ pub async fn run_activation(
     } else {
         PathModificationBehavior::Prepend
     };
+
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         activator.run_activation(ActivationVariables {
@@ -191,7 +192,47 @@ pub async fn run_activation(
             }
         }
     };
-    Ok(activator_result)
+
+    if clean_env && cfg!(windows){
+        return Err(miette::miette!(format!("It's not possible to run a `clean-env` on windows as it will create to much issues for the running programs which makes it practically useless")))
+    }
+    else if clean_env {
+        let mut cleaned_environment_variables = get_clean_environment_variables();
+
+        // Extend with the original activation environment
+        cleaned_environment_variables.extend(activator_result);
+
+        // Enable this when we found a better way to support windows.
+        // On Windows the path is not completly replace but we need to strip some paths to keep it as clean as possible.
+        // if cfg!(target_os = "windows") {
+        //     let path = env
+        //         .get("Path")
+        //         .map(|path| {
+        //             // Keep some of the paths
+        //             let win_path = std::env::split_paths(&path).filter(|p| {
+        //                 // Required for base functionalities
+        //                 p.to_string_lossy().contains(":\\Windows")
+        //                     // Required for compilers
+        //                     || p.to_string_lossy().contains("\\Program Files")
+        //                     // Required for pixi environments
+        //                     || p.starts_with(environment.dir())
+        //             });
+        //             // Join back up the paths
+        //             std::env::join_paths(win_path).expect("Could not join paths")
+        //         })
+        //         .expect("Could not find PATH in environment variables");
+        //     // Insert the path back into the env.
+        //     env.insert(
+        //         "Path".to_string(),
+        //         path.to_str()
+        //             .expect("Path contains non-utf8 paths")
+        //             .to_string(),
+        //     );
+        // }
+
+        return Ok(cleaned_environment_variables);
+    }
+    Ok(std::env::vars().chain(activator_result))
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
@@ -245,118 +286,10 @@ pub fn get_clean_environment_variables() -> HashMap<String, String> {
         vec![]
     };
 
-    let windows_keys = if cfg!(target_os = "windows") {
-        vec![
-            "APPDATA",
-            "COMPUTERNAME",
-            "COMSPEC",
-            "COMMONPROGRAMFILES",
-            "COMMONPROGRAMFILES(X86)",
-            "COMMONPROGRAMW6432",
-            "DRIVERDATA",
-            "HOMEDRIVE",
-            "HOMEPATH",
-            "LOGONSERVER",
-            "NUMBER_OF_PROCESSORS",
-            "OS",
-            "PATHEXT",
-            "PROCESSOR_ARCHITECTURE",
-            "PROCESSOR_IDENTIFIER",
-            "PROCESSOR_LEVEL",
-            "PROCESSOR_REVISION",
-            "PROMPT_COMMAND",
-            "PROMPT_COMMAND_RIGHT",
-            "PROMPT_INDICATOR",
-            "PROMPT_INDICATOR_VI_INSERT",
-            "PROMPT_INDICATOR_VI_NORMAL",
-            "PROMPT_MULTILINE_INDICATOR",
-            "PWD",
-            "SESSIONNAME",
-            "SYSTEMDRIVE",
-            "SYSTEMROOT",
-            "TEMP",
-            "TMP",
-            "TERMINAL_EMULATOR",
-            "USERNAME",
-            "USERPROFILE",
-            "USERDOMAIN_ROAMINGPROFILE",
-            "USERDOMAIN",
-            "WINDIR",
-        ]
-        // vec![
-        //     "!C:",
-        //     "!D:",
-        //     "=::",
-        //     "ALLUSERSPROFILE",
-        //     "APPDATA",
-        //     "CMD_DURATION_MS",
-        //     "COMMONPROGRAMFILES",
-        //     "COMMONPROGRAMFILES(\"X86\")",
-        //     "COMMONPROGRAMW6432",
-        //     "COMPUTERNAME",
-        //     "COMSPEC",
-        //     "CONDA_PREFIX",
-        //     "CURRENT_FILE",
-        //     "DIRS_POSITION",
-        //     "DriverData",
-        //     "EFC_5504",
-        //     "FILE_PWD",
-        //     "HOMEDRIVE",
-        //     "HOMEPATH",
-        //     "IDEA_INITIAL_DIRECTORY",
-        //     "LAST_EXIT_CODE",
-        //     "LOCALAPPDATA",
-        //     "LOGONSERVER",
-        //     "NUMBER_OF_PROCESSORS",
-        //     "NU_LOG_DATE_FORMAT",
-        //     "NU_LOG_FORMAT",
-        //     "NU_VERSION",
-        //     "OLDPWD",
-        //     "OneDrive",
-        //     "OneDriveConsumer",
-        //     "OS",
-        //     "PATH",
-        //     "PATHEXT",
-        //     "PROCESSOR_ARCHITECTURE",
-        //     "PROCESSOR_IDENTIFIER",
-        //     "PROCESSOR_LEVEL",
-        //     "PROCESSOR_REVISION",
-        //     "PROGRAMDATA",
-        //     "PROGRAMFILES",
-        //     "PROGRAMFILES(\"X86\")",
-        //      "PROGRAMW6432",
-        //      "PROMPT",
-        //      "PROMPT_INDICATOR",
-        //      "PROMPT_MULTILINE_INDICATOR",
-        //      "PSMODULEPATH",
-        //      "PUBLIC",
-        //      "PWD",
-        //      "SESSIONNAME",
-        //      "STARSHIP_SESSION_KEY",
-        //      "STARSHIP_SHELL",
-        //      "SYSTEMDRIVE",
-        //      "SYSTEMROOT",
-        //      "TEMP",
-        //      "TERMINAL_EMULATOR",
-        //      "TERM_SESSION_ID",
-        //      "TMP",
-        //      "USERDOMAIN",
-        //      "USERDOMAIN_ROAMINGPROFILE",
-        //      "USERNAME",
-        //      "USERPROFILE",
-        //      "WINDIR",
-        //      "WIX",
-        //      "TERM",
-        //      "HOME",
-        // ]
-    } else {
-        vec![]
-    };
-
     let keys = unix_keys
         .into_iter()
         .chain(macos_keys)
-        .chain(windows_keys)
+        // .chain(windows_keys)
         .map(|s| s.to_string().to_uppercase())
         .collect_vec();
 
@@ -458,17 +391,5 @@ mod tests {
             env.get("USER").unwrap(),
             std::env::var("USER").as_ref().unwrap()
         );
-    }
-
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn test_get_windows_clean_environment_variables() {
-        let env = get_clean_environment_variables();
-        // Make sure that the environment variables are set.
-        assert_eq!(
-            env.get("USERNAME").unwrap(),
-            std::env::var("USERNAME").as_ref().unwrap()
-        );
-        assert!(env.get("Path").is_some());
     }
 }
