@@ -193,10 +193,11 @@ pub async fn run_activation(
         }
     };
 
-    if clean_env && cfg!(windows){
-        return Err(miette::miette!(format!("It's not possible to run a `clean-env` on windows as it will create to much issues for the running programs which makes it practically useless")))
-    }
-    else if clean_env {
+    if clean_env && cfg!(windows) {
+        return Err(miette::miette!(
+            format!("It's not possible to run a `clean-env` on Windows as it requires so many non conda specific files that it is basically useless to use. \
+        So pixi currently doesn't support this feature.")));
+    } else if clean_env {
         let mut cleaned_environment_variables = get_clean_environment_variables();
 
         // Extend with the original activation environment
@@ -232,7 +233,7 @@ pub async fn run_activation(
 
         return Ok(cleaned_environment_variables);
     }
-    Ok(std::env::vars().chain(activator_result))
+    Ok(std::env::vars().chain(activator_result).collect())
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
