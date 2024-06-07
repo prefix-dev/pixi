@@ -1,6 +1,11 @@
+use std::{borrow::Borrow, fmt::Display};
+
+use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
 use thiserror::Error;
+
+use crate::{consts, project::manifest::ProjectManifest};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -86,5 +91,57 @@ impl TomlError {
 impl From<toml_edit::de::Error> for TomlError {
     fn from(e: toml_edit::de::Error) -> Self {
         TomlError::Error(e.into())
+    }
+}
+
+/// Error for when a feature is not defined in the project manifest.
+#[derive(Debug, Error)]
+pub struct UnknownFeature {
+    feature: String,
+    existing_features: Vec<String>,
+}
+
+impl UnknownFeature {
+    pub fn new(feature: String, manifest: impl Borrow<ProjectManifest>) -> Self {
+        // Find the top 2 features that are closest to the feature name.
+        let existing_features = manifest
+            .borrow()
+            .features
+            .keys()
+            .filter_map(|f| {
+                let distance = strsim::jaro(f.as_str(), &feature);
+                (distance > 0.6).then_some((distance, f))
+            })
+            .sorted_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, name)| name.to_string())
+            .take(2)
+            .collect();
+        Self {
+            feature,
+            existing_features,
+        }
+    }
+}
+
+impl std::fmt::Display for UnknownFeature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the feature '{}' is not defined in the project manifest",
+            consts::FEATURE_STYLE.apply_to(&self.feature)
+        )
+    }
+}
+
+impl miette::Diagnostic for UnknownFeature {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        if !self.existing_features.is_empty() {
+            Some(Box::new(format!(
+                "Did you mean '{}'?",
+                self.existing_features.join("' or '")
+            )))
+        } else {
+            None
+        }
     }
 }

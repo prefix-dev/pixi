@@ -361,7 +361,7 @@ List all tasks in the project.
 ##### Options
 
 - `--environment`(`-e`): the environment's tasks list, if non is provided the default tasks will be listed.
-- `--summary`(`-s`): the output gets formatted to be machine parsable. (Used in the autocompletion of `pixi run`).
+- `--summary`(`-s`): list the tasks per environment.
 
 ```shell
 pixi task list
@@ -959,7 +959,7 @@ pixi project channel add --feature cuda nividia
 
 ### `project channel list`
 
-List the channels in the project file
+List the channels in the manifest file
 
 ##### Options
 
@@ -978,7 +978,7 @@ Environment: default
 
 ### `project channel remove`
 
-List the channels in the project file
+List the channels in the manifest file
 
 ##### Arguments
 
@@ -1017,9 +1017,51 @@ Set the project description.
 pixi project description set "my new description"
 ```
 
+### `project environment add`
+
+Add an environment to the manifest file.
+
+##### Arguments
+
+1. `<NAME>`: The name of the environment to add.
+
+##### Options
+
+- `-f, --feature <FEATURES>`: Features to add to the environment.
+- `--solve-group <SOLVE_GROUP>`: The solve-group to add the environment to.
+- `--no-default-feature`: Don't include the default feature in the environment.
+- `--force`:  Update the manifest even if the environment already exists.
+
+```sh
+pixi project environment add env1 --feature feature1 --feature feature2
+pixi project environment add env2 -f feature1 --solve-group test
+pixi project environment add env3 -f feature1 --no-default-feature
+pixi project environment add env3 -f feature1 --force
+```
+
+### `project environment remove`
+
+Remove an environment from the manifest file.
+
+##### Arguments
+
+1. `<NAME>`: The name of the environment to remove.
+
+```shell
+pixi project environment remove env1
+```
+
+### `project environment list`
+
+List the environments in the manifest file.
+
+```shell
+pixi project environment list
+```
+
 ### `project platform add`
 
-Adds a platform(s) to the project file and updates the lock file.
+Adds a platform(s) to the manifest file and updates the lock file.
 
 ##### Arguments
 
@@ -1037,7 +1079,7 @@ pixi project platform add --feature test win-64
 
 ### `project platform list`
 
-List the platforms in the project file.
+List the platforms in the manifest file.
 
 ```sh
 $ pixi project platform list
@@ -1049,7 +1091,7 @@ osx-arm64
 
 ### `project platform remove`
 
-Remove platform(s) from the project file and updates the lock file.
+Remove platform(s) from the manifest file and updates the lock file.
 
 ##### Arguments
 

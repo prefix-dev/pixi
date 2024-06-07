@@ -1,9 +1,10 @@
-use super::has_features::HasFeatures;
-use super::manifest::SystemRequirements;
-use super::{manifest, Environment, Project};
+use std::{hash::Hash, path::PathBuf};
+
 use itertools::Itertools;
-use std::hash::Hash;
-use std::path::PathBuf;
+
+use super::{
+    has_features::HasFeatures, manifest, manifest::SystemRequirements, Environment, Project,
+};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -44,22 +45,26 @@ impl<'p> SolveGroup<'p> {
             .join(self.name())
     }
 
-    /// Returns an iterator over all the environments that are part of the group.
+    /// Returns an iterator over all the environments that are part of the
+    /// group.
     pub fn environments(
         &self,
     ) -> impl DoubleEndedIterator<Item = Environment<'p>> + ExactSizeIterator + 'p {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
-                &self.project.manifest.parsed.environments.environments[*env_idx],
+                self.project.manifest.parsed.environments.environments[*env_idx]
+                    .as_ref()
+                    .expect("environment has been removed"),
             )
         })
     }
     /// Returns the system requirements for this solve group.
     ///
-    /// The system requirements of the solve group are the union of the system requirements of all
-    /// the environments that share the same solve group. If multiple environments specify a
-    /// requirement for the same system package, the highest is chosen.
+    /// The system requirements of the solve group are the union of the system
+    /// requirements of all the environments that share the same solve
+    /// group. If multiple environments specify a requirement for the same
+    /// system package, the highest is chosen.
     pub fn system_requirements(&self) -> SystemRequirements {
         self.local_system_requirements()
     }
@@ -83,12 +88,12 @@ impl<'p> HasFeatures<'p> for SolveGroup<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::has_features::HasFeatures;
-    use crate::Project;
+    use std::{collections::HashSet, path::Path};
+
     use itertools::Itertools;
     use rattler_conda_types::PackageName;
-    use std::collections::HashSet;
-    use std::path::Path;
+
+    use crate::{project::has_features::HasFeatures, Project};
 
     #[test]
     fn test_solve_group() {
@@ -144,8 +149,8 @@ mod tests {
         assert_eq!(bar_environment.solve_group(), Some(solve_group.clone()));
         assert_eq!(default_environment.solve_group(), None);
 
-        // Make sure that all the environments share the same system requirements, because they are
-        // in the same solve-group.
+        // Make sure that all the environments share the same system requirements,
+        // because they are in the same solve-group.
         let foo_system_requirements = foo_environment.system_requirements();
         let bar_system_requirements = bar_environment.system_requirements();
         let default_system_requirements = default_environment.system_requirements();
@@ -158,7 +163,8 @@ mod tests {
             "https://my-index.com/simple".parse().unwrap()
         );
 
-        // Check that the solve group 'group1' contains all the dependencies of its environments
+        // Check that the solve group 'group1' contains all the dependencies of its
+        // environments
         let package_names: HashSet<_> = solve_group
             .dependencies(None, None)
             .names()
@@ -172,8 +178,9 @@ mod tests {
                 .collect::<HashSet<_>>()
         );
 
-        // Check that the solve group 'group2' contains all the dependencies of its environments
-        // it should not contain 'a', which is a dependency of the default environment
+        // Check that the solve group 'group2' contains all the dependencies of its
+        // environments it should not contain 'a', which is a dependency of the
+        // default environment
         let solve_group = solve_groups[1].clone();
         let package_names: HashSet<_> = solve_group
             .dependencies(None, None)
