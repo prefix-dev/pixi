@@ -358,11 +358,9 @@ pub fn get_clean_environment_variables() -> HashMap<String, String> {
         .map(|s| s.to_string().to_uppercase())
         .collect_vec();
 
-    env
-        .into_iter()
+    env.into_iter()
         .filter(|(key, _)| keys.contains(&key.to_string().to_uppercase()))
         .collect::<HashMap<String, String>>()
-
 }
 
 /// Determine the environment variables that need to be set in an interactive shell to make it
