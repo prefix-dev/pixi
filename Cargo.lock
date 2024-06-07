@@ -6807,3 +6807,13 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[patch.unused]]
+name = "rattler"
+version = "0.26.4"
+source = "git+https://github.com/mamba-org/rattler?branch=main#3569b59f8d4553f7159a32c7bb0a412a2e0d4fe6"
+
+[[patch.unused]]
+name = "rattler_solve"
+version = "0.24.2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#3569b59f8d4553f7159a32c7bb0a412a2e0d4fe6"
