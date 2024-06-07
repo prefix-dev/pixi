@@ -855,6 +855,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
+name = "concat-idents"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f76990911f2267d837d9d0ad060aa63aaad170af40904b29461734c339030d4d"
+dependencies = [
+ "quote",
+ "syn 2.0.65",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1154,7 +1164,7 @@ name = "distribution-filename"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.38#0b23caa18d7eb2f874d73e57b7b4bdf35e881a46"
 dependencies = [
- "pep440_rs",
+ "pep440_rs 0.5.0",
  "platform-tags",
  "rkyv",
  "serde",
@@ -1175,8 +1185,8 @@ dependencies = [
  "git2",
  "itertools 0.12.1",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "rkyv",
@@ -1384,12 +1394,13 @@ checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 
 [[package]]
 name = "file_url"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cd0e1a8a0c7a1829090615ebce07ebf31911031a08915ca869f1085f0e39032"
+checksum = "1042c5fdc9f2cf548a139ccd0985fa2460d796f99b08574f72f1f53d179e6591"
 dependencies = [
  "itertools 0.12.1",
  "percent-encoding",
+ "thiserror",
  "typed-path",
  "url",
 ]
@@ -2241,7 +2252,7 @@ dependencies = [
  "mailparse",
  "once_cell",
  "pathdiff",
- "pep440_rs",
+ "pep440_rs 0.5.0",
  "platform-info",
  "platform-tags",
  "pypi-types",
@@ -3176,13 +3187,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pep440_rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca0a570e7ec9171250cac57614e901f62408094b54b3798bb920d3cf0d4a0e09"
+dependencies = [
+ "once_cell",
+ "serde",
+ "unicode-width",
+ "unscanny",
+]
+
+[[package]]
 name = "pep508_rs"
 version = "0.4.2"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.38#0b23caa18d7eb2f874d73e57b7b4bdf35e881a46"
 dependencies = [
  "derivative",
  "once_cell",
- "pep440_rs",
+ "pep440_rs 0.5.0",
  "regex",
  "serde",
  "thiserror",
@@ -3190,6 +3213,23 @@ dependencies = [
  "url",
  "uv-fs",
  "uv-normalize",
+]
+
+[[package]]
+name = "pep508_rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "581c27e97a3f38c5d691962af7da93c2672b5227d59cf165b87a9b1fd53dd724"
+dependencies = [
+ "derivative",
+ "once_cell",
+ "pep440_rs 0.6.0",
+ "regex",
+ "serde",
+ "thiserror",
+ "unicode-width",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]
@@ -3307,6 +3347,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "clap_complete",
+ "concat-idents",
  "console",
  "crossbeam-channel",
  "csv",
@@ -3335,8 +3376,8 @@ dependencies = [
  "nix 0.28.0",
  "once_cell",
  "parking_lot 0.12.2",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "pyproject-toml",
@@ -3583,8 +3624,8 @@ dependencies = [
  "indexmap 2.2.6",
  "mailparse",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "regex",
  "rkyv",
  "serde",
@@ -3602,8 +3643,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b80f889b6d413c3f8963a2c7db03f95dd6e1d85e1074137cb2013ea2faa8898"
 dependencies = [
  "indexmap 2.2.6",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "serde",
  "toml",
 ]
@@ -3670,9 +3711,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.26.0"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b659b13fde86dcd6f8b1adc6aeaaf50eb9d082468ff7639aea45bd2c9ce57c97"
+checksum = "f3d5504e8afc260cceebb79886032ac146c9344c55fbaf9034ca45a0c00b7447"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3692,6 +3733,7 @@ dependencies = [
  "memmap2 0.9.4",
  "once_cell",
  "parking_lot 0.12.2",
+ "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -3713,10 +3755,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "rattler_conda_types"
-version = "0.24.0"
+name = "rattler_cache"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ae7656866a9e67ea29627c52b350510e0600176b8cf266759368d22ee6f7490"
+checksum = "bdad5b1a62c97fe6acbad6f1421eed77bf75f736a5af44a18f0e46d6d1cd5c81"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "digest",
+ "dirs",
+ "fxhash",
+ "itertools 0.12.1",
+ "parking_lot 0.12.2",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_networking",
+ "rattler_package_streaming",
+ "reqwest 0.12.4",
+ "reqwest-middleware",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_conda_types"
+version = "0.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65d6d35c484af9b1a3ce13ace90de388c8a21b1f832bf2ee97b5681a94178326"
 dependencies = [
  "chrono",
  "file_url",
@@ -3761,17 +3828,17 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.8"
+version = "0.22.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97d2aebc838d2c61c9b57f2694e15f82c35e5198dbbebb2e94f6e92e426727c"
+checksum = "5bb54f27b97a03b9b2921bd18967947bc5788a8d653fcd6b6bdd18dad192312f"
 dependencies = [
  "chrono",
  "file_url",
  "fxhash",
  "indexmap 2.2.6",
  "itertools 0.12.1",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.6.0",
+ "pep508_rs 0.6.0",
  "purl",
  "rattler_conda_types",
  "rattler_digest",
@@ -3827,9 +3894,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.21.0"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3e5f158b303cac143f0c537e237fd934b6aba9f5e26cb9adebbde1af5a4cd0"
+checksum = "390c453b80d7904362e121c89f29aee796fb4d38cc7b24fe7ba9e583ef77a27b"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3853,9 +3920,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.20.2"
+version = "0.20.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "724051407513f63016c76e23f3e9d2487f7fd32a402a811adc49d8db31a669db"
+checksum = "810de4b4ef0c75087b77b6425caf869ee435ee392950f71800ec21ac512e576b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3905,9 +3972,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.20.5"
+version = "0.20.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f98b0b2c7841458bfb1b19eecd98517a2033e441d116201a638d55900a7c9905"
+checksum = "e17c8a64079dc3a7b8b0070e0d7c4bee4008bf16d799b8b621a9aa88968650c6"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3923,9 +3990,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.23.0"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c58bfe47f340da07709494d04b03e1a7d90c785a8e587171c8c19a0cb29c038"
+checksum = "d62f673fe9f9198b4d3235da314d727eff59515cc4db9b0e2452e9bbe959433d"
 dependencies = [
  "chrono",
  "futures",
@@ -3941,9 +4008,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.12"
+version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9a5b06af1855cc4c3257659d9c788f915572c4b1f5b47657772f8d5daf00912"
+checksum = "2ae1f4c940a73181b636a2957e665f1c7caeed443ef468ca31d380417f4b52bd"
 dependencies = [
  "archspec",
  "libloading",
@@ -4100,7 +4167,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.38#0b23caa18d7eb2f874d73e57b7b4bdf35e881a46"
 dependencies = [
  "fs-err",
- "pep508_rs",
+ "pep508_rs 0.4.2",
  "regex",
  "serde",
  "tracing",
@@ -4247,10 +4314,11 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d299d168910c5d71f3c0f5441abe38ca4a6ae21f70fae909bfc6bead28f6620f"
+checksum = "e7b73dc355efbb88c372550b92bf17d36bf555ecf319a4783a5b8b7c34488bc5"
 dependencies = [
+ "ahash 0.8.11",
  "bitvec",
  "elsa",
  "event-listener 5.3.0",
@@ -5703,8 +5771,8 @@ dependencies = [
  "indoc",
  "itertools 0.12.1",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "regex",
  "rustc-hash",
  "serde",
@@ -5762,8 +5830,8 @@ dependencies = [
  "html-escape",
  "http 1.1.0",
  "install-wheel-rs",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.4",
@@ -5798,7 +5866,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.1.38#0b23caa18d7eb2f874d73e5
 dependencies = [
  "anyhow",
  "itertools 0.12.1",
- "pep508_rs",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "rustc-hash",
  "serde",
@@ -5817,7 +5885,7 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "itertools 0.12.1",
- "pep508_rs",
+ "pep508_rs 0.4.2",
  "rustc-hash",
  "tracing",
  "uv-build",
@@ -5844,8 +5912,8 @@ dependencies = [
  "install-wheel-rs",
  "nanoid",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.4",
@@ -5946,8 +6014,8 @@ dependencies = [
  "fs-err",
  "futures",
  "install-wheel-rs",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "rayon",
@@ -5983,8 +6051,8 @@ dependencies = [
  "fs-err",
  "install-wheel-rs",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "platform-tags",
  "pypi-types",
  "regex",
@@ -6033,8 +6101,8 @@ dependencies = [
  "once-map",
  "once_cell",
  "owo-colors",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "petgraph",
  "platform-tags",
  "pubgrub",
@@ -6067,8 +6135,8 @@ dependencies = [
  "fs-err",
  "futures",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "reqwest 0.12.4",
  "reqwest-middleware",
  "tempfile",
@@ -6089,8 +6157,8 @@ dependencies = [
  "anyhow",
  "distribution-types",
  "once-map",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0",
+ "pep508_rs 0.4.2",
  "pypi-types",
  "requirements-txt",
  "rustc-hash",

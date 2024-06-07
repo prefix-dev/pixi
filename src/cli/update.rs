@@ -14,6 +14,7 @@ use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
 use serde::Serialize;
+use serde_json::Value;
 use tabwriter::TabWriter;
 
 use crate::{
@@ -642,19 +643,12 @@ impl LockFileDiff {
 #[derive(Serialize, Clone)]
 pub struct JsonPackageDiff {
     name: String,
-    before: Option<JsonChange>,
-    after: Option<JsonChange>,
+    before: Option<serde_json::Value>,
+    after: Option<serde_json::Value>,
     #[serde(rename = "type")]
     ty: JsonPackageType,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     explicit: bool,
-}
-
-#[derive(Serialize, Clone)]
-pub struct JsonChange {
-    version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    build: Option<String>,
 }
 
 #[derive(Serialize, Copy, Clone)]
@@ -692,20 +686,14 @@ impl LockFileJsonDiff {
                     Package::Conda(pkg) => JsonPackageDiff {
                         name: pkg.package_record().name.as_normalized().to_string(),
                         before: None,
-                        after: Some(JsonChange {
-                            version: pkg.package_record().version.to_string(),
-                            build: Some(pkg.package_record().build.to_string()),
-                        }),
+                        after: Some(serde_json::to_value(&pkg).unwrap()),
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.package_record().name),
                     },
                     Package::Pypi(pkg) => JsonPackageDiff {
                         name: pkg.data().package.name.as_dist_info_name().into_owned(),
                         before: None,
-                        after: Some(JsonChange {
-                            version: pkg.data().package.version.to_string(),
-                            build: None,
-                        }),
+                        after: Some(serde_json::to_value(&pkg).unwrap()),
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
                     },
@@ -714,10 +702,7 @@ impl LockFileJsonDiff {
                 let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
                     Package::Conda(pkg) => JsonPackageDiff {
                         name: pkg.package_record().name.as_normalized().to_string(),
-                        before: Some(JsonChange {
-                            version: pkg.package_record().version.to_string(),
-                            build: Some(pkg.package_record().build.to_string()),
-                        }),
+                        before: Some(serde_json::to_value(&pkg).unwrap()),
                         after: None,
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.package_record().name),
@@ -725,10 +710,7 @@ impl LockFileJsonDiff {
 
                     Package::Pypi(pkg) => JsonPackageDiff {
                         name: pkg.data().package.name.as_dist_info_name().into_owned(),
-                        before: Some(JsonChange {
-                            version: pkg.data().package.version.to_string(),
-                            build: None,
-                        }),
+                        before: Some(serde_json::to_value(&pkg).unwrap()),
                         after: None,
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
@@ -737,33 +719,30 @@ impl LockFileJsonDiff {
 
                 let changed_diffs = packages_diff.changed.into_iter().map(|(old, new)| match (old, new) {
                     (Package::Conda(old), Package::Conda(new)) =>
-                        JsonPackageDiff {
-                            name: old.package_record().name.as_normalized().to_string(),
-                            before: Some(JsonChange {
-                                version: old.package_record().version.to_string(),
-                                build: Some(old.package_record().build.to_string()),
-                            }),
-                            after: Some(JsonChange {
-                                version: new.package_record().version.to_string(),
-                                build: Some(new.package_record().build.to_string()),
-                            }),
-                            ty: JsonPackageType::Conda,
-                            explicit: conda_dependencies.contains_key(&old.package_record().name),
-                        },
-                    (Package::Pypi(old), Package::Pypi(new)) =>
+                        {
+                            let before = serde_json::to_value(&old).unwrap();
+                            let after = serde_json::to_value(&new).unwrap();
+                            let (before, after) = compute_json_diff(before, after);
+                            JsonPackageDiff {
+                                name: old.package_record().name.as_normalized().to_string(),
+                                before: Some(before),
+                                after: Some(after),
+                                ty: JsonPackageType::Conda,
+                                explicit: conda_dependencies.contains_key(&old.package_record().name),
+                            }
+                        }
+                    (Package::Pypi(old), Package::Pypi(new)) => {
+                        let before = serde_json::to_value(&old).unwrap();
+                        let after = serde_json::to_value(&new).unwrap();
+                        let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
                             name: old.data().package.name.as_dist_info_name().into_owned(),
-                            before: Some(JsonChange {
-                                version: old.data().package.version.to_string(),
-                                build: None,
-                            }),
-                            after: Some(JsonChange {
-                                version: new.data().package.version.to_string(),
-                                build: None,
-                            }),
+                            before: Some(before),
+                            after: Some(after),
                             ty: JsonPackageType::Pypi,
                             explicit: pypi_dependencies.contains_key(&old.data().package.name),
-                        },
+                        }
+                    }
                     _ => unreachable!("packages cannot change type, they are represented as removals and inserts instead"),
                 });
 
@@ -781,4 +760,24 @@ impl LockFileJsonDiff {
 
         Self { environment }
     }
+}
+
+fn compute_json_diff(
+    mut a: serde_json::Value,
+    mut b: serde_json::Value,
+) -> (serde_json::Value, serde_json::Value) {
+    if let (Some(a), Some(b)) = (a.as_object_mut(), b.as_object_mut()) {
+        a.retain(|key, value| {
+            if let Some(other_value) = b.get(key) {
+                if other_value == value {
+                    b.remove(key);
+                    return false;
+                }
+            } else {
+                b.insert(key.to_string(), Value::Null);
+            }
+            true
+        });
+    }
+    (a, b)
 }
