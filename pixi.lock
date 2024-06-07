@@ -1,45 +1,5 @@
 version: 5
 environments:
-  clean:
-    channels:
-    - url: https://fast.prefix.dev/conda-forge/
-    packages:
-      linux-64:
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hd590300_5.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/c-ares-1.28.1-hd590300_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.6.2-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/cmake-3.29.4-h91dbaaa_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/coreutils-9.5-hd590300_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/findutils-4.6.0-h166bdaf_1001.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/gettext-0.22.5-h59595ed_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/gettext-tools-0.22.5-h59595ed_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/grep-3.11-he2e7a12_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/keyutils-1.6.1-h166bdaf_0.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/krb5-1.21.2-h659d440_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libasprintf-0.22.5-h661eb56_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libasprintf-devel-0.22.5-h661eb56_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libcurl-8.8.0-hca28451_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libedit-3.1.20191231-he28a2e2_2.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libev-4.33-hd590300_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.2-h59595ed_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-13.2.0-h77fa898_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libgettextpo-0.22.5-h59595ed_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libgettextpo-devel-0.22.5-h59595ed_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libgomp-13.2.0-h77fa898_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libnghttp2-1.58.0-h47da74e_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libssh2-1.11.0-h0841786_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libstdcxx-ng-13.2.0-hc0a3c3a_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libuv-1.48.0-hd590300_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.1-h4ab18f5_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/make-4.3-hd18ef5c_1.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-h59595ed_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.1-h4ab18f5_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pcre2-10.43-hcad00b1_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/rhash-1.4.4-hd590300_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/xz-5.2.6-h166bdaf_0.tar.bz2
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.6-ha6fb4c9_0.conda
   default:
     channels:
     - url: https://fast.prefix.dev/conda-forge/
@@ -1984,30 +1944,6 @@ packages:
   size: 85051
   timestamp: 1692312207348
 - kind: conda
-  name: cmake
-  version: 3.29.4
-  build: h91dbaaa_0
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/cmake-3.29.4-h91dbaaa_0.conda
-  sha256: 80c39e10ace7733829220bb382acddd42cf0d698dc7541bfaf9c5fb325cab6b0
-  md5: d07b4431d37186cf69ef63a2aba6f47a
-  depends:
-  - bzip2 >=1.0.8,<2.0a0
-  - libcurl >=8.8.0,<9.0a0
-  - libexpat >=2.6.2,<3.0a0
-  - libgcc-ng >=12
-  - libstdcxx-ng >=12
-  - libuv >=1.48.0,<2.0a0
-  - libzlib >=1.2.13,<2.0a0
-  - ncurses >=6.5,<7.0a0
-  - rhash >=1.4.4,<2.0a0
-  - xz >=5.2.6,<6.0a0
-  - zstd >=1.5.6,<1.6.0a0
-  license: BSD-3-Clause
-  license_family: BSD
-  size: 19024763
-  timestamp: 1717457328163
-- kind: conda
   name: colorama
   version: 0.4.6
   build: pyhd8ed1ab_0
@@ -2054,20 +1990,6 @@ packages:
   license_family: PSF
   size: 16367
   timestamp: 1624848715744
-- kind: conda
-  name: coreutils
-  version: '9.5'
-  build: hd590300_0
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/coreutils-9.5-hd590300_0.conda
-  sha256: 7cd3b0f55aa55bb27b045c30f32b3f6b874ecc006f3abcb274c71a3bcbacb358
-  md5: 126d457e0e7a535278e808a7d8960015
-  depends:
-  - libgcc-ng >=12
-  license: GPL-3.0-or-later
-  license_family: GPL
-  size: 3014238
-  timestamp: 1711655132451
 - kind: conda
   name: cssselect2
   version: 0.2.1
@@ -2294,22 +2216,6 @@ packages:
   license: Unlicense
   size: 15902
   timestamp: 1714422911808
-- kind: conda
-  name: findutils
-  version: 4.6.0
-  build: h166bdaf_1001
-  build_number: 1001
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/findutils-4.6.0-h166bdaf_1001.tar.bz2
-  sha256: 30aca48b587e51d51f148d9b450a07fb21475585375e5c54c0048b13a31a437a
-  md5: 0045534ae3fc1682e8096b0c70b2570b
-  depends:
-  - gettext
-  - libgcc-ng >=12
-  license: GPL-3.0
-  license_family: GPL
-  size: 570573
-  timestamp: 1666198102478
 - kind: conda
   name: font-ttf-dejavu-sans-mono
   version: '2.37'
@@ -2859,22 +2765,6 @@ packages:
   license: GPL-2.0-or-later and LGPL-2.1-or-later
   size: 7744105
   timestamp: 1701087084155
-- kind: conda
-  name: grep
-  version: '3.11'
-  build: he2e7a12_1
-  build_number: 1
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/grep-3.11-he2e7a12_1.conda
-  sha256: 237c9ab3918afd80d80098d838ecf75e954a067ceeae0c6fcdcc9fcf01fe40c3
-  md5: 0805d6f17b16177aef83dd97dbd494f6
-  depends:
-  - libgcc-ng >=12
-  - pcre2 >=10.43,<10.44.0a0
-  license: GPL-3.0-or-later
-  license_family: GPL
-  size: 290061
-  timestamp: 1710897913223
 - kind: conda
   name: gxx
   version: 12.3.0
@@ -4566,20 +4456,6 @@ packages:
   size: 33601
   timestamp: 1680112270483
 - kind: conda
-  name: libuv
-  version: 1.48.0
-  build: hd590300_0
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/libuv-1.48.0-hd590300_0.conda
-  sha256: b7c0e8a0c93c2621be7645b37123d4e8d27e8a974da26a3fba47a9c37711aa7f
-  md5: 7e8b914b1062dd4386e3de4d82a3ead6
-  depends:
-  - libgcc-ng >=12
-  license: MIT
-  license_family: MIT
-  size: 899979
-  timestamp: 1709913354710
-- kind: conda
   name: libwebp-base
   version: 1.4.0
   build: h10d778d_0
@@ -4869,21 +4745,6 @@ packages:
   license: MIT, BSD
   size: 31928
   timestamp: 1608166099896
-- kind: conda
-  name: make
-  version: '4.3'
-  build: hd18ef5c_1
-  build_number: 1
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/make-4.3-hd18ef5c_1.tar.bz2
-  sha256: 4a5fe7c80bb0de0015328e2d3fc8db1736f528cb1fd53cd0d5527e24269a4f7c
-  md5: 4049ebfd3190b580dffe76daed26155a
-  depends:
-  - libgcc-ng >=7.5.0
-  license: GPL-3.0-or-later
-  license_family: GPL
-  size: 518896
-  timestamp: 1602706451788
 - kind: conda
   name: markdown
   version: '3.6'
@@ -5429,22 +5290,6 @@ packages:
   license_family: BSD
   size: 818317
   timestamp: 1708118868321
-- kind: conda
-  name: pcre2
-  version: '10.43'
-  build: hcad00b1_0
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/pcre2-10.43-hcad00b1_0.conda
-  sha256: 766dd986a7ed6197676c14699000bba2625fd26c8a890fcb7a810e5cf56155bc
-  md5: 8292dea9e022d9610a11fce5e0896ed8
-  depends:
-  - bzip2 >=1.0.8,<2.0a0
-  - libgcc-ng >=12
-  - libzlib >=1.2.13,<2.0.0a0
-  license: BSD-3-Clause
-  license_family: BSD
-  size: 950847
-  timestamp: 1708118050286
 - kind: conda
   name: perl
   version: 5.32.1
@@ -6540,20 +6385,6 @@ packages:
   license_family: APACHE
   size: 58810
   timestamp: 1717057174842
-- kind: conda
-  name: rhash
-  version: 1.4.4
-  build: hd590300_0
-  subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/rhash-1.4.4-hd590300_0.conda
-  sha256: 12711d2d4a808a503c2e49b25d26ecb351435521e814c154e682dd2be71c2611
-  md5: ec972a9a2925ac8d7a19eb9606561fff
-  depends:
-  - libgcc-ng >=12
-  license: MIT
-  license_family: MIT
-  size: 185144
-  timestamp: 1693455923632
 - kind: conda
   name: ruamel.yaml
   version: 0.18.6

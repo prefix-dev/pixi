@@ -35,19 +35,6 @@ git = "2.42.0.*"
 [feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
 
-[feature.clean-env]
-platforms = ["linux-64"]
-
-[feature.clean-env.tasks]
-clean-install = { cmd = "cargo install --path . --locked", clean-env = true}
-
-[feature.clean-env.dependencies]
-cmake = ">=3.29.3,<3.30"
-make = ">=4.3,<5"
-coreutils = ">=9.5,<10"
-grep = ">=3.11,<4"
-findutils = ">=4.6.0,<4.7"
-
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
 mkdocs-material = ">=9.5.16"
@@ -82,4 +69,3 @@ taplo = ">=0.9.1,<0.10"
 default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
 docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
 schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}
-clean = { features = ["clean-env"] }
