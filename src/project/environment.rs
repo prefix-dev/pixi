@@ -166,7 +166,7 @@ impl<'p> Environment<'p> {
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
     pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(Some(Platform::current()))
+        self.tasks(Some(self.best_platform()))
             .into_iter()
             .flat_map(|tasks| {
                 tasks.into_iter().filter_map(|(key, _)| {
@@ -231,6 +231,18 @@ impl<'p> Environment<'p> {
             .flatten()
             .cloned()
             .collect()
+    }
+
+    /// Returns the environment variables that should be set when activating this environment.
+    ///
+    /// The environment variables of all features are combined in the order they are defined for the environment.
+    pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
+        self.features()
+            .filter_map(|f| f.activation_env(platform))
+            .fold(HashMap::new(), |mut acc, env| {
+                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                acc
+            })
     }
 
     /// Validates that the given platform is supported by this environment.
@@ -403,7 +415,7 @@ mod tests {
         let task = manifest.default_environment().get_filtered_tasks();
 
         assert_eq!(task.len(), 1);
-        assert_eq!(task.contains(&"foo".into()), true);
+        assert!(task.contains(&"foo".into()));
     }
 
     fn format_dependencies(dependencies: CondaDependencies) -> String {
@@ -703,5 +715,37 @@ mod tests {
                 .collect_vec(),
             vec!["https://1.com/", "https://2.com/"]
         )
+    }
+
+    #[test]
+    fn test_validate_platform() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["osx-64", "linux-64", "win-64"]
+        "#,
+        )
+        .unwrap();
+        let env = manifest.default_environment();
+        // This should also work on OsxArm64
+        assert!(env.validate_platform_support(Some(Platform::Osx64)).is_ok());
+
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["emscripten-wasm32"]
+        "#,
+        )
+        .unwrap();
+        let env = manifest.default_environment();
+        assert!(env
+            .validate_platform_support(Some(Platform::EmscriptenWasm32))
+            .is_ok());
     }
 }

@@ -3,16 +3,18 @@ use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
-use distribution_types::ParsedGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
+use pypi_types::ParsedGitUrl;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
+use rattler_lock::{
+    ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+};
 use requirements_txt::EditableRequirement;
 use std::fmt::Display;
 use std::ops::Sub;
@@ -32,10 +34,33 @@ pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
-    #[error(
-        "the indexes used to previously solve to lock file do not match the environments indexes"
-    )]
-    IndexesMismatch,
+    #[error(transparent)]
+    IndexesMismatch(#[from] IndexesMismatch),
+}
+
+#[derive(Debug, Error)]
+pub struct IndexesMismatch {
+    current: PypiIndexes,
+    previous: Option<PypiIndexes>,
+}
+
+impl Display for IndexesMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(previous) = &self.previous {
+            write!(
+                f,
+                "the indexes used to previously solve to lock file do not match the environments indexes.\n \
+                Expected: {expected:#?}\n Found: {found:#?}",
+                expected = previous,
+                found = self.current
+            )
+        } else {
+            write!(
+                f,
+                "the indexes used to previously solve to lock file are missing"
+            )
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -149,18 +174,27 @@ pub fn verify_environment_satisfiability(
 
     // Check if the indexes in the lock file match our current configuration.
     if !environment.pypi_dependencies(None).is_empty() {
+        let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
         match locked_environment.pypi_indexes() {
             None => {
                 if locked_environment
                     .version()
                     .should_pypi_indexes_be_present()
                 {
-                    return Err(EnvironmentUnsat::IndexesMismatch);
+                    return Err(IndexesMismatch {
+                        current: indexes,
+                        previous: None,
+                    }
+                    .into());
                 }
             }
-            Some(indexes) => {
-                if indexes != &rattler_lock::PypiIndexes::from(grouped_env.pypi_options()) {
-                    return Err(EnvironmentUnsat::IndexesMismatch);
+            Some(locked_indexes) => {
+                if locked_indexes != &indexes {
+                    return Err(IndexesMismatch {
+                        current: indexes,
+                        previous: Some(locked_indexes.clone()),
+                    }
+                    .into());
                 }
             }
         }
@@ -260,11 +294,11 @@ pub fn pypi_satifisfies_editable(
 
     // In the case that both the spec and the locked data are direct git urls
     // we need to compare the urls to see if they are the same
-    let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
+    let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone()).ok();
     let locked_git_url = locked_data
         .url_or_path
         .as_url()
-        .and_then(|url| ParsedGitUrl::try_from(url).ok());
+        .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
 
     // Both are git url's
     if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
@@ -311,26 +345,36 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
         None => true,
         Some(VersionOrUrl::VersionSpecifier(spec)) => spec.contains(&locked_data.version),
         Some(VersionOrUrl::Url(spec_url)) => {
-            // In the case that both the spec and the locked data are direct git urls
-            // we need to compare the urls to see if they are the same
-            let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
-            let locked_git_url = locked_data
-                .url_or_path
-                .as_url()
-                .and_then(|url| ParsedGitUrl::try_from(url).ok());
-
             // Both are git url's
-            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-                let base_is_same =
-                    spec_git_url.url.repository() == locked_data_url.url.repository();
+            if spec_url.as_str().starts_with("git+")
+                && locked_data
+                    .url_or_path
+                    .as_url()
+                    .map(|u| u.as_str().starts_with("git+"))
+                    .unwrap_or_default()
+            {
+                // In the case that both the spec and the locked data are direct git urls
+                // we need to compare the urls to see if they are the same
+                let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone());
+                let locked_git_url = locked_data
+                    .url_or_path
+                    .as_url()
+                    .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
 
-                // If the spec does not specify a revision than any will do
-                // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-                    return base_is_same;
+                if let (Ok(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
+                    let base_is_same =
+                        spec_git_url.url.repository() == locked_data_url.url.repository();
+
+                    // If the spec does not specify a revision than any will do
+                    // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                    if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                        return base_is_same;
+                    }
+                    // If the spec does specify a revision than the revision must match
+                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                } else {
+                    false
                 }
-                // If the spec does specify a revision than the revision must match
-                base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
                 let spec_path_or_url = spec_url
                     .given()
@@ -637,13 +681,14 @@ pub fn verify_package_platform_satisfiability(
 
                     // Ensure that the record matches the currently selected interpreter.
                     if let Some(python_version) = &record.0.requires_python {
-                        if !python_version.contains(&marker_environment.python_full_version.version)
+                        if !python_version
+                            .contains(&marker_environment.python_full_version().version)
                         {
                             return Err(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
                                 python_version.clone(),
                                 marker_environment
-                                    .python_full_version
+                                    .python_full_version()
                                     .version
                                     .clone()
                                     .into(),

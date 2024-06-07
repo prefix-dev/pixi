@@ -238,6 +238,7 @@ impl PackageBuilder {
                 track_features: vec![],
                 version: self.version,
                 purls: None,
+                run_exports: None,
             },
             subdir,
             archive_type: self.archive_type,

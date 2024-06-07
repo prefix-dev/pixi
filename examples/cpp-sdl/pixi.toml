@@ -1,6 +1,5 @@
 [project]
 name = "sdl_example"
-version = "0.1.0"
 description = "Showcases how to create a simple C++ executable with Pixi"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]

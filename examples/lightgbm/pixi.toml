@@ -1,6 +1,5 @@
 [project]
 name = "lightgbm"
-version = "0.1.0"
 description = "LightGBM demo for machine learning project"
 authors = ["fkt <deepthought@postech.ac.kr>"]
 channels = ["conda-forge"]
