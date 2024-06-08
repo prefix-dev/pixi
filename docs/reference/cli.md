@@ -666,6 +666,7 @@ Use the `cache` subcommand to clean the cache
 
 ##### Options
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--environment <ENVIRONMENT> (-e)`: The environment to clean, if none are provided all environments will be removed.
 
 ```shell
 pixi clean
