@@ -123,14 +123,12 @@ platforms = {{ platforms }}
 "#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
-.pixi
+**/.pixi/envs
 *.egg-info
-
 "#;
 
 const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
-pixi.lock linguist-language=YAML
-
+pixi.lock linguist-language=YAML linguist-generated=true
 "#;
 
 pub async fn execute(args: Args) -> miette::Result<()> {

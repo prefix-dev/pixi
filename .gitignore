@@ -3,8 +3,8 @@
 .vscode
 .test-projects
 __pycache__
-**/**/.pixi
-**/**/.build
+**/.pixi/envs
+**/.build
 .DS_store
 site/
 .cache
