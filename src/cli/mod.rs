@@ -38,7 +38,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.22.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.23.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -127,8 +127,8 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
-    // up-to-date with the manifest file.
+    /// Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
+    /// up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,

@@ -1,0 +1,11 @@
+---
+source: src/project/manifest/document.rs
+assertion_line: 593
+expression: source.to_string()
+---
+[environments]
+foo = []
+bar = ["not-default"]
+baz = { features = ["default"], solve-group = "group1" }
+foobar = { features = ["default"], solve-group = "group1", no-default-feature = true }
+barfoo = { features = ["default"], no-default-feature = true }

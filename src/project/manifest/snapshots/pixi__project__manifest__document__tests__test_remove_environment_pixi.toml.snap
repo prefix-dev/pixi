@@ -1,0 +1,7 @@
+---
+source: src/project/manifest/document.rs
+assertion_line: 602
+expression: source.to_string()
+---
+[environments]
+bar = ["default"]

@@ -317,6 +317,48 @@ impl IntoFuture for InstallBuilder {
     }
 }
 
+pub struct ProjectEnvironmentAddBuilder {
+    pub args: project::environment::add::Args,
+    pub manifest_path: Option<PathBuf>,
+}
+
+impl ProjectEnvironmentAddBuilder {
+    pub fn with_feature(mut self, feature: impl Into<String>) -> Self {
+        self.args
+            .features
+            .get_or_insert_with(Vec::new)
+            .push(feature.into());
+        self
+    }
+
+    pub fn with_no_default_features(mut self, no_default_features: bool) -> Self {
+        self.args.no_default_feature = no_default_features;
+        self
+    }
+
+    pub fn force(mut self, force: bool) -> Self {
+        self.args.force = force;
+        self
+    }
+
+    pub fn with_solve_group(mut self, solve_group: impl Into<String>) -> Self {
+        self.args.solve_group = Some(solve_group.into());
+        self
+    }
+}
+
+impl IntoFuture for ProjectEnvironmentAddBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+    fn into_future(self) -> Self::IntoFuture {
+        project::environment::execute(project::environment::Args {
+            manifest_path: self.manifest_path,
+            command: project::environment::Command::Add(self.args),
+        })
+        .boxed_local()
+    }
+}
+
 /// Contains the arguments to pass to [`update::exeecute()`]. Call `.await` to
 /// call the CLI execute method and await the result at the same time.
 pub struct UpdateBuilder {
@@ -353,6 +395,11 @@ impl UpdateBuilder {
 
     pub fn dry_run(mut self, dry_run: bool) -> Self {
         self.args.dry_run = dry_run;
+        self
+    }
+
+    pub fn json(mut self, json: bool) -> Self {
+        self.args.json = json;
         self
     }
 }

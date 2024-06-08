@@ -31,8 +31,8 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
-    TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
 /// To control the pixi process
@@ -270,6 +270,19 @@ impl PixiControl {
         }
     }
 
+    pub fn project_environment_add(&self, name: &str) -> ProjectEnvironmentAddBuilder {
+        ProjectEnvironmentAddBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::environment::add::Args {
+                name: name.to_string(),
+                features: None,
+                solve_group: None,
+                no_default_feature: false,
+                force: false,
+            },
+        }
+    }
+
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
@@ -363,6 +376,7 @@ impl PixiControl {
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
+                json: false,
             },
         }
     }

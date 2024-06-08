@@ -232,7 +232,7 @@ pub fn amend_pypi_purls_for_record(
     if let Some(possible_mapped_name) =
         compressed_mapping.get(record.package_record.name.as_normalized())
     {
-        if !not_a_pypi && purls.is_empty() {
+        if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
             // if we have a pypi name for it
             // we record the purl
             if let Some(mapped_name) = possible_mapped_name {
