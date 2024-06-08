@@ -1,5 +1,5 @@
 /// Command to clean the parts of your system which are touched by pixi.
-use crate::{config, EnvironmentName, Project};
+use crate::{config, consts, EnvironmentName, Project};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::progress::{global_multi_progress, long_running_progress_style};
 use clap::Parser;
 use indicatif::ProgressBar;
+use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
@@ -41,6 +42,10 @@ pub struct CacheArgs {
     /// Clean only the conda related cache.
     #[arg(long)]
     pub conda: bool,
+
+    /// Answer yes to all questions.
+    #[arg(long)]
+    pub yes: bool,
     // TODO: Would be amazing to have a --unused flag to clean only the unused cache.
     //       By searching the inode count of the packages and removing based on that.
     // #[arg(long)]
@@ -75,6 +80,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{:?}'", explicit_env.name());
             } else {
                 // Remove all pixi related work from the project.
+                if !project.environments_dir().starts_with(project.pixi_dir())
+                    && project.default_environments_dir().exists()
+                {
+                    remove_folder_with_progress(project.default_environments_dir(), false).await?;
+                    remove_folder_with_progress(
+                        project.default_solve_group_environments_dir(),
+                        false,
+                    )
+                    .await?;
+                    remove_folder_with_progress(project.task_cache_folder(), false).await?;
+                }
                 remove_folder_with_progress(project.environments_dir(), true).await?;
                 remove_folder_with_progress(project.solve_group_environments_dir(), false).await?;
                 remove_folder_with_progress(project.task_cache_folder(), false).await?;
@@ -90,23 +106,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     let cache_dir = config::get_cache_dir()?;
     let mut dirs = vec![];
+
     if args.pypi {
-        dirs.push(cache_dir.join("pypi"));
+        dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
     }
     if args.conda {
         dirs.push(cache_dir.join("pkgs"));
     }
+    if dirs.is_empty() && (args.yes || dialoguer::Confirm::new()
+                .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
+                .interact_opt()
+                .into_diagnostic()?
+                .unwrap_or(false))
+            {
+                dirs.push(cache_dir);
+            }
+
     if dirs.is_empty() {
-        tracing::info!(
-            "No cache directories selected, so cleaning all cache directories. in {:?}",
-            cache_dir
-        );
-        dirs.push(cache_dir);
+        eprintln!("{}", console::style("Nothing to remove.").green());
+        return Ok(());
     }
 
-    // Ignore errors
     for dir in dirs {
-        remove_folder_with_progress(dir, false).await?;
+        remove_folder_with_progress(dir, true).await?;
     }
     Ok(())
 }
@@ -119,7 +141,7 @@ async fn remove_folder_with_progress(
         if warning_non_existent {
             eprintln!(
                 "{}",
-                console::style(format!("Folder {:?} does not exist", &folder)).yellow()
+                console::style(format!("Folder {:?} was already clean.", &folder)).yellow()
             );
         }
         return Ok(());
