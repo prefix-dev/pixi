@@ -8,10 +8,9 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::io;
-use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
@@ -217,24 +216,71 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
-    let mut writer = tabwriter::TabWriter::new(stdout());
-    for env in envs {
-        let formatted: String = env
-            .get_filtered_tasks()
-            .iter()
-            .sorted()
-            .map(|name| name.fancy_display())
-            .join(", ");
-        writeln!(
-            writer,
-            "{}\t: {}",
-            env.name().fancy_display().bold(),
-            formatted
-        )?;
+fn list_tasks(
+    task_map: HashMap<Environment, HashMap<TaskName, Task>>,
+    summary: bool,
+) -> io::Result<()> {
+    if summary {
+        print_heading("Tasks per environment:");
+        for (env, tasks) in task_map {
+            let formatted: String = tasks
+                .keys()
+                .sorted()
+                .map(|name| name.fancy_display())
+                .join(", ");
+            eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
+        }
+        return Ok(());
     }
-    writer.flush()?;
+
+    let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
+    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
+
+    task_map.values().for_each(|tasks| {
+        tasks.iter().for_each(|(taskname, task)| {
+            all_tasks.insert(taskname.clone());
+            if let Some(description) = task.description() {
+                formatted_descriptions.insert(
+                    taskname.clone(),
+                    format!(
+                        " - {:<15} {}",
+                        taskname.fancy_display(),
+                        console::style(description).italic().to_string()
+                    ),
+                );
+            }
+        });
+    });
+
+    print_heading("Tasks that can run on this machine:");
+    let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
+    eprintln!("{}", formatted_tasks);
+
+    let formatted_descriptions: String = formatted_descriptions.values().join("\n");
+    eprintln!("\n{}", formatted_descriptions);
+
     Ok(())
+}
+
+fn get_tasks_per_env(
+    task_list: HashSet<TaskName>,
+    environments: Vec<Environment>,
+) -> HashMap<Environment, HashMap<TaskName, Task>> {
+    let mut tasks_per_env: HashMap<Environment, HashMap<TaskName, Task>> = HashMap::new();
+    for env in environments {
+        let mut tasks: HashMap<TaskName, Task> = HashMap::new();
+        let this_env_tasks = env
+            .tasks(Some(env.best_platform()))
+            .expect("error getting tasks");
+        for taskname in task_list.iter() {
+            // if the task is in the environment, add it to the list
+            if let Some(&task) = this_env_tasks.get(taskname) {
+                tasks.insert(taskname.clone(), task.clone());
+            }
+        }
+        tasks_per_env.insert(env, tasks);
+    }
+    tasks_per_env
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
@@ -364,25 +410,22 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
-            } else if args.summary {
-                print_heading("Tasks per environment:");
-                print_tasks_per_env(project.environments()).expect("io error when printing tasks");
-            } else if args.machine_readable {
+                return Ok(());
+            }
+
+            if args.machine_readable {
                 let unformatted: String = available_tasks
                     .iter()
                     .sorted()
                     .map(|name| name.as_str())
                     .join(" ");
                 eprintln!("{}", unformatted);
-            } else {
-                let formatted: String = available_tasks
-                    .iter()
-                    .sorted()
-                    .map(|name| name.fancy_display())
-                    .join(", ");
-                print_heading("Tasks that can run on this machine:");
-                eprintln!("{}", formatted);
+                return Ok(());
             }
+
+            let tasks_per_env = get_tasks_per_env(available_tasks, project.environments());
+
+            list_tasks(tasks_per_env, args.summary).expect("io error when printing tasks");
         }
     };
 
