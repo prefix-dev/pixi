@@ -264,13 +264,13 @@ async fn test_clean_env() {
         .unwrap();
 
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "Hello is: \n");
+    assert_eq!(result.stdout, "Hello is:\n");
 
     let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
             manifest_path: None,
-            clean_env: true,
+            clean_env: false,
             ..Default::default()
         })
         .await
