@@ -559,23 +559,29 @@ pub fn find_project_manifest() -> Option<PathBuf> {
     })
 }
 
-/// Create a symlink from the default pixi directory to the custom target
-/// directory
+/// Create a symlink from the directory to the custom target directory
 #[cfg(not(windows))]
-fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
-    if default_pixi_dir.exists() {
+fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
+    if symlink_dir.exists() {
         tracing::debug!(
             "Symlink already exists at '{}', skipping creating symlink.",
-            default_pixi_dir.display()
+            symlink_dir.display()
         );
         return;
     }
-    symlink(pixi_dir_name, default_pixi_dir)
+    let parent = symlink_dir
+        .parent()
+        .expect("symlink dir should have parent");
+    fs_extra::dir::create_all(parent, false)
+        .map_err(|e| tracing::error!("Failed to create directory '{}': {}", parent.display(), e))
+        .ok();
+
+    symlink(target_dir, symlink_dir)
         .map_err(|e| {
             tracing::error!(
                 "Failed to create symlink from '{}' to '{}': {}",
-                pixi_dir_name.display(),
-                default_pixi_dir.display(),
+                target_dir.display(),
+                symlink_dir.display(),
                 e
             )
         })
