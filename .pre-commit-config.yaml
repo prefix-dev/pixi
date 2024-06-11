@@ -1,4 +1,4 @@
-exclude: ^(.pixi/|.snap)
+exclude: (^.pixi/|.snap)
 repos:
   - repo: local
     hooks:
@@ -12,7 +12,7 @@ repos:
       # pre-commit-hooks
       - id: check-yaml
         name: check-yaml
-        entry: pixi run -e lint check yaml
+        entry: pixi run -e lint check-yaml
         language: system
         types: [yaml]
       - id: end-of-file
