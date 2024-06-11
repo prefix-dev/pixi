@@ -175,8 +175,8 @@ pub fn write_environment_file(
 ) -> miette::Result<PathBuf> {
     let path = environment_dir.join(consts::ENVIRONMENT_FILE_NAME);
 
-    // Using toml as that is the main tool in pixi.
-    let contents = toml_edit::ser::to_string_pretty(&env_file).into_diagnostic()?;
+    // Using json as it's easier to machine read it.
+    let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
     std::fs::write(&path, contents).into_diagnostic()?;
 
     tracing::debug!("Wrote environment file to: {:?}", path);
