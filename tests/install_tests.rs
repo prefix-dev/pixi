@@ -12,7 +12,7 @@ use pixi::cli::run::Args;
 use pixi::cli::{run, LockFileUsageArgs};
 use pixi::config::{Config, DetachedEnvironments};
 use pixi::consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER};
-use pixi::FeatureName;
+use pixi::{consts, FeatureName};
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -22,7 +22,7 @@ use uv_interpreter::PythonEnvironment;
 /// and run it
 #[tokio::test]
 #[serial]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -47,6 +47,9 @@ async fn install_run_python() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout.trim(), "Python 3.11.0");
     assert!(result.stderr.is_empty());
+
+    // Test for existence of environment file
+    assert!(pixi.default_env_path().unwrap().join(consts::ENVIRONMENT_FILE_NAME).exists())
 }
 
 /// This is a test to check that creating incremental lock files works.
