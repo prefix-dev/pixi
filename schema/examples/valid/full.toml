@@ -52,10 +52,9 @@ test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends-on = ["test5"] }
-test7 = { cmd = "pytest", cwd = "tests", depends-on = [
-  "test5",
-], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" } }
-
+test7 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}}
+test8 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}, clean-env = true}
+test9 = { cmd = "pytest", clean-env = false}
 [system-requirements]
 linux = "5.10"
 libc = { family = "glibc", version = "2.17" }

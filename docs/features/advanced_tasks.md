@@ -195,6 +195,23 @@ These variables are not shared over tasks, so you need to define these for every
     ```
     This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
 
+## Clean environment
+You can make sure the environment of a task is "pixi only".
+Here pixi will only include the minimal required environment variables for your platform to run the command in.
+The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.
+It will however include some default values from the shell, like:
+`"DISPLAY"`, `"LC_ALL"`, `"LC_TIME"`, `"LC_NUMERIC"`, `"LC_MEASUREMENT"`, `"SHELL"`, `"USER"`, `"USERNAME"`, `"LOGNAME"`, `"HOME"`, `"HOSTNAME"`,`"TMPDIR"`, `"XPC_SERVICE_NAME"`, `"XPC_FLAGS"`
+
+```toml
+[tasks]
+clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+```
+This setting can also be set from the command line with `pixi run --clean-env TASK_NAME`.
+
+!!! warning "`clean-env` not supported on Windows"
+    On Windows it's hard to create a "clean environment" as `conda-forge` doesn't ship Windows compilers and Windows needs a lot of base variables.
+    Making this feature not worthy of implementing as the amount of edge cases will make it unusable.
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.

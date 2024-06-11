@@ -266,6 +266,11 @@ class TaskInlineTable(StrictBaseModel):
         description="A short description of the task",
         examples=["Build the project"],
     )
+    clean_env: bool | None = Field(
+        None,
+        alias="clean-env",
+        description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
+    )
 
 
 #######################

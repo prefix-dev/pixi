@@ -88,7 +88,10 @@ async fn generate_activation_script(
 /// Generates a JSON object describing the changes to the shell environment when
 /// activating the provided pixi environment.
 async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
-    let environment_variables = environment.project().get_env_variables(environment).await?;
+    let environment_variables = environment
+        .project()
+        .get_env_variables(environment, false)
+        .await?;
     let shell_env = ShellEnv {
         environment_variables,
     };

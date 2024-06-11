@@ -55,8 +55,11 @@ use crate::{
     consts,
     project::{
         manifest::{
-            channel::PrioritizedChannel, environment::TomlEnvironmentMapOrSeq,
-            error::UnknownFeature, pypi_options::PypiOptions, python::PyPiPackageName,
+            channel::PrioritizedChannel,
+            environment::TomlEnvironmentMapOrSeq,
+            error::{DependencyError, UnknownFeature},
+            pypi_options::PypiOptions,
+            python::PyPiPackageName,
         },
         SpecType,
     },
@@ -395,8 +398,17 @@ impl Manifest {
         };
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
-            self.get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_dependency(&name, &spec, spec_type)?;
+            match self
+                .get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_dependency(&name, &spec, spec_type)
+            {
+                Ok(_) => (),
+                Err(DependencyError::Duplicate(e)) => {
+                    tracing::warn!("Dependency `{}` already existed, overwriting", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
+
             // and to the TOML document
             self.document
                 .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
@@ -414,8 +426,16 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Add the pypi dependency to the manifest
-            self.get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pypi_dependency(requirement, editable)?;
+            match self
+                .get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_pypi_dependency(requirement, editable)
+            {
+                Ok(_) => (),
+                Err(DependencyError::Duplicate(e)) => {
+                    tracing::warn!("Dependency `{}` already existed, overwriting", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
             // and to the TOML document
             self.document
                 .add_pypi_dependency(requirement, platform, feature_name)?;
@@ -433,8 +453,16 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Remove the dependency from the manifest
-            self.target_mut(platform, feature_name)
-                .remove_dependency(dep, spec_type)?;
+            match self
+                .target_mut(platform, feature_name)
+                .remove_dependency(dep, spec_type)
+            {
+                Ok(_) => (),
+                Err(DependencyError::NoDependency(e)) => {
+                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
             // Remove the dependency from the TOML document
             self.document
                 .remove_dependency(dep, spec_type, platform, feature_name)?;
@@ -451,8 +479,16 @@ impl Manifest {
     ) -> miette::Result<()> {
         for platform in to_options(platforms) {
             // Remove the dependency from the manifest
-            self.target_mut(platform, feature_name)
-                .remove_pypi_dependency(dep)?;
+            match self
+                .target_mut(platform, feature_name)
+                .remove_pypi_dependency(dep)
+            {
+                Ok(_) => (),
+                Err(DependencyError::NoDependency(e)) => {
+                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                }
+                Err(e) => return Err(e.into()),
+            };
             // Remove the dependency from the TOML document
             self.document
                 .remove_pypi_dependency(dep, platform, feature_name)?;

@@ -9,7 +9,6 @@ use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 
-use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
@@ -47,6 +46,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Use a clean environment to run the task
+    ///
+    /// Using this flag will ignore your current shell environment and use bare minimum environment to activate the pixi environment in.
+    #[arg(long)]
+    pub clean_env: bool,
 }
 
 /// CLI entry point for `pixi run`
@@ -171,8 +176,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                let command_env =
-                    get_task_env(&mut lock_file, &executable_task.run_environment).await?;
+                let command_env = get_task_env(
+                    &mut lock_file,
+                    &executable_task.run_environment,
+                    args.clean_env || executable_task.task().clean_env(),
+                )
+                .await?;
                 entry.insert(command_env)
             }
         };
@@ -235,6 +244,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
 pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
+    clean_env: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -244,19 +254,13 @@ pub async fn get_task_env<'p>(
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", |_| {
-        crate::activation::run_activation(environment)
+        crate::activation::run_activation(environment, clean_env)
     })
     .await
     .wrap_err("failed to activate environment")?;
 
-    // Get environments from pixi
-    let environment_variables = get_environment_variables(environment);
-
     // Concatenate with the system environment variables
-    Ok(std::env::vars()
-        .chain(activation_env)
-        .chain(environment_variables)
-        .collect())
+    Ok(activation_env)
 }
 
 #[derive(Debug, Error, Diagnostic)]

@@ -132,6 +132,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
+    clean_env: bool,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -140,6 +141,12 @@ pub async fn run_activation(
             e
         ))
     })?;
+
+    let path_modification_behavior = if clean_env {
+        PathModificationBehavior::Replace
+    } else {
+        PathModificationBehavior::Prepend
+    };
 
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
@@ -151,7 +158,7 @@ pub async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behavior: PathModificationBehavior::Prepend,
+            path_modification_behavior,
         })
     })
     .await
@@ -186,7 +193,47 @@ pub async fn run_activation(
         }
     };
 
-    Ok(activator_result)
+    if clean_env && cfg!(windows) {
+        return Err(miette::miette!(
+            format!("It's not possible to run a `clean-env` on Windows as it requires so many non conda specific files that it is basically useless to use. \
+        So pixi currently doesn't support this feature.")));
+    } else if clean_env {
+        let mut cleaned_environment_variables = get_clean_environment_variables();
+
+        // Extend with the original activation environment
+        cleaned_environment_variables.extend(activator_result);
+
+        // Enable this when we found a better way to support windows.
+        // On Windows the path is not completely replace, but we need to strip some paths to keep it as clean as possible.
+        // if cfg!(target_os = "windows") {
+        //     let path = env
+        //         .get("Path")
+        //         .map(|path| {
+        //             // Keep some of the paths
+        //             let win_path = std::env::split_paths(&path).filter(|p| {
+        //                 // Required for base functionalities
+        //                 p.to_string_lossy().contains(":\\Windows")
+        //                     // Required for compilers
+        //                     || p.to_string_lossy().contains("\\Program Files")
+        //                     // Required for pixi environments
+        //                     || p.starts_with(environment.dir())
+        //             });
+        //             // Join back up the paths
+        //             std::env::join_paths(win_path).expect("Could not join paths")
+        //         })
+        //         .expect("Could not find PATH in environment variables");
+        //     // Insert the path back into the env.
+        //     env.insert(
+        //         "Path".to_string(),
+        //         path.to_str()
+        //             .expect("Path contains non-utf8 paths")
+        //             .to_string(),
+        //     );
+        // }
+
+        return Ok(cleaned_environment_variables);
+    }
+    Ok(std::env::vars().chain(activator_result).collect())
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
@@ -213,6 +260,45 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+pub fn get_clean_environment_variables() -> HashMap<String, String> {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+
+    let unix_keys = if cfg!(unix) {
+        vec![
+            "DISPLAY",
+            "LC_ALL",
+            "LC_TIME",
+            "LC_NUMERIC",
+            "LC_MEASUREMENT",
+            "SHELL",
+            "USER",
+            "USERNAME",
+            "LOGNAME",
+            "HOME",
+            "HOSTNAME",
+        ]
+    } else {
+        vec![]
+    };
+
+    let macos_keys = if cfg!(target_os = "macos") {
+        vec!["TMPDIR", "XPC_SERVICE_NAME", "XPC_FLAGS"]
+    } else {
+        vec![]
+    };
+
+    let keys = unix_keys
+        .into_iter()
+        .chain(macos_keys)
+        // .chain(windows_keys)
+        .map(|s| s.to_string().to_uppercase())
+        .collect_vec();
+
+    env.into_iter()
+        .filter(|(key, _)| keys.contains(&key.to_string().to_uppercase()))
+        .collect::<HashMap<String, String>>()
+}
+
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
@@ -224,7 +310,10 @@ pub async fn get_activation_env<'p>(
     // Get the prefix which we can then activate.
     get_up_to_date_prefix(environment, lock_file_usage, false).await?;
 
-    environment.project().get_env_variables(environment).await
+    environment
+        .project()
+        .get_env_variables(environment, false)
+        .await
 }
 
 #[cfg(test)]
@@ -253,14 +342,13 @@ mod tests {
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
-        dbg!(&env);
+
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
         assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
-        dbg!(&env);
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
@@ -292,6 +380,17 @@ mod tests {
         assert_eq!(
             env.get("PIXI_PROJECT_VERSION").unwrap(),
             &project.version().as_ref().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "unix")]
+    fn test_get_linux_clean_environment_variables() {
+        let env = get_clean_environment_variables();
+        // Make sure that the environment variables are set.
+        assert_eq!(
+            env.get("USER").unwrap(),
+            std::env::var("USER").as_ref().unwrap()
         );
     }
 }
