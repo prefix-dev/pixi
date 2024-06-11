@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use url::Url;
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
-pub const PYPROJECT_MANIFEST: &str = "pyproject.json";
+pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const PIXI_DIR: &str = ".pixi";
 pub const PIXI_VERSION: &str = env!("CARGO_PKG_VERSION");
