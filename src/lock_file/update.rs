@@ -27,6 +27,7 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::environment::{write_environment_file, EnvironmentFile};
 use crate::{
     config, consts,
     environment::{
@@ -164,6 +165,16 @@ impl<'p> LockFileDerivedData<'p> {
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
             .insert(environment.clone(), prefix.clone());
+
+        // Save an environment file to the environment directory
+        write_environment_file(
+            &environment.dir(),
+            EnvironmentFile {
+                manifest_path: environment.project().manifest_path(),
+                environment_name: environment.name().to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+            },
+        )?;
 
         Ok(prefix)
     }

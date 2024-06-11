@@ -26,7 +26,9 @@ use rattler::{
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
+use serde::{Deserialize, Serialize};
 use std::convert::identity;
+use std::path::PathBuf;
 use std::{collections::HashMap, io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -157,6 +159,29 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
         .into_diagnostic()?;
     }
     Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct EnvironmentFile {
+    pub(crate) manifest_path: PathBuf,
+    pub(crate) environment_name: String,
+    pub(crate) pixi_version: String,
+}
+/// Write information about the environment to a file in the environment directory.
+/// This can be useful for other tools that only know the environment directory to find the original project.
+pub fn write_environment_file(
+    environment_dir: &Path,
+    env_file: EnvironmentFile,
+) -> miette::Result<PathBuf> {
+    let path = environment_dir.join(consts::ENVIRONMENT_FILE_NAME);
+
+    // Using toml as that is the main tool in pixi.
+    let contents = toml_edit::ser::to_string_pretty(&env_file).into_diagnostic()?;
+    std::fs::write(&path, contents).into_diagnostic()?;
+
+    tracing::debug!("Wrote environment file to: {:?}", path);
+
+    Ok(path)
 }
 
 /// Runs the following checks to make sure the project is in a sane state:
