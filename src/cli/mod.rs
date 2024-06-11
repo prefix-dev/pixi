@@ -214,11 +214,6 @@ pub async fn execute() -> miette::Result<()> {
                 .into_diagnostic()?,
         )
         .add_directive(
-            format!("rattler_installs_packages={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
             format!(
                 "rattler_networking::authentication_storage::backends::file={}",
                 LevelFilter::OFF
@@ -238,6 +233,7 @@ pub async fn execute() -> miette::Result<()> {
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
+        .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
         .without_time();
 
