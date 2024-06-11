@@ -245,7 +245,7 @@ fn list_tasks(
                     format!(
                         " - {:<15} {}",
                         taskname.fancy_display(),
-                        console::style(description).italic().to_string()
+                        console::style(description).italic()
                     ),
                 );
             }
