@@ -178,7 +178,8 @@ pub fn write_environment_file(
         .join(consts::ENVIRONMENT_FILE_NAME);
 
     let parent = path
-        .parent().expect("There should already be a conda-meta folder");
+        .parent()
+        .expect("There should already be a conda-meta folder");
 
     if !parent.exists() {
         std::fs::create_dir_all(parent).into_diagnostic()?
