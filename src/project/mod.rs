@@ -518,6 +518,7 @@ impl Project {
     pub async fn get_env_variables(
         &self,
         environment: &Environment<'_>,
+        clean_env: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -527,7 +528,7 @@ impl Project {
         })?;
 
         cell.get_or_try_init::<miette::Report>(async {
-            let activation_env = run_activation(environment).await?;
+            let activation_env = run_activation(environment, clean_env).await?;
 
             let environment_variables = get_environment_variables(environment);
 

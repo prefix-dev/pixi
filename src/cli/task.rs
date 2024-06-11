@@ -81,6 +81,10 @@ pub struct AddArgs {
     /// The environment variable to set, use --env key=value multiple times for more than one variable
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
+
+    /// Isolate the task from the shell environment, and only use the pixi environment to run the task
+    #[arg(long)]
+    pub clean_env: bool,
 }
 
 /// Parse a single key-value pair
@@ -149,6 +153,7 @@ impl From<AddArgs> for Task {
         } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
             Self::Plain(cmd_args)
         } else {
+            let clean_env = value.clean_env;
             let cwd = value.cwd;
             let env = if value.env.is_empty() {
                 None
@@ -166,6 +171,7 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env,
+                clean_env,
             })
         }
     }
