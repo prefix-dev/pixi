@@ -9,6 +9,7 @@ repos:
         always_run: true
         require_serial: true
         pass_filenames: false
+      # pre-commit-hooks
       - id: check-yaml
         name: check-yaml
         entry: pixi run -e lint check yaml
@@ -45,14 +46,6 @@ repos:
         entry: pixi run -e lint codespell
         language: system
         types: [text]
-      # cargo-sort
-      - id: cargo-sort
-        name: cargo-sort
-        entry: pixi run -e lint cargo-sort
-        language: system
-        types: [file, toml]
-        files: Cargo\.toml
-        pass_filenames: false
   # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
   - repo: https://github.com/DevinR528/cargo-sort
     rev: v1.0.9

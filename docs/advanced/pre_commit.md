@@ -56,7 +56,7 @@ repos:
 ```
 
 1. Pre-commit doesn't take `.gitignore` into account when running `pre-commit run -a`.
-2. This hook is a workaround for an isssue with pixi. It ensures that the pixi environments are up to date before running the other hooks.
+2. This hook is a workaround for an issue with pixi. It ensures that the pixi environments are up to date before running the other hooks.
    For more information, see [#1482](https://github.com/prefix-dev/pixi/issues/1482).
 
 This has the advantage that you only have one place where you specify your dependency versions instead of having to manage them in multiple places.

@@ -21,10 +21,18 @@ bump = "tbump --only-patch"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 
 [feature.dev.dependencies]
-pre-commit = "~=3.3.0"
 # Needed for the citation
 cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
+
+[feature.lint.dependencies]
+pre-commit = ">=3.7.1,<4"
+pre-commit-hooks = ">=4.6.0,<5"
+ruff = ">=0.4.8,<0.5"
+codespell = ">=2.3.0,<3"
+[feature.lint.tasks]
+pre-commit-install = "pre-commit-install"
+pre-commit-run = "pre-commit run --all"
 
 [feature.build.dependencies]
 # Needed for building
@@ -69,3 +77,4 @@ taplo = ">=0.9.1,<0.10"
 default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
 docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
 schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}
+lint = { features = ["lint"], no-default-feature = true, solve-group = "one" }
