@@ -205,7 +205,7 @@ pub struct Execute {
 
     /// A description of the task
     pub description: Option<String>,
-    
+
     /// Isolate the task from the running machine
     #[serde(default)]
     pub clean_env: bool,

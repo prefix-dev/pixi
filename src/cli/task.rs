@@ -84,7 +84,7 @@ pub struct AddArgs {
     /// A description of the task to be added.
     #[arg(long)]
     pub description: Option<String>,
-    
+
     /// Isolate the task from the shell environment, and only use the pixi environment to run the task
     #[arg(long)]
     pub clean_env: bool,
