@@ -806,6 +806,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#clean-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Clean environment
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1350,6 +1359,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#clean-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Clean environment
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1543,6 +1561,21 @@ For example overwriting a <code>PATH</code>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $PATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">PATH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/tmp/path:$PATH&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 This will output <code>/tmp/path:/usr/bin:/bin</code> instead of the original <code>/usr/bin:/bin</code>.</p>
+</div>
+<h2 id="clean-environment">Clean environment<a class="headerlink" href="#clean-environment" title="Permanent link">#</a></h2>
+<p>You can make sure the environment of a task is "pixi only".
+Here pixi will only include the minimal required environment variables for your platform to run the command in.
+The environment will contain all variables set by the conda environment like <code>"CONDA_PREFIX"</code>.
+It will however include some default values from the shell, like:
+<code>"DISPLAY"</code>, <code>"LC_ALL"</code>, <code>"LC_TIME"</code>, <code>"LC_NUMERIC"</code>, <code>"LC_MEASUREMENT"</code>, <code>"SHELL"</code>, <code>"USER"</code>, <code>"USERNAME"</code>, <code>"LOGNAME"</code>, <code>"HOME"</code>, <code>"HOSTNAME"</code>,<code>"TMPDIR"</code>, <code>"XPC_SERVICE_NAME"</code>, <code>"XPC_FLAGS"</code></p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">clean_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python run_in_isolated_env.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">clean-env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+</span></code></pre></div>
+This setting can also be set from the command line with <code>pixi run --clean-env TASK_NAME</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>clean-env</code> not supported on Windows</p>
+<p>On Windows it's hard to create a "clean environment" as <code>conda-forge</code> doesn't ship Windows compilers and Windows needs a lot of base variables.
+Making this feature not worthy of implementing as the amount of edge cases will make it unusable.</p>
 </div>
 <h2 id="our-task-runner-deno_task_shell">Our task runner: deno_task_shell<a class="headerlink" href="#our-task-runner-deno_task_shell" title="Permanent link">#</a></h2>
 <p>To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
