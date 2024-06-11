@@ -658,6 +658,35 @@ More information [here](../advanced/explain_info_command.md).
 pixi info
 pixi info --json --extended
 ```
+## `clean`
+
+Clean the parts of your system which are touched by pixi.
+Defaults to cleaning the environments and task cache.
+Use the `cache` subcommand to clean the cache
+
+##### Options
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--environment <ENVIRONMENT> (-e)`: The environment to clean, if none are provided all environments will be removed.
+
+```shell
+pixi clean
+```
+
+### `clean cache`
+
+Clean the pixi cache on your system.
+
+##### Options
+- `--pypi`: Clean the pypi cache.
+- `--conda`: Clean the conda cache.
+- `--yes`: Skip the confirmation prompt.
+
+```shell
+pixi clean cache # clean all pixi caches
+pixi clean cache --pypi # clean only the pypi cache
+pixi clean cache --conda # clean only the conda cache
+pixi clean cache --yes # skip the confirmation prompt
+```
 
 ## `upload`
 
