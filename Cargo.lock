@@ -3868,9 +3868,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.20.3"
+version = "0.20.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5cf314480ddf618405c8249393e55cefcbd18b65b9877ced23365519054e14f"
+checksum = "810de4b4ef0c75087b77b6425caf869ee435ee392950f71800ec21ac512e576b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3956,9 +3956,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.13"
+version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf0fd83b54bdb95f722b80b1ea9219e02b5c5ab4ad24b4b9bdb8b9e2ad8173a"
+checksum = "2ae1f4c940a73181b636a2957e665f1c7caeed443ef468ca31d380417f4b52bd"
 dependencies = [
  "archspec",
  "libloading",

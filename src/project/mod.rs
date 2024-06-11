@@ -304,7 +304,7 @@ impl Project {
         &self.root
     }
 
-    /// Returns the pixi directory
+    /// Returns the pixi directory of the project [consts::PIXI_DIR]
     pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
     }
@@ -323,9 +323,14 @@ impl Project {
         }
     }
 
+    /// Returns the default environment directory without interacting with config.
+    pub fn default_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    }
+
     /// Returns the environment directory
     pub fn environments_dir(&self) -> PathBuf {
-        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+        let default_envs_dir = self.default_environments_dir();
 
         // Early out if detached-environments is not set
         if self.config().detached_environments().is_false() {
@@ -367,6 +372,12 @@ impl Project {
         default_envs_dir
     }
 
+    /// Returns the default solve group environments directory, without interacting with config
+    pub fn default_solve_group_environments_dir(&self) -> PathBuf {
+        self.default_environments_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
     /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
         // If the detached-environments path is set, use it instead of the default
@@ -374,7 +385,7 @@ impl Project {
         if let Some(detached_environments_path) = self.detached_environments_path() {
             return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
         }
-        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_solve_group_environments_dir()
     }
 
     /// Returns the path to the manifest file.
@@ -382,7 +393,7 @@ impl Project {
         self.manifest.path.clone()
     }
 
-    /// Returns the path to the lock file of the project
+    /// Returns the path to the lock file of the project [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
@@ -507,6 +518,7 @@ impl Project {
     pub async fn get_env_variables(
         &self,
         environment: &Environment<'_>,
+        clean_env: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -516,7 +528,7 @@ impl Project {
         })?;
 
         cell.get_or_try_init::<miette::Report>(async {
-            let activation_env = run_activation(environment).await?;
+            let activation_env = run_activation(environment, clean_env).await?;
 
             let environment_variables = get_environment_variables(environment);
 
@@ -578,12 +590,14 @@ fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
 
     symlink(target_dir, symlink_dir)
         .map_err(|e| {
-            tracing::error!(
-                "Failed to create symlink from '{}' to '{}': {}",
-                target_dir.display(),
-                symlink_dir.display(),
-                e
-            )
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                tracing::error!(
+                    "Failed to create symlink from '{}' to '{}': {}",
+                    target_dir.display(),
+                    symlink_dir.display(),
+                    e
+                )
+            }
         })
         .ok();
 }

@@ -477,7 +477,6 @@ async fn test_installer_name() {
         .with_install(true)
         .await
         .unwrap();
-    dbg!(pixi.default_env_path().unwrap());
 
     // Get the correct dist-info folder
     let dist_info = if cfg!(not(target_os = "windows")) {
