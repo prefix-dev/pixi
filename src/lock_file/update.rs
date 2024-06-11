@@ -114,6 +114,16 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // Save an environment file to the environment directory
+        write_environment_file(
+            &environment.dir(),
+            EnvironmentFile {
+                manifest_path: environment.project().manifest_path(),
+                environment_name: environment.name().to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+            },
+        )?;
+
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
             return Ok(prefix.clone());
         }
@@ -165,16 +175,6 @@ impl<'p> LockFileDerivedData<'p> {
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
             .insert(environment.clone(), prefix.clone());
-
-        // Save an environment file to the environment directory
-        write_environment_file(
-            &environment.dir(),
-            EnvironmentFile {
-                manifest_path: environment.project().manifest_path(),
-                environment_name: environment.name().to_string(),
-                pixi_version: consts::PIXI_VERSION.to_string(),
-            },
-        )?;
 
         Ok(prefix)
     }

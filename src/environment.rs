@@ -177,10 +177,8 @@ pub fn write_environment_file(
         .join("conda-meta")
         .join(consts::ENVIRONMENT_FILE_NAME);
 
-    let binding = path.clone();
-    let parent = binding
-        .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
+    let parent = path
+        .parent().expect("There should already be a conda-meta folder");
 
     if !parent.exists() {
         std::fs::create_dir_all(parent).into_diagnostic()?
