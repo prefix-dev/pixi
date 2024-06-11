@@ -22,7 +22,7 @@ use uv_interpreter::PythonEnvironment;
 /// and run it
 #[tokio::test]
 #[serial]
-// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -49,7 +49,12 @@ async fn install_run_python() {
     assert!(result.stderr.is_empty());
 
     // Test for existence of environment file
-    assert!(pixi.default_env_path().unwrap().join(consts::ENVIRONMENT_FILE_NAME).exists())
+    assert!(pixi
+        .default_env_path()
+        .unwrap()
+        .join("conda-meta")
+        .join(consts::ENVIRONMENT_FILE_NAME)
+        .exists())
 }
 
 /// This is a test to check that creating incremental lock files works.

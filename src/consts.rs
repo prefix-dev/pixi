@@ -25,7 +25,7 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 /// The default channels to use for a new project.
 pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
-pub const ENVIRONMENT_FILE_NAME: &str = "pixi_environment.json";
+pub const ENVIRONMENT_FILE_NAME: &str = "pixi_environment";
 
 lazy_static! {
     pub static ref TASK_STYLE: Style = Style::new().blue();

@@ -173,7 +173,18 @@ pub fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
-    let path = environment_dir.join(consts::ENVIRONMENT_FILE_NAME);
+    let path = environment_dir
+        .join("conda-meta")
+        .join(consts::ENVIRONMENT_FILE_NAME);
+
+    let binding = path.clone();
+    let parent = binding
+        .parent()
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
+
+    if !parent.exists() {
+        std::fs::create_dir_all(parent).into_diagnostic()?
+    }
 
     // Using json as it's easier to machine read it.
     let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
