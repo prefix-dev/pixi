@@ -253,18 +253,21 @@ async fn test_clean_env() {
         .execute()
         .unwrap();
 
-    let result = pixi
-        .run(Args {
-            task: vec!["env-test".to_string()],
-            manifest_path: None,
-            clean_env: true,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    let run = pixi.run(Args {
+        task: vec!["env-test".to_string()],
+        manifest_path: None,
+        clean_env: true,
+        ..Default::default()
+    });
 
-    assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "Hello is:\n");
+    if cfg!(windows) {
+        // Clean env running not supported on windows.
+        run.await.unwrap_err();
+    } else {
+        let result = run.await.unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.stdout, "Hello is:\n");
+    }
 
     let result = pixi
         .run(Args {
