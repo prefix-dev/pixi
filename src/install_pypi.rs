@@ -183,14 +183,11 @@ fn convert_to_dist(
             // We consider it to be a registry url
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
-            let filename_raw = url
-                .path_segments()
-                .unwrap()
-                .last()
-                .unwrap();
+            let filename_raw = url.path_segments().unwrap().last().unwrap();
 
             // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`
-            let filename_decoded = percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
+            let filename_decoded =
+                percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
 
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
@@ -1090,6 +1087,7 @@ pub async fn update_python_distributions(
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, str::FromStr};
+    use distribution_types::RemoteSource;
 
     use pep440_rs::Version;
     use rattler_lock::{PypiPackageData, UrlOrPath};
@@ -1112,9 +1110,13 @@ mod tests {
             requires_python: None,
             editable: false,
         };
+
         // Convert the locked data to a uv dist
         // check if it does not panic
-        convert_to_dist(&locked, &PathBuf::new())
+        let dist = convert_to_dist(&locked, &PathBuf::new())
             .expect("could not convert wheel with special chars to dist");
+
+        // Check if the dist is a built dist
+        assert!(!dist.filename().unwrap().contains("%2B"));
     }
 }
