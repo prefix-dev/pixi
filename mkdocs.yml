@@ -122,6 +122,7 @@ nav:
       - Channel Logic: advanced/channel_priority.md
       - GitHub Actions: advanced/github_actions.md
       - Pyproject.toml: advanced/pyproject_toml.md
+      - Pre-commit: advanced/pre_commit.md
   - Reference:
       - Project Configuration: reference/project_configuration.md
       - Pixi Configuration: reference/pixi_configuration.md

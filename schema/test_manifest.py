@@ -59,10 +59,12 @@ def manifest_schema():
         schema = json.load(f)
     return schema
 
+
 @pytest.fixture(scope="session")
 def validator(manifest_schema):
     validator_cls = jsonschema.validators.validator_for(manifest_schema)
     return validator_cls(manifest_schema)
+
 
 def test_manifest_schema_valid(validator, valid_manifest):
     validator.validate(valid_manifest)

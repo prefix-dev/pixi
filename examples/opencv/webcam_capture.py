@@ -33,7 +33,6 @@ def capture_and_grayscale():
             working_cam = cap
             break
 
-
     # Check if the webcam is opened correctly
     if not working_cam.isOpened():
         raise OSError("Cannot open webcam")

@@ -10,8 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-      - uses: pre-commit/action@v3.0.1
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          environments: lint
+      - name: pre-commit
+        run: pixi run pre-commit-run --color=always --show-diff-on-failure
         env:
           # As the rust GitHub action is better at the rust jobs it can be skipped in this job.
           SKIP: clippy,fmt

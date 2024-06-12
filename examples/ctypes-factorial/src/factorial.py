@@ -7,7 +7,7 @@ from loguru import logger as log
 log.remove()
 log.add(
     sys.stdout,
-    format="{time:YYYY-MM-DD@HH:mm:ss.SSSSSS}|{level}|{name}.{function}:{line}|{message}"
+    format="{time:YYYY-MM-DD@HH:mm:ss.SSSSSS}|{level}|{name}.{function}:{line}|{message}",
 )
 
 
@@ -36,10 +36,7 @@ def c_factorial(n):
     significand = ctypes.c_double()
     exponent = ctypes.c_int()
 
-    c_lib.calculate_factorial_approximation(
-        n,
-        ctypes.byref(significand),
-        ctypes.byref(exponent))
+    c_lib.calculate_factorial_approximation(n, ctypes.byref(significand), ctypes.byref(exponent))
     return significand.value, exponent.value
 
 
@@ -48,17 +45,14 @@ if __name__ == "__main__":
         description="Calculate factorial using Python or C with ctypes."
     )
     parser.add_argument(
-        "n",
-        type=int,
-        nargs="?",
-        default=10,
-        help="Number for which to calculate the factorial."
+        "n", type=int, nargs="?", default=10, help="Number for which to calculate the factorial."
     )
     parser.add_argument(
-        "-e", "--engine",
+        "-e",
+        "--engine",
         choices=["python", "ctypes"],
         default="ctypes",
-        help="Calculation engine (python or ctypes)."
+        help="Calculation engine (python or ctypes).",
     )
     args = parser.parse_args()
 
