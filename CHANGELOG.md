@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `pixi clean` command by @ruben-arts in [#1325](https://github.com/prefix-dev/pixi/pull/1325)
 - Add `--clean-env` flag to tasks and run command by @ruben-arts in [#1395](https://github.com/prefix-dev/pixi/pull/1395)
 - Add `description` field to `task` by @jjjermiah in [#1479](https://github.com/prefix-dev/pixi/pull/1479)
+- Add pixi file to the environment to add pixi specific details by @ruben-arts in [#1495](https://github.com/prefix-dev/pixi/pull/1495)
 
 #### Changed
 
