@@ -192,15 +192,23 @@ fn convert_to_dist(
             // We consider it to be a registry url
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
-            let filename_raw = url.path_segments().unwrap().last().unwrap();
+            let filename_raw = url
+                .path_segments()
+                .unwrap()
+                .last()
+                .unwrap()
+                // And replaces `%2B` with `+` as those will not be read correctly, related issue:
+                // https://github.com/prefix-dev/pixi/issues/1418
+                .replace("%2B", "+");
+
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
-            let file = locked_data_to_file(pkg, filename_raw);
+            let file = locked_data_to_file(pkg, filename_raw.as_ref());
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
             // and we should consider it a sdist
-            let filename = WheelFilename::from_str(filename_raw);
+            let filename = WheelFilename::from_str(filename_raw.as_ref());
             if let Ok(filename) = filename {
                 Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
                     wheels: vec![RegistryBuiltWheel {
