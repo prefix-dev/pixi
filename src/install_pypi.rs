@@ -187,19 +187,19 @@ fn convert_to_dist(
                 .path_segments()
                 .unwrap()
                 .last()
-                .unwrap()
-                // And replaces `%2B` with `+` as those will not be read correctly, related issue:
-                // https://github.com/prefix-dev/pixi/issues/1418
-                .replace("%2B", "+");
+                .unwrap();
+
+            // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`
+            let filename_decoded = percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
 
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
-            let file = locked_data_to_file(pkg, filename_raw.as_ref());
+            let file = locked_data_to_file(pkg, filename_decoded.as_ref());
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
             // and we should consider it a sdist
-            let filename = WheelFilename::from_str(filename_raw.as_ref());
+            let filename = WheelFilename::from_str(filename_decoded.as_ref());
             if let Ok(filename) = filename {
                 Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
                     wheels: vec![RegistryBuiltWheel {
