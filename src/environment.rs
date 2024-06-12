@@ -181,9 +181,7 @@ pub fn write_environment_file(
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    if !parent.exists() {
-        std::fs::create_dir_all(parent).into_diagnostic()?
-    }
+std::fs::create_dir_all(parent).into_diagnostic()?
 
     // Using json as it's easier to machine read it.
     let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
