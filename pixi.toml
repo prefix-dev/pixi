@@ -34,6 +34,7 @@ pkg-config = "0.29.*"
 git = "2.42.0.*"
 [feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
+make = ">=4.3,<5"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
