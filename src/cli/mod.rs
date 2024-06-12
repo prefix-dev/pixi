@@ -13,6 +13,7 @@ use super::util::IndicatifWriter;
 use crate::{progress, progress::global_multi_progress};
 
 pub mod add;
+pub mod clean;
 pub mod completion;
 pub mod config;
 pub mod global;
@@ -93,7 +94,6 @@ pub enum Command {
     Install(install::Args),
     Update(update::Args),
 
-    // Execution commands
     #[clap(visible_alias = "r")]
     Run(run::Args),
     #[clap(visible_alias = "s")]
@@ -119,6 +119,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     SelfUpdate(self_update::Args),
+    Clean(clean::Args),
     Completion(completion::Args),
 }
 
@@ -126,8 +127,8 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
-    // up-to-date with the manifest file.
+    /// Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
+    /// up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
@@ -214,11 +215,6 @@ pub async fn execute() -> miette::Result<()> {
                 .into_diagnostic()?,
         )
         .add_directive(
-            format!("rattler_installs_packages={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
             format!(
                 "rattler_networking::authentication_storage::backends::file={}",
                 LevelFilter::OFF
@@ -238,6 +234,7 @@ pub async fn execute() -> miette::Result<()> {
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
+        .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
         .without_time();
 
@@ -269,6 +266,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
+        Command::Clean(cmd) => clean::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await,
         Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),

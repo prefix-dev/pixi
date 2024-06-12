@@ -31,6 +31,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 namespace: None,
                 md5: None,
                 sha256: None,
+                url: None,
             },
             MatchSpec {
                 name: Some(
@@ -58,6 +59,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 namespace: None,
                 md5: None,
                 sha256: None,
+                url: None,
             },
             MatchSpec {
                 name: Some(
@@ -85,6 +87,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 namespace: None,
                 md5: None,
                 sha256: None,
+                url: None,
             },
             MatchSpec {
                 name: Some(
@@ -112,6 +115,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 namespace: None,
                 md5: None,
                 sha256: None,
+                url: None,
             },
         ],
         [

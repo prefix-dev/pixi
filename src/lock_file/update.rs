@@ -139,7 +139,10 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment.project().get_env_variables(environment).await?;
+        let env_variables = environment
+            .project()
+            .get_env_variables(environment, false)
+            .await?;
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -1011,7 +1014,7 @@ impl<'p> UpdateContext<'p> {
             };
 
             // Get environment variables from the activation
-            let env_variables = project.get_env_variables(&environment).await?;
+            let env_variables = project.get_env_variables(&environment, false).await?;
 
             let locked_group_records = self
                 .locked_grouped_pypi_records

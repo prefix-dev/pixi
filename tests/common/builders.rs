@@ -397,6 +397,11 @@ impl UpdateBuilder {
         self.args.dry_run = dry_run;
         self
     }
+
+    pub fn json(mut self, json: bool) -> Self {
+        self.args.json = json;
+        self
+    }
 }
 
 impl IntoFuture for UpdateBuilder {

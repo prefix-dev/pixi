@@ -176,6 +176,7 @@ alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).

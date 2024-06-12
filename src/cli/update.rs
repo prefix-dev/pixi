@@ -1,5 +1,5 @@
-use std::borrow::Cow;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     collections::HashSet,
     io::{stdout, Write},
@@ -13,13 +13,18 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
+use serde::Serialize;
+use serde_json::Value;
 use tabwriter::TabWriter;
 
-use crate::consts::{CondaEmoji, PypiEmoji};
-use crate::project::grouped_environment::GroupedEnvironment;
 use crate::{
-    config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, EnvironmentName,
-    HasFeatures, Project,
+    config::ConfigCli,
+    consts,
+    consts::{CondaEmoji, PypiEmoji},
+    load_lock_file,
+    lock_file::UpdateContext,
+    project::grouped_environment::GroupedEnvironment,
+    EnvironmentName, HasFeatures, Project,
 };
 
 /// Update dependencies as recorded in the local lock file
@@ -32,7 +37,8 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// Don't install the (solve) environments needed for pypi-dependencies solving.
+    /// Don't install the (solve) environments needed for pypi-dependencies
+    /// solving.
     #[arg(long)]
     pub no_install: bool,
 
@@ -42,6 +48,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub specs: UpdateSpecsArgs,
+
+    #[clap(long)]
+    pub json: bool,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -80,7 +89,8 @@ impl From<UpdateSpecsArgs> for UpdateSpecs {
 }
 
 impl UpdateSpecs {
-    /// Returns true if the package should be relaxed according to the user input.
+    /// Returns true if the package should be relaxed according to the user
+    /// input.
     fn should_relax(&self, environment_name: &str, platform: Platform, package: &Package) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms {
@@ -159,7 +169,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the diff between the old and new lock-file.
     let diff = LockFileDiff::from_lock_files(&loaded_lock_file, &updated_lock_file.lock_file);
-    if diff.is_empty() {
+
+    // Format as json?
+    if args.json {
+        let diff = LockFileDiff::from_lock_files(&loaded_lock_file, &updated_lock_file.lock_file);
+        let json_diff = LockFileJsonDiff::new(&project, diff);
+        let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
+        println!("{}", json);
+    } else if diff.is_empty() {
         println!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
@@ -621,4 +638,149 @@ impl LockFileDiff {
         })
         .collect()
     }
+}
+
+#[derive(Serialize, Clone)]
+pub struct JsonPackageDiff {
+    name: String,
+    before: Option<serde_json::Value>,
+    after: Option<serde_json::Value>,
+    #[serde(rename = "type")]
+    ty: JsonPackageType,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    explicit: bool,
+}
+
+#[derive(Serialize, Copy, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub enum JsonPackageType {
+    Conda,
+    Pypi,
+}
+
+#[derive(Serialize, Clone)]
+pub struct LockFileJsonDiff {
+    pub version: usize,
+    pub environment: IndexMap<String, IndexMap<Platform, Vec<JsonPackageDiff>>>,
+}
+
+impl LockFileJsonDiff {
+    fn new(project: &Project, value: LockFileDiff) -> Self {
+        let mut environment = IndexMap::new();
+
+        for (environment_name, environment_diff) in value.environment {
+            let mut environment_diff_json = IndexMap::new();
+
+            for (platform, packages_diff) in environment_diff {
+                let conda_dependencies = project
+                    .environment(environment_name.as_str())
+                    .map(|env| env.dependencies(None, Some(platform)))
+                    .unwrap_or_default();
+
+                let pypi_dependencies = project
+                    .environment(environment_name.as_str())
+                    .map(|env| env.pypi_dependencies(Some(platform)))
+                    .unwrap_or_default();
+
+                let add_diffs = packages_diff.added.into_iter().map(|new| match new {
+                    Package::Conda(pkg) => JsonPackageDiff {
+                        name: pkg.package_record().name.as_normalized().to_string(),
+                        before: None,
+                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        ty: JsonPackageType::Conda,
+                        explicit: conda_dependencies.contains_key(&pkg.package_record().name),
+                    },
+                    Package::Pypi(pkg) => JsonPackageDiff {
+                        name: pkg.data().package.name.as_dist_info_name().into_owned(),
+                        before: None,
+                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        ty: JsonPackageType::Pypi,
+                        explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
+                    },
+                });
+
+                let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
+                    Package::Conda(pkg) => JsonPackageDiff {
+                        name: pkg.package_record().name.as_normalized().to_string(),
+                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: None,
+                        ty: JsonPackageType::Conda,
+                        explicit: conda_dependencies.contains_key(&pkg.package_record().name),
+                    },
+
+                    Package::Pypi(pkg) => JsonPackageDiff {
+                        name: pkg.data().package.name.as_dist_info_name().into_owned(),
+                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: None,
+                        ty: JsonPackageType::Pypi,
+                        explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
+                    },
+                });
+
+                let changed_diffs = packages_diff.changed.into_iter().map(|(old, new)| match (old, new) {
+                    (Package::Conda(old), Package::Conda(new)) =>
+                        {
+                            let before = serde_json::to_value(&old).unwrap();
+                            let after = serde_json::to_value(&new).unwrap();
+                            let (before, after) = compute_json_diff(before, after);
+                            JsonPackageDiff {
+                                name: old.package_record().name.as_normalized().to_string(),
+                                before: Some(before),
+                                after: Some(after),
+                                ty: JsonPackageType::Conda,
+                                explicit: conda_dependencies.contains_key(&old.package_record().name),
+                            }
+                        }
+                    (Package::Pypi(old), Package::Pypi(new)) => {
+                        let before = serde_json::to_value(&old).unwrap();
+                        let after = serde_json::to_value(&new).unwrap();
+                        let (before, after) = compute_json_diff(before, after);
+                        JsonPackageDiff {
+                            name: old.data().package.name.as_dist_info_name().into_owned(),
+                            before: Some(before),
+                            after: Some(after),
+                            ty: JsonPackageType::Pypi,
+                            explicit: pypi_dependencies.contains_key(&old.data().package.name),
+                        }
+                    }
+                    _ => unreachable!("packages cannot change type, they are represented as removals and inserts instead"),
+                });
+
+                let packages_diff_json = add_diffs
+                    .chain(removed_diffs)
+                    .chain(changed_diffs)
+                    .sorted_by_key(|diff| diff.name.clone())
+                    .collect_vec();
+
+                environment_diff_json.insert(platform, packages_diff_json);
+            }
+
+            environment.insert(environment_name, environment_diff_json);
+        }
+
+        Self {
+            version: 1,
+            environment,
+        }
+    }
+}
+
+fn compute_json_diff(
+    mut a: serde_json::Value,
+    mut b: serde_json::Value,
+) -> (serde_json::Value, serde_json::Value) {
+    if let (Some(a), Some(b)) = (a.as_object_mut(), b.as_object_mut()) {
+        a.retain(|key, value| {
+            if let Some(other_value) = b.get(key) {
+                if other_value == value {
+                    b.remove(key);
+                    return false;
+                }
+            } else {
+                b.insert(key.to_string(), Value::Null);
+            }
+            true
+        });
+    }
+    (a, b)
 }
