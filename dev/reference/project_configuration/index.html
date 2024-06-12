@@ -2009,14 +2009,14 @@ We support:</p>
 <li><code>index-url</code>: replaces the main index url.
    Only one <code>index-url</code> can be defined per environment.</li>
 <li><code>extra-index-urls</code>: adds an extra index url.</li>
-<li><code>find-links</code>: which can either be a path <code>{path: './links'}</code> or a url <code>{url: 'https://example.com/links'}</code>.
+<li><code>find-links</code>: which can either be a path <code>{path = './links'}</code> or a url <code>{url = 'https://example.com/links'}</code>.
    This is similar to the <code>--find-links</code> option in <code>pip</code>.</li>
 </ul>
 <p>An example:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://example.com/simple&quot;</span><span class="p">]</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">find-links</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">path</span><span class="err">:</span><span class="w"> </span><span class="s1">&#39;./links&#39;</span><span class="p">}]</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">find-links</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;./links&#39;</span><span class="p">}]</span>
 </span></code></pre></div>
 <p>There are some examples in the pixi repository that make use of this feature.
 To read about existing authentication methods, please check the <a href="../../advanced/authentication/#pypi-authentication">PyPI Authentication</a> section.</p>
