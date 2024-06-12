@@ -1211,6 +1211,15 @@
             }
           ]
         },
+        "description": {
+          "title": "Description",
+          "description": "A short description of the task",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "Build the project"
+          ]
+        },
         "env": {
           "title": "Env",
           "description": "A map of environment variables to values, used in the task, these will be overwritten by the shell.",
