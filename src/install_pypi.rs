@@ -1086,8 +1086,8 @@ pub async fn update_python_distributions(
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr};
     use distribution_types::RemoteSource;
+    use std::{path::PathBuf, str::FromStr};
 
     use pep440_rs::Version;
     use rattler_lock::{PypiPackageData, UrlOrPath};
