@@ -1,12 +1,11 @@
-use crate::conda_pypi_clobber::PypiCondaClobberRegistry;
-use crate::prefix::Prefix;
-use crate::project::manifest::pypi_options::PypiOptions;
-use crate::uv_reporter::{UvReporter, UvReporterOptions};
-use std::borrow::Cow;
-use std::sync::Arc;
+use std::{borrow::Cow, collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use distribution_filename::WheelFilename;
-
+use distribution_types::{
+    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
+    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+};
+use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
@@ -16,41 +15,31 @@ use pypi_types::{
     HashAlgorithm, HashDigest, ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError,
     VerbatimParsedUrl,
 };
-use tempfile::{tempdir, TempDir};
-use url::Url;
-
-use uv_auth::store_credentials_from_url;
-use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
-use uv_configuration::{ConfigSettings, SetupPyStrategy};
-use uv_resolver::InMemoryIndex;
-use uv_types::HashStrategy;
-
-use crate::consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST};
-use crate::lock_file::UvResolutionContext;
-use crate::project::manifest::SystemRequirements;
-
-use crate::pypi_tags::{get_pypi_tags, is_python_record};
-use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
-    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
-};
-use install_wheel_rs::linker::LinkMode;
-
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
-
-use std::collections::HashMap;
-use std::path::Path;
-use std::str::FromStr;
-use std::time::Duration;
-
+use tempfile::{tempdir, TempDir};
+use url::Url;
+use uv_auth::store_credentials_from_url;
+use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_installer::{Downloader, InstalledEditable, ResolvedEditable, SitePackages};
 use uv_interpreter::{Interpreter, PythonEnvironment};
 use uv_normalize::PackageName;
-use uv_resolver::FlatIndex;
+use uv_resolver::{FlatIndex, InMemoryIndex};
+use uv_types::HashStrategy;
+
+use crate::{
+    conda_pypi_clobber::PypiCondaClobberRegistry,
+    consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
+    lock_file::UvResolutionContext,
+    prefix::Prefix,
+    project::manifest::{pypi_options::PypiOptions, SystemRequirements},
+    pypi_tags::{get_pypi_tags, is_python_record},
+    uv_reporter::{UvReporter, UvReporterOptions},
+};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -69,25 +58,27 @@ fn elapsed(duration: Duration) -> String {
 /// Derived from uv [`uv_installer::Plan`]
 #[derive(Debug)]
 struct PixiInstallPlan {
-    /// The distributions that are not already installed in the current environment, but are
-    /// available in the local cache.
+    /// The distributions that are not already installed in the current
+    /// environment, but are available in the local cache.
     pub local: Vec<CachedDist>,
 
-    /// The distributions that are not already installed in the current environment, and are
-    /// not available in the local cache.
-    /// this is where we differ from UV because we want already have the URL we want to download
+    /// The distributions that are not already installed in the current
+    /// environment, and are not available in the local cache.
+    /// this is where we differ from UV because we want already have the URL we
+    /// want to download
     pub remote: Vec<Dist>,
 
-    /// Any distributions that are already installed in the current environment, but will be
-    /// re-installed (including upgraded) to satisfy the requirements.
+    /// Any distributions that are already installed in the current environment,
+    /// but will be re-installed (including upgraded) to satisfy the
+    /// requirements.
     pub reinstalls: Vec<InstalledDist>,
 
-    /// Any distributions that are already installed in the current environment, and are
-    /// _not_ necessary to satisfy the requirements.
+    /// Any distributions that are already installed in the current environment,
+    /// and are _not_ necessary to satisfy the requirements.
     pub extraneous: Vec<InstalledDist>,
 
-    /// Keep track of any packages that have been re-installed because of installer mismatch
-    /// we can warn the user later that this has happened
+    /// Keep track of any packages that have been re-installed because of
+    /// installer mismatch we can warn the user later that this has happened
     pub installer_mismatch: Vec<String>,
 }
 
@@ -193,22 +184,28 @@ fn convert_to_dist(
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
             let filename_raw = url.path_segments().unwrap().last().unwrap();
+
+            // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`
+            let filename_decoded =
+                percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
+
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
-            let file = locked_data_to_file(pkg, filename_raw);
+            let file = locked_data_to_file(pkg, filename_decoded.as_ref());
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
             // and we should consider it a sdist
-            let filename = WheelFilename::from_str(filename_raw);
+            let filename = WheelFilename::from_str(filename_decoded.as_ref());
             if let Ok(filename) = filename {
                 Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
                     wheels: vec![RegistryBuiltWheel {
                         filename,
                         file: Box::new(file),
                         // This should be fine because currently it is only used for caching
-                        // When upgrading uv and running into problems we would need to sort this out
-                        // but it would require adding the indexes to the lock file
+                        // When upgrading uv and running into problems we would need to sort this
+                        // out but it would require adding the indexes to
+                        // the lock file
                         index: IndexUrl::Pypi(VerbatimUrl::from_url(
                             DEFAULT_PYPI_INDEX_URL.clone(),
                         )),
@@ -264,8 +261,8 @@ enum ValidateInstall {
 /// Check freshness of a locked url against an installed dist
 fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miette::Result<bool> {
     if let Ok(archive) = locked_url.to_file_path() {
-        // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and `setup.py`
-        // against the METADATA of the installed distribution
+        // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and
+        // `setup.py` against the METADATA of the installed distribution
         if ArchiveTimestamp::up_to_date_with(&archive, ArchiveTarget::Install(installed_dist))
             .into_diagnostic()?
         {
@@ -354,7 +351,8 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     let locked_url = match &locked.url_or_path {
-                        // Remove `direct+` scheme if it is there so we can compare the required to the installed url
+                        // Remove `direct+` scheme if it is there so we can compare the required to
+                        // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url),
                         UrlOrPath::Path(_path) => return Ok(ValidateInstall::Reinstall),
                     };
@@ -606,13 +604,14 @@ struct EditablesWithTemp {
 
 /// Function to figure out what we should do with any editables:
 ///
-/// So we need to figure out if the editables still need to be built, or if they are *ready* to be installed
-/// Because an editable install is metadata and a .pth file containing the path the building of it is a bit different when compared to
-/// regular wheels. They are kind of stripped wheels essentially.
+/// So we need to figure out if the editables still need to be built, or if they
+/// are *ready* to be installed Because an editable install is metadata and a
+/// .pth file containing the path the building of it is a bit different when
+/// compared to regular wheels. They are kind of stripped wheels essentially.
 ///
-/// UV has the concept of a `ResolvedEditable`, which is an editable that has either just been built or is already installed.
-/// We can use this to figure out what we need to do with an editable in the prefix.
-///
+/// UV has the concept of a `ResolvedEditable`, which is an editable that has
+/// either just been built or is already installed. We can use this to figure
+/// out what we need to do with an editable in the prefix.
 async fn resolve_editables(
     lock_file_dir: &Path,
     editables: Vec<&CombinedPypiPackageData>,
@@ -862,8 +861,9 @@ pub async fn update_python_distributions(
     );
 
     tracing::debug!("Figuring out what to install/reinstall/remove");
-    // Partition into those that should be linked from the cache (`local`), those that need to be
-    // downloaded (`remote`), and those that should be removed (`extraneous`).
+    // Partition into those that should be linked from the cache (`local`), those
+    // that need to be downloaded (`remote`), and those that should be removed
+    // (`extraneous`).
     let PixiInstallPlan {
         local,
         remote,
@@ -911,7 +911,8 @@ pub async fn update_python_distributions(
     }
 
     // Some info logging
-    // List all package names that are going to be installed, re-installed and removed
+    // List all package names that are going to be installed, re-installed and
+    // removed
     tracing::info!(
         "resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
         local.len(),
@@ -957,7 +958,8 @@ pub async fn update_python_distributions(
             uv_context.concurrency.downloads,
         );
 
-        // Before hitting the network let's make sure the credentials are available to uv
+        // Before hitting the network let's make sure the credentials are available to
+        // uv
         for url in index_locations.urls() {
             let success = store_credentials_from_url(url);
             tracing::debug!("Stored credentials for {}: {}", url, success);
@@ -1043,8 +1045,8 @@ pub async fn update_python_distributions(
     }
 
     if !installer_mismatch.is_empty() {
-        // Notify the user if there are any packages that were re-installed because they were installed
-        // by a different installer.
+        // Notify the user if there are any packages that were re-installed because they
+        // were installed by a different installer.
         let packages = installer_mismatch
             .iter()
             .map(|name| name.to_string())
@@ -1084,6 +1086,7 @@ pub async fn update_python_distributions(
 
 #[cfg(test)]
 mod tests {
+    use distribution_types::RemoteSource;
     use std::{path::PathBuf, str::FromStr};
 
     use pep440_rs::Version;
@@ -1107,9 +1110,13 @@ mod tests {
             requires_python: None,
             editable: false,
         };
+
         // Convert the locked data to a uv dist
         // check if it does not panic
-        convert_to_dist(&locked, &PathBuf::new())
+        let dist = convert_to_dist(&locked, &PathBuf::new())
             .expect("could not convert wheel with special chars to dist");
+
+        // Check if the dist is a built dist
+        assert!(!dist.filename().unwrap().contains("%2B"));
     }
 }

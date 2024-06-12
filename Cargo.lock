@@ -3324,6 +3324,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "pep440_rs",
  "pep508_rs",
+ "percent-encoding",
  "platform-tags",
  "pypi-types",
  "pyproject-toml",

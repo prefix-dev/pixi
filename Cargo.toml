@@ -79,6 +79,7 @@ parking_lot = "0.12.2"
 
 pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+percent-encoding = "2.3.1"
 platform-tags = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 pypi-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 pyproject-toml = "0.11.0"
