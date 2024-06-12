@@ -16,7 +16,7 @@ use crate::progress::await_in_progress;
 use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
 use crate::util::default_channel_config;
-use crate::{config, EnvironmentName, FeatureName, Project};
+use crate::{config, consts, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
 
@@ -385,7 +385,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let info = Info {
         platform: Platform::current().to_string(),
         virtual_packages,
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: consts::PIXI_VERSION.to_string(),
         cache_dir: Some(config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,

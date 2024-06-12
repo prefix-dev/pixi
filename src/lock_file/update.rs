@@ -27,6 +27,7 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::environment::{write_environment_file, EnvironmentFile};
 use crate::{
     config, consts,
     environment::{
@@ -113,6 +114,16 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // Save an environment file to the environment directory
+        write_environment_file(
+            &environment.dir(),
+            EnvironmentFile {
+                manifest_path: environment.project().manifest_path(),
+                environment_name: environment.name().to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+            },
+        )?;
+
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
             return Ok(prefix.clone());
         }
