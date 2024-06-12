@@ -2,5 +2,5 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - pixi ==0.22.0
+  - pixi
   - pip

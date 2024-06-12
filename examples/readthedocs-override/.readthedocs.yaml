@@ -5,7 +5,7 @@ build:
     # this ensures a viable `mamba` is on `$PATH``
     python: mambaforge-latest
   commands:
-    - mamba install -c conda-forge -c nodefaults pixi==0.22.0
+    - mamba install -c conda-forge -c nodefaults pixi
     - pixi install
     - pixi run docs
     - pixi run readthedocs
