@@ -13,7 +13,6 @@ use std::os::unix::fs::symlink;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    env,
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -35,7 +34,6 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
-    activation::{get_environment_variables, run_activation},
     config::Config,
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
@@ -323,7 +321,8 @@ impl Project {
         }
     }
 
-    /// Returns the default environment directory without interacting with config.
+    /// Returns the default environment directory without interacting with
+    /// config.
     pub fn default_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
@@ -372,7 +371,8 @@ impl Project {
         default_envs_dir
     }
 
-    /// Returns the default solve group environments directory, without interacting with config
+    /// Returns the default solve group environments directory, without
+    /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
         self.default_environments_dir()
             .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
@@ -393,7 +393,8 @@ impl Project {
         self.manifest.path.clone()
     }
 
-    /// Returns the path to the lock file of the project [consts::PROJECT_LOCK_FILE]
+    /// Returns the path to the lock file of the project
+    /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
@@ -513,34 +514,6 @@ impl Project {
         &self.config
     }
 
-    /// Return a combination of static environment variables generated from the
-    /// project and the environment and from running activation script
-    pub async fn get_env_variables(
-        &self,
-        environment: &Environment<'_>,
-        clean_env: bool,
-    ) -> miette::Result<&HashMap<String, String>> {
-        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
-            miette::miette!(
-                "{} environment should be already created during project creation",
-                environment.name()
-            )
-        })?;
-
-        cell.get_or_try_init::<miette::Report>(async {
-            let activation_env = run_activation(environment, clean_env).await?;
-
-            let environment_variables = get_environment_variables(environment);
-
-            let all_variables: HashMap<String, String> = activation_env
-                .into_iter()
-                .chain(environment_variables.into_iter())
-                .collect();
-            Ok(all_variables)
-        })
-        .await
-    }
-
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
@@ -550,7 +523,7 @@ impl Project {
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
 pub fn find_project_manifest() -> Option<PathBuf> {
-    let current_dir = env::current_dir().ok()?;
+    let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
         [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
             .iter()

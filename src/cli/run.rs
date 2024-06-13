@@ -16,7 +16,6 @@ use crate::task::{
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::Project;
-
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -24,6 +23,7 @@ use crate::project::virtual_packages::verify_current_platform_has_required_virtu
 use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
+use crate::activation::CurrentEnvVarBehavior;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
@@ -253,14 +253,19 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data.prefix(environment).await?;
 
     // Get environment variables from the activation
+    let env_var_behavior = if clean_env {
+        CurrentEnvVarBehavior::Clean
+    } else {
+        CurrentEnvVarBehavior::Exclude
+    };
     let activation_env = await_in_progress("activating environment", |_| {
-        crate::activation::run_activation(environment, clean_env)
+        environment.get_activated_env_variables(env_var_behavior)
     })
     .await
     .wrap_err("failed to activate environment")?;
 
     // Concatenate with the system environment variables
-    Ok(activation_env)
+    Ok(activation_env.clone())
 }
 
 #[derive(Debug, Error, Diagnostic)]

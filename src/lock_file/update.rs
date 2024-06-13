@@ -27,11 +27,12 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
-use crate::environment::{write_environment_file, EnvironmentFile};
 use crate::{
+    activation::CurrentEnvVarBehavior,
     config, consts,
     environment::{
-        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
+        PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
     lock_file::{
@@ -151,9 +152,9 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         let env_variables = environment
-            .project()
-            .get_env_variables(environment, false)
+            .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
             .await?;
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -165,7 +166,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             &uv_context,
             &environment.pypi_options(),
-            env_variables,
+            &env_variables,
             self.project.root(),
             environment.best_platform(),
         )
@@ -1006,6 +1007,11 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
+            // Get environment variables from the activation
+            let env_variables = environment
+                .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
+                .await?;
+
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
@@ -1024,9 +1030,6 @@ impl<'p> UpdateContext<'p> {
                 Some(context) => context.clone(),
             };
 
-            // Get environment variables from the activation
-            let env_variables = project.get_env_variables(&environment, false).await?;
-
             let locked_group_records = self
                 .locked_grouped_pypi_records
                 .get(&group)
@@ -1041,7 +1044,7 @@ impl<'p> UpdateContext<'p> {
                 platform,
                 repodata_future,
                 prefix_future,
-                env_variables,
+                &env_variables,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,

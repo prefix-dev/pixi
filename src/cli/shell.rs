@@ -1,21 +1,25 @@
-use crate::activation::get_activation_env;
-use crate::config::ConfigCliPrompt;
-use crate::{prompt, Project};
+use std::{collections::HashMap, io::Write, path::PathBuf};
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::activation::PathModificationBehavior;
-use rattler_shell::shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript};
-use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
+use rattler_shell::{
+    activation::PathModificationBehavior,
+    shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
+};
 
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
-
-use crate::cli::LockFileUsageArgs;
-use crate::project::manifest::EnvironmentName;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    cli::LockFileUsageArgs,
+    config::ConfigCliPrompt,
+    project::{
+        manifest::EnvironmentName,
+        virtual_packages::verify_current_platform_has_required_virtual_packages,
+    },
+    prompt, Project,
+};
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
@@ -214,7 +218,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+    let env = environment
+        .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
+        .await?;
+
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.
@@ -248,12 +255,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt).await,
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env, prompt).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env, prompt),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &env, prompt).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &env, prompt).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &env, prompt).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &env, prompt).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }
