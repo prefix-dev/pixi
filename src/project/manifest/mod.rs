@@ -438,7 +438,7 @@ impl Manifest {
             };
             // and to the TOML document
             self.document
-                .add_pypi_dependency(requirement, platform, feature_name)?;
+                .add_pypi_dependency(requirement, platform, feature_name, editable)?;
         }
         Ok(())
     }
