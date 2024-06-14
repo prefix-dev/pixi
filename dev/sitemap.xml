@@ -21,6 +21,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/dev-release-steps/</loc>
+         <lastmod>2024-06-14</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/vision/</loc>
          <lastmod>2024-06-14</lastmod>
          <changefreq>daily</changefreq>
