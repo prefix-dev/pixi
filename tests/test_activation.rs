@@ -20,8 +20,8 @@ async fn test_normal_env_activation() {
 
     assert!(normal_env.get("CONDA_PREFIX").is_some());
     assert!(normal_env.get("DIRTY_VAR").is_none());
-    // Display is not a pixi var, but it is passed into a clean env.
-    assert!(normal_env.get("DISPLAY").is_none());
+    // HOME is not a pixi var, but it is passed into a clean env.
+    assert!(normal_env.get("HOME").is_none());
 }
 
 #[tokio::test]
@@ -40,7 +40,7 @@ async fn test_full_env_activation() {
         .unwrap();
     assert!(full_env.get("CONDA_PREFIX").is_some());
     assert!(full_env.get("DIRTY_VAR").is_some());
-    assert!(full_env.get("DISPLAY").is_some());
+    assert!(full_env.get("HOME").is_some());
 }
 
 #[cfg(target_family = "unix")]
@@ -62,5 +62,5 @@ async fn test_clean_env_activation() {
     assert!(clean_env.get("DIRTY_VAR").is_none());
 
     // Display is not a pixi var, but it is passed into a clean env.
-    assert!(clean_env.get("DISPLAY").is_some());
+    assert!(clean_env.get("HOME").is_some());
 }
