@@ -1,21 +1,24 @@
-use super::{
-    errors::{UnknownTask, UnsupportedPlatformError},
-    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
-    SolveGroup,
-};
-use crate::project::has_features::HasFeatures;
-
-use crate::consts;
-use crate::task::TaskName;
-use crate::{task::Task, Project};
-use itertools::Either;
-use rattler_conda_types::{Arch, Platform};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     fs,
     hash::{Hash, Hasher},
     sync::Once,
+};
+
+use itertools::Either;
+use rattler_conda_types::{Arch, Platform};
+
+use super::{
+    errors::{UnknownTask, UnsupportedPlatformError},
+    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
+    SolveGroup,
+};
+use crate::{
+    consts,
+    project::has_features::HasFeatures,
+    task::{Task, TaskName},
+    Project,
 };
 
 /// Describes a single environment from a project manifest. This is used to describe environments
@@ -297,13 +300,14 @@ impl<'p> Hash for Environment<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::CondaDependencies;
+    use std::{collections::HashSet, path::Path};
 
-    use super::*;
     use insta::assert_snapshot;
     use itertools::Itertools;
     use rattler_conda_types::Channel;
-    use std::{collections::HashSet, path::Path};
+
+    use super::*;
+    use crate::project::CondaDependencies;
 
     #[test]
     fn test_default_channels() {

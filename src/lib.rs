@@ -1,4 +1,4 @@
-mod activation;
+pub mod activation;
 pub mod cli;
 pub(crate) mod conda_pypi_clobber;
 pub mod config;
@@ -24,7 +24,6 @@ mod uv_reporter;
 pub mod pypi_mapping;
 mod repodata;
 
-pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
 pub use project::{

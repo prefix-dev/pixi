@@ -3,21 +3,31 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::activation::ActivationError::FailedToRunActivationScript;
 use rattler_shell::{
-    activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
+    activation::{
+        ActivationError, ActivationError::FailedToRunActivationScript, ActivationVariables,
+        Activator, PathModificationBehavior,
+    },
     shell::ShellEnum,
 };
 
-use crate::project::has_features::HasFeatures;
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
-    project::{manifest::EnvironmentName, Environment},
+    project::{has_features::HasFeatures, manifest::EnvironmentName, Environment},
     Project,
 };
 
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
+
+pub enum CurrentEnvVarBehavior {
+    /// Clean the environment variables of the current shell.
+    /// This will return the minimal set of environment variables that are required to run the command.
+    Clean,
+    /// Copy the environment variables of the current shell.
+    Include,
+    /// Do not take any environment variables from the current shell.
+    Exclude,
+}
 
 impl Project {
     /// Returns environment variables and their values that should be injected when running a command.
@@ -124,7 +134,7 @@ pub fn get_activator<'p>(
     // Add the environment variables from the project.
     activator
         .env_vars
-        .extend(get_environment_variables(environment));
+        .extend(get_static_environment_variables(environment));
 
     Ok(activator)
 }
@@ -132,7 +142,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
-    clean_env: bool,
+    env_var_behavior: &CurrentEnvVarBehavior,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -142,10 +152,11 @@ pub async fn run_activation(
         ))
     })?;
 
-    let path_modification_behavior = if clean_env {
-        PathModificationBehavior::Replace
-    } else {
-        PathModificationBehavior::Prepend
+    let path_modification_behavior = match env_var_behavior {
+        // We need to replace the full environment path with the new one.
+        // So only the executables from the pixi environment are available.
+        CurrentEnvVarBehavior::Clean => PathModificationBehavior::Replace,
+        _ => PathModificationBehavior::Prepend,
     };
 
     let activator_result = match tokio::task::spawn_blocking(move || {
@@ -193,51 +204,13 @@ pub async fn run_activation(
         }
     };
 
-    if clean_env && cfg!(windows) {
-        return Err(miette::miette!(
-            format!("It's not possible to run a `clean-env` on Windows as it requires so many non conda specific files that it is basically useless to use. \
-        So pixi currently doesn't support this feature.")));
-    } else if clean_env {
-        let mut cleaned_environment_variables = get_clean_environment_variables();
-
-        // Extend with the original activation environment
-        cleaned_environment_variables.extend(activator_result);
-
-        // Enable this when we found a better way to support windows.
-        // On Windows the path is not completely replace, but we need to strip some paths to keep it as clean as possible.
-        // if cfg!(target_os = "windows") {
-        //     let path = env
-        //         .get("Path")
-        //         .map(|path| {
-        //             // Keep some of the paths
-        //             let win_path = std::env::split_paths(&path).filter(|p| {
-        //                 // Required for base functionalities
-        //                 p.to_string_lossy().contains(":\\Windows")
-        //                     // Required for compilers
-        //                     || p.to_string_lossy().contains("\\Program Files")
-        //                     // Required for pixi environments
-        //                     || p.starts_with(environment.dir())
-        //             });
-        //             // Join back up the paths
-        //             std::env::join_paths(win_path).expect("Could not join paths")
-        //         })
-        //         .expect("Could not find PATH in environment variables");
-        //     // Insert the path back into the env.
-        //     env.insert(
-        //         "Path".to_string(),
-        //         path.to_str()
-        //             .expect("Path contains non-utf8 paths")
-        //             .to_string(),
-        //     );
-        // }
-
-        return Ok(cleaned_environment_variables);
-    }
-    Ok(std::env::vars().chain(activator_result).collect())
+    Ok(activator_result)
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
-pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMap<String, String> {
+pub fn get_static_environment_variables<'p>(
+    environment: &'p Environment<'p>,
+) -> HashMap<String, String> {
     // Get environment variables from the project
     let project_env = environment.project().get_metadata_env();
 
@@ -260,6 +233,8 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+/// Get the environment variables that are set in the current shell
+/// and strip them down to the minimal set required to run a command.
 pub fn get_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
 
@@ -302,18 +277,32 @@ pub fn get_clean_environment_variables() -> HashMap<String, String> {
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
-/// variables from the project.
-pub async fn get_activation_env<'p>(
-    environment: &'p Environment<'p>,
-    lock_file_usage: LockFileUsage,
-) -> miette::Result<&HashMap<String, String>> {
-    // Get the prefix which we can then activate.
-    get_up_to_date_prefix(environment, lock_file_usage, false).await?;
+/// variables from the project and based on the clean_env setting it will also add in the current
+/// shell environment variables.
+pub(crate) async fn initialize_env_variables(
+    environment: &Environment<'_>,
+    env_var_behavior: CurrentEnvVarBehavior,
+) -> miette::Result<HashMap<String, String>> {
+    let activation_env = run_activation(environment, &env_var_behavior).await?;
 
-    environment
-        .project()
-        .get_env_variables(environment, false)
-        .await
+    // Get environment variables from the currently activated shell.
+    let current_shell_env_vars = match env_var_behavior {
+        CurrentEnvVarBehavior::Clean if cfg!(windows) => {
+            return Err(miette::miette!(
+                "Currently it's not possible to run a `clean-env` option on Windows."
+            ));
+        }
+        CurrentEnvVarBehavior::Clean => get_clean_environment_variables(),
+        CurrentEnvVarBehavior::Include => std::env::vars().collect(),
+        CurrentEnvVarBehavior::Exclude => HashMap::new(),
+    };
+
+    let all_variables: HashMap<String, String> = current_shell_env_vars
+        .into_iter()
+        .chain(activation_env)
+        .collect();
+
+    Ok(all_variables)
 }
 
 #[cfg(test)]
