@@ -172,8 +172,8 @@ pub async fn run_activation(
             path_modification_behavior,
         })
     })
-    .await
-    .into_diagnostic()?
+        .await
+        .into_diagnostic()?
     {
         Ok(activator) => activator,
         Err(e) => {
@@ -297,10 +297,7 @@ pub(crate) async fn initialize_env_variables(
         CurrentEnvVarBehavior::Exclude => HashMap::new(),
     };
 
-    let all_variables: HashMap<String, String> = activation_env
-        .into_iter()
-        .chain(current_shell_env_vars.into_iter())
-        .collect();
+    let all_variables: HashMap<String, String> = current_shell_env_vars.into_iter().chain(activation_env).collect();
 
     Ok(all_variables)
 }
