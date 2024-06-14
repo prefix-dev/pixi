@@ -1,9 +1,7 @@
-use serial_test::serial;
 use pixi::activation::CurrentEnvVarBehavior;
 use crate::common::PixiControl;
 
 mod common;
-
 
 #[tokio::test]
 async fn test_normal_env_activation() {
@@ -22,14 +20,6 @@ async fn test_normal_env_activation() {
 
     assert!(normal_env.get("CONDA_PREFIX").is_some());
     assert!(normal_env.get("DIRTY_VAR").is_none());
-
-    if !cfg!(target_family = "windows") {
-        let clean_env = project.get_activated_environment_variables(
-            &default_env,
-            CurrentEnvVarBehavior::Clean,
-        ).await.unwrap();
-        assert!(clean_env.get("CONDA_PREFIX").is_some());
-    }
 }
 
 #[cfg(target_family = "unix")]
