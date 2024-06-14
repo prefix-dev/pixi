@@ -6,25 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.24.2] - 2024-06-14
-### ✨ Highlights
-
-
-
-### 📃 Details
-
 #### Documentation
 - Add readthedocs examples  by @bollwyvl in [#1423](https://github.com/prefix-dev/pixi/pull/1423)
 - Fix typo in  project_configuration.md  by @RaulPL in [#1502](https://github.com/prefix-dev/pixi/pull/1502)
 
 #### Fixed
 - Too much shell variables in activation of `pixi shell`  by @ruben-arts in [#1507](https://github.com/prefix-dev/pixi/pull/1507)
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.24.1] - 2024-06-12
 ### 📃 Details
