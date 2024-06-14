@@ -256,7 +256,7 @@ pub async fn get_task_env<'p>(
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean
     } else {
-        CurrentEnvVarBehavior::Exclude
+        CurrentEnvVarBehavior::Include
     };
     let activation_env = await_in_progress("activating environment", |_| {
         environment
