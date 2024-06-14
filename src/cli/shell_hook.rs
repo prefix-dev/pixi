@@ -10,12 +10,12 @@ use serde::Serialize;
 use serde_json;
 
 use crate::{
-    activation::get_activator,
+    activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
     config::ConfigCliPrompt,
     environment::get_up_to_date_prefix,
-    project::{has_features::HasFeatures, Environment},
-    Project,
+    project::Environment,
+    HasFeatures, Project,
 };
 
 /// Print the pixi environment activation script.
@@ -90,11 +90,13 @@ async fn generate_activation_script(
 async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
     let environment_variables = environment
         .project()
-        .get_env_variables(environment, false)
+        .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
         .await?;
+
     let shell_env = ShellEnv {
         environment_variables,
     };
+
     serde_json::to_string(&shell_env).into_diagnostic()
 }
 

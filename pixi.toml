@@ -67,6 +67,6 @@ pyyaml = ">=6.0.1,<6.1"
 taplo = ">=0.9.1,<0.10"
 
 [environments]
-default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
-docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
-schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}
+default = { features = ["build", "dev", "docs", "schema"], solve-group = "default"}
+docs = { features = ["docs"], no-default-feature = true, solve-group = "default"}
+schema = { features = ["schema"], no-default-feature = true , solve-group = "default"}
