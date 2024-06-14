@@ -3,6 +3,11 @@ use pixi::activation::CurrentEnvVarBehavior;
 
 mod common;
 
+#[cfg(windows)]
+const HOME: &str = "HOMEPATH";
+#[cfg(unix)]
+const HOME: &str = "HOME";
+
 #[tokio::test]
 async fn test_pixi_only_env_activation() {
     let pixi = PixiControl::new().unwrap();
@@ -20,8 +25,8 @@ async fn test_pixi_only_env_activation() {
 
     assert!(pixi_only_env.get("CONDA_PREFIX").is_some());
     assert!(pixi_only_env.get("DIRTY_VAR").is_none());
-    // PWD is not a pixi var, so it is not included in pixi_only.
-    assert!(pixi_only_env.get("PWD").is_none());
+    // This is not a pixi var, so it is not included in pixi_only.
+    assert!(pixi_only_env.get(HOME).is_none());
 }
 
 #[tokio::test]
@@ -40,7 +45,7 @@ async fn test_full_env_activation() {
         .unwrap();
     assert!(full_env.get("CONDA_PREFIX").is_some());
     assert!(full_env.get("DIRTY_VAR").is_some());
-    assert!(full_env.get("PWD").is_some());
+    assert!(full_env.get(HOME).is_some());
 }
 
 #[cfg(target_family = "unix")]
@@ -61,6 +66,6 @@ async fn test_clean_env_activation() {
     assert!(clean_env.get("CONDA_PREFIX").is_some());
     assert!(clean_env.get("DIRTY_VAR").is_none());
 
-    // PWD is not a pixi var, but it is passed into a clean env.
-    assert!(clean_env.get("PWD").is_some());
+    // This is not a pixi var, but it is passed into a clean env.
+    assert!(clean_env.get(HOME).is_some());
 }
