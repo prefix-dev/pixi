@@ -324,7 +324,7 @@ async fn pypi_reinstall_python() {
 
     if cfg!(not(target_os = "windows")) {
         // On non-windows the site-packages should be empty
-        assert!(installed_312.iter().count() == 0);
+        assert_eq!(installed_312.iter().count(), 0);
     } else {
         // Windows should still contain some packages
         // This is because the site-packages is not prefixed with the python version
