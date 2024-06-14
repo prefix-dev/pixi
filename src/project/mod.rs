@@ -90,11 +90,12 @@ impl SpecType {
     }
 }
 
-/// Environment variable cache for both clean and normal environment variables
+/// Environment variable cache for different activations
 #[derive(Debug, Clone)]
 pub struct EnvironmentVars {
     clean: Arc<AsyncCell<HashMap<String, String>>>,
-    normal: Arc<AsyncCell<HashMap<String, String>>>,
+    pixi_only: Arc<AsyncCell<HashMap<String, String>>>,
+    full: Arc<AsyncCell<HashMap<String, String>>>,
 }
 
 impl EnvironmentVars {
@@ -102,7 +103,8 @@ impl EnvironmentVars {
     pub fn new() -> Self {
         Self {
             clean: Arc::new(AsyncCell::new()),
-            normal: Arc::new(AsyncCell::new()),
+            pixi_only: Arc::new(AsyncCell::new()),
+            full: Arc::new(AsyncCell::new()),
         }
     }
 
@@ -111,9 +113,14 @@ impl EnvironmentVars {
         &self.clean
     }
 
-    /// Get the normal environment variables
-    pub fn normal(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
-        &self.normal
+    /// Get the pixi_only environment variables
+    pub fn pixi_only(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.pixi_only
+    }
+
+    /// Get the full environment variables
+    pub fn full(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.full
     }
 }
 
@@ -486,8 +493,15 @@ impl Project {
                     })
                     .await
             }
-            _ => {
-                vars.normal()
+            CurrentEnvVarBehavior::Exclude => {
+                vars.pixi_only()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            CurrentEnvVarBehavior::Include => {
+                vars.full()
                     .get_or_try_init(async {
                         initialize_env_variables(environment, current_env_var_behavior).await
                     })
