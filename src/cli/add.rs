@@ -7,7 +7,6 @@ use std::{
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use rattler_conda_types::{
@@ -21,10 +20,12 @@ use crate::{
     config::ConfigCli,
     environment::{verify_prefix_location_unchanged, LockFileUsage},
     load_lock_file,
-    lock_file::{filter_lock_file, UpdateContext},
+    lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{
-        grouped_environment::GroupedEnvironment, has_features::HasFeatures,
-        manifest::python::PyPiPackageName, DependencyType, Project, SpecType,
+        grouped_environment::GroupedEnvironment,
+        has_features::HasFeatures,
+        manifest::{python::PyPiPackageName, DependencyOverwriteBehavior},
+        DependencyType, Project, SpecType,
     },
     FeatureName,
 };
@@ -217,31 +218,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         DependencyType::CondaDependency(spec_type) => {
             let specs = args.specs()?;
             for (name, spec) in specs {
-                project.manifest.add_dependency(
+                let added = project.manifest.add_dependency(
                     &spec,
                     spec_type,
                     &args.platform,
                     &args.feature_name(),
+                    DependencyOverwriteBehavior::OverwriteIfExplicit,
                 )?;
-                if spec.version.is_none() {
-                    conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                if added {
+                    if spec.version.is_none() {
+                        conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                    }
+                    conda_packages.insert(name);
                 }
-                conda_packages.insert(name);
             }
         }
         DependencyType::PypiDependency => {
             let specs = args.pypi_deps(&project)?;
             for (name, spec) in specs {
-                project.manifest.add_pypi_dependency(
+                let added = project.manifest.add_pypi_dependency(
                     &spec,
                     &args.platform,
                     &args.feature_name(),
                     Some(editable),
+                    DependencyOverwriteBehavior::OverwriteIfExplicit,
                 )?;
-                if spec.version_or_url.is_none() {
-                    pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
+                if added {
+                    if spec.version_or_url.is_none() {
+                        pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
+                    }
+                    pypi_packages.insert(name.as_normalized().clone());
                 }
-                pypi_packages.insert(name.as_normalized().clone());
             }
         }
     }
@@ -262,6 +269,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unique()
         .collect_vec();
+    let default_environment_is_affected =
+        affected_environments.contains(&project.default_environment());
 
     tracing::debug!(
         "environments affected by the add command: {}",
@@ -293,20 +302,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     // Solve the updated project.
-    let updated_lock_file = UpdateContext::builder(&project)
+    let LockFileDerivedData {
+        lock_file,
+        package_cache,
+        uv_context,
+        ..
+    } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
         .with_no_install(args.no_install || args.no_lockfile_update)
         .finish()?
         .update()
-        .await?
-        .lock_file;
+        .await?;
 
     // Update the constraints of specs that didn't have a version constraint based
     // on the contents of the lock-file.
     let implicit_constraints = if !conda_specs_to_add_constraints_for.is_empty() {
         update_conda_specs_from_lock_file(
             &mut project,
-            &updated_lock_file,
+            &lock_file,
             conda_specs_to_add_constraints_for,
             affect_environment_and_platforms,
             &feature_name,
@@ -315,7 +328,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else if !pypi_specs_to_add_constraints_for.is_empty() {
         update_pypi_specs_from_lock_file(
             &mut project,
-            &updated_lock_file,
+            &lock_file,
             pypi_specs_to_add_constraints_for,
             affect_environment_and_platforms,
             &feature_name,
@@ -327,11 +340,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Write the lock-file and the project to disk
-    updated_lock_file
-        .to_path(&project.lock_file_path())
-        .into_diagnostic()
-        .context("failed to write lock-file to disk")?;
     project.save()?;
+
+    // Reconstruct the lock-file derived data.
+    let mut updated_lock_file = LockFileDerivedData {
+        project: &project,
+        lock_file,
+        package_cache,
+        updated_conda_prefixes: Default::default(),
+        updated_pypi_prefixes: Default::default(),
+        uv_context,
+    };
+    if !args.no_lockfile_update {
+        updated_lock_file.write_to_disk()?;
+    }
+
+    // Install/update the default environment if:
+    // - we are not skipping the installation,
+    // - there is only the default environment,
+    // - and the default environment is affected by the changes,
+    if !args.no_install && project.environments().len() == 1 && default_environment_is_affected {
+        updated_lock_file
+            .prefix(&project.default_environment())
+            .await?;
+    }
 
     // Notify the user we succeeded.
     args.display_success("Added", implicit_constraints);
@@ -369,7 +401,13 @@ fn update_pypi_specs_from_lock_file(
         let version_constraint = determine_version_constraint(
             pypi_records
                 .iter()
-                .filter_map(|(data, _)| Version::from_str(&data.version.to_string()).ok())
+                .filter_map(|(data, _)| {
+                    if &data.name == name.as_normalized() {
+                        Version::from_str(&data.version.to_string()).ok()
+                    } else {
+                        None
+                    }
+                })
                 .collect_vec()
                 .iter(),
         );
@@ -389,6 +427,7 @@ fn update_pypi_specs_from_lock_file(
                 platforms,
                 feature_name,
                 Some(editable),
+                DependencyOverwriteBehavior::Overwrite,
             )?;
         }
     }
@@ -446,6 +485,7 @@ fn update_conda_specs_from_lock_file(
                 spec_type,
                 platforms,
                 feature_name,
+                DependencyOverwriteBehavior::Overwrite,
             )?;
         }
     }

@@ -70,3 +70,6 @@ taplo = ">=0.9.1,<0.10"
 default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
 docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
 schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}
+
+[pypi-dependencies]
+boltons = ">=24.0.0, <24.1"

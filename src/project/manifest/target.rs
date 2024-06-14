@@ -1,25 +1,27 @@
-use crate::project::manifest::activation::Activation;
-use crate::project::manifest::python::PyPiPackageName;
-use crate::task::TaskName;
-use crate::utils::spanned::PixiSpanned;
-use crate::{
-    project::{manifest::PyPiRequirement, SpecType},
-    task::Task,
-};
-use indexmap::map::Entry;
-use indexmap::IndexMap;
+use std::{borrow::Cow, collections::HashMap, str::FromStr};
+
+use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::str::FromStr;
 
 use super::error::DependencyError;
+use crate::{
+    project::{
+        manifest::{
+            activation::Activation, python::PyPiPackageName, DependencyOverwriteBehavior,
+            PyPiRequirement,
+        },
+        SpecType,
+    },
+    task::{Task, TaskName},
+    utils::spanned::PixiSpanned,
+};
 
-/// A target describes the dependencies, activations and task available to a specific feature, in
-/// a specific environment, and optionally for a specific platform.
+/// A target describes the dependencies, activations and task available to a
+/// specific feature, in a specific environment, and optionally for a specific
+/// platform.
 #[derive(Default, Debug, Clone)]
 pub struct Target {
     /// Dependencies for this target.
@@ -51,16 +53,17 @@ impl Target {
         self.dependencies.get(&SpecType::Build)
     }
 
-    /// Returns the dependencies to use for the given `spec_type`. If `None` is specified, the
-    /// combined dependencies are returned.
+    /// Returns the dependencies to use for the given `spec_type`. If `None` is
+    /// specified, the combined dependencies are returned.
     ///
-    /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
-    /// dependencies.
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
     ///
-    /// This function returns `None` if no dependencies are specified for the given `spec_type`.
+    /// This function returns `None` if no dependencies are specified for the
+    /// given `spec_type`.
     ///
-    /// This function returns a `Cow` to avoid cloning the dependencies if they can be returned
-    /// directly from the underlying map.
+    /// This function returns a `Cow` to avoid cloning the dependencies if they
+    /// can be returned directly from the underlying map.
     pub fn dependencies(
         &self,
         spec_type: Option<SpecType>,
@@ -74,13 +77,14 @@ impl Target {
 
     /// Determines the combined set of dependencies.
     ///
-    /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
-    /// dependencies.
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
     ///
-    /// This function returns `None` if no dependencies are specified for the given `spec_type`.
+    /// This function returns `None` if no dependencies are specified for the
+    /// given `spec_type`.
     ///
-    /// This function returns a `Cow` to avoid cloning the dependencies if they can be returned
-    /// directly from the underlying map.
+    /// This function returns a `Cow` to avoid cloning the dependencies if they
+    /// can be returned directly from the underlying map.
     fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
         let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
@@ -166,12 +170,22 @@ impl Target {
         dep_name: &PackageName,
         spec: &NamelessMatchSpec,
         spec_type: SpecType,
-    ) -> Result<(), DependencyError> {
-        if self.has_dependency(dep_name, Some(spec_type), Some(spec)) {
-            return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
+        dependency_overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> Result<bool, DependencyError> {
+        if self.has_dependency(dep_name, Some(spec_type), None) {
+            match dependency_overwrite_behavior {
+                DependencyOverwriteBehavior::OverwriteIfExplicit if spec.version.is_none() => {
+                    return Ok(false)
+                }
+                DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
+                DependencyOverwriteBehavior::Error => {
+                    return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
+                }
+                _ => {}
+            }
         }
         self.add_dependency(dep_name, spec, spec_type);
-        Ok(())
+        Ok(true)
     }
 
     /// Checks if this target contains a specific pypi dependency
@@ -232,16 +246,29 @@ impl Target {
         &mut self,
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
-    ) -> Result<(), DependencyError> {
-        if self.has_pypi_dependency(requirement, true) {
-            return Err(DependencyError::Duplicate(requirement.name.to_string()));
+        dependency_overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> Result<bool, DependencyError> {
+        if self.has_pypi_dependency(requirement, false) {
+            match dependency_overwrite_behavior {
+                DependencyOverwriteBehavior::OverwriteIfExplicit
+                    if requirement.version_or_url.is_none() =>
+                {
+                    return Ok(false)
+                }
+                DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
+                DependencyOverwriteBehavior::Error => {
+                    return Err(DependencyError::Duplicate(requirement.name.to_string()));
+                }
+                _ => {}
+            }
         }
         self.add_pypi_dependency(requirement, editable);
-        Ok(())
+        Ok(true)
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform selection.
+/// Represents a target selector. Currently we only support explicit platform
+/// selection.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
@@ -360,8 +387,8 @@ impl<'de> Deserialize<'de> for Target {
 pub struct Targets {
     default_target: Target,
 
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
-    /// manifest.
+    /// We use an [`IndexMap`] to preserve the order in which the items where
+    /// defined in the manifest.
     targets: IndexMap<TargetSelector, Target>,
 
     /// The source location of the target selector in the manifest.
@@ -369,7 +396,8 @@ pub struct Targets {
 }
 
 impl Targets {
-    /// Constructs a new [`Targets`] from a default target and additional user defined targets.
+    /// Constructs a new [`Targets`] from a default target and additional user
+    /// defined targets.
     pub fn from_default_and_user_defined(
         default_target: Target,
         user_defined_targets: IndexMap<PixiSpanned<TargetSelector>, Target>,
@@ -400,11 +428,12 @@ impl Targets {
         &mut self.default_target
     }
 
-    /// Returns all the targets that apply for the given platform. If no platform is specified, only
-    /// the default target is returned.
+    /// Returns all the targets that apply for the given platform. If no
+    /// platform is specified, only the default target is returned.
     ///
-    /// Multiple selectors might match for a given platform. This function returns all of them in
-    /// order, with the most specific selector first and the default target last.
+    /// Multiple selectors might match for a given platform. This function
+    /// returns all of them in order, with the most specific selector first
+    /// and the default target last.
     ///
     /// This also always includes the default target.
     pub fn resolve(
@@ -420,8 +449,9 @@ impl Targets {
 
     /// Returns all the targets that apply for the given platform.
     ///
-    /// Multiple selectors might match for a given platform. This function returns all of them in
-    /// order, with the most specific selector first and the default target last.
+    /// Multiple selectors might match for a given platform. This function
+    /// returns all of them in order, with the most specific selector first
+    /// and the default target last.
     ///
     /// This also always includes the default target.
     ///
@@ -447,8 +477,8 @@ impl Targets {
         self.targets.get(target)
     }
 
-    /// Returns the target for the given target selector or the default target if the selector is
-    /// `None`.
+    /// Returns the target for the given target selector or the default target
+    /// if the selector is `None`.
     pub fn for_opt_target(&self, target: Option<&TargetSelector>) -> Option<&Target> {
         if let Some(sel) = target {
             self.targets.get(sel)
@@ -457,8 +487,8 @@ impl Targets {
         }
     }
 
-    /// Returns the target for the given target selector or the default target if no target is
-    /// specified.
+    /// Returns the target for the given target selector or the default target
+    /// if no target is specified.
     pub fn for_opt_target_mut(&mut self, target: Option<&TargetSelector>) -> Option<&mut Target> {
         if let Some(sel) = target {
             self.targets.get_mut(sel)
@@ -467,10 +497,11 @@ impl Targets {
         }
     }
 
-    /// Returns the target for the given target selector or the default target if no target is
-    /// specified.
+    /// Returns the target for the given target selector or the default target
+    /// if no target is specified.
     ///
-    /// If a target is specified and it does not exist the default target is returned instead.
+    /// If a target is specified and it does not exist the default target is
+    /// returned instead.
     pub fn for_opt_target_or_default(&self, target: Option<&TargetSelector>) -> &Target {
         if let Some(sel) = target {
             self.targets.get(sel).unwrap_or(&self.default_target)
@@ -479,8 +510,8 @@ impl Targets {
         }
     }
 
-    /// Returns a mutable reference to the target for the given target selector or the default
-    /// target if no target is specified.
+    /// Returns a mutable reference to the target for the given target selector
+    /// or the default target if no target is specified.
     ///
     /// If a target is specified and it does not exist, it will be created.
     pub fn for_opt_target_or_default_mut(
@@ -523,10 +554,12 @@ impl Targets {
 
 #[cfg(test)]
 mod tests {
-    use crate::Project;
+    use std::path::Path;
+
     use insta::assert_snapshot;
     use itertools::Itertools;
-    use std::path::Path;
+
+    use crate::Project;
 
     #[test]
     fn test_targets_overwrite_order() {

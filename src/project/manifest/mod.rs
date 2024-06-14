@@ -113,6 +113,21 @@ pub struct Manifest {
     pub parsed: ProjectManifest,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum DependencyOverwriteBehavior {
+    /// Overwrite anything that is already present.
+    Overwrite,
+
+    /// Overwrite only if the dependency is explicitly defined (e.g it has some constraints).
+    OverwriteIfExplicit,
+
+    /// Ignore any duplicate
+    IgnoreDuplicate,
+
+    /// Error on duplicate
+    Error,
+}
+
 impl Borrow<ProjectManifest> for Manifest {
     fn borrow(&self) -> &ProjectManifest {
         &self.parsed
@@ -391,29 +406,34 @@ impl Manifest {
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+        overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> miette::Result<bool> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
+        let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_dependency(&name, &spec, spec_type)
+                .try_add_dependency(&name, &spec, spec_type, overwrite_behavior)
             {
-                Ok(_) => (),
-                Err(DependencyError::Duplicate(e)) => {
-                    tracing::warn!("Dependency `{}` already existed, overwriting", e);
+                Ok(true) => {
+                    self.document.add_dependency(
+                        &name,
+                        &spec,
+                        spec_type,
+                        platform,
+                        feature_name,
+                    )?;
+                    any_added = true;
                 }
+                Ok(false) => {}
                 Err(e) => return Err(e.into()),
             };
-
-            // and to the TOML document
-            self.document
-                .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
         }
-        Ok(())
+        Ok(any_added)
     }
 
     /// Add a pypi requirement to the manifest
@@ -423,24 +443,29 @@ impl Manifest {
         platforms: &[Platform],
         feature_name: &FeatureName,
         editable: Option<bool>,
-    ) -> miette::Result<()> {
+        overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> miette::Result<bool> {
+        let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the pypi dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pypi_dependency(requirement, editable)
+                .try_add_pypi_dependency(requirement, editable, overwrite_behavior)
             {
-                Ok(_) => (),
-                Err(DependencyError::Duplicate(e)) => {
-                    tracing::warn!("Dependency `{}` already existed, overwriting", e);
+                Ok(true) => {
+                    self.document.add_pypi_dependency(
+                        requirement,
+                        platform,
+                        feature_name,
+                        editable,
+                    )?;
+                    any_added = true;
                 }
+                Ok(false) => {}
                 Err(e) => return Err(e.into()),
             };
-            // and to the TOML document
-            self.document
-                .add_pypi_dependency(requirement, platform, feature_name, editable)?;
         }
-        Ok(())
+        Ok(any_added)
     }
 
     /// Removes a dependency based on `SpecType`.
@@ -2645,10 +2670,11 @@ bar = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),
+                &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap(),
                 SpecType::Run,
                 &[],
                 &FeatureName::Default,
+                DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
         assert_eq!(
@@ -2670,6 +2696,7 @@ bar = "*"
                 SpecType::Run,
                 &[],
                 &FeatureName::Named("test".to_string()),
+                DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
 
@@ -2694,6 +2721,7 @@ bar = "*"
                 SpecType::Run,
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
+                DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
 
@@ -2719,6 +2747,7 @@ bar = "*"
                 SpecType::Build,
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
+                DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
 
