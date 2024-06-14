@@ -14,6 +14,7 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     cli::LockFileUsageArgs,
     config::ConfigCliPrompt,
+    environment::get_up_to_date_prefix,
     project::{
         manifest::EnvironmentName,
         virtual_packages::verify_current_platform_has_required_virtual_packages,
@@ -216,6 +217,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         EnvironmentName::Default => project.name().to_string(),
         EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
     };
+
+    // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
+    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
