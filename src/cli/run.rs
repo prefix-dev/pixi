@@ -15,7 +15,7 @@ use crate::task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
-use crate::Project;
+use crate::{HasFeatures, Project};
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -259,7 +259,7 @@ pub async fn get_task_env<'p>(
         CurrentEnvVarBehavior::Exclude
     };
     let activation_env = await_in_progress("activating environment", |_| {
-        environment.get_activated_env_variables(env_var_behavior)
+        environment.project().get_activated_environment_variables(environment, env_var_behavior)
     })
     .await
     .wrap_err("failed to activate environment")?;

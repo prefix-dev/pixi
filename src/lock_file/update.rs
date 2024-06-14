@@ -151,8 +151,9 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment
-            .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
+        let env_variables = self
+            .project
+            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
             .await?;
 
         // Update the prefix with Pypi records
@@ -987,7 +988,7 @@ impl<'p> UpdateContext<'p> {
             .outdated_envs
             .pypi
             .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env.clone(), *p)))
+            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -1008,8 +1009,8 @@ impl<'p> UpdateContext<'p> {
             }
 
             // Get environment variables from the activation
-            let env_variables = environment
-                .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
+            let env_variables = project
+                .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available
@@ -1044,7 +1045,7 @@ impl<'p> UpdateContext<'p> {
                 platform,
                 repodata_future,
                 prefix_future,
-                &env_variables,
+                env_variables,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,

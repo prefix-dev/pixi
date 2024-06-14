@@ -218,8 +218,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = environment
-        .get_activated_env_variables(CurrentEnvVarBehavior::Exclude)
+    let env = project
+        .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
         .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);

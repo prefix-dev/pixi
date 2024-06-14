@@ -34,6 +34,7 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
     config::Config,
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
@@ -89,6 +90,33 @@ impl SpecType {
     }
 }
 
+/// Environment variable cache for both clean and normal environment variables
+#[derive(Debug, Clone)]
+pub struct EnvironmentVars {
+    clean: Arc<AsyncCell<HashMap<String, String>>>,
+    normal: Arc<AsyncCell<HashMap<String, String>>>,
+}
+
+impl EnvironmentVars {
+    /// Create a new instance with empty AsyncCells
+    pub fn new() -> Self {
+        Self {
+            clean: Arc::new(AsyncCell::new()),
+            normal: Arc::new(AsyncCell::new()),
+        }
+    }
+
+    /// Get the clean environment variables
+    pub fn clean(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.clean
+    }
+
+    /// Get the normal environment variables
+    pub fn normal(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.normal
+    }
+}
+
 /// The pixi project, this main struct to interact with the project. This struct
 /// holds the `Manifest` and has functions to modify or request information from
 /// it. This allows in the future to have multiple environments or manifests
@@ -106,8 +134,9 @@ pub struct Project {
     repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
-    /// The cache that contains environment variables
-    env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The environment variables that are activated when the environment is activated.
+    /// Cached per environment, for both clean and normal
+    env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     /// The cache that contains mapping
     mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
@@ -152,13 +181,11 @@ impl Project {
         }
     }
 
-    //Initialize empty map of environments variables
-    fn init_env_vars(
-        environments: &Environments,
-    ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
+    /// Initialize empty map of environments variables
+    fn init_env_vars(environments: &Environments) -> HashMap<EnvironmentName, EnvironmentVars> {
         environments
             .iter()
-            .map(|environment| (environment.name.clone(), Arc::new(AsyncCell::new())))
+            .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
     }
 
@@ -439,6 +466,35 @@ impl Project {
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
+    /// Get or initialize the activated environment variables
+    pub async fn get_activated_environment_variables(
+        &self,
+        environment: &Environment<'_>,
+        current_env_var_behavior: CurrentEnvVarBehavior,
+    ) -> miette::Result<&HashMap<String, String>> {
+        let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
+        match current_env_var_behavior {
+            CurrentEnvVarBehavior::Clean => {
+                vars.clean()
+                    .get_or_try_init(async {
+                        initialize_env_variables(&environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            _ => {
+                vars.normal()
+                    .get_or_try_init(async {
+                        initialize_env_variables(&environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+        }
+    }
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest

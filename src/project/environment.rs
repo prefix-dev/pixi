@@ -3,10 +3,9 @@ use std::{
     fmt::Debug,
     fs,
     hash::{Hash, Hasher},
-    sync::{Arc, Once},
+    sync::Once,
 };
 
-use async_once_cell::OnceCell as AsyncCell;
 use itertools::Either;
 use rattler_conda_types::{Arch, Platform};
 
@@ -16,7 +15,7 @@ use super::{
     SolveGroup,
 };
 use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables}, consts,
+    consts,
     project::has_features::HasFeatures,
     task::{Task, TaskName},
     Project,
@@ -41,10 +40,6 @@ pub struct Environment<'p> {
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
-
-    /// The environment variables that are activated when the environment is activated.
-    activated_environment_variables_clean: Arc<AsyncCell<HashMap<String, String>>>,
-    activated_environment_variables_normal: Arc<AsyncCell<HashMap<String, String>>>,
 }
 
 impl Debug for Environment<'_> {
@@ -71,8 +66,6 @@ impl<'p> Environment<'p> {
         Self {
             project,
             environment,
-            activated_environment_variables_clean: Arc::new(AsyncCell::new()),
-            activated_environment_variables_normal: Arc::new(AsyncCell::new()),
         }
     }
 
@@ -206,35 +199,6 @@ impl<'p> Environment<'p> {
             }),
             Ok(Some(task)) => Ok(task),
         }
-    }
-
-    /// Return a combination of static environment variables generated from the
-    /// project and the environment and from running activation script
-    ///
-    /// If `clean_env` is `Some(true)`, the activation env will include a cleaned shell environment.
-    /// If `clean_env` is `Some(false)`, the activation env will include the current shell environment.
-    /// If `clean_env` is `None`, the activation env will not include the shell environment.
-    pub async fn get_activated_env_variables(
-        &self,
-        env_var_behavior: CurrentEnvVarBehavior,
-    ) -> Result<HashMap<String, String>, miette::Report> {
-        match env_var_behavior {
-            // Only save clean or normal env variables once
-            CurrentEnvVarBehavior::Clean => {
-                self.activated_environment_variables_clean
-                    .get_or_try_init(async move {
-                        initialize_env_variables(&self, env_var_behavior).await
-                    })
-                    .await
-            }
-            _ => {
-                self.activated_environment_variables_normal
-                    .get_or_try_init(async move {
-                        initialize_env_variables(&self, env_var_behavior).await
-                    })
-                    .await
-            }
-        }.cloned()
     }
 
     /// Returns the system requirements for this environment.
