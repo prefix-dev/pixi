@@ -1275,7 +1275,7 @@
 <ul>
 <li>Make sure main is up-to-date and ci passes: <a href="https://github.com/prefix-dev/pixi/actions/workflows/rust.yml?query=branch%3Amain+"><img alt="build-badge" src="https://img.shields.io/github/actions/workflow/status/prefix-dev/pixi/rust.yml?style=flat-square&amp;branch=main" /></a></li>
 <li>Set the variable <code>export RELEASE_VERSION=X.Y.Z</code> in your shell</li>
-<li>Make a new branch for the release: <code>git fetch upstream &amp;&amp; git checkout -b bump/prepare-v$RELEASE_VERSION upstream/main</code></li>
+<li>Make a new branch for the release: <code>git checkout main &amp;&amp; git pull upstream main &amp;&amp; git checkout -b bump/prepare-v$RELEASE_VERSION</code></li>
 <li>Bump all versions: <code>pixi run bump</code></li>
 <li>Update the changelog: <code>pixi run bump-changelog</code><ul>
 <li>Don't forget to update the "Highlights" section.</li>
