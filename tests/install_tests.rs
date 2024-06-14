@@ -301,6 +301,11 @@ async fn pypi_reinstall_python() {
         .set_type(pixi::DependencyType::PypiDependency)
         .await
         .unwrap();
+    assert!(pixi.lock_file().await.unwrap().contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.11"
+    ));
 
     let prefix = pixi.default_env_path().unwrap();
 
@@ -318,6 +323,11 @@ async fn pypi_reinstall_python() {
 
     // Reinstall python
     pixi.add("python==3.12").with_install(true).await.unwrap();
+    assert!(pixi.lock_file().await.unwrap().contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.12"
+    ));
 
     // Check if site-packages has entries, should be empty now
     let installed_312 = uv_installer::SitePackages::from_executable(&env).unwrap();

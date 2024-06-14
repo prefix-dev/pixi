@@ -306,6 +306,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         lock_file,
         package_cache,
         uv_context,
+        updated_conda_prefixes,
+        updated_pypi_prefixes,
         ..
     } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
@@ -347,8 +349,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &project,
         lock_file,
         package_cache,
-        updated_conda_prefixes: Default::default(),
-        updated_pypi_prefixes: Default::default(),
+        updated_conda_prefixes,
+        updated_pypi_prefixes,
         uv_context,
     };
     if !args.no_lockfile_update {
