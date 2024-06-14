@@ -9,21 +9,21 @@ use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 
+use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::verify_prefix_location_unchanged;
+use crate::lock_file::LockFileDerivedData;
+use crate::lock_file::UpdateLockFileOptions;
+use crate::progress::await_in_progress;
 use crate::project::errors::UnsupportedPlatformError;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::project::Environment;
 use crate::task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::{HasFeatures, Project};
-use crate::lock_file::LockFileDerivedData;
-use crate::lock_file::UpdateLockFileOptions;
-use crate::progress::await_in_progress;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
-use crate::activation::CurrentEnvVarBehavior;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
@@ -259,7 +259,9 @@ pub async fn get_task_env<'p>(
         CurrentEnvVarBehavior::Exclude
     };
     let activation_env = await_in_progress("activating environment", |_| {
-        environment.project().get_activated_environment_variables(environment, env_var_behavior)
+        environment
+            .project()
+            .get_activated_environment_variables(environment, env_var_behavior)
     })
     .await
     .wrap_err("failed to activate environment")?;

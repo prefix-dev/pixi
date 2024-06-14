@@ -482,14 +482,14 @@ impl Project {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(&environment, current_env_var_behavior).await
+                        initialize_env_variables(environment, current_env_var_behavior).await
                     })
                     .await
             }
             _ => {
                 vars.normal()
                     .get_or_try_init(async {
-                        initialize_env_variables(&environment, current_env_var_behavior).await
+                        initialize_env_variables(environment, current_env_var_behavior).await
                     })
                     .await
             }

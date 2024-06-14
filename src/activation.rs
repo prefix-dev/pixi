@@ -19,7 +19,6 @@ use crate::{
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
 
-
 pub enum CurrentEnvVarBehavior {
     /// Clean the environment variables of the current shell.
     /// This will return the minimal set of environment variables that are required to run the command.
@@ -143,7 +142,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
-    env_var_behavior: &CurrentEnvVarBehavior
+    env_var_behavior: &CurrentEnvVarBehavior,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(

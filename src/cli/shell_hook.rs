@@ -90,7 +90,7 @@ async fn generate_activation_script(
 async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
     let environment_variables = environment
         .project()
-        .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
         .await?;
 
     let shell_env = ShellEnv {

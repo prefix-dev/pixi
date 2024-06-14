@@ -167,7 +167,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             &uv_context,
             &environment.pypi_options(),
-            &env_variables,
+            env_variables,
             self.project.root(),
             environment.best_platform(),
         )
@@ -1010,7 +1010,7 @@ impl<'p> UpdateContext<'p> {
 
             // Get environment variables from the activation
             let env_variables = project
-                .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
+                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available
