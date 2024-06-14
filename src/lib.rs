@@ -1,4 +1,4 @@
-mod activation;
+pub mod activation;
 pub mod cli;
 pub(crate) mod conda_pypi_clobber;
 pub mod config;
