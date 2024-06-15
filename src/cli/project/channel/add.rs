@@ -1,10 +1,8 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::FeatureName;
 use crate::Project;
 use clap::Parser;
-use miette::IntoDiagnostic;
-use rattler_conda_types::Channel;
+
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The channel name or URL
@@ -26,25 +24,12 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .map_or(FeatureName::Default, FeatureName::Named);
 
     // Determine which channels are missing
-    let channels = args
-        .channel
-        .into_iter()
-        .map(|channel_str| {
-            Channel::from_str(&channel_str, project.config().channel_config())
-                .map(|channel| (channel_str, channel))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+    let channels = project.resolve_prioritized_channels(args.channel)?;
 
     // Add the channels to the manifest
-    project.manifest.add_channels(
-        channels
-            .clone()
-            .into_iter()
-            .map(|(_name, channel)| channel)
-            .map(PrioritizedChannel::from_channel),
-        &feature_name,
-    )?;
+    project
+        .manifest
+        .add_channels(channels.values().cloned(), &feature_name)?;
 
     // TODO: Update all environments touched by the features defined.
     get_up_to_date_prefix(
@@ -60,7 +45,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
             "{}Added {} ({})",
             console::style(console::Emoji("✔ ", "")).green(),
             name,
-            channel.base_url()
+            channel.channel.base_url()
         );
     }
 

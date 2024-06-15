@@ -1,11 +1,8 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 
-use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::FeatureName;
 use crate::Project;
 use clap::Parser;
-use miette::IntoDiagnostic;
-use rattler_conda_types::Channel;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -28,25 +25,12 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .map_or(FeatureName::Default, FeatureName::Named);
 
     // Determine which channels to remove
-    let channels = args
-        .channel
-        .into_iter()
-        .map(|channel_str| {
-            Channel::from_str(&channel_str, project.config().channel_config())
-                .map(|channel| (channel_str, channel))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+    let channels = project.resolve_prioritized_channels(args.channel)?;
 
     // Remove the channels from the manifest
-    project.manifest.remove_channels(
-        channels
-            .clone()
-            .into_iter()
-            .map(|(_name, channel)| channel)
-            .map(PrioritizedChannel::from_channel),
-        &feature_name,
-    )?;
+    project
+        .manifest
+        .remove_channels(channels.values().cloned(), &feature_name)?;
 
     // Try to update the lock-file without the removed channels
     get_up_to_date_prefix(
@@ -63,7 +47,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
             "{}Removed {} ({})",
             console::style(console::Emoji("✔ ", "")).green(),
             name,
-            channel.base_url()
+            channel.channel.base_url()
         );
     }
 

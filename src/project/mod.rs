@@ -23,10 +23,10 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 use indexmap::Equivalent;
-use manifest::{EnvironmentName, Manifest};
+use manifest::{channel::PrioritizedChannel, EnvironmentName, Manifest};
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::Version;
+use rattler_conda_types::{Channel, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -167,10 +167,14 @@ impl Borrow<ProjectManifest> for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub fn from_manifest(manifest: Manifest) -> Self {
+    fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
+        let root = manifest
+            .path
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
 
         let config = Config::load(&root);
 
@@ -197,7 +201,6 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
-    /// Assumes the manifest is a Pixi manifest
     pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
@@ -221,7 +224,7 @@ impl Project {
                         );
                     }
                 }
-                return Self::load(Path::new(env_manifest_path.as_str()));
+                return Self::from_path(Path::new(env_manifest_path.as_str()));
             }
         }
 
@@ -234,7 +237,7 @@ impl Project {
             ),
         };
 
-        Self::load(&project_toml)
+        Self::from_path(&project_toml)
     }
 
     /// Returns the source code of the project as [`NamedSource`].
@@ -244,41 +247,16 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
-        // Determine the parent directory of the manifest file
-        let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
-
-        let root = full_path
-            .parent()
-            .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
-
-        // Load the TOML document
+    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
-
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
-
-        // Load the user configuration from the local project and all default locations
-        let config = Config::load(root);
-
-        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
-
-        Ok(Self {
-            root: root.to_owned(),
-            client,
-            authenticated_client,
-            manifest,
-            env_vars,
-            mapping_source: Default::default(),
-            config,
-            repodata_gateway: Default::default(),
-        })
+        Ok(Project::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
-            Some(path) => Project::load(path)?,
+            Some(path) => Project::from_path(path)?,
             None => Project::discover()?,
         };
         Ok(project)
@@ -551,6 +529,21 @@ impl Project {
                 .map(GroupedEnvironment::from),
         );
         environments.into_iter().collect()
+    }
+
+    /// Computes channels (as prioritized channels) from a list of strings, and the project's channel config
+    pub fn resolve_prioritized_channels(
+        &self,
+        channels: Vec<String>,
+    ) -> miette::Result<HashMap<String, PrioritizedChannel>> {
+        channels
+            .into_iter()
+            .map(|channel_str| {
+                Channel::from_str(&channel_str, self.config().channel_config())
+                    .map(|channel| (channel_str, PrioritizedChannel::from_channel(channel)))
+            })
+            .collect::<Result<HashMap<_, _>, _>>()
+            .into_diagnostic()
     }
 
     /// Returns true if the project contains any reference pypi dependencies.

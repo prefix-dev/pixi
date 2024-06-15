@@ -122,8 +122,9 @@ impl Borrow<ProjectManifest> for Manifest {
 impl Manifest {
     /// Create a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
+        let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
         let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
-        Self::from_str(path.as_ref(), contents)
+        Self::from_str(manifest_path.as_ref(), contents)
     }
 
     /// Return the toml manifest file name ('pixi.toml' or 'pyproject.toml')
@@ -199,8 +200,6 @@ impl Manifest {
             .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
             .targets
             .resolve(platform)
-            .collect_vec()
-            .into_iter()
             .rev()
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.clone(), task))
@@ -738,15 +737,6 @@ impl Manifest {
         Q: Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
-    }
-
-    /// Returns the solve group with the given name or `None` if it does not
-    /// exist.
-    pub fn solve_group<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
-    where
-        Q: Hash + Equivalent<String>,
-    {
-        self.parsed.solve_groups.find(name)
     }
 }
 
