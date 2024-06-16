@@ -6,6 +6,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 
+use crate::consts;
 use miette::{Context, IntoDiagnostic};
 use reqwest::Client;
 use serde::Deserialize;
@@ -39,7 +40,7 @@ struct GithubReleaseAsset {
 }
 
 fn user_agent() -> String {
-    format!("pixi {}", env!("CARGO_PKG_VERSION"))
+    format!("pixi {}", consts::PIXI_VERSION)
 }
 
 fn default_archive_name() -> Option<String> {
@@ -99,7 +100,7 @@ You can always use `pixi self-update --force` to force the update.",
     let target_version = target_version_json.tag_name.trim_start_matches('v');
 
     // Get the current version of the pixi binary
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = consts::PIXI_VERSION;
 
     // Stop here if the target version is the same as the current version
     if target_version == current_version {

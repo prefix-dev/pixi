@@ -239,3 +239,46 @@ async fn test_task_with_env() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout, "From a world with spaces\n");
 }
+
+#[tokio::test]
+async fn test_clean_env() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    std::env::set_var("HELLO", "world from env");
+
+    pixi.tasks()
+        .add("env-test".into(), None, FeatureName::Default)
+        .with_commands(["echo Hello is: $HELLO"])
+        .execute()
+        .unwrap();
+
+    let run = pixi.run(Args {
+        task: vec!["env-test".to_string()],
+        manifest_path: None,
+        clean_env: true,
+        ..Default::default()
+    });
+
+    if cfg!(windows) {
+        // Clean env running not supported on windows.
+        run.await.unwrap_err();
+    } else {
+        let result = run.await.unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.stdout, "Hello is:\n");
+    }
+
+    let result = pixi
+        .run(Args {
+            task: vec!["env-test".to_string()],
+            manifest_path: None,
+            clean_env: false,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "Hello is: world from env\n");
+}

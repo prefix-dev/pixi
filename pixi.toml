@@ -17,7 +17,7 @@ install = "cargo install --path . --locked"
 test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
-bump = "tbump --only-patch"
+bump = "tbump --only-patch $RELEASE_VERSION"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 
 [feature.dev.dependencies]
@@ -34,6 +34,7 @@ pkg-config = "0.29.*"
 git = "2.42.0.*"
 [feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
+make = ">=4.3,<5"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
@@ -43,6 +44,7 @@ pillow = ">=9.4.0"
 cairosvg = "2.7.1.*"
 mike = "2.0.0.*"
 mkdocs-redirects = ">=1.2.1,<2"
+git-cliff = ">=2.2.1,<2.4"
 
 [feature.docs.tasks]
 build-docs = "mkdocs build --strict"
@@ -50,6 +52,7 @@ docs = "mkdocs serve"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 deploy-dev = "mike deploy --push dev devel"
 mike-serve = "mike serve"
+bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
@@ -66,6 +69,6 @@ pyyaml = ">=6.0.1,<6.1"
 taplo = ">=0.9.1,<0.10"
 
 [environments]
-default = { features = ["build", "dev", "docs", "schema"], solve-group = "one"}
-docs = { features = ["docs"], no-default-feature = true, solve-group = "one"}
-schema = { features = ["schema"], no-default-feature = true , solve-group = "one"}
+default = { features = ["build", "dev", "docs", "schema"], solve-group = "default"}
+docs = { features = ["docs"], no-default-feature = true, solve-group = "default"}
+schema = { features = ["schema"], no-default-feature = true , solve-group = "default"}

@@ -239,7 +239,7 @@ impl<'p> ExecutableTask<'p> {
     /// that caused the task to not be skipped - we can use this later to update the cache file quickly.
     pub(crate) async fn can_skip(
         &self,
-        lock_file: &LockFileDerivedData<'_>,
+        lock_file: &LockFileDerivedData<'p>,
     ) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
         let cache_name = self.cache_name();
