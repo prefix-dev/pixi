@@ -35,13 +35,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.0
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
         with:
           run-install: false
-      - run: |
+      - name: Update lockfiles
+        run: |
           pixi global install pixi-diff-to-markdown
-          pixi update --json | pixi-diff-to-markdown >> diff.md
-      - uses: peter-evans/create-pull-request@v6
+          pixi update --json --no-install | pixi-diff-to-markdown >> diff.md
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: Update pixi lockfile
