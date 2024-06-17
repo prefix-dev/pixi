@@ -27,8 +27,8 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Update pixi lockfile
-          title: Update pixi lockfile
+          commit-message: 'bump: update pixi lockfile'
+          title: 'bump: update pixi lockfile'
           body-path: diff.md
           branch: update-pixi
           base: main
