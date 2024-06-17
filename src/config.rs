@@ -1,7 +1,9 @@
 use clap::{ArgAction, Parser};
 use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
+use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
+use std::cmp::PartialEq;
 use std::collections::{BTreeSet as Set, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -215,6 +217,27 @@ impl PyPIConfig {
     }
 }
 
+/// The strategy for that will be used for pinning a version of a package.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PinningStrategy {
+    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <1.3"
+    #[default]
+    PinLatestMinor,
+    /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
+    PinHigherOrEqualLatest,
+    /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
+    PinExactVersion,
+    /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
+    NoPin,
+}
+impl FromStr for PinningStrategy {
+    type Err = serde::de::value::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -244,6 +267,10 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
+
+    /// Dependency Pinning strategy used for dependency modification through automated logic like `pixi add`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinning_strategy: Option<PinningStrategy>,
 
     #[serde(skip)]
     #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
@@ -284,6 +311,7 @@ impl Default for Config {
             repodata_config: None,
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
+            pinning_strategy: Default::default(),
         }
     }
 }
@@ -480,6 +508,27 @@ impl Config {
         config
     }
 
+    // Get all possible keys of the configuration
+    pub fn get_keys(&self) -> &[&str] {
+        &[
+            "default-channels",
+            "change-ps1",
+            "authentication-override-file",
+            "tls-no-verify",
+            "mirrors",
+            "detached-environments",
+            "pinning-strategy",
+            "repodata-config",
+            "repodata-config.disable-jlap",
+            "repodata-config.disable-bzip2",
+            "repodata-config.disable-zstd",
+            "pypi-config",
+            "pypi-config.index-url",
+            "pypi-config.extra-index-urls",
+            "pypi-config.keyring-provider",
+        ]
+    }
+
     /// Merge the given config into the current one.
     #[must_use]
     pub fn merge_config(mut self, other: Config) -> Self {
@@ -504,6 +553,7 @@ impl Config {
             repodata_config: other.repodata_config.or(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
+            pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
         }
     }
 
@@ -577,27 +627,8 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys = || {
-            let keys = [
-                "default-channels",
-                "change-ps1",
-                "authentication-override-file",
-                "tls-no-verify",
-                "mirrors",
-                "detached-environments",
-                "repodata-config",
-                "repodata-config.disable-jlap",
-                "repodata-config.disable-bzip2",
-                "repodata-config.disable-zstd",
-                "pypi-config",
-                "pypi-config.index-url",
-                "pypi-config.extra-index-urls",
-                "pypi-config.keyring-provider",
-            ];
-            format!("Supported keys:\n\n{}", keys.join("\n"))
-        };
-
-        let err = miette::miette!("Unknown key: {}\n{}", key, show_supported_keys());
+        let show_supported_keys = || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
+        let err = miette::miette!("Unknown key: {}\n{}", console::style(key).red(), show_supported_keys());
 
         match key {
             "default-channels" => {
@@ -629,6 +660,12 @@ impl Config {
                     "false" => DetachedEnvironments::Boolean(false),
                     _ => DetachedEnvironments::Path(PathBuf::from(v)),
                 });
+            }
+            "pinning-strategy" => {
+                self.pinning_strategy = value
+                    .map(|v| PinningStrategy::from_str(v.as_str()))
+                    .transpose()
+                    .into_diagnostic()?
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -766,6 +803,7 @@ mod tests {
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
 detached-environments = "{}"
+pinning-strategy = "no-pin"
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
@@ -1039,6 +1077,40 @@ UNUSED = "unused"
 
         config.set("change-ps1", None).unwrap();
         assert_eq!(config.change_ps1, None);
+
+        config.set("pinning-strategy", None).unwrap();
+        assert_eq!(config.pinning_strategy, None);
+        config
+            .set("pinning-strategy", Some("no-pin".to_string()))
+            .unwrap();
+        assert_eq!(config.pinning_strategy, Some(PinningStrategy::NoPin));
+        config
+            .set("pinning-strategy", Some("pin-exact-version".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.pinning_strategy,
+            Some(PinningStrategy::PinExactVersion)
+        );
+        config
+            .set(
+                "pinning-strategy",
+                Some("pin-higher-or-equal-latest".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.pinning_strategy,
+            Some(PinningStrategy::PinHigherOrEqualLatest)
+        );
+        config
+            .set("pinning-strategy", Some("pin-latest-minor".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.pinning_strategy,
+            Some(PinningStrategy::PinLatestMinor)
+        );
+        config
+            .set("pinning-strategy", Some("bla".to_string()))
+            .unwrap_err();
 
         config.set("unknown-key", None).unwrap_err();
     }
