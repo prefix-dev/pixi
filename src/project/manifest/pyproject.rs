@@ -1,19 +1,17 @@
+use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
+
 use miette::Report;
 use pep440_rs::VersionSpecifiers;
 use pyproject_toml::{self, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::fs;
-use std::path::PathBuf;
-use std::{collections::HashMap, str::FromStr};
 use toml_edit::DocumentMut;
-
-use crate::FeatureName;
 
 use super::{
     error::{RequirementConversionError, TomlError},
     Feature, ProjectManifest, SpecType,
 };
+use crate::FeatureName;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
@@ -66,12 +64,14 @@ impl From<PyProjectManifest> for ProjectManifest {
         // TODO: could copy across / convert some other optional fields if relevant
         manifest.project.name = Some(pyproject.name.clone());
 
-        // Add python as dependency based on the project.requires_python property (if any)
+        // Add python as dependency based on the project.requires_python property (if
+        // any)
         let python_spec = pyproject.requires_python.clone();
 
         let target = manifest.default_feature_mut().targets.default_mut();
         let python = PackageName::from_str("python").unwrap();
-        // If the target doesn't have any python dependency, we add it from the `requires-python`
+        // If the target doesn't have any python dependency, we add it from the
+        // `requires-python`
         if !target.has_dependency(&python, Some(SpecType::Run), None) {
             target.add_dependency(
                 &python,
@@ -121,8 +121,8 @@ impl From<PyProjectManifest> for ProjectManifest {
 }
 
 /// Try to return a NamelessMatchSpec from a pep508_rs::VersionOrUrl
-/// This will only work if it is not URL and the VersionSpecifier can successfully
-/// be interpreted as a NamelessMatchSpec.version
+/// This will only work if it is not URL and the VersionSpecifier can
+/// successfully be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_nameless_matchspec(
     version: &Option<VersionSpecifiers>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
@@ -145,7 +145,8 @@ fn version_or_url_to_nameless_matchspec(
 /// A struct wrapping pyproject_toml::PyProjectToml
 /// ensuring it has a project table
 ///
-/// This is used during 'pixi init' to parse a potentially non-pixi 'pyproject.toml'
+/// This is used during 'pixi init' to parse a potentially non-pixi
+/// 'pyproject.toml'
 pub struct PyProjectToml {
     inner: pyproject_toml::PyProjectToml,
 }
@@ -178,10 +179,14 @@ impl PyProjectToml {
         self.inner.project.as_ref().unwrap()
     }
 
-    /// Builds a list of pixi environments from pyproject groups of extra dependencies:
-    ///  - one environment is created per group of extra, with the same name as the group of extra
-    ///  - each environment includes the feature of the same name as the group of extra
-    ///  - it will also include other features inferred from any self references to other groups of extras
+    /// Builds a list of pixi environments from pyproject groups of extra
+    /// dependencies:
+    ///  - one environment is created per group of extra, with the same name as
+    ///    the group of extra
+    ///  - each environment includes the feature of the same name as the group
+    ///    of extra
+    ///  - it will also include other features inferred from any self references
+    ///    to other groups of extras
     pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
         let mut environments = HashMap::new();
         if let Some(extras) = &self.project().optional_dependencies {
@@ -203,14 +208,14 @@ impl PyProjectToml {
         environments
     }
 
-    /// Checks whether a path is a valid `pyproject.toml` for use with pixi by checking if it
-    /// contains a `[tool.pixi.project]` item.
+    /// Checks whether a path is a valid `pyproject.toml` for use with pixi by
+    /// checking if it contains a `[tool.pixi.project]` item.
     pub fn is_pixi(path: &PathBuf) -> bool {
         let source = fs::read_to_string(path).unwrap();
         Self::is_pixi_str(&source).unwrap_or(false)
     }
-    /// Checks whether a string is a valid `pyproject.toml` for use with pixi by checking if it
-    /// contains a `[tool.pixi.project]` item.
+    /// Checks whether a string is a valid `pyproject.toml` for use with pixi by
+    /// checking if it contains a `[tool.pixi.project]` item.
     pub fn is_pixi_str(source: &str) -> Result<bool, Report> {
         match source.parse::<DocumentMut>().map_err(TomlError::from) {
             Err(e) => e.to_fancy("pyproject.toml", source),
@@ -225,15 +230,14 @@ impl PyProjectToml {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
 
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        project::manifest::{python::PyPiPackageName, Manifest},
+        project::manifest::{python::PyPiPackageName, DependencyOverwriteBehavior, Manifest},
         FeatureName,
     };
 
@@ -409,7 +413,13 @@ mod tests {
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&requirement, &[], &FeatureName::Default, None)
+            .add_pypi_dependency(
+                &requirement,
+                &[],
+                &FeatureName::Default,
+                None,
+                DependencyOverwriteBehavior::Overwrite,
+            )
             .unwrap();
 
         assert!(manifest
@@ -431,6 +441,7 @@ mod tests {
                 &[],
                 &FeatureName::Named("test".to_string()),
                 None,
+                DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
         assert!(manifest
