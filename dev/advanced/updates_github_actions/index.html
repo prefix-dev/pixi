@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="How to build and run an SDL application in C++">
+        <meta name="description" content="Learn how to use GitHub Actions to automatically update your pixi lockfiles.">
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/examples/cpp-sdl/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/">
       
       
-        <link rel="prev" href="../../tutorials/rust/">
+        <link rel="prev" href="../github_actions/">
       
       
-        <link rel="next" href="../opencv/">
+        <link rel="next" href="../pyproject_toml/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +24,7 @@
     
     
       
-        <title>SDL example - Pixi by prefix.dev</title>
+        <title>Update lockfiles with GitHub Actions - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="SDL example - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="How to build and run an SDL application in C++" >
+        <meta  property="og:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/examples/cpp-sdl.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/examples/cpp-sdl/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="SDL example - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="How to build and run an SDL application in C++" >
+        <meta  name="twitter:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/examples/cpp-sdl.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
       
     
     
@@ -102,6 +102,11 @@
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#how-to-use" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -138,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              SDL example
+              Update lockfiles with GitHub Actions
             
           </span>
         </div>
@@ -547,8 +552,6 @@
       
   
   
-    
-  
   
   
     
@@ -560,11 +563,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -578,7 +581,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -589,17 +592,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../examples/cpp-sdl/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -608,7 +604,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -621,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../opencv/" class="md-nav__link">
+      <a href="../../examples/opencv/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -642,7 +637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ros2-nav2/" class="md-nav__link">
+      <a href="../../examples/ros2-nav2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -819,8 +814,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -830,11 +827,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
           <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
@@ -848,7 +845,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -862,7 +859,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -883,7 +880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -904,7 +901,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -925,7 +922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -943,10 +940,28 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Updates using GitHub Actions
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -955,6 +970,60 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to use
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Triggering CI in automated PRs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customizing-the-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Customizing the summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-reusable-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using reusable workflows
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -967,7 +1036,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1226,6 +1295,50 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to use
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Triggering CI in automated PRs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customizing-the-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Customizing the summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-reusable-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using reusable workflows
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1239,7 +1352,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/examples/cpp-sdl.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/updates_github_actions.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1247,28 +1360,71 @@
   
 
 
-  <h1>C++/Cmake</h1>
+  <h1>Updates using GitHub Actions</h1>
 
-<p><img alt="" src="https://storage.googleapis.com/prefix-cms-images/docs/sdl_examle.png" />
-The <code>cpp-sdl</code> example is located in the pixi repository.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/prefix-dev/pixi.git
+<p>You can leverage GitHub Actions in combination with <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pavelzw/pixi-diff-to-markdown</a>
+to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.</p>
+<p><img alt="Update lockfiles" src="../../assets/update-lockfile-light.png#only-light" />
+<img alt="Update lockfiles" src="../../assets/update-lockfile-dark.png#only-dark" /></p>
+<div class="admonition note">
+<p class="admonition-title">Dependabot/Renovate support for pixi</p>
+<p>You can track native Dependabot support for pixi in <a href="https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470">dependabot/dependabot-core #2227</a>
+and for Renovate in <a href="https://github.com/renovatebot/renovate/issues/2213">renovatebot/renovate #2213</a>.</p>
+</div>
+<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
+<p>To get started, create a new GitHub Actions workflow file in your repository.</p>
+<div class="language-yaml highlight"><span class="filename">.github/workflows/update-lockfiles.yml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">permissions</span><span class="p">:</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">pull-requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nt">on</span><span class="p">:</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0 5 1 * *</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nt">jobs</span><span class="p">:</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">pixi-update</span><span class="p">:</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.1</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">          </span><span class="nt">run-install</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="no">pixi global install pixi-diff-to-markdown</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="no">pixi update --json --no-install | pixi-diff-to-markdown &gt;&gt; diff.md</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create pull request</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/create-pull-request@v6</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">          </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ secrets.GITHUB_TOKEN }}</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">          </span><span class="nt">commit-message</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">          </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="nt">body-path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">diff.md</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">          </span><span class="nt">branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">update-pixi</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">          </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">          </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">          </span><span class="nt">delete-branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">          </span><span class="nt">add-paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi.lock</span>
 </span></code></pre></div>
-<p>Move to the example folder</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">cd</span><span class="w"> </span>pixi/examples/cpp-sdl
-</span></code></pre></div>
-<p>Run the <code>start</code> command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
-</span></code></pre></div>
-<p>Using the <a href="../../features/advanced_tasks/#depends-on"><code>depends-on</code></a> feature you only needed to run the <code>start</code> task but under water it is running the following tasks.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Configure the CMake project</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>configure
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Build the executable</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Start the build executable</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
-</span></code></pre></div>
+<ol>
+<li>Needed for <code>peter-evans/create-pull-request</code></li>
+<li>Runs at 05:00, on day 1 of the month</li>
+</ol>
+<p>In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -&gt; "General").</p>
+<p><img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-light.png#only-light" />
+<img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-dark.png#only-dark" /></p>
+<h2 id="triggering-ci-in-automated-prs">Triggering CI in automated PRs<a class="headerlink" href="#triggering-ci-in-automated-prs" title="Permanent link">#</a></h2>
+<p>In order to prevent accidental recursive GitHub Workflow runs, GitHub decided to not trigger any workflows on automated PRs when using the default <code>GITHUB_TOKEN</code>.
+There are a couple of ways how to work around this limitation. You can find excellent documentation for this in <code>peter-evans/create-pull-request</code>, see <a href="https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs">here</a>.</p>
+<h2 id="customizing-the-summary">Customizing the summary<a class="headerlink" href="#customizing-the-summary" title="Permanent link">#</a></h2>
+<p>You can customize the summary by either using command-line-arguments of <code>pixi-diff-to-markdown</code> or by specifying the configuration in <code>pixi.toml</code> under <code>[tool.pixi-diff-to-markdown]</code>. See the <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pixi-diff-to-markdown documentation</a> or run <code>pixi-diff-to-markdown --help</code> for more information.</p>
+<h2 id="using-reusable-workflows">Using reusable workflows<a class="headerlink" href="#using-reusable-workflows" title="Permanent link">#</a></h2>
+<p>If you want to use the same workflow in multiple repositories in your GitHub organization, you can create a reusable workflow.
+You can find more information in the <a href="https://docs.github.com/en/actions/using-workflows/reusing-workflows">GitHub documentation</a>.</p>
 
 
 
@@ -1340,9 +1496,9 @@ The <code>cpp-sdl</code> example is located in the pixi repository.</p>
           
             
             <a
-              href="../../tutorials/rust/"
+              href="../github_actions/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Rust"
+              aria-label="Previous: GitHub Actions"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1353,7 +1509,7 @@ The <code>cpp-sdl</code> example is located in the pixi repository.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Rust
+                  GitHub Actions
                 </div>
               </div>
             </a>
@@ -1363,16 +1519,16 @@ The <code>cpp-sdl</code> example is located in the pixi repository.</p>
           
             
             <a
-              href="../opencv/"
+              href="../pyproject_toml/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: OpenCV"
+              aria-label="Next: Pyproject.toml"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  OpenCV
+                  Pyproject.toml
                 </div>
               </div>
               <div class="md-footer__button md-icon">
