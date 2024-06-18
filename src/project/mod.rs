@@ -132,10 +132,9 @@ impl EnvironmentVars {
 pub struct Project {
     /// Root folder of the project
     root: PathBuf,
-    /// Reqwest client shared for this project
-    client: reqwest::Client,
-    /// Authenticated reqwest client shared for this project
-    authenticated_client: ClientWithMiddleware,
+    /// Reqwest client shared for this project.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     repodata_gateway: OnceLock<Gateway>,
@@ -174,12 +173,9 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
-
         Self {
             root,
-            client,
-            authenticated_client,
+            client: Default::default(),
             manifest,
             env_vars,
             mapping_source: Default::default(),
@@ -260,12 +256,9 @@ impl Project {
         // Load the user configuration from the local project and all default locations
         let config = Config::load(root);
 
-        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
-
         Ok(Self {
             root: root.to_owned(),
-            client,
-            authenticated_client,
+            client: Default::default(),
             manifest,
             env_vars,
             mapping_source: Default::default(),
@@ -571,13 +564,18 @@ impl Project {
 
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {
-        &self.client
+        &self.client_and_authenticated_client().0
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.authenticated_client
+        &self.client_and_authenticated_client().1
+    }
+
+    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+        self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
     }
 
     pub fn config(&self) -> &Config {
