@@ -55,7 +55,7 @@ Use the `shell` command to activate the environment and start a new shell in the
 ```shell
 pixi shell
 python
-exit
+exit()
 ```
 
 You've just learned the basic features of pixi:

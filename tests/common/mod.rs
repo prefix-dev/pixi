@@ -333,7 +333,7 @@ impl PixiControl {
                 None => {
                     let env =
                         get_task_env(&mut lock_file, &task.run_environment, args.clean_env).await?;
-                    task_env.insert(env) as &_
+                    task_env.insert(env)
                 }
                 Some(task_env) => task_env,
             };

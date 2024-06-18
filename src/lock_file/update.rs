@@ -27,11 +27,12 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
-use crate::environment::{write_environment_file, EnvironmentFile};
 use crate::{
+    activation::CurrentEnvVarBehavior,
     config, consts,
     environment::{
-        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
+        PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
     lock_file::{
@@ -150,10 +151,11 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment
-            .project()
-            .get_env_variables(environment, false)
+        let env_variables = self
+            .project
+            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
             .await?;
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -986,7 +988,7 @@ impl<'p> UpdateContext<'p> {
             .outdated_envs
             .pypi
             .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env.clone(), *p)))
+            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -1006,6 +1008,11 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
+            // Get environment variables from the activation
+            let env_variables = project
+                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .await?;
+
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
@@ -1023,9 +1030,6 @@ impl<'p> UpdateContext<'p> {
                     .clone(),
                 Some(context) => context.clone(),
             };
-
-            // Get environment variables from the activation
-            let env_variables = project.get_env_variables(&environment, false).await?;
 
             let locked_group_records = self
                 .locked_grouped_pypi_records

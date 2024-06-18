@@ -13,7 +13,6 @@ use std::os::unix::fs::symlink;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    env,
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -35,7 +34,7 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
-    activation::{get_environment_variables, run_activation},
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
     config::Config,
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
@@ -91,6 +90,40 @@ impl SpecType {
     }
 }
 
+/// Environment variable cache for different activations
+#[derive(Debug, Clone)]
+pub struct EnvironmentVars {
+    clean: Arc<AsyncCell<HashMap<String, String>>>,
+    pixi_only: Arc<AsyncCell<HashMap<String, String>>>,
+    full: Arc<AsyncCell<HashMap<String, String>>>,
+}
+
+impl EnvironmentVars {
+    /// Create a new instance with empty AsyncCells
+    pub fn new() -> Self {
+        Self {
+            clean: Arc::new(AsyncCell::new()),
+            pixi_only: Arc::new(AsyncCell::new()),
+            full: Arc::new(AsyncCell::new()),
+        }
+    }
+
+    /// Get the clean environment variables
+    pub fn clean(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.clean
+    }
+
+    /// Get the pixi_only environment variables
+    pub fn pixi_only(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.pixi_only
+    }
+
+    /// Get the full environment variables
+    pub fn full(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.full
+    }
+}
+
 /// The pixi project, this main struct to interact with the project. This struct
 /// holds the `Manifest` and has functions to modify or request information from
 /// it. This allows in the future to have multiple environments or manifests
@@ -107,8 +140,9 @@ pub struct Project {
     repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
-    /// The cache that contains environment variables
-    env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The environment variables that are activated when the environment is activated.
+    /// Cached per environment, for both clean and normal
+    env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     /// The cache that contains mapping
     mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
@@ -150,13 +184,11 @@ impl Project {
         }
     }
 
-    //Initialize empty map of environments variables
-    fn init_env_vars(
-        environments: &Environments,
-    ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
+    /// Initialize empty map of environments variables
+    fn init_env_vars(environments: &Environments) -> HashMap<EnvironmentName, EnvironmentVars> {
         environments
             .iter()
-            .map(|environment| (environment.name.clone(), Arc::new(AsyncCell::new())))
+            .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
     }
 
@@ -316,7 +348,8 @@ impl Project {
         }
     }
 
-    /// Returns the default environment directory without interacting with config.
+    /// Returns the default environment directory without interacting with
+    /// config.
     pub fn default_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
@@ -365,7 +398,8 @@ impl Project {
         default_envs_dir
     }
 
-    /// Returns the default solve group environments directory, without interacting with config
+    /// Returns the default solve group environments directory, without
+    /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
         self.default_environments_dir()
             .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
@@ -386,7 +420,8 @@ impl Project {
         self.manifest.path.clone()
     }
 
-    /// Returns the path to the lock file of the project [consts::PROJECT_LOCK_FILE]
+    /// Returns the path to the lock file of the project
+    /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
@@ -431,6 +466,42 @@ impl Project {
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
+    /// Get or initialize the activated environment variables
+    pub async fn get_activated_environment_variables(
+        &self,
+        environment: &Environment<'_>,
+        current_env_var_behavior: CurrentEnvVarBehavior,
+    ) -> miette::Result<&HashMap<String, String>> {
+        let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
+        match current_env_var_behavior {
+            CurrentEnvVarBehavior::Clean => {
+                vars.clean()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            CurrentEnvVarBehavior::Exclude => {
+                vars.pixi_only()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            CurrentEnvVarBehavior::Include => {
+                vars.full()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+        }
+    }
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -511,34 +582,6 @@ impl Project {
         &self.config
     }
 
-    /// Return a combination of static environment variables generated from the
-    /// project and the environment and from running activation script
-    pub async fn get_env_variables(
-        &self,
-        environment: &Environment<'_>,
-        clean_env: bool,
-    ) -> miette::Result<&HashMap<String, String>> {
-        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
-            miette::miette!(
-                "{} environment should be already created during project creation",
-                environment.name()
-            )
-        })?;
-
-        cell.get_or_try_init::<miette::Report>(async {
-            let activation_env = run_activation(environment, clean_env).await?;
-
-            let environment_variables = get_environment_variables(environment);
-
-            let all_variables: HashMap<String, String> = activation_env
-                .into_iter()
-                .chain(environment_variables.into_iter())
-                .collect();
-            Ok(all_variables)
-        })
-        .await
-    }
-
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
@@ -548,7 +591,7 @@ impl Project {
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
 pub fn find_project_manifest() -> Option<PathBuf> {
-    let current_dir = env::current_dir().ok()?;
+    let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
         [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
             .iter()

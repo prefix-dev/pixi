@@ -9,19 +9,19 @@ use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 
+use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::verify_prefix_location_unchanged;
+use crate::lock_file::LockFileDerivedData;
+use crate::lock_file::UpdateLockFileOptions;
+use crate::progress::await_in_progress;
 use crate::project::errors::UnsupportedPlatformError;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::project::Environment;
 use crate::task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
-use crate::Project;
-
-use crate::lock_file::LockFileDerivedData;
-use crate::lock_file::UpdateLockFileOptions;
-use crate::progress::await_in_progress;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
+use crate::{HasFeatures, Project};
 use thiserror::Error;
 use tracing::Level;
 
@@ -253,14 +253,21 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data.prefix(environment).await?;
 
     // Get environment variables from the activation
+    let env_var_behavior = if clean_env {
+        CurrentEnvVarBehavior::Clean
+    } else {
+        CurrentEnvVarBehavior::Include
+    };
     let activation_env = await_in_progress("activating environment", |_| {
-        crate::activation::run_activation(environment, clean_env)
+        environment
+            .project()
+            .get_activated_environment_variables(environment, env_var_behavior)
     })
     .await
     .wrap_err("failed to activate environment")?;
 
     // Concatenate with the system environment variables
-    Ok(activation_env)
+    Ok(activation_env.clone())
 }
 
 #[derive(Debug, Error, Diagnostic)]
