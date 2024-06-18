@@ -30,8 +30,8 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
-use pypi_types::VerbatimParsedUrl;
 use pypi_types::{HashAlgorithm, HashDigest};
+use pypi_types::{RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -40,7 +40,10 @@ use rattler_lock::{
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use uv_configuration::{ConfigSettings, Constraints, NoBuild, Overrides, SetupPyStrategy};
+use uv_configuration::{
+    ConfigSettings, Constraints, NoBuild, Overrides, PreviewMode, SetupPyStrategy,
+};
+use uv_git::GitResolver;
 
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
@@ -52,6 +55,7 @@ use uv_resolver::{
     AllowedYanks, BuiltEditableMetadata, DefaultResolverProvider, FlatIndex, InMemoryIndex,
     Manifest, Options, Preference, PythonRequirement, Resolver,
 };
+use uv_toolchain::Interpreter;
 use uv_types::{BuildContext, EmptyInstalledPackages};
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
@@ -266,7 +270,7 @@ pub async fn resolve_pypi(
         .into_iter()
         .map(|req| {
             req.into_requirement_with_parsed_url()
-                .map(distribution_types::Requirement::from)
+                .map(pypi_types::Requirement::from)
                 .expect("editable requirements treated as non-editable requirements")
         })
         .collect::<Vec<_>>();
@@ -311,7 +315,7 @@ pub async fn resolve_pypi(
             .wrap_err("failed to query find-links locations")?;
         FlatIndex::from_entries(
             entries,
-            &tags,
+            Some(&tags),
             &context.hash_strategy,
             &context.no_build,
             &context.no_binary,
@@ -330,6 +334,7 @@ pub async fn resolve_pypi(
         &index_locations,
         &flat_index,
         &in_memory_index,
+        &GitResolver::default(),
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
@@ -338,6 +343,7 @@ pub async fn resolve_pypi(
         &context.no_build,
         &context.no_binary,
         context.concurrency,
+        PreviewMode::Disabled,
     )
     .with_options(options)
     .with_build_extra_env_vars(env_variables.iter());
@@ -356,7 +362,7 @@ pub async fn resolve_pypi(
                 index: None,
             };
 
-            distribution_types::Requirement {
+            pypi_types::Requirement {
                 name: p.name.as_normalized().clone(),
                 extras: vec![],
                 marker: None,
@@ -391,7 +397,6 @@ pub async fn resolve_pypi(
         Overrides::default(),
         preferences,
         None,
-        built_editables.clone(),
         uv_resolver::Exclusions::None,
         Vec::new(),
     );
@@ -401,10 +406,11 @@ pub async fn resolve_pypi(
             &registry_client,
             &build_dispatch,
             context.concurrency.downloads,
+            uv_configuration::PreviewMode::Disabled,
         ),
         &flat_index,
         &tags,
-        PythonRequirement::new(&interpreter, interpreter.python_full_version()),
+        PythonRequirement::from_interpreter(&interpreter),
         AllowedYanks::default(),
         &context.hash_strategy,
         options.exclude_newer,
@@ -421,8 +427,9 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         Some(&marker_environment),
-        &PythonRequirement::new(&interpreter, interpreter.python_full_version()),
+        &PythonRequirement::from_interpreter(&interpreter),
         &in_memory_index,
+        &GitResolver::default(),
         provider,
         EmptyInstalledPackages,
     )
@@ -482,7 +489,12 @@ async fn lock_pypi_packages<'a>(
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
+    let database = DistributionDatabase::new(
+        registry_client,
+        build_dispatch,
+        concurrent_downloads,
+        PreviewMode::Disabled,
+    );
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
@@ -643,6 +655,7 @@ async fn lock_pypi_packages<'a>(
                 PypiPackageData {
                     name: metadata.name,
                     version: metadata.version,
+                    // TODO make another conversion function
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
                     requires_python: metadata.requires_python,
                     url_or_path,

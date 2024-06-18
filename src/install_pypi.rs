@@ -21,7 +21,8 @@ use url::Url;
 
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
-use uv_configuration::{ConfigSettings, SetupPyStrategy};
+use uv_configuration::{ConfigSettings, PreviewMode, SetupPyStrategy};
+use uv_git::GitResolver;
 use uv_resolver::InMemoryIndex;
 use uv_types::HashStrategy;
 
@@ -31,8 +32,8 @@ use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
-    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
+    RegistryBuiltWheel, RegistrySourceDist, SourceDist,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -807,6 +808,7 @@ pub async fn update_python_distributions(
         &index_locations,
         &flat_index,
         &in_memory_index,
+        &GitResolver::default(),
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
@@ -815,6 +817,7 @@ pub async fn update_python_distributions(
         &uv_context.no_build,
         &uv_context.no_binary,
         uv_context.concurrency,
+        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -955,6 +958,7 @@ pub async fn update_python_distributions(
             registry_client.as_ref(),
             &build_dispatch,
             uv_context.concurrency.downloads,
+            PreviewMode::Disabled,
         );
 
         // Before hitting the network let's make sure the credentials are available to uv
