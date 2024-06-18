@@ -22,16 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # https://keats.github.io/tera/docs/#introduction
 body = """
 {% if version %}\
-    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    ### [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
-    ## [Unreleased]
+    ### [Unreleased]
 {% endif %}\
 
-    ### ✨ Highlights
+    #### ✨ Highlights
 
 
-
-    ### 📃 Details
 {% for group, commits in commits | group_by(attribute="group") %}
     #### {{ group | upper_first }}
     {%- for commit in commits %}
@@ -45,7 +43,7 @@ body = """
 {% endfor %}
 
 {%- if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
-  ## New Contributors
+  #### New Contributors
 {%- endif -%}
 
 {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}

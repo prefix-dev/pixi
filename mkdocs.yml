@@ -98,6 +98,7 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
+  - Updates: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
@@ -135,6 +136,7 @@ nav:
 hooks:
   - schema/docs_hooks.py
   - install/docs_hooks.py
+  - docs/docs_hooks.py
 
 plugins:
   - redirects:
