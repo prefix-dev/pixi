@@ -1040,7 +1040,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
-            /// NOTE that we are depecrating top-level
             /// pypi-options
             #[serde(default)]
             pypi_options: Option<PypiOptions>,
