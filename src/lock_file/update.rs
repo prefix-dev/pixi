@@ -28,9 +28,11 @@ use url::Url;
 use uv_normalize::ExtraName;
 
 use crate::{
+    activation::CurrentEnvVarBehavior,
     config, consts,
     environment::{
-        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
+        PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
     lock_file::{
@@ -113,6 +115,16 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // Save an environment file to the environment directory
+        write_environment_file(
+            &environment.dir(),
+            EnvironmentFile {
+                manifest_path: environment.project().manifest_path(),
+                environment_name: environment.name().to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+            },
+        )?;
+
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
             return Ok(prefix.clone());
         }
@@ -139,7 +151,11 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment.project().get_env_variables(environment).await?;
+        let env_variables = self
+            .project
+            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            .await?;
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -972,7 +988,7 @@ impl<'p> UpdateContext<'p> {
             .outdated_envs
             .pypi
             .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env.clone(), *p)))
+            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -992,6 +1008,11 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
+            // Get environment variables from the activation
+            let env_variables = project
+                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .await?;
+
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
@@ -1009,9 +1030,6 @@ impl<'p> UpdateContext<'p> {
                     .clone(),
                 Some(context) => context.clone(),
             };
-
-            // Get environment variables from the activation
-            let env_variables = project.get_env_variables(&environment).await?;
 
             let locked_group_records = self
                 .locked_grouped_pypi_records

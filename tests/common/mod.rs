@@ -331,8 +331,9 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    let env = get_task_env(&mut lock_file, &task.run_environment).await?;
-                    task_env.insert(env) as &_
+                    let env =
+                        get_task_env(&mut lock_file, &task.run_environment, args.clean_env).await?;
+                    task_env.insert(env)
                 }
                 Some(task_env) => task_env,
             };
@@ -376,6 +377,7 @@ impl PixiControl {
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
+                json: false,
             },
         }
     }
@@ -428,6 +430,8 @@ impl TasksControl<'_> {
                 feature,
                 cwd: None,
                 env: Default::default(),
+                description: None,
+                clean_env: false,
             },
         }
     }
@@ -457,6 +461,7 @@ impl TasksControl<'_> {
                 platform,
                 alias: name,
                 depends_on: vec![],
+                description: None,
             },
         }
     }

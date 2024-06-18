@@ -17,6 +17,7 @@ sdl2 = "2.26.5.*"
 cmake = "3.26.4.*"
 cxx-compiler = "1.5.2.*"
 ninja = "1.11.1.*"
+make = ">=4.3,<5"
 
 [feature.build.tasks.configure]
 # Configures CMake

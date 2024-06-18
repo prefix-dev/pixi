@@ -380,6 +380,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             namespace: None,
             md5: None,
             sha256: None,
+            url: None,
         } => {
             // No other fields besides the version was specified, so we can just return the
             // version as a string.
@@ -398,6 +399,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             namespace,
             md5,
             sha256,
+            url,
         } => {
             let mut table = InlineTable::new();
             table.insert(
@@ -436,6 +438,9 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             }
             if let Some(sha256) = sha256 {
                 table.insert("sha256", format!("{:x}", sha256).into());
+            }
+            if let Some(url) = url {
+                table.insert("url", url.to_string().into());
             }
             table.into()
         }

@@ -13,6 +13,7 @@ use super::util::IndicatifWriter;
 use crate::{progress, progress::global_multi_progress};
 
 pub mod add;
+pub mod clean;
 pub mod completion;
 pub mod config;
 pub mod global;
@@ -37,7 +38,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.23.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.24.2] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -93,7 +94,6 @@ pub enum Command {
     Install(install::Args),
     Update(update::Args),
 
-    // Execution commands
     #[clap(visible_alias = "r")]
     Run(run::Args),
     #[clap(visible_alias = "s")]
@@ -119,6 +119,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     SelfUpdate(self_update::Args),
+    Clean(clean::Args),
     Completion(completion::Args),
 }
 
@@ -214,11 +215,6 @@ pub async fn execute() -> miette::Result<()> {
                 .into_diagnostic()?,
         )
         .add_directive(
-            format!("rattler_installs_packages={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
             format!(
                 "rattler_networking::authentication_storage::backends::file={}",
                 LevelFilter::OFF
@@ -238,6 +234,7 @@ pub async fn execute() -> miette::Result<()> {
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
+        .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
         .without_time();
 
@@ -269,6 +266,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
+        Command::Clean(cmd) => clean::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await,
         Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
