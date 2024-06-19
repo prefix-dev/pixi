@@ -37,7 +37,7 @@ Before contributing, please read our [Code of Conduct](https://github.com/prefix
 - Explain how the feature would be beneficial to the project.
 
 ## Questions and Discussions
-For general questions, consider using our chat platform: [Discord](https://discord.gg/kKV8ZxyzY4)
+For general questions, consider using our chat platform: [Discord](https://discord.prefix.dev)
 
 ## Acknowledgments
 Your contributions are highly appreciated and will be credited accordingly.
