@@ -312,11 +312,14 @@ pub fn pypi_satifisfies_editable(
 
         // If the spec has a short commit than we can do a partial match
         // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-        if let GitReference::ShortCommit(spec_short_sha) = spec_git_url.url.reference() {
-            // We expect the lock file to have a long commit hash
-            // in this case
-            if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                return base_is_same && sha.starts_with(spec_short_sha);
+        // Currently this resolves to BranchOrTag
+        if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
+            if seems_like_commit_sha(branch_or_tag) {
+                // We expect the lock file to have a long commit hash
+                // in this case
+                if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
+                    return base_is_same && sha.starts_with(branch_or_tag);
+                }
             }
         }
 
@@ -342,6 +345,11 @@ pub fn pypi_satifisfies_editable(
         };
         spec_path_or_url == locked_path_or_url
     }
+}
+
+/// Checks if the string seems like a git commit sha
+fn seems_like_commit_sha(s: &str) -> bool {
+    s.len() >= 4 && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
@@ -383,12 +391,14 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     }
                     // If the spec has a short commit than we can do a partial match
                     // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-                    if let GitReference::ShortCommit(spec_short_sha) = spec_git_url.url.reference()
-                    {
-                        // We expect the lock file to have a long commit hash
-                        // in this case
-                        if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                            return base_is_same && sha.starts_with(spec_short_sha);
+                    // Currently this resolves to BranchOrTag
+                    if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
+                        if seems_like_commit_sha(branch_or_tag) {
+                            // We expect the lock file to have a long commit hash
+                            // in this case
+                            if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
+                                return base_is_same && sha.starts_with(branch_or_tag);
+                            }
                         }
                     }
 
@@ -1010,7 +1020,7 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2293").unwrap();
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap();
         // This should satisfy:
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
         let non_matching_spec =
