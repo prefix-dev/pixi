@@ -2799,6 +2799,7 @@ The packages specified in the manifest will also be highlighted (in this case <c
 To exit the pixi shell, simply run <code>exit</code>.</p>
 <h5 id="options_13">Options<a class="headerlink" href="#options_13" title="Permanent link">#</a></h5>
 <ul>
+<li><code>--change-ps1 &lt;true or false&gt;</code>: When set to false, the <code>(pixi)</code> prefix in the shell prompt is removed (default: <code>true</code>). The default behavior can be <a href="../pixi_configuration/#change-ps1">configured globally</a>.</li>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../project_configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../project_configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../project_configuration/">manifest file</a><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
