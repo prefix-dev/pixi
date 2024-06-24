@@ -93,11 +93,11 @@ pub struct LockFileDerivedData<'p> {
     pub package_cache: PackageCache,
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
-    pub updated_conda_prefixes: HashMap<Environment<'p>, (Prefix, PythonStatus)>,
+    pub updated_conda_prefixes: HashMap<EnvironmentName, (Prefix, PythonStatus)>,
 
     /// A list of prefixes that have been updated while resolving all
     /// dependencies.
-    pub updated_pypi_prefixes: HashMap<Environment<'p>, Prefix>,
+    pub updated_pypi_prefixes: HashMap<EnvironmentName, Prefix>,
 
     /// The cached uv context
     pub uv_context: Option<UvResolutionContext>,
@@ -125,7 +125,7 @@ impl<'p> LockFileDerivedData<'p> {
             },
         )?;
 
-        if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
+        if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
 
@@ -176,7 +176,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
-            .insert(environment.clone(), prefix.clone());
+            .insert(environment.name().clone(), prefix.clone());
 
         Ok(prefix)
     }
@@ -210,7 +210,7 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
-        if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment) {
+        if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment.name()) {
             return Ok((prefix.clone(), python_status.clone()));
         }
 
@@ -257,8 +257,10 @@ impl<'p> LockFileDerivedData<'p> {
         .await?;
 
         // Store that we updated the environment, so we won't have to do it again.
-        self.updated_conda_prefixes
-            .insert(environment.clone(), (prefix.clone(), python_status.clone()));
+        self.updated_conda_prefixes.insert(
+            environment.name().clone(),
+            (prefix.clone(), python_status.clone()),
+        );
 
         Ok((prefix, python_status))
     }
@@ -434,7 +436,7 @@ impl<'p> UpdateContext<'p> {
     /// Get a list of conda prefixes that have been updated.
     pub fn take_instantiated_conda_prefixes(
         &mut self,
-    ) -> HashMap<Environment<'p>, (Prefix, PythonStatus)> {
+    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
         self.instantiated_conda_prefixes
             .drain()
             .filter_map(|(env, cell)| match env {
@@ -443,7 +445,7 @@ impl<'p> UpdateContext<'p> {
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env, prefix))
+                    Some((env.name().clone(), prefix))
                 }
                 _ => None,
             })

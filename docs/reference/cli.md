@@ -563,6 +563,7 @@ To exit the pixi shell, simply run `exit`.
 
 ##### Options
 
+- `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.

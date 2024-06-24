@@ -222,6 +222,9 @@ impl From<PyPiRequirement> for toml_edit::Value {
         }
 
         match &val {
+            PyPiRequirement::Version { version, extras } if extras.is_empty() => {
+                toml_edit::Value::from(version.to_string())
+            }
             PyPiRequirement::Version { version, extras } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
@@ -308,7 +311,11 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         if let Some(version_or_url) = req.version_or_url {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
-                    version: VersionOrStar::Version(v),
+                    version: if v.is_empty() {
+                        VersionOrStar::Star
+                    } else {
+                        VersionOrStar::Version(v)
+                    },
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => {

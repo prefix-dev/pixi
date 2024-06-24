@@ -251,6 +251,7 @@ impl ManifestSource {
         requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        editable: Option<bool>,
     ) -> Result<(), TomlError> {
         match self {
             ManifestSource::PyProjectToml(_) => {
@@ -270,10 +271,15 @@ impl ManifestSource {
                 }
             }
             ManifestSource::PixiToml(_) => {
+                let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+                if let Some(editable) = editable {
+                    pypi_requirement.set_editable(editable);
+                }
+
                 self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
                     .insert(
                         requirement.name.as_ref(),
-                        Item::Value(PyPiRequirement::from(requirement.clone()).into()),
+                        Item::Value(pypi_requirement.into()),
                     );
             }
         };

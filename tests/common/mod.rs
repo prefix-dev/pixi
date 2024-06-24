@@ -199,6 +199,7 @@ impl PixiControl {
     /// `.await` on the return value.
     pub fn init(&self) -> InitBuilder {
         InitBuilder {
+            no_fast_prefix: false,
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,
@@ -214,6 +215,7 @@ impl PixiControl {
     /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
+            no_fast_prefix: false,
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,

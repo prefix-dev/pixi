@@ -1,9 +1,11 @@
 mod common;
 
-use crate::common::PixiControl;
+use std::str::FromStr;
+
 use pixi::{util::default_channel_config, HasFeatures};
 use rattler_conda_types::{Channel, Version};
-use std::str::FromStr;
+
+use crate::common::PixiControl;
 
 #[tokio::test]
 async fn init_creates_project_manifest() {
@@ -27,7 +29,8 @@ async fn init_creates_project_manifest() {
     );
 }
 
-/// Tests that when initializing an empty project with a custom channel it is actually used.
+/// Tests that when initializing an empty project with a custom channel it is
+/// actually used.
 #[tokio::test]
 async fn specific_channel() {
     let pixi = PixiControl::new().unwrap();
@@ -53,13 +56,14 @@ async fn specific_channel() {
     )
 }
 
-/// Tests that when initializing an empty project the default channel `conda-forge` is used.
+/// Tests that when initializing an empty project the default channel
+/// `conda-forge` is used.
 #[tokio::test]
 async fn default_channel() {
     let pixi = PixiControl::new().unwrap();
 
     // Init a new project
-    pixi.init().await.unwrap();
+    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
     // Load the project
     let project = pixi.project().unwrap();
@@ -81,9 +85,9 @@ async fn default_channel() {
 //     let mut pypi_config = PyPIConfig::default();
 //     pypi_config.index_url = Some(index_url.clone());
 //     pypi_config.extra_index_urls = vec![index_url.clone()];
-//     // pypi_config.keyring_provider = Some(pixi::config::KeyringProvider::Subprocess);
-//     let mut config = Config::default();
-//     config.pypi_config = pypi_config;
+//     // pypi_config.keyring_provider =
+// Some(pixi::config::KeyringProvider::Subprocess);     let mut config =
+// Config::default();     config.pypi_config = pypi_config;
 //     pixi.init().await.unwrap();
 
 //     // Load the project
