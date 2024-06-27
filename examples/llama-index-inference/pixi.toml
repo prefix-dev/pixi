@@ -1,0 +1,17 @@
+[project]
+name = "alpaca"
+version = "0.1.0"
+description = "Llama-index and llama.cpp running a local model. Tested on MacOS ARM architecture with Metal GPU support"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[dependencies]
+python = "<3.12"
+scipy = ">=1.14.0,<1.15"
+numpy = "<2.0"
+
+[pypi-dependencies]
+llama-cpp-python = "*"
+llama-index-core = "*"
+llama-index-embeddings-huggingface = "*"
+llama-index-llms-llama-cpp = "*"
