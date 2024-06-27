@@ -13,7 +13,6 @@ use std::os::unix::fs::symlink;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    env,
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -35,7 +34,7 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
-    activation::{get_environment_variables, run_activation},
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
     config::Config,
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
@@ -91,6 +90,40 @@ impl SpecType {
     }
 }
 
+/// Environment variable cache for different activations
+#[derive(Debug, Clone)]
+pub struct EnvironmentVars {
+    clean: Arc<AsyncCell<HashMap<String, String>>>,
+    pixi_only: Arc<AsyncCell<HashMap<String, String>>>,
+    full: Arc<AsyncCell<HashMap<String, String>>>,
+}
+
+impl EnvironmentVars {
+    /// Create a new instance with empty AsyncCells
+    pub fn new() -> Self {
+        Self {
+            clean: Arc::new(AsyncCell::new()),
+            pixi_only: Arc::new(AsyncCell::new()),
+            full: Arc::new(AsyncCell::new()),
+        }
+    }
+
+    /// Get the clean environment variables
+    pub fn clean(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.clean
+    }
+
+    /// Get the pixi_only environment variables
+    pub fn pixi_only(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.pixi_only
+    }
+
+    /// Get the full environment variables
+    pub fn full(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+        &self.full
+    }
+}
+
 /// The pixi project, this main struct to interact with the project. This struct
 /// holds the `Manifest` and has functions to modify or request information from
 /// it. This allows in the future to have multiple environments or manifests
@@ -99,17 +132,17 @@ impl SpecType {
 pub struct Project {
     /// Root folder of the project
     root: PathBuf,
-    /// Reqwest client shared for this project
-    client: reqwest::Client,
-    /// Authenticated reqwest client shared for this project
-    authenticated_client: ClientWithMiddleware,
+    /// Reqwest client shared for this project.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
-    /// The cache that contains environment variables
-    env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The environment variables that are activated when the environment is activated.
+    /// Cached per environment, for both clean and normal
+    env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     /// The cache that contains mapping
     mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
@@ -140,12 +173,9 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
-
         Self {
             root,
-            client,
-            authenticated_client,
+            client: Default::default(),
             manifest,
             env_vars,
             mapping_source: Default::default(),
@@ -154,13 +184,11 @@ impl Project {
         }
     }
 
-    //Initialize empty map of environments variables
-    fn init_env_vars(
-        environments: &Environments,
-    ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
+    /// Initialize empty map of environments variables
+    fn init_env_vars(environments: &Environments) -> HashMap<EnvironmentName, EnvironmentVars> {
         environments
             .iter()
-            .map(|environment| (environment.name.clone(), Arc::new(AsyncCell::new())))
+            .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
     }
 
@@ -228,12 +256,9 @@ impl Project {
         // Load the user configuration from the local project and all default locations
         let config = Config::load(root);
 
-        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
-
         Ok(Self {
             root: root.to_owned(),
-            client,
-            authenticated_client,
+            client: Default::default(),
             manifest,
             env_vars,
             mapping_source: Default::default(),
@@ -304,7 +329,7 @@ impl Project {
         &self.root
     }
 
-    /// Returns the pixi directory
+    /// Returns the pixi directory of the project [consts::PIXI_DIR]
     pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
     }
@@ -323,9 +348,15 @@ impl Project {
         }
     }
 
+    /// Returns the default environment directory without interacting with
+    /// config.
+    pub fn default_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    }
+
     /// Returns the environment directory
     pub fn environments_dir(&self) -> PathBuf {
-        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+        let default_envs_dir = self.default_environments_dir();
 
         // Early out if detached-environments is not set
         if self.config().detached_environments().is_false() {
@@ -367,6 +398,13 @@ impl Project {
         default_envs_dir
     }
 
+    /// Returns the default solve group environments directory, without
+    /// interacting with config
+    pub fn default_solve_group_environments_dir(&self) -> PathBuf {
+        self.default_environments_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
     /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
         // If the detached-environments path is set, use it instead of the default
@@ -374,7 +412,7 @@ impl Project {
         if let Some(detached_environments_path) = self.detached_environments_path() {
             return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
         }
-        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_solve_group_environments_dir()
     }
 
     /// Returns the path to the manifest file.
@@ -383,6 +421,7 @@ impl Project {
     }
 
     /// Returns the path to the lock file of the project
+    /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
@@ -427,6 +466,42 @@ impl Project {
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
+    /// Get or initialize the activated environment variables
+    pub async fn get_activated_environment_variables(
+        &self,
+        environment: &Environment<'_>,
+        current_env_var_behavior: CurrentEnvVarBehavior,
+    ) -> miette::Result<&HashMap<String, String>> {
+        let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
+        match current_env_var_behavior {
+            CurrentEnvVarBehavior::Clean => {
+                vars.clean()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            CurrentEnvVarBehavior::Exclude => {
+                vars.pixi_only()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+            CurrentEnvVarBehavior::Include => {
+                vars.full()
+                    .get_or_try_init(async {
+                        initialize_env_variables(environment, current_env_var_behavior).await
+                    })
+                    .await
+            }
+        }
+    }
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -489,44 +564,22 @@ impl Project {
 
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {
-        &self.client
+        &self.client_and_authenticated_client().0
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.authenticated_client
+        &self.client_and_authenticated_client().1
+    }
+
+    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+        self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
     }
 
     pub fn config(&self) -> &Config {
         &self.config
-    }
-
-    /// Return a combination of static environment variables generated from the
-    /// project and the environment and from running activation script
-    pub async fn get_env_variables(
-        &self,
-        environment: &Environment<'_>,
-    ) -> miette::Result<&HashMap<String, String>> {
-        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
-            miette::miette!(
-                "{} environment should be already created during project creation",
-                environment.name()
-            )
-        })?;
-
-        cell.get_or_try_init::<miette::Report>(async {
-            let activation_env = run_activation(environment).await?;
-
-            let environment_variables = get_environment_variables(environment);
-
-            let all_variables: HashMap<String, String> = activation_env
-                .into_iter()
-                .chain(environment_variables.into_iter())
-                .collect();
-            Ok(all_variables)
-        })
-        .await
     }
 
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
@@ -538,7 +591,7 @@ impl Project {
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
 pub fn find_project_manifest() -> Option<PathBuf> {
-    let current_dir = env::current_dir().ok()?;
+    let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
         [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
             .iter()
@@ -559,25 +612,33 @@ pub fn find_project_manifest() -> Option<PathBuf> {
     })
 }
 
-/// Create a symlink from the default pixi directory to the custom target
-/// directory
+/// Create a symlink from the directory to the custom target directory
 #[cfg(not(windows))]
-fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
-    if default_pixi_dir.exists() {
+fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
+    if symlink_dir.exists() {
         tracing::debug!(
             "Symlink already exists at '{}', skipping creating symlink.",
-            default_pixi_dir.display()
+            symlink_dir.display()
         );
         return;
     }
-    symlink(pixi_dir_name, default_pixi_dir)
+    let parent = symlink_dir
+        .parent()
+        .expect("symlink dir should have parent");
+    fs_extra::dir::create_all(parent, false)
+        .map_err(|e| tracing::error!("Failed to create directory '{}': {}", parent.display(), e))
+        .ok();
+
+    symlink(target_dir, symlink_dir)
         .map_err(|e| {
-            tracing::error!(
-                "Failed to create symlink from '{}' to '{}': {}",
-                pixi_dir_name.display(),
-                default_pixi_dir.display(),
-                e
-            )
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                tracing::error!(
+                    "Failed to create symlink from '{}' to '{}': {}",
+                    target_dir.display(),
+                    symlink_dir.display(),
+                    e
+                )
+            }
         })
         .ok();
 }

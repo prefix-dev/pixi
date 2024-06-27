@@ -7,7 +7,7 @@ use uv_types::{HashStrategy, InFlight};
 
 use crate::{
     config::{self, get_cache_dir},
-    Project,
+    consts, Project,
 };
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
@@ -25,7 +25,7 @@ pub struct UvResolutionContext {
 
 impl UvResolutionContext {
     pub fn from_project(project: &Project) -> miette::Result<Self> {
-        let uv_cache = get_cache_dir()?.join("uv-cache");
+        let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             std::fs::create_dir_all(&uv_cache)
                 .into_diagnostic()

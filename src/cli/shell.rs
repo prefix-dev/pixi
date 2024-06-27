@@ -1,21 +1,26 @@
-use crate::activation::get_activation_env;
-use crate::config::ConfigCliPrompt;
-use crate::{prompt, Project};
+use std::{collections::HashMap, io::Write, path::PathBuf};
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::activation::PathModificationBehavior;
-use rattler_shell::shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript};
-use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
+use rattler_shell::{
+    activation::PathModificationBehavior,
+    shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
+};
 
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
-
-use crate::cli::LockFileUsageArgs;
-use crate::project::manifest::EnvironmentName;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    cli::LockFileUsageArgs,
+    config::ConfigCliPrompt,
+    environment::get_up_to_date_prefix,
+    project::{
+        manifest::EnvironmentName,
+        virtual_packages::verify_current_platform_has_required_virtual_packages,
+    },
+    prompt, Project,
+};
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
@@ -213,8 +218,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
     };
 
+    // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
+    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+    let env = project
+        .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
+        .await?;
+
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.

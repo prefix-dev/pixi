@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.23.0/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.24.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -13,7 +13,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.23.0/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.24.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -1149,6 +1149,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "clean-env": {
+          "title": "Clean-Env",
+          "description": "Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
+          "type": "boolean"
+        },
         "cmd": {
           "title": "Cmd",
           "description": "A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/features/advanced_tasks/#syntax)",
@@ -1208,6 +1213,15 @@
               "type": "string",
               "pattern": "^[^\\s\\$]+$"
             }
+          ]
+        },
+        "description": {
+          "title": "Description",
+          "description": "A short description of the task",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "Build the project"
           ]
         },
         "env": {

@@ -160,34 +160,94 @@ This approach guarantees a conflict-free environment by allowing only one featur
 For the user the cli would look like this:
 
 ```shell title="Default behavior"
-pixi run python
+➜ pixi run python
 # Runs python in the `default` environment
 ```
 
 ```shell title="Activating an specific environment"
-pixi run -e test pytest
-pixi run --environment test pytest
+➜ pixi run -e test pytest
+➜ pixi run --environment test pytest
 # Runs `pytest` in the `test` environment
 ```
 
 ```shell title="Activating a shell in an environment"
-pixi shell -e cuda
+➜ pixi shell -e cuda
 pixi shell --environment cuda
 # Starts a shell in the `cuda` environment
 ```
 
 ```shell title="Running any command in an environment"
-pixi run -e test any_command
+➜ pixi run -e test any_command
 # Runs any_command in the `test` environment which doesn't require to be predefined as a task.
 ```
+### Abmigious Environment Selection
+It's possible to define tasks in multiple environments, in this case the user should be prompted to select the environment.
+
+Here is a simple example of a task only manifest:
+
+```toml title="pixi.toml"
+[project]
+name = "test_ambiguous_env"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tasks]
+default = "echo Default"
+ambi = "echo Ambi::Default"
+[feature.test.tasks]
+test = "echo Test"
+ambi = "echo Ambi::Test"
+
+[feature.dev.tasks]
+dev = "echo Dev"
+ambi = "echo Ambi::Dev"
+
+[environments]
+default = ["test", "dev"]
+test = ["test"]
+dev = ["dev"]
+```
+Trying to run the `abmi` task will prompt the user to select the environment.
+As it is available in all environments.
 
 ```shell title="Interactive selection of environments if task is in multiple environments"
-# In the scenario where test is a task in multiple environments, interactive selection should be used.
-pixi run test
-# Which env?
-# 1. test
-# 2. test39
+➜ pixi run ambi
+? The task 'ambi' can be run in multiple environments.
+
+Please select an environment to run the task in: ›
+❯ default # selecting default
+  test
+  dev
+
+✨ Pixi task (ambi in default): echo Ambi::Test
+Ambi::Test
 ```
+
+As you can see it runs the task defined in the `feature.task` but it is run in the `default` environment.
+This happens because the `ambi` task is defined in the `test` feature, and it is overwritten in the default environment.
+So the `tasks.default` is now non-reachable from any environment.
+
+Some other results running in this example:
+```shell
+➜ pixi run --environment test ambi
+✨ Pixi task (ambi in test): echo Ambi::Test
+Ambi::Test
+
+➜ pixi run --environment dev ambi
+✨ Pixi task (ambi in dev): echo Ambi::Dev
+Ambi::Dev
+
+# dev is run in the default environment
+➜ pixi run dev
+✨ Pixi task (dev in default): echo Dev
+Dev
+
+# dev is run in the dev environment
+➜ pixi run -e dev dev
+✨ Pixi task (dev in dev): echo Dev
+Dev
+```
+
 
 ## Important links
 

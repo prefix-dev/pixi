@@ -15,7 +15,8 @@ use tokio::task::spawn_blocking;
 use crate::progress::await_in_progress;
 use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
-use crate::{config, EnvironmentName, FeatureName, Project};
+use crate::util::default_channel_config;
+use crate::{config, consts, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
 
@@ -90,7 +91,7 @@ impl Display for EnvironmentInfo {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
         if !self.channels.is_empty() {
-            let channels_list = self.channels.iter().map(|c| c.to_string()).format(", ");
+            let channels_list = self.channels.iter().format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -347,7 +348,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels: env
                             .channels()
                             .into_iter()
-                            .filter_map(|c| c.name.clone())
+                            .map(|c| {
+                                default_channel_config()
+                                    .canonical_name(c.base_url())
+                                    .to_string()
+                            })
                             .collect(),
                         prefix: env.dir(),
                         tasks,
@@ -380,7 +385,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let info = Info {
         platform: Platform::current().to_string(),
         virtual_packages,
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: consts::PIXI_VERSION.to_string(),
         cache_dir: Some(config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,

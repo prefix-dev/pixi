@@ -150,16 +150,36 @@ impl Task {
         }
     }
 
+    /// Returns the description of the task.
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            Task::Plain(_) => None,
+            Task::Custom(_) => None,
+            Task::Execute(exe) => exe.description.as_deref(),
+            Task::Alias(_) => None,
+        }
+    }
+
     /// True if this task is a custom task instead of something defined in a project.
     pub fn is_custom(&self) -> bool {
         matches!(self, Task::Custom(_))
+    }
+
+    /// True if this task is meant to run in a clean environment, stripped of all non required variables.
+    pub fn clean_env(&self) -> bool {
+        match self {
+            Task::Plain(_) => false,
+            Task::Custom(_) => false,
+            Task::Execute(execute) => execute.clean_env,
+            Task::Alias(_) => false,
+        }
     }
 }
 
 /// A command script executes a single command from the environment
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
     /// an array of strings and a single string are supported.
@@ -172,8 +192,8 @@ pub struct Execute {
     pub outputs: Option<Vec<String>>,
 
     /// A list of commands that should be run before this one
-    // BREAK: Make the alias a renamed field to force kebab-case
-    #[serde(default, alias = "depends-on")]
+    // BREAK: Make the remove the alias and force kebab-case
+    #[serde(default, alias = "depends_on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 
@@ -182,6 +202,13 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
+
+    /// A description of the task
+    pub description: Option<String>,
+
+    /// Isolate the task from the running machine
+    #[serde(default)]
+    pub clean_env: bool,
 }
 
 impl From<Execute> for Task {
@@ -200,6 +227,7 @@ pub struct Custom {
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
 }
+
 impl From<Custom> for Task {
     fn from(value: Custom) -> Self {
         Task::Custom(value)
@@ -251,6 +279,9 @@ pub struct Alias {
     #[serde(alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
+
+    /// A description of the task.
+    pub description: Option<String>,
 }
 
 impl Display for Task {
@@ -288,6 +319,10 @@ impl Display for Task {
             if !env.is_empty() {
                 write!(f, ", env = {:?}", env)?;
             }
+        }
+        let description = self.description();
+        if let Some(description) = description {
+            write!(f, ", description = {:?}", description)?;
         }
 
         Ok(())
