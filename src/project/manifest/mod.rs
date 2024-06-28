@@ -1683,6 +1683,24 @@ mod tests {
             .unwrap());
     }
 
+    #[test]
+    fn test_pypy_options_project_and_default_feature() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [project.pypi-options]
+            extra-index-urls = ["https://pypi.org/simple2"]
+
+            [pypi-options]
+            extra-index-urls = ["https://pypi.org/simple3"]
+            "#
+        );
+
+        let manifest =
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!");
+        assert_yaml_snapshot!(manifest.project.pypi_options.clone().unwrap());
+    }
+
     fn test_remove(
         file_contents: &str,
         name: &str,
