@@ -277,7 +277,7 @@ fn get_tasks_per_env(
         let mut tasks: HashMap<TaskName, Task> = HashMap::new();
         let this_env_tasks = env
             .tasks(Some(env.best_platform()))
-            .expect("error getting tasks");
+            .unwrap_or_else(|_| HashMap::new());
         for taskname in task_list.iter() {
             // if the task is in the environment, add it to the list
             if let Some(&task) = this_env_tasks.get(taskname) {
