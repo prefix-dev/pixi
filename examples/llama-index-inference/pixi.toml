@@ -3,7 +3,7 @@ name = "alpaca"
 version = "0.1.0"
 description = "Llama-index and llama.cpp running a local model. Tested on MacOS ARM architecture with Metal GPU support"
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 
 # setting this avoids building scikit_learn from source (on arm)
 [system-requirements]
