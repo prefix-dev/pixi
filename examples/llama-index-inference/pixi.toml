@@ -5,6 +5,10 @@ description = "Llama-index and llama.cpp running a local model. Tested on MacOS 
 channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
+# setting this avoids building scikit_learn from source (on arm)
+[system-requirements]
+macos = "12.0"
+
 [dependencies]
 python = "<3.12"
 scipy = ">=1.14.0,<1.15"
