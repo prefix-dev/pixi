@@ -1,7 +1,7 @@
 [project]
 name = "alpaca"
 version = "0.1.0"
-description = "Llama-index and llama.cpp running a local model. Tested on MacOS ARM architecture with Metal GPU support"
+description = "Llama-index and llama.cpp running a local model, tested with MacOS ARM and Linux AMD 64"
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64"]
 
