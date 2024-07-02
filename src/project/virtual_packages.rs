@@ -15,7 +15,7 @@ use thiserror::Error;
 
 /// The default GLIBC version to use. This is used when no system requirements are specified.
 pub fn default_glibc_version() -> Version {
-    "2.17".parse().unwrap()
+    "2.28".parse().unwrap()
 }
 
 /// The default linux version to use. This is used when no system requirements are specified.
@@ -27,8 +27,8 @@ pub fn default_linux_version() -> Version {
 /// MacOS platform.
 pub fn default_mac_os_version(platform: Platform) -> Version {
     match platform {
-        Platform::OsxArm64 => "11.0".parse().unwrap(),
-        Platform::Osx64 => "10.15".parse().unwrap(),
+        Platform::OsxArm64 => "13.0".parse().unwrap(),
+        Platform::Osx64 => "13.0".parse().unwrap(),
         _ => panic!(
             "default_mac_os_version() called with non-osx platform: {}",
             platform

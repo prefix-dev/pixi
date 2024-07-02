@@ -660,7 +660,7 @@ async fn resolve_editables(
                 if ArchiveTimestamp::up_to_date_with(&editable.path, ArchiveTarget::Install(dist))
                     .into_diagnostic()?
                     // If the editable is dynamic, we need to rebuild it
-                    && !uv_installer::is_dynamic(dist.path())
+                    && !uv_installer::is_dynamic(&editable.path)
                     // And the dist is already editable
                     && dist.is_editable()
                 {
