@@ -1,12 +1,11 @@
+use itertools::{Either, Itertools};
+use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
+use rattler_conda_types::Platform;
 use std::{
     collections::HashSet,
     ops::Range,
     path::{Path, PathBuf},
 };
-
-use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
-use rattler_conda_types::Platform;
 
 use super::pypi_options::PypiOptions;
 use crate::project::manifest::{
@@ -177,10 +176,17 @@ impl ProjectManifest {
             }
         }
 
+        // Choose whether to include the default
+        let default = if env.no_default_feature {
+            Either::Left(std::iter::empty())
+        } else {
+            Either::Right(std::iter::once(&default_feature))
+        };
+
         // Check if there are conflicts in system requirements between features
         if let Err(e) = features
             .iter()
-            .chain(std::iter::once(&default_feature))
+            .chain(default.clone())
             .map(|feature| &feature.system_requirements)
             .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
         {
@@ -196,8 +202,15 @@ impl ProjectManifest {
         // Check if there are no conflicts in pypi options between features
         features
             .iter()
-            .chain(std::iter::once(&default_feature))
-            .filter_map(|feature| feature.pypi_options())
+            .chain(default)
+            .filter_map(|feature| {
+                if feature.pypi_options().is_none() {
+                    // Use the project default features
+                    self.project.pypi_options.as_ref()
+                } else {
+                    feature.pypi_options()
+                }
+            })
             .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
             .into_diagnostic()?;
 

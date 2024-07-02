@@ -1,3 +1,4 @@
+use super::pypi_options::PypiOptions;
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexSet;
 use rattler_conda_types::{Platform, Version};
@@ -54,4 +55,7 @@ pub struct ProjectMetadata {
 
     /// URL or Path of the conda to pypi name mapping
     pub conda_pypi_map: Option<HashMap<String, String>>,
+
+    /// The pypi options supported in the project
+    pub pypi_options: Option<PypiOptions>,
 }

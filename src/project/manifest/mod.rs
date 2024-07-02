@@ -1101,6 +1101,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
+            /// pypi-options
             #[serde(default)]
             pypi_options: Option<PypiOptions>,
 
@@ -1140,6 +1141,9 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
+
+            // Use the pypi-options from the manifest for
+            // the default feature
             pypi_options: toml_manifest.pypi_options,
 
             // Combine the default target with all user specified targets
@@ -1661,22 +1665,40 @@ mod tests {
         let contents = format!(
             r#"
             {PROJECT_BOILERPLATE}
-            [pypi-options]
+            [project.pypi-options]
             index-url = "https://pypi.org/simple"
             extra-index-urls = ["https://pypi.org/simple2"]
-            [[pypi-options.find-links]]
+            [[project.pypi-options.find-links]]
             path = "../foo"
-            [[pypi-options.find-links]]
+            [[project.pypi-options.find-links]]
             url = "https://example.com/bar"
             "#
         );
 
         assert_yaml_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
             .expect("parsing should succeed!")
-            .default_feature()
+            .project
             .pypi_options
             .clone()
             .unwrap());
+    }
+
+    #[test]
+    fn test_pypy_options_project_and_default_feature() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [project.pypi-options]
+            extra-index-urls = ["https://pypi.org/simple2"]
+
+            [pypi-options]
+            extra-index-urls = ["https://pypi.org/simple3"]
+            "#
+        );
+
+        let manifest =
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!");
+        assert_yaml_snapshot!(manifest.project.pypi_options.clone().unwrap());
     }
 
     fn test_remove(
