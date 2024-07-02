@@ -722,6 +722,44 @@ mod tests {
     }
 
     #[test]
+    fn test_pypi_options_project_and_default_feature() {
+        let contents = r##"
+            [project]
+            name = "foobar"
+            channels = ["conda-forge"]
+            platforms = ["osx-64", "linux-64", "win-64"]
+
+            [project.pypi-options]
+            extra-index-urls = ["https://pypi.org/simple2"]
+
+            # These are added to the default feature
+            [feature.foo.pypi-options]
+            extra-index-urls = ["https://pypi.org/simple"]
+
+            [environments]
+            foo = ["foo"]
+            bar = { features = ["foo"], no-default-feature = true }
+            "##;
+
+        let manifest = Project::from_str(Path::new("pixi.toml"), &contents).unwrap();
+        assert_eq!(
+            manifest
+                .default_environment()
+                .pypi_options()
+                .extra_index_urls
+                .unwrap()
+                .len(),
+            1
+        );
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options();
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options();
+        // Includes default pypl options, inherited from project
+        // and the one from the feature
+        assert_eq!(foo_opts.extra_index_urls.unwrap().len(), 2);
+        assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 1);
+    }
+
+    #[test]
     fn test_validate_platform() {
         let manifest = Project::from_str(
             Path::new("pixi.toml"),
