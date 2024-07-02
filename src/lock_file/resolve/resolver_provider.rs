@@ -9,9 +9,8 @@ use distribution_types::{
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
-use pypi_types::Metadata23;
 use rattler_conda_types::RepoDataRecord;
-use uv_distribution::ArchiveMetadata;
+use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_resolver::{
     DefaultResolverProvider, MetadataResponse, ResolverProvider, VersionMap, VersionsResponse,
     WheelMetadataResult,
@@ -96,12 +95,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
                 return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
-                    metadata: Metadata23 {
+                    metadata: Metadata {
                         name: iden.name.as_normalized().clone(),
                         version: iden.version.clone(),
                         requires_dist: vec![],
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
+                        dev_dependencies: Default::default(),
                     },
                     hashes: vec![],
                 })))

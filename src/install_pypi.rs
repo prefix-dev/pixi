@@ -806,6 +806,7 @@ pub async fn update_python_distributions(
         &index_locations,
         &flat_index,
         &in_memory_index,
+        &GitResolver::default(),
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
@@ -814,6 +815,7 @@ pub async fn update_python_distributions(
         &uv_context.no_build,
         &uv_context.no_binary,
         uv_context.concurrency,
+        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -956,6 +958,7 @@ pub async fn update_python_distributions(
             registry_client.as_ref(),
             &build_dispatch,
             uv_context.concurrency.downloads,
+            PreviewMode::Disabled,
         );
 
         // Before hitting the network let's make sure the credentials are available to
