@@ -1,7 +1,10 @@
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use miette::IntoDiagnostic;
-use rattler_conda_types::PrefixRecord;
+use miette::{Context, IntoDiagnostic};
+use rattler_conda_types::{Platform, PrefixRecord};
+use rattler_shell::activation::{ActivationVariables, Activator};
+use rattler_shell::shell::ShellEnum;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
 
@@ -21,6 +24,20 @@ impl Prefix {
     /// Returns the root directory of the prefix
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Runs the activation scripts of the prefix and returns the environment
+    /// variables that were modified as part of this process.
+    pub async fn run_activation(&self) -> miette::Result<HashMap<String, String>> {
+        let activator =
+            Activator::from_path(self.root(), ShellEnum::default(), Platform::current())
+                .into_diagnostic()
+                .context("failed to constructor environment activator")?;
+
+        activator
+            .run_activation(ActivationVariables::from_env().unwrap_or_default())
+            .into_diagnostic()
+            .context("failed to run activation")
     }
 
     /// Scans the `conda-meta` directory of an environment and returns all the [`PrefixRecord`]s found

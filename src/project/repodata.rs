@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::{config, project::Project};
 use rattler_repodata_gateway::{ChannelConfig, Gateway, SourceConfig};
 use std::path::PathBuf;
@@ -12,28 +13,32 @@ impl Project {
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
             });
 
-            // Determine the default configuration from the config
-            let default_source_config = self
-                .config
-                .repodata_config
-                .as_ref()
-                .map(|config| SourceConfig {
-                    jlap_enabled: !config.disable_jlap.unwrap_or(false),
-                    zstd_enabled: !config.disable_zstd.unwrap_or(false),
-                    bz2_enabled: !config.disable_bzip2.unwrap_or(false),
-                    cache_action: Default::default(),
-                })
-                .unwrap_or_default();
-
             // Construct the gateway
             Gateway::builder()
                 .with_client(self.authenticated_client().clone())
                 .with_cache_dir(cache_dir.join("repodata"))
-                .with_channel_config(ChannelConfig {
-                    default: default_source_config,
-                    per_channel: Default::default(),
-                })
+                .with_channel_config(ChannelConfig::from(&self.config))
                 .finish()
         })
+    }
+}
+
+impl<'c> From<&'c Config> for ChannelConfig {
+    fn from(config: &'c Config) -> Self {
+        let default_source_config = config
+            .repodata_config
+            .as_ref()
+            .map(|config| SourceConfig {
+                jlap_enabled: !config.disable_jlap.unwrap_or(false),
+                zstd_enabled: !config.disable_zstd.unwrap_or(false),
+                bz2_enabled: !config.disable_bzip2.unwrap_or(false),
+                cache_action: Default::default(),
+            })
+            .unwrap_or_default();
+
+        Self {
+            default: default_source_config,
+            per_channel: Default::default(),
+        }
     }
 }
