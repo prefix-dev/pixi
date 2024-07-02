@@ -26,7 +26,7 @@ When you want to show your users and contributors that they can use pixi in your
   - [iMOD Python](https://github.com/Deltares/imod-python): Make massive MODFLOW models
   - [iMOD Coupler](https://github.com/Deltares/imod_coupler): Application for coupling hydrological kernels
   - [iMOD Documentation](https://github.com/Deltares/iMOD-Documentation): Documentation of the iMOD suite.
-  - [Xugrid](https://github.com/Deltares/xugrid):  Xarray and unstructured grids
+  - [Xugrid](https://github.com/Deltares/xugrid): Xarray and unstructured grids
   - [Numba celltree](https://github.com/Deltares/numba_celltree): Celltree data structure for searching for points, lines, boxes, and cells (convex polygons) in a two dimensional unstructured mesh.
   - [QGIS-Tim](https://github.com/Deltares/QGIS-Tim): QGIS plugin and utilities for TimML multi-layer analytic element model
   - [Pandamesh](https://github.com/Deltares/pandamesh): From geodataframe to mesh
@@ -36,11 +36,17 @@ When you want to show your users and contributors that they can use pixi in your
   - [PyFlwDir](https://github.com/Deltares/pyflwdir): Fast methods to work with hydro- and topography data in pure Python.
 - USGS:
   - [MODFLOW 6](https://github.com/MODFLOW-USGS/modflow6): USGS modular hydrological model
+- QuantCo:
+  - [glum](https://github.com/quantco/glum): High performance Python GLMs with all the features!
+  - [polarify](https://github.com/Quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
+  - [datajudge](https://github.com/Quantco/datajudge): Assessing whether data from database complies with reference information
+  - [ndonnx](https://github.com/Quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
+  - [multiregex](https://github.com/Quantco/multiregex): Quickly match many regexes against a string
+  - [slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
+  - [metalearners](https://github.com/Quantco/metalearners): MetaLearners for CATE estimation
 
 - [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
 - [karelze/tclf](https://github.com/KarelZe/tclf): A python library for trade classification⚡
-- [quantco/polarify](https://github.com/quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
-- [quantco/slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
 - [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
 - [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
