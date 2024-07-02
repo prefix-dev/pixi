@@ -56,7 +56,7 @@ Found a Bug or Have a Feature Request?
 Open an issue at: https://github.com/prefix-dev/pixi/issues
 
 Need Help?
-Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
+Ask a question on the Prefix Discord server: https://discord.prefix.dev
 
 For more information, see the documentation at: https://pixi.sh
 "
