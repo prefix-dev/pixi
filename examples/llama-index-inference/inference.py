@@ -1,4 +1,3 @@
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, set_global_tokenizer
 from llama_index.llms.llama_cpp import LlamaCPP
 from llama_index.llms.llama_cpp.llama_utils import (
     messages_to_prompt,

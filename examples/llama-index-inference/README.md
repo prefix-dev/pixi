@@ -19,8 +19,8 @@ llama_print_timings:        eval time =   17786.87 ms /   246 runs   (   72.30 m
 llama_print_timings:       total time =   19959.11 ms /   317 tokens
 ```
 
-Opportunities for improvement: 
+Opportunities for improvement:
 
 - Modify for Linux / CUDA environments to demonstrate a more practical production stack.
-- Enhance the pipeline with a RAG workflow, which is what Llama Index is good at. 
+- Enhance the pipeline with a RAG workflow, which is what Llama Index is good at.
 - Experiment with different GGUF models for a quality / performance balance that fits your hardware.
