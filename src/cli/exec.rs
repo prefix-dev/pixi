@@ -84,6 +84,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = config::get_cache_dir().context("failed to determine cache directory")?;
 
+    let mut command_args = args.command.iter();
+    let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
+
     // Create the environment to run the command in.
     let prefix = create_prefix(&args, &cache_dir, &config).await?;
 
@@ -94,9 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
     // Spawn the command
-    let mut command_args = args.command.into_iter();
-    let command = command_args.next().expect("missing required command");
-    let status = std::process::Command::new(&command)
+    let status = std::process::Command::new(command)
         .args(command_args)
         .envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
         .status()
