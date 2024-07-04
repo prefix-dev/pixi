@@ -55,16 +55,15 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 ## Status
 
-Pixi is under active development, and we're planning to add many more features.
+Pixi is ready for production!
 We are working hard to keep file-format changes compatible with the previous
 versions so that you can rely on pixi with peace of mind.
 
-Some notable features we have in the pipeline are:
+Some notable features we envision for upcoming releases are:
 
 - **Build and publish** your project as a Conda package.
-- Support for **PyPi packages**.
 - Support for **dependencies from source**.
-- Improvements to documentation, examples, and user experience.
+- More powerful "global installation" of packages towards a deterministic setup of global packages on multiple machines.
 
 ## Installation
 
