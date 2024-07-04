@@ -413,7 +413,7 @@ fn update_pypi_specs_from_lock_file(
                 })
                 .collect_vec()
                 .iter(),
-            PinningStrategy::PinMinor,
+            project.config().pinning_strategy.clone().unwrap_or_else(|| PinningStrategy::PinMinor),
         );
 
         let version_spec =
@@ -474,7 +474,11 @@ fn update_conda_specs_from_lock_file(
                     None
                 }
             }),
-            PinningStrategy::PinMinor,
+            project
+                .config()
+                .pinning_strategy
+                .clone()
+                .unwrap_or_else(|| PinningStrategy::PinMinor),
         );
 
         if let Some(version_constraint) = version_constraint {
@@ -517,6 +521,7 @@ fn determine_version_constraint<'a>(
             LogicalOperator::Or,
             versions
                 .into_iter()
+                .dedup()
                 .map(|v| VersionSpec::Exact(EqualityOperator::Equals, v.clone()))
                 .collect(),
         ),
@@ -593,7 +598,7 @@ mod tests {
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMajor).unwrap().to_string(), @">=1.2.0,<2");
 
         insta::assert_snapshot!(determine_version_constraint(&["1.2".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2");
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
 
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinLatestUp).unwrap().to_string(), @">=1.2.0");
 
