@@ -521,7 +521,7 @@ fn determine_version_constraint<'a>(
         .bump(VersionBumpType::Last)
         .ok()?;
     let constraint = match pinning_strategy {
-        PinningStrategy::PinExactVersion => VersionSpec::Group(
+        PinningStrategy::ExactVersion => VersionSpec::Group(
             LogicalOperator::Or,
             versions
                 .into_iter()
@@ -529,7 +529,7 @@ fn determine_version_constraint<'a>(
                 .map(|v| VersionSpec::Exact(EqualityOperator::Equals, v.clone()))
                 .collect(),
         ),
-        PinningStrategy::PinMajor => {
+        PinningStrategy::Major => {
             let upper_bound = max_version
                 .pop_segments(2)
                 .unwrap_or_else(|| upper_bound.clone())
@@ -543,7 +543,7 @@ fn determine_version_constraint<'a>(
                 ],
             )
         }
-        PinningStrategy::PinMinor => {
+        PinningStrategy::Minor => {
             let upper_bound = max_version
                 .pop_segments(1)
                 .unwrap_or_else(|| upper_bound.clone())
@@ -557,9 +557,7 @@ fn determine_version_constraint<'a>(
                 ],
             )
         }
-        PinningStrategy::PinLatestUp => {
-            VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound)
-        }
+        PinningStrategy::LatestUp => VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
         PinningStrategy::NoPin => VersionSpec::Any,
         PinningStrategy::Semver => {
             // For v0 packages, we pin to minor instead of major. As discussed in https://github.com/prefix-dev/pixi/issues/1562
@@ -622,14 +620,14 @@ mod tests {
             .to_string(), @">=0.2.0,<0.3");
 
         // Major
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMajor).unwrap().to_string(), @">=1.2.0,<2");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::Major).unwrap().to_string(), @">=1.2.0,<2");
 
         // Minor
-        insta::assert_snapshot!(determine_version_constraint(&["1.2".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2");
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2".parse().unwrap()], PinningStrategy::ExactVersion).unwrap().to_string(), @"==1.2");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::ExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
 
         // LatestUP
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinLatestUp).unwrap().to_string(), @">=1.2.0");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::LatestUp).unwrap().to_string(), @">=1.2.0");
 
         // NoPin
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::NoPin).unwrap().to_string(), @"*");

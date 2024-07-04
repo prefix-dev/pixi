@@ -225,14 +225,14 @@ pub enum PinningStrategy {
     #[default]
     Semver,
     /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
-    PinMinor,
+    Minor,
     /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
-    PinMajor,
+    Major,
     /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
-    PinLatestUp,
+    LatestUp,
     /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
     // Adding "Version" to the name for future extendability.
-    PinExactVersion,
+    ExactVersion,
     /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
     // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
     NoPin,
@@ -842,10 +842,10 @@ UNUSED = "unused"
 
     #[rstest]
     #[case("semver", PinningStrategy::Semver)]
-    #[case("pin-major", PinningStrategy::PinMajor)]
-    #[case("pin-minor", PinningStrategy::PinMinor)]
-    #[case("pin-exact-version", PinningStrategy::PinExactVersion)]
-    #[case("pin-latest-up", PinningStrategy::PinLatestUp)]
+    #[case("major", PinningStrategy::Major)]
+    #[case("minor", PinningStrategy::Minor)]
+    #[case("exact-version", PinningStrategy::ExactVersion)]
+    #[case("latest-up", PinningStrategy::LatestUp)]
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
         let toml = format!("pinning-strategy = \"{}\"", input);
@@ -1110,10 +1110,10 @@ UNUSED = "unused"
     #[case("pinning-strategy", None, None)]
     #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
     #[case("pinning-strategy", Some("no-pin".to_string()), Some(PinningStrategy::NoPin))]
-    #[case("pinning-strategy", Some("pin-exact-version".to_string()), Some(PinningStrategy::PinExactVersion))]
-    #[case("pinning-strategy", Some("pin-latest-up".to_string()), Some(PinningStrategy::PinLatestUp))]
-    #[case("pinning-strategy", Some("pin-major".to_string()), Some(PinningStrategy::PinMajor))]
-    #[case("pinning-strategy", Some("pin-minor".to_string()), Some(PinningStrategy::PinMinor))]
+    #[case("pinning-strategy", Some("exact-version".to_string()), Some(PinningStrategy::ExactVersion))]
+    #[case("pinning-strategy", Some("latest-up".to_string()), Some(PinningStrategy::LatestUp))]
+    #[case("pinning-strategy", Some("major".to_string()), Some(PinningStrategy::Major))]
+    #[case("pinning-strategy", Some("minor".to_string()), Some(PinningStrategy::Minor))]
     fn test_set_pinning_strategy(
         #[case] key: &str,
         #[case] value: Option<String>,
