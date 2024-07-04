@@ -223,12 +223,16 @@ impl PyPIConfig {
 pub enum PinningStrategy {
     /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <1.3"
     #[default]
-    PinLatestMinor,
+    PinMinor,
+    /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
+    PinMajor,
     /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
-    PinHigherOrEqualLatest,
+    PinLatestUp,
     /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
+    // Adding "Version" to the name for future extendability.
     PinExactVersion,
     /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
+    // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
     NoPin,
 }
 impl FromStr for PinningStrategy {
@@ -627,8 +631,13 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys = || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
-        let err = miette::miette!("Unknown key: {}\n{}", console::style(key).red(), show_supported_keys());
+        let show_supported_keys =
+            || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
+        let err = miette::miette!(
+            "Unknown key: {}\n{}",
+            console::style(key).red(),
+            show_supported_keys()
+        );
 
         match key {
             "default-channels" => {
@@ -796,6 +805,7 @@ pub fn config_path_global() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn test_config_parse() {
@@ -826,6 +836,18 @@ UNUSED = "unused"
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
         );
+    }
+
+    #[rstest]
+    #[case("pin-major", PinningStrategy::PinMajor)]
+    #[case("pin-minor", PinningStrategy::PinMinor)]
+    #[case("pin-exact-version", PinningStrategy::PinExactVersion)]
+    #[case("pin-latest-up", PinningStrategy::PinLatestUp)]
+    #[case("no-pin", PinningStrategy::NoPin)]
+    fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
+        let toml = format!("pinning-strategy = \"{}\"", input);
+        let (config, _) = Config::from_toml(&toml).unwrap();
+        assert_eq!(config.pinning_strategy, Some(expected));
     }
 
     #[test]
@@ -1078,40 +1100,23 @@ UNUSED = "unused"
         config.set("change-ps1", None).unwrap();
         assert_eq!(config.change_ps1, None);
 
-        config.set("pinning-strategy", None).unwrap();
-        assert_eq!(config.pinning_strategy, None);
-        config
-            .set("pinning-strategy", Some("no-pin".to_string()))
-            .unwrap();
-        assert_eq!(config.pinning_strategy, Some(PinningStrategy::NoPin));
-        config
-            .set("pinning-strategy", Some("pin-exact-version".to_string()))
-            .unwrap();
-        assert_eq!(
-            config.pinning_strategy,
-            Some(PinningStrategy::PinExactVersion)
-        );
-        config
-            .set(
-                "pinning-strategy",
-                Some("pin-higher-or-equal-latest".to_string()),
-            )
-            .unwrap();
-        assert_eq!(
-            config.pinning_strategy,
-            Some(PinningStrategy::PinHigherOrEqualLatest)
-        );
-        config
-            .set("pinning-strategy", Some("pin-latest-minor".to_string()))
-            .unwrap();
-        assert_eq!(
-            config.pinning_strategy,
-            Some(PinningStrategy::PinLatestMinor)
-        );
-        config
-            .set("pinning-strategy", Some("bla".to_string()))
-            .unwrap_err();
-
         config.set("unknown-key", None).unwrap_err();
+    }
+
+    #[rstest]
+    #[case("pinning-strategy", None, None)]
+    #[case("pinning-strategy", Some("no-pin".to_string()), Some(PinningStrategy::NoPin))]
+    #[case("pinning-strategy", Some("pin-exact-version".to_string()), Some(PinningStrategy::PinExactVersion))]
+    #[case("pinning-strategy", Some("pin-latest-up".to_string()), Some(PinningStrategy::PinLatestUp))]
+    #[case("pinning-strategy", Some("pin-major".to_string()), Some(PinningStrategy::PinMajor))]
+    #[case("pinning-strategy", Some("pin-minor".to_string()), Some(PinningStrategy::PinMinor))]
+    fn test_set_pinning_strategy(
+        #[case] key: &str,
+        #[case] value: Option<String>,
+        #[case] expected: Option<PinningStrategy>,
+    ) {
+        let mut config = Config::default();
+        config.set(key, value).unwrap();
+        assert_eq!(config.pinning_strategy, expected);
     }
 }
