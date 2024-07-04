@@ -413,7 +413,11 @@ fn update_pypi_specs_from_lock_file(
                 })
                 .collect_vec()
                 .iter(),
-            project.config().pinning_strategy.clone().unwrap_or_else(|| PinningStrategy::PinMinor),
+            project
+                .config()
+                .pinning_strategy
+                .clone()
+                .unwrap_or(PinningStrategy::PinMinor),
         );
 
         let version_spec =
@@ -478,7 +482,7 @@ fn update_conda_specs_from_lock_file(
                 .config()
                 .pinning_strategy
                 .clone()
-                .unwrap_or_else(|| PinningStrategy::PinMinor),
+                .unwrap_or(PinningStrategy::PinMinor),
         );
 
         if let Some(version_constraint) = version_constraint {
