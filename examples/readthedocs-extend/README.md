@@ -16,7 +16,7 @@ This example shows how to [extend] a [ReadTheDocs] `sphinx` build by customizing
 >
 > For a simpler `mkdocs` build, see the [`readthedocs-override`][override] example.
 
-[ReadTheDocs]: https://readthdocs.com
+[ReadTheDocs]: https://readthedocs.com
 [extend]: https://docs.readthedocs.io/en/stable/build-customization.html#extend-the-build-process
 [build.jobs]: https://docs.readthedocs.io/en/stable/config-file/v2.html#build-jobs
 [readthedocs-sphinx-ext]: https://github.com/readthedocs/readthedocs-sphinx-ext

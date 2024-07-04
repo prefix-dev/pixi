@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockFileBuilder, Package};
+use rattler_lock::{LockFile, Package};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
@@ -22,8 +22,7 @@ use crate::{
     consts,
     consts::{CondaEmoji, PypiEmoji},
     load_lock_file,
-    lock_file::UpdateContext,
-    project::grouped_environment::GroupedEnvironment,
+    lock_file::{filter_lock_file, UpdateContext},
     EnvironmentName, HasFeatures, Project,
 };
 
@@ -262,35 +261,9 @@ fn check_package_exists(
 
 /// Constructs a new lock-file where some of the constraints have been removed.
 fn unlock_packages(project: &Project, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
-    let mut builder = LockFileBuilder::new();
-
-    for (environment_name, environment) in lock_file.environments() {
-        // Find the environment in the project
-        let Some(project_env) = project.environment(environment_name) else {
-            continue;
-        };
-
-        // Copy the channels
-        builder.set_channels(environment_name, environment.channels().to_vec());
-
-        // Copy the indexes
-        let indexes = environment
-            .pypi_indexes()
-            .cloned()
-            .unwrap_or_else(|| GroupedEnvironment::from(project_env).pypi_options().into());
-        builder.set_pypi_indexes(environment_name, indexes);
-
-        // Copy all packages that don't need to be relaxed
-        for (platform, packages) in environment.packages_by_platform() {
-            for package in packages {
-                if !specs.should_relax(environment_name, platform, &package) {
-                    builder.add_package(environment_name, platform, package);
-                }
-            }
-        }
-    }
-
-    builder.finish()
+    filter_lock_file(project, lock_file, |env, platform, package| {
+        !specs.should_relax(env.name().as_str(), platform, package)
+    })
 }
 
 // Represents the differences between two sets of packages.
