@@ -221,8 +221,10 @@ impl PyPIConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
-    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <1.3"
+    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0" becomes ">=0.1.0, <0.2"
     #[default]
+    Semver,
+    /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
     PinMinor,
     /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
     PinMajor,
@@ -839,6 +841,7 @@ UNUSED = "unused"
     }
 
     #[rstest]
+    #[case("semver", PinningStrategy::Semver)]
     #[case("pin-major", PinningStrategy::PinMajor)]
     #[case("pin-minor", PinningStrategy::PinMinor)]
     #[case("pin-exact-version", PinningStrategy::PinExactVersion)]
@@ -1105,6 +1108,7 @@ UNUSED = "unused"
 
     #[rstest]
     #[case("pinning-strategy", None, None)]
+    #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
     #[case("pinning-strategy", Some("no-pin".to_string()), Some(PinningStrategy::NoPin))]
     #[case("pinning-strategy", Some("pin-exact-version".to_string()), Some(PinningStrategy::PinExactVersion))]
     #[case("pinning-strategy", Some("pin-latest-up".to_string()), Some(PinningStrategy::PinLatestUp))]

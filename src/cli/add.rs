@@ -417,7 +417,7 @@ fn update_pypi_specs_from_lock_file(
                 .config()
                 .pinning_strategy
                 .clone()
-                .unwrap_or(PinningStrategy::PinMinor),
+                .unwrap_or(PinningStrategy::Semver),
         );
 
         let version_spec =
@@ -482,7 +482,7 @@ fn update_conda_specs_from_lock_file(
                 .config()
                 .pinning_strategy
                 .clone()
-                .unwrap_or(PinningStrategy::PinMinor),
+                .unwrap_or(PinningStrategy::Semver),
         );
 
         if let Some(version_constraint) = version_constraint {
@@ -561,6 +561,22 @@ fn determine_version_constraint<'a>(
             VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound)
         }
         PinningStrategy::NoPin => VersionSpec::Any,
+        PinningStrategy::Semver => {
+            // For v0 packages, we pin to minor instead of major. As discussed in https://github.com/prefix-dev/pixi/issues/1562
+            let is_v0 = max_version.starts_with(&Version::from_str("0").expect("0 is version"));
+            let upper_bound = max_version
+                .pop_segments(if is_v0 { 1 } else { 2 })
+                .unwrap_or_else(|| upper_bound.clone())
+                .bump(VersionBumpType::Last)
+                .ok()?;
+            VersionSpec::Group(
+                LogicalOperator::And,
+                vec![
+                    VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                    VersionSpec::Range(RangeOperator::Less, upper_bound),
+                ],
+            )
+        }
     };
     Some(constraint)
 }
@@ -591,21 +607,31 @@ mod tests {
 
     #[test]
     fn test_determine_version_constraint() {
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap()], PinningStrategy::PinMinor)
+        // Semver
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::Semver)
             .unwrap()
-            .to_string(), @">=1.2.0,<1.3");
-
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMinor)
+            .to_string(), @">=1.2.0,<2");
+        insta::assert_snapshot!(determine_version_constraint(&["0.2.0".parse().unwrap(), "0.3.0".parse().unwrap()], PinningStrategy::Semver)
             .unwrap()
-            .to_string(), @">=1.2.0,<1.4");
+            .to_string(), @">=0.2.0,<0.4");
+        insta::assert_snapshot!(determine_version_constraint(&["0.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::Semver)
+            .unwrap()
+            .to_string(), @">=0.2.0,<2");
+        insta::assert_snapshot!(determine_version_constraint(&["0.2.0".parse().unwrap()], PinningStrategy::Semver)
+            .unwrap()
+            .to_string(), @">=0.2.0,<0.3");
 
+        // Major
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMajor).unwrap().to_string(), @">=1.2.0,<2");
 
+        // Minor
         insta::assert_snapshot!(determine_version_constraint(&["1.2".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2");
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
 
+        // LatestUP
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinLatestUp).unwrap().to_string(), @">=1.2.0");
 
+        // NoPin
         insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::NoPin).unwrap().to_string(), @"*");
     }
 }
