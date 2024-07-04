@@ -123,7 +123,6 @@ nav:
       - GitHub Actions: advanced/github_actions.md
       - Updates using GitHub Actions: advanced/updates_github_actions.md
       - Pyproject.toml: advanced/pyproject_toml.md
-      - Pre-commit: advanced/pre_commit.md
   - Reference:
       - Project Configuration: reference/project_configuration.md
       - Pixi Configuration: reference/pixi_configuration.md
