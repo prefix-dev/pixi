@@ -1,0 +1,30 @@
+version: 2
+
+build:
+  os: ubuntu-22.04
+  apt_packages:
+    - libasound2
+    - libatk1.0-0
+    - libcups2
+    - libdbus-glib-1-2
+    - libgtk-3-0
+    - libnss3
+    - libpangocairo-1.0-0
+    - libx11-xcb1
+    - libxcomposite1
+    - libxcursor1
+    - libxdamage1
+    - libxi6
+    - libxrandr2
+    - libxss1
+    - libxtst6
+  tools:
+    python: mambaforge-latest
+  jobs:
+    pre_build:
+      - pixi install --environment=rtd
+sphinx:
+  builder: html
+  configuration: docs/conf.py
+conda:
+  environment: docs/environment.yml

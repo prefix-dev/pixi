@@ -121,6 +121,7 @@ nav:
       - Info Command: advanced/explain_info_command.md
       - Channel Logic: advanced/channel_priority.md
       - GitHub Actions: advanced/github_actions.md
+      - Updates using GitHub Actions: advanced/updates_github_actions.md
       - Pyproject.toml: advanced/pyproject_toml.md
       - Pre-commit: advanced/pre_commit.md
   - Reference:

@@ -290,6 +290,8 @@ Add a task to the [manifest file](project_configuration.md), use `--depends-on` 
 - `--feature <FEATURE> (-f)`: the feature for which the task is added, if non provided the default tasks will be added.
 - `--depends-on <DEPENDS_ON>`: the task it depends on to be run before the one your adding.
 - `--cwd <CWD>`: the working directory for the task relative to the root of the project.
+- `--env <ENV>`: the environment variables as `key=value` pairs for the task, can be used multiple times, e.g. `--env "VAR1=VALUE1" --env "VAR2=VALUE2"`.
+- `--description <DESCRIPTION>`: a description of the task.
 
 ```shell
 pixi task add cow cowpy "Hello User"
@@ -297,6 +299,7 @@ pixi task add tls ls --cwd tests
 pixi task add test cargo t --depends-on build
 pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 pixi task add train python train.py --feature cuda
+pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
 ```
 
 This adds the following to the [manifest file](project_configuration.md):
@@ -312,6 +315,9 @@ build-osx = "METAL=1 cargo build"
 
 [feature.cuda.tasks]
 train = "python train.py"
+
+[feature.build.tasks]
+publish-pypi = { cmd = "hatch publish --yes --repo main", env = { HATCH_CONFIG = "config/hatch.toml" }, description = "Publish the package to pypi" }
 ```
 
 Which you can then run with the `run` command:
@@ -557,6 +563,7 @@ To exit the pixi shell, simply run `exit`.
 
 ##### Options
 
+- `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.

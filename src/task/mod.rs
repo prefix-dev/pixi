@@ -150,6 +150,16 @@ impl Task {
         }
     }
 
+    /// Returns the description of the task.
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            Task::Plain(_) => None,
+            Task::Custom(_) => None,
+            Task::Execute(exe) => exe.description.as_deref(),
+            Task::Alias(_) => None,
+        }
+    }
+
     /// True if this task is a custom task instead of something defined in a project.
     pub fn is_custom(&self) -> bool {
         matches!(self, Task::Custom(_))
@@ -192,6 +202,9 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
+
+    /// A description of the task
+    pub description: Option<String>,
 
     /// Isolate the task from the running machine
     #[serde(default)]
@@ -266,6 +279,9 @@ pub struct Alias {
     #[serde(alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
+
+    /// A description of the task.
+    pub description: Option<String>,
 }
 
 impl Display for Task {
@@ -303,6 +319,10 @@ impl Display for Task {
             if !env.is_empty() {
                 write!(f, ", env = {:?}", env)?;
             }
+        }
+        let description = self.description();
+        if let Some(description) = description {
+            write!(f, ", description = {:?}", description)?;
         }
 
         Ok(())

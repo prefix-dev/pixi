@@ -47,9 +47,18 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
 /// the CLI execute method and await the result at the same time.
 pub struct InitBuilder {
     pub args: init::Args,
+    pub no_fast_prefix: bool,
 }
 
 impl InitBuilder {
+    /// Disable using `https://fast.prefix.dev` as the default channel.
+    pub fn no_fast_prefix_overwrite(self, no_fast_prefix: bool) -> Self {
+        Self {
+            no_fast_prefix,
+            ..self
+        }
+    }
+
     pub fn with_channel(mut self, channel: impl ToString) -> Self {
         self.args
             .channels
@@ -73,7 +82,17 @@ impl IntoFuture for InitBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        init::execute(self.args).boxed_local()
+        init::execute(init::Args {
+            channels: if !self.no_fast_prefix {
+                self.args
+                    .channels
+                    .or_else(|| Some(vec!["https://fast.prefix.dev/conda-forge".to_string()]))
+            } else {
+                self.args.channels
+            },
+            ..self.args
+        })
+        .boxed_local()
     }
 }
 

@@ -1,25 +1,32 @@
 mod common;
 
-use std::fs::{create_dir_all, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    fs::{create_dir_all, File},
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use crate::common::builders::{string_from_iter, HasDependencyConfig};
-use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
-use pixi::cli::run::Args;
-use pixi::cli::{run, LockFileUsageArgs};
-use pixi::config::{Config, DetachedEnvironments};
-use pixi::consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER};
-use pixi::FeatureName;
+use pixi::{
+    cli::{run, run::Args, LockFileUsageArgs},
+    config::{Config, DetachedEnvironments},
+    consts,
+    consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER},
+    FeatureName,
+};
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
 use uv_interpreter::PythonEnvironment;
 
-/// Should add a python version to the environment and lock file that matches the specified version
-/// and run it
+use crate::common::{
+    builders::{string_from_iter, HasDependencyConfig},
+    package_database::{Package, PackageDatabase},
+};
+
+/// Should add a python version to the environment and lock file that matches
+/// the specified version and run it
 #[tokio::test]
 #[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
@@ -47,18 +54,27 @@ async fn install_run_python() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout.trim(), "Python 3.11.0");
     assert!(result.stderr.is_empty());
+
+    // Test for existence of environment file
+    assert!(pixi
+        .default_env_path()
+        .unwrap()
+        .join("conda-meta")
+        .join(consts::ENVIRONMENT_FILE_NAME)
+        .exists())
 }
 
 /// This is a test to check that creating incremental lock files works.
 ///
-/// It works by using a fake channel that contains two packages: `foo` and `bar`. `foo` depends on
-/// `bar` so adding a dependency on `foo` pulls in `bar`. Initially only version `1` of both
-/// packages is added and a project is created that depends on `foo >=1`. This select `foo@1` and
-/// `bar@1`.
-/// Next, version 2 for both packages is added and the requirement in the project is updated to
-/// `foo >=2`, this should then select `foo@1` but `bar` should remain on version `1` even though
-/// version `2` is available. This is because `bar` was previously locked to version `1` and it is
-/// still a valid solution to keep using version `1` of bar.
+/// It works by using a fake channel that contains two packages: `foo` and
+/// `bar`. `foo` depends on `bar` so adding a dependency on `foo` pulls in
+/// `bar`. Initially only version `1` of both packages is added and a project is
+/// created that depends on `foo >=1`. This select `foo@1` and `bar@1`.
+/// Next, version 2 for both packages is added and the requirement in the
+/// project is updated to `foo >=2`, this should then select `foo@1` but `bar`
+/// should remain on version `1` even though version `2` is available. This is
+/// because `bar` was previously locked to version `1` and it is still a valid
+/// solution to keep using version `1` of bar.
 #[tokio::test]
 async fn test_incremental_lock_file() {
     let mut package_database = PackageDatabase::default();
@@ -106,8 +122,8 @@ async fn test_incremental_lock_file() {
         .await
         .unwrap();
 
-    // Force using version 2 of `foo`. This should force `foo` to version `2` but `bar` should still
-    // remaining on `1` because it was previously locked
+    // Force using version 2 of `foo`. This should force `foo` to version `2` but
+    // `bar` should still remaining on `1` because it was previously locked
     pixi.add("foo >=2").await.unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
@@ -147,7 +163,8 @@ async fn install_locked_with_config() {
         "python==3.10.0"
     } else if cfg!(target_os = "windows") {
         // Abusing this test to also test the `add` function of older version of python
-        // Before this wasn't possible because uv queried the python interpreter, even without pypi dependencies.
+        // Before this wasn't possible because uv queried the python interpreter, even
+        // without pypi dependencies.
         "python==3.6.0"
     } else {
         "python==2.7.15"
@@ -284,6 +301,11 @@ async fn pypi_reinstall_python() {
         .set_type(pixi::DependencyType::PypiDependency)
         .await
         .unwrap();
+    assert!(pixi.lock_file().await.unwrap().contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.11"
+    ));
 
     let prefix = pixi.default_env_path().unwrap();
 
@@ -294,19 +316,25 @@ async fn pypi_reinstall_python() {
     let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
-    // sleep for a few seconds to make sure we can remove stuff (Windows file system issues)
+    // sleep for a few seconds to make sure we can remove stuff (Windows file system
+    // issues)
     #[cfg(target_os = "windows")]
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Reinstall python
     pixi.add("python==3.12").with_install(true).await.unwrap();
+    assert!(pixi.lock_file().await.unwrap().contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.12"
+    ));
 
     // Check if site-packages has entries, should be empty now
     let installed_312 = uv_installer::SitePackages::from_executable(&env).unwrap();
 
     if cfg!(not(target_os = "windows")) {
         // On non-windows the site-packages should be empty
-        assert!(installed_312.iter().count() == 0);
+        assert_eq!(installed_312.iter().count(), 0);
     } else {
         // Windows should still contain some packages
         // This is because the site-packages is not prefixed with the python version
@@ -357,7 +385,8 @@ async fn test_channels_changed() {
     package_database_a.add_package(Package::build("bar", "2").finish());
     let channel_a = package_database_a.into_channel().await.unwrap();
 
-    // Write another channel with a package `bar` with only one version but another one.
+    // Write another channel with a package `bar` with only one version but another
+    // one.
     let mut package_database_b = PackageDatabase::default();
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
@@ -377,7 +406,8 @@ async fn test_channels_changed() {
     ))
     .unwrap();
 
-    // Get an up-to-date lockfile and verify that bar version 2 was selected from channel `a`.
+    // Get an up-to-date lockfile and verify that bar version 2 was selected from
+    // channel `a`.
     let lock_file = pixi.up_to_date_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
@@ -397,7 +427,8 @@ async fn test_channels_changed() {
     ))
     .unwrap();
 
-    // Get an up-to-date lockfile and verify that bar version 1 was now selected from channel `b`.
+    // Get an up-to-date lockfile and verify that bar version 1 was now selected
+    // from channel `b`.
     let lock_file = pixi.up_to_date_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }
@@ -408,8 +439,7 @@ async fn test_channels_changed() {
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    // Add and update lockfile with this version of python
-    pixi.add("python==3.11").with_install(true).await.unwrap();
+    pixi.install().await.unwrap();
 
     let prefix = pixi.default_env_path().unwrap();
     let conda_meta_history_file = prefix.join("conda-meta/history");
@@ -449,12 +479,11 @@ async fn minimal_lockfile_update_pypi() {
         .await
         .unwrap();
 
-    // Check the locked click dependencies to see if it was only minimally updated
+    // `click` should not be updated to a higher version.
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        // With a fresh solve this would be bumped to `>=8.0.0`
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }

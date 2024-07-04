@@ -13,37 +13,41 @@ readme = "README.md"
 homepage = "https://project.com"
 repository = "https://github.com/author/project"
 documentation = "https://docs.project.com"
-conda-pypi-map = {"robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge"}
+conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge" }
 
 [dependencies]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
-
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [pypi-dependencies]
 testpypi = "*"
 testpypi1 = "*"
-requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
+requests = { version = ">= 2.8.1, ==2.8.*", extras = [
+  "security",
+  "tests",
+] } # Using the map allows the user to add `extras`
 
 [host-dependencies]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [build-dependencies]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [tasks]
 build = "conda build ."
 # deprecated depends_on
-test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
-test2 = { cmd = "pytest", cwd = "tests"}
+test = { cmd = "pytest", cwd = "tests", depends_on = [
+  "build",
+], description = "Run tests using pytests after building." }
+test2 = { cmd = "pytest", cwd = "tests" }
 test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
@@ -53,7 +57,7 @@ test8 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPA
 test9 = { cmd = "pytest", clean-env = false}
 [system-requirements]
 linux = "5.10"
-libc = { family="glibc", version="2.17" }
+libc = { family = "glibc", version = "2.17" }
 cuda = "10.1"
 
 [feature.test.dependencies]
@@ -63,18 +67,18 @@ test = "*"
 test = "*"
 
 [feature.prod]
-activation = {scripts = ["activate.sh", "deactivate.sh"]}
+activation = { scripts = ["activate.sh", "deactivate.sh"] }
 
 [feature.lint]
-dependencies = {flake8 = "3.7.9", black = "19.10b0"}
+dependencies = { flake8 = "3.7.9", black = "19.10b0" }
 
 [environments]
-test = {features = ["test"], solve-group = "test"}
-prod = {features = ["test2"], solve-group = "test"}
+test = { features = ["test"], solve-group = "test" }
+prod = { features = ["test2"], solve-group = "test" }
 
 [activation]
 scripts = ["activate.sh", "deactivate.sh"]
-env = { TEST = "bla"}
+env = { TEST = "bla" }
 
 [target.unix.activation.env]
 TEST2 = "bla2"
@@ -86,30 +90,32 @@ scripts = ["env_setup.bat"]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
-
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.osx-arm64.pypi-dependencies]
 testpypi = "*"
 testpypi1 = "*"
-requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
+requests = { version = ">= 2.8.1, ==2.8.*", extras = [
+  "security",
+  "tests",
+] } # Using the map allows the user to add `extras`
 
 [target.osx-64.host-dependencies]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.linux-64.build-dependencies]
 test = "*"
 test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build="py34_0" }
+package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.linux-64.tasks]
 build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
-test2 = { cmd = "pytest", cwd = "tests"}
+test2 = { cmd = "pytest", cwd = "tests" }
 test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
@@ -119,14 +125,17 @@ test6 = { depends-on = ["test5"] }
 test = "*"
 
 [feature.cuda]
-activation = {scripts = ["cuda_activation.sh"]}
-channels = ["nvidia" , { channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
-dependencies = {cuda = "x.y.z", cudnn = "12.0"}
-pypi-dependencies = {torch = "==1.9.0"}
+activation = { scripts = ["cuda_activation.sh"] }
+channels = [
+  "nvidia",
+  { channel = "pytorch", priority = -1 },
+] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+dependencies = { cuda = "x.y.z", cudnn = "12.0" }
+pypi-dependencies = { torch = "==1.9.0" }
 platforms = ["linux-64", "osx-arm64"]
-system-requirements = {cuda = "12"}
-tasks = { warmup = "python warmup.py" }
-target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+system-requirements = { cuda = "12" }
+tasks = { warmup = { cmd = "python warmup.py", description = "Warmup the GPU" } }
+target.osx-arm64 = { dependencies = { mlx = "x.y.z" } }
 
 [feature.cuda2.activation]
 scripts = ["cuda_activation.sh"]
@@ -152,11 +161,10 @@ mlx = "x.y.z"
 channels = ["nvidia"]
 platforms = ["linux-64", "osx-arm64"]
 
-
 [tool.poetry]
 test = "bla"
 test1 = ["bla", "bli"]
-test2= { version = "~=1.1", channel = "test" }
+test2 = { version = "~=1.1", channel = "test" }
 
 [tool.poetry.dependencies]
 test = "bla"

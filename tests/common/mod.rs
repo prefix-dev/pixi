@@ -199,6 +199,7 @@ impl PixiControl {
     /// `.await` on the return value.
     pub fn init(&self) -> InitBuilder {
         InitBuilder {
+            no_fast_prefix: false,
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,
@@ -214,6 +215,7 @@ impl PixiControl {
     /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
+            no_fast_prefix: false,
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,
@@ -333,7 +335,7 @@ impl PixiControl {
                 None => {
                     let env =
                         get_task_env(&mut lock_file, &task.run_environment, args.clean_env).await?;
-                    task_env.insert(env) as &_
+                    task_env.insert(env)
                 }
                 Some(task_env) => task_env,
             };
@@ -430,6 +432,7 @@ impl TasksControl<'_> {
                 feature,
                 cwd: None,
                 env: Default::default(),
+                description: None,
                 clean_env: false,
             },
         }
@@ -460,6 +463,7 @@ impl TasksControl<'_> {
                 platform,
                 alias: name,
                 depends_on: vec![],
+                description: None,
             },
         }
     }

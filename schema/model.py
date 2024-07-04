@@ -113,6 +113,7 @@ class Project(StrictBaseModel):
     conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
         None, alias="conda-pypi-map", description="The `conda` to PyPI mapping configuration"
     )
+    pypi_options: PyPIOptions | None = Field(None, alias="pypi-options", description="Options related to PyPI indexes for this project")
 
 
 ########################
@@ -260,6 +261,11 @@ class TaskInlineTable(StrictBaseModel):
         None,
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
+    )
+    description: NonEmptyStr | None = Field(
+        None,
+        description="A short description of the task",
+        examples=["Build the project"],
     )
     clean_env: bool | None = Field(
         None,
@@ -506,6 +512,7 @@ class BaseManifest(StrictBaseModel):
     tool: dict[str, Any] = Field(
         None, description="Third-party tool configurations, ignored by pixi"
     )
+    pypi_options: PyPIOptions | None = Field(None, alias="pypi-options", description="Options related to PyPI indexes, on the default feature")
 
 
 #########################
