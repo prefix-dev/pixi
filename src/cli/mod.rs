@@ -16,6 +16,7 @@ pub mod add;
 pub mod clean;
 pub mod completion;
 pub mod config;
+mod exec;
 pub mod global;
 pub mod has_specs;
 pub mod info;
@@ -96,6 +97,8 @@ pub enum Command {
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
+    #[clap(visible_alias = "x")]
+    Exec(exec::Args),
     #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
@@ -283,6 +286,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
+        Command::Exec(args) => exec::execute(args).await,
     }
 }
 
