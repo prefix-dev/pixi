@@ -3,21 +3,31 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::activation::ActivationError::FailedToRunActivationScript;
 use rattler_shell::{
-    activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
+    activation::{
+        ActivationError, ActivationError::FailedToRunActivationScript, ActivationVariables,
+        Activator, PathModificationBehavior,
+    },
     shell::ShellEnum,
 };
 
-use crate::project::has_features::HasFeatures;
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
-    project::{manifest::EnvironmentName, Environment},
+    project::{has_features::HasFeatures, manifest::EnvironmentName, Environment},
     Project,
 };
 
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
+
+pub enum CurrentEnvVarBehavior {
+    /// Clean the environment variables of the current shell.
+    /// This will return the minimal set of environment variables that are required to run the command.
+    Clean,
+    /// Copy the environment variables of the current shell.
+    Include,
+    /// Do not take any environment variables from the current shell.
+    Exclude,
+}
 
 impl Project {
     /// Returns environment variables and their values that should be injected when running a command.
@@ -124,7 +134,7 @@ pub fn get_activator<'p>(
     // Add the environment variables from the project.
     activator
         .env_vars
-        .extend(get_environment_variables(environment));
+        .extend(get_static_environment_variables(environment));
 
     Ok(activator)
 }
@@ -132,6 +142,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
+    env_var_behavior: &CurrentEnvVarBehavior,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -140,6 +151,13 @@ pub async fn run_activation(
             e
         ))
     })?;
+
+    let path_modification_behavior = match env_var_behavior {
+        // We need to replace the full environment path with the new one.
+        // So only the executables from the pixi environment are available.
+        CurrentEnvVarBehavior::Clean => PathModificationBehavior::Replace,
+        _ => PathModificationBehavior::Prepend,
+    };
 
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
@@ -151,7 +169,7 @@ pub async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behavior: PathModificationBehavior::Prepend,
+            path_modification_behavior,
         })
     })
     .await
@@ -190,7 +208,9 @@ pub async fn run_activation(
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
-pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMap<String, String> {
+pub fn get_static_environment_variables<'p>(
+    environment: &'p Environment<'p>,
+) -> HashMap<String, String> {
     // Get environment variables from the project
     let project_env = environment.project().get_metadata_env();
 
@@ -213,18 +233,76 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+/// Get the environment variables that are set in the current shell
+/// and strip them down to the minimal set required to run a command.
+pub fn get_clean_environment_variables() -> HashMap<String, String> {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+
+    let unix_keys = if cfg!(unix) {
+        vec![
+            "DISPLAY",
+            "LC_ALL",
+            "LC_TIME",
+            "LC_NUMERIC",
+            "LC_MEASUREMENT",
+            "SHELL",
+            "USER",
+            "USERNAME",
+            "LOGNAME",
+            "HOME",
+            "HOSTNAME",
+        ]
+    } else {
+        vec![]
+    };
+
+    let macos_keys = if cfg!(target_os = "macos") {
+        vec!["TMPDIR", "XPC_SERVICE_NAME", "XPC_FLAGS"]
+    } else {
+        vec![]
+    };
+
+    let keys = unix_keys
+        .into_iter()
+        .chain(macos_keys)
+        // .chain(windows_keys)
+        .map(|s| s.to_string().to_uppercase())
+        .collect_vec();
+
+    env.into_iter()
+        .filter(|(key, _)| keys.contains(&key.to_string().to_uppercase()))
+        .collect::<HashMap<String, String>>()
+}
+
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
-/// variables from the project.
-pub async fn get_activation_env<'p>(
-    environment: &'p Environment<'p>,
-    lock_file_usage: LockFileUsage,
-) -> miette::Result<&HashMap<String, String>> {
-    // Get the prefix which we can then activate.
-    get_up_to_date_prefix(environment, lock_file_usage, false).await?;
+/// variables from the project and based on the clean_env setting it will also add in the current
+/// shell environment variables.
+pub(crate) async fn initialize_env_variables(
+    environment: &Environment<'_>,
+    env_var_behavior: CurrentEnvVarBehavior,
+) -> miette::Result<HashMap<String, String>> {
+    let activation_env = run_activation(environment, &env_var_behavior).await?;
 
-    environment.project().get_env_variables(environment).await
+    // Get environment variables from the currently activated shell.
+    let current_shell_env_vars = match env_var_behavior {
+        CurrentEnvVarBehavior::Clean if cfg!(windows) => {
+            return Err(miette::miette!(
+                "Currently it's not possible to run a `clean-env` option on Windows."
+            ));
+        }
+        CurrentEnvVarBehavior::Clean => get_clean_environment_variables(),
+        CurrentEnvVarBehavior::Include => std::env::vars().collect(),
+        CurrentEnvVarBehavior::Exclude => HashMap::new(),
+    };
+
+    let all_variables: HashMap<String, String> = current_shell_env_vars
+        .into_iter()
+        .chain(activation_env)
+        .collect();
+
+    Ok(all_variables)
 }
 
 #[cfg(test)]
@@ -253,14 +331,13 @@ mod tests {
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
-        dbg!(&env);
+
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
         assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
-        dbg!(&env);
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
@@ -292,6 +369,17 @@ mod tests {
         assert_eq!(
             env.get("PIXI_PROJECT_VERSION").unwrap(),
             &project.version().as_ref().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "unix")]
+    fn test_get_linux_clean_environment_variables() {
+        let env = get_clean_environment_variables();
+        // Make sure that the environment variables are set.
+        assert_eq!(
+            env.get("USER").unwrap(),
+            std::env::var("USER").as_ref().unwrap()
         );
     }
 }

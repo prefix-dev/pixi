@@ -251,6 +251,7 @@ impl ManifestSource {
         requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        editable: Option<bool>,
     ) -> Result<(), TomlError> {
         match self {
             ManifestSource::PyProjectToml(_) => {
@@ -270,10 +271,15 @@ impl ManifestSource {
                 }
             }
             ManifestSource::PixiToml(_) => {
+                let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+                if let Some(editable) = editable {
+                    pypi_requirement.set_editable(editable);
+                }
+
                 self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
                     .insert(
                         requirement.name.as_ref(),
-                        Item::Value(PyPiRequirement::from(requirement.clone()).into()),
+                        Item::Value(pypi_requirement.into()),
                     );
             }
         };
@@ -380,6 +386,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             namespace: None,
             md5: None,
             sha256: None,
+            url: None,
         } => {
             // No other fields besides the version was specified, so we can just return the
             // version as a string.
@@ -398,6 +405,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             namespace,
             md5,
             sha256,
+            url,
         } => {
             let mut table = InlineTable::new();
             table.insert(
@@ -436,6 +444,9 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             }
             if let Some(sha256) = sha256 {
                 table.insert("sha256", format!("{:x}", sha256).into());
+            }
+            if let Some(url) = url {
+                table.insert("url", url.to_string().into());
             }
             table.into()
         }

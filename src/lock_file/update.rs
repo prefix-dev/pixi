@@ -28,9 +28,11 @@ use url::Url;
 use uv_normalize::ExtraName;
 
 use crate::{
+    activation::CurrentEnvVarBehavior,
     config, consts,
     environment::{
-        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
+        PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
     lock_file::{
@@ -91,11 +93,11 @@ pub struct LockFileDerivedData<'p> {
     pub package_cache: PackageCache,
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
-    pub updated_conda_prefixes: HashMap<Environment<'p>, (Prefix, PythonStatus)>,
+    pub updated_conda_prefixes: HashMap<EnvironmentName, (Prefix, PythonStatus)>,
 
     /// A list of prefixes that have been updated while resolving all
     /// dependencies.
-    pub updated_pypi_prefixes: HashMap<Environment<'p>, Prefix>,
+    pub updated_pypi_prefixes: HashMap<EnvironmentName, Prefix>,
 
     /// The cached uv context
     pub uv_context: Option<UvResolutionContext>,
@@ -113,7 +115,17 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
-        if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
+        // Save an environment file to the environment directory
+        write_environment_file(
+            &environment.dir(),
+            EnvironmentFile {
+                manifest_path: environment.project().manifest_path(),
+                environment_name: environment.name().to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+            },
+        )?;
+
+        if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
 
@@ -139,7 +151,11 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment.project().get_env_variables(environment).await?;
+        let env_variables = self
+            .project
+            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            .await?;
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -160,7 +176,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
-            .insert(environment.clone(), prefix.clone());
+            .insert(environment.name().clone(), prefix.clone());
 
         Ok(prefix)
     }
@@ -194,7 +210,7 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
-        if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment) {
+        if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment.name()) {
             return Ok((prefix.clone(), python_status.clone()));
         }
 
@@ -241,8 +257,10 @@ impl<'p> LockFileDerivedData<'p> {
         .await?;
 
         // Store that we updated the environment, so we won't have to do it again.
-        self.updated_conda_prefixes
-            .insert(environment.clone(), (prefix.clone(), python_status.clone()));
+        self.updated_conda_prefixes.insert(
+            environment.name().clone(),
+            (prefix.clone(), python_status.clone()),
+        );
 
         Ok((prefix, python_status))
     }
@@ -418,7 +436,7 @@ impl<'p> UpdateContext<'p> {
     /// Get a list of conda prefixes that have been updated.
     pub fn take_instantiated_conda_prefixes(
         &mut self,
-    ) -> HashMap<Environment<'p>, (Prefix, PythonStatus)> {
+    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
         self.instantiated_conda_prefixes
             .drain()
             .filter_map(|(env, cell)| match env {
@@ -427,7 +445,7 @@ impl<'p> UpdateContext<'p> {
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env, prefix))
+                    Some((env.name().clone(), prefix))
                 }
                 _ => None,
             })
@@ -972,7 +990,7 @@ impl<'p> UpdateContext<'p> {
             .outdated_envs
             .pypi
             .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env.clone(), *p)))
+            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -992,6 +1010,11 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
+            // Get environment variables from the activation
+            let env_variables = project
+                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .await?;
+
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
@@ -1009,9 +1032,6 @@ impl<'p> UpdateContext<'p> {
                     .clone(),
                 Some(context) => context.clone(),
             };
-
-            // Get environment variables from the activation
-            let env_variables = project.get_env_variables(&environment).await?;
 
             let locked_group_records = self
                 .locked_grouped_pypi_records

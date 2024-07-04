@@ -176,6 +176,7 @@ alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).
@@ -260,7 +261,7 @@ We support:
 - `index-url`: replaces the main index url.
    Only one `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url.
-- `find-links`: which can either be a path `{path: './links'}` or a url `{url: 'https://example.com/links'}`.
+- `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`.
 
 An example:
@@ -269,7 +270,7 @@ An example:
 [pypi-options]
 index-url = "https://pypi.org/simple"
 extra-index-urls = ["https://example.com/simple"]
-find-links = [{path: './links'}]
+find-links = [{path = './links'}]
 ```
 
 There are some examples in the pixi repository that make use of this feature.

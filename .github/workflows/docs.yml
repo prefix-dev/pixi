@@ -41,7 +41,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.8.0
+      - uses: prefix-dev/setup-pixi@v0.8.1
         with:
           environments: docs
 
@@ -67,7 +67,7 @@ jobs:
         run: |
           git checkout tags/${{ github.event.inputs.tag }}
 
-      - uses: prefix-dev/setup-pixi@v0.8.0
+      - uses: prefix-dev/setup-pixi@v0.8.1
         with:
           environments: docs
 
@@ -100,7 +100,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.8.0
+      - uses: prefix-dev/setup-pixi@v0.8.1
         with:
           environments: docs
 

@@ -147,6 +147,7 @@ It will only update the lock file if the dependencies in the [manifest file](pro
 - `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
+- `--json`: Output the changes in json format.
 
 ```shell
 pixi update numpy
@@ -178,7 +179,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
-
+- `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
@@ -192,6 +193,11 @@ pixi run task argument1 argument2
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
+
+# THIS DOESN'T WORK ON WINDOWS
+# If you want to run a command in a clean environment you can use the --clean-env flag.
+# The PATH should only contain the pixi environment here.
+pixi run --clean-env "echo \$PATH"
 ```
 
 !!! info
@@ -284,6 +290,8 @@ Add a task to the [manifest file](project_configuration.md), use `--depends-on` 
 - `--feature <FEATURE> (-f)`: the feature for which the task is added, if non provided the default tasks will be added.
 - `--depends-on <DEPENDS_ON>`: the task it depends on to be run before the one your adding.
 - `--cwd <CWD>`: the working directory for the task relative to the root of the project.
+- `--env <ENV>`: the environment variables as `key=value` pairs for the task, can be used multiple times, e.g. `--env "VAR1=VALUE1" --env "VAR2=VALUE2"`.
+- `--description <DESCRIPTION>`: a description of the task.
 
 ```shell
 pixi task add cow cowpy "Hello User"
@@ -291,6 +299,7 @@ pixi task add tls ls --cwd tests
 pixi task add test cargo t --depends-on build
 pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 pixi task add train python train.py --feature cuda
+pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
 ```
 
 This adds the following to the [manifest file](project_configuration.md):
@@ -306,6 +315,9 @@ build-osx = "METAL=1 cargo build"
 
 [feature.cuda.tasks]
 train = "python train.py"
+
+[feature.build.tasks]
+publish-pypi = { cmd = "hatch publish --yes --repo main", env = { HATCH_CONFIG = "config/hatch.toml" }, description = "Publish the package to pypi" }
 ```
 
 Which you can then run with the `run` command:
@@ -551,6 +563,7 @@ To exit the pixi shell, simply run `exit`.
 
 ##### Options
 
+- `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
@@ -656,6 +669,35 @@ More information [here](../advanced/explain_info_command.md).
 ```shell
 pixi info
 pixi info --json --extended
+```
+## `clean`
+
+Clean the parts of your system which are touched by pixi.
+Defaults to cleaning the environments and task cache.
+Use the `cache` subcommand to clean the cache
+
+##### Options
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--environment <ENVIRONMENT> (-e)`: The environment to clean, if none are provided all environments will be removed.
+
+```shell
+pixi clean
+```
+
+### `clean cache`
+
+Clean the pixi cache on your system.
+
+##### Options
+- `--pypi`: Clean the pypi cache.
+- `--conda`: Clean the conda cache.
+- `--yes`: Skip the confirmation prompt.
+
+```shell
+pixi clean cache # clean all pixi caches
+pixi clean cache --pypi # clean only the pypi cache
+pixi clean cache --conda # clean only the conda cache
+pixi clean cache --yes # skip the confirmation prompt
 ```
 
 ## `upload`

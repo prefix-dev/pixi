@@ -1,14 +1,17 @@
+use std::{
+    borrow::Borrow,
+    fmt,
+    fmt::{Display, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use pypi_types::VerbatimParsedUrl;
-use serde::Serializer;
-use serde::{de::Error, Deserialize, Deserializer, Serialize};
-use std::fmt::Display;
-use std::path::{Path, PathBuf};
-use std::{fmt, fmt::Formatter, str::FromStr};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
-
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -16,6 +19,12 @@ use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 pub struct PyPiPackageName {
     source: String,
     normalized: PackageName,
+}
+
+impl Borrow<PackageName> for PyPiPackageName {
+    fn borrow(&self) -> &PackageName {
+        &self.normalized
+    }
 }
 
 impl<'de> Deserialize<'de> for PyPiPackageName {
@@ -213,6 +222,9 @@ impl From<PyPiRequirement> for toml_edit::Value {
         }
 
         match &val {
+            PyPiRequirement::Version { version, extras } if extras.is_empty() => {
+                toml_edit::Value::from(version.to_string())
+            }
             PyPiRequirement::Version { version, extras } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
@@ -299,7 +311,11 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         if let Some(version_or_url) = req.version_or_url {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
-                    version: VersionOrStar::Version(v),
+                    version: if v.is_empty() {
+                        VersionOrStar::Star
+                    } else {
+                        VersionOrStar::Version(v)
+                    },
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => {
@@ -453,7 +469,8 @@ impl RequirementOrEditable {
         }
     }
 
-    /// Returns a pep508 requirement if it is a pep508 requirement, using the parsed url type.
+    /// Returns a pep508 requirement if it is a pep508 requirement, using the
+    /// parsed url type.
     pub fn into_requirement_with_parsed_url(
         self,
     ) -> Option<pep508_rs::Requirement<VerbatimParsedUrl>> {
@@ -592,11 +609,13 @@ impl PyPiRequirement {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::str::FromStr;
+
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
-    use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn test_pypi_to_string() {

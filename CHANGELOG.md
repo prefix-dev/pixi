@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.2] - 2024-06-14
+#### Documentation
+- Add readthedocs examples  by @bollwyvl in [#1423](https://github.com/prefix-dev/pixi/pull/1423)
+- Fix typo in  project_configuration.md  by @RaulPL in [#1502](https://github.com/prefix-dev/pixi/pull/1502)
+
+#### Fixed
+- Too much shell variables in activation of `pixi shell`  by @ruben-arts in [#1507](https://github.com/prefix-dev/pixi/pull/1507)
+
+## [0.24.1] - 2024-06-12
+### 📃 Details
+#### Fixed
+- Replace http code %2b with + by @ruben-arts in [#1500](https://github.com/prefix-dev/pixi/pull/1500)
+
+## [0.24.0] - 2024-06-12
+### ✨ Highlights
+
+- You can now run in a more isolated environment on `unix` machines, using `pixi run --clean-env TASK_NAME`.
+- You can new easily clean your environment with `pixi clean` or the cache with `pixi clean cache`
+
+### 📃 Details
+#### Added
+
+- Add `pixi clean` command by @ruben-arts in [#1325](https://github.com/prefix-dev/pixi/pull/1325)
+- Add `--clean-env` flag to tasks and run command by @ruben-arts in [#1395](https://github.com/prefix-dev/pixi/pull/1395)
+- Add `description` field to `task` by @jjjermiah in [#1479](https://github.com/prefix-dev/pixi/pull/1479)
+- Add pixi file to the environment to add pixi specific details by @ruben-arts in [#1495](https://github.com/prefix-dev/pixi/pull/1495)
+
+#### Changed
+
+- Project environment cli by @baszalmstra in [#1433](https://github.com/prefix-dev/pixi/pull/1433)
+- Update task list console output by @vigneshmanick in [#1443](https://github.com/prefix-dev/pixi/pull/1443)
+- Upgrade uv by @tdejager in [#1436](https://github.com/prefix-dev/pixi/pull/1436)
+- Sort packages in `list_global_packages` by @dhirschfeld in [#1458](https://github.com/prefix-dev/pixi/pull/1458)
+- Added test for special chars wheel filename by @tdejager in [#1454](https://github.com/prefix-dev/pixi/pull/1454)
+
+#### Documentation
+- Improve multi env tasks documentation by @ruben-arts in [#1494](https://github.com/prefix-dev/pixi/pull/1494)
+
+#### Fixed
+- Use the activated environment when running a task by @tdejager in [#1461](https://github.com/prefix-dev/pixi/pull/1461)
+- Fix authentication pypi-deps for download from lockfile by @tdejager in [#1460](https://github.com/prefix-dev/pixi/pull/1460)
+- Display channels correctly in `pixi info` by @ruben-arts in [#1459](https://github.com/prefix-dev/pixi/pull/1459)
+- Render help for `--frozen` by @ruben-arts in [#1468](https://github.com/prefix-dev/pixi/pull/1468)
+- Don't record purl for non conda-forge channels by @nichmor in [#1451](https://github.com/prefix-dev/pixi/pull/1451)
+- Use best_platform to verify the run platform by @ruben-arts in [#1472](https://github.com/prefix-dev/pixi/pull/1472)
+- Creation of parent dir of symlink by @ruben-arts in [#1483](https://github.com/prefix-dev/pixi/pull/1483)
+- `pixi install --all` output missing newline by @vigneshmanick in [#1487](https://github.com/prefix-dev/pixi/pull/1487)
+- Don't error on already existing dependency by @ruben-arts in [#1449](https://github.com/prefix-dev/pixi/pull/1449)
+- Remove debug true in release by @ruben-arts in [#1477](https://github.com/prefix-dev/pixi/pull/1477)
+
+## New Contributors
+* @dhirschfeld made their first contribution in [#1458](https://github.com/prefix-dev/pixi/pull/1458)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.23.0..HEAD)
+
 ## [0.23.0] - 2024-05-27
 ### ✨ Highlights
 - This release adds two new commands `pixi config` and `pixi update`

@@ -1,0 +1,11 @@
+\version: 2
+build:
+  os: ubuntu-22.04
+  tools:
+    # this ensures a viable `mamba` is on `$PATH``
+    python: mambaforge-latest
+  commands:
+    - mamba install -c conda-forge -c nodefaults pixi
+    - pixi install
+    - pixi run docs
+    - pixi run readthedocs

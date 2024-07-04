@@ -206,7 +206,7 @@ mod tests {
             [project]
             name = "foo"
             channels = ["foo"]
-            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+            platforms = ["linux-64", "win-64", "osx-64"]
 
             [tasks]
             test = "cargo test"
@@ -216,7 +216,8 @@ mod tests {
             test = ["test"]
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let env = project.default_environment();
+        let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());

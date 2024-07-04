@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::pyproject::PyProjectToml;
+use crate::project::manifest::DependencyOverwriteBehavior;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
@@ -125,12 +126,10 @@ platforms = {{ platforms }}
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
 *.egg-info
-
 "#;
 
 const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
-pixi.lock linguist-language=YAML
-
+pixi.lock linguist-language=YAML linguist-generated=true
 "#;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -190,6 +189,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 crate::SpecType::Run,
                 &platforms,
                 &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
             )?;
         }
         for requirement in pypi_deps {
@@ -198,6 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 &FeatureName::default(),
                 None,
+                DependencyOverwriteBehavior::Overwrite,
             )?;
         }
         project.save()?;

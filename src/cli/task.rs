@@ -8,10 +8,9 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::io;
-use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
@@ -81,6 +80,14 @@ pub struct AddArgs {
     /// The environment variable to set, use --env key=value multiple times for more than one variable
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
+
+    /// A description of the task to be added.
+    #[arg(long)]
+    pub description: Option<String>,
+
+    /// Isolate the task from the shell environment, and only use the pixi environment to run the task
+    #[arg(long)]
+    pub clean_env: bool,
 }
 
 /// Parse a single key-value pair
@@ -106,6 +113,10 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The description of the alias task
+    #[arg(long)]
+    pub description: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -129,6 +140,8 @@ pub struct ListArgs {
 impl From<AddArgs> for Task {
     fn from(value: AddArgs) -> Self {
         let depends_on = value.depends_on.unwrap_or_default();
+        // description or none
+        let description = value.description;
 
         // Convert the arguments into a single string representation
         let cmd_args = if value.commands.len() == 1 {
@@ -145,10 +158,18 @@ impl From<AddArgs> for Task {
         // Depending on whether the task has a command, and depends_on or not we create a plain or
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
-            Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
+            Self::Alias(Alias {
+                depends_on,
+                description,
+            })
+        } else if depends_on.is_empty()
+            && value.cwd.is_none()
+            && value.env.is_empty()
+            && description.is_none()
+        {
             Self::Plain(cmd_args)
         } else {
+            let clean_env = value.clean_env;
             let cwd = value.cwd;
             let env = if value.env.is_empty() {
                 None
@@ -159,6 +180,7 @@ impl From<AddArgs> for Task {
                 }
                 Some(env)
             };
+
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
@@ -166,6 +188,8 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env,
+                description,
+                clean_env,
             })
         }
     }
@@ -175,6 +199,7 @@ impl From<AliasArgs> for Task {
     fn from(value: AliasArgs) -> Self {
         Self::Alias(Alias {
             depends_on: value.depends_on,
+            description: value.description,
         })
     }
 }
@@ -197,24 +222,69 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn print_tasks_per_env(envs: Vec<Environment>) -> io::Result<()> {
-    let mut writer = tabwriter::TabWriter::new(stdout());
-    for env in envs {
-        let formatted: String = env
-            .get_filtered_tasks()
-            .iter()
-            .sorted()
-            .map(|name| name.fancy_display())
-            .join(", ");
-        writeln!(
-            writer,
-            "{}\t: {}",
-            env.name().fancy_display().bold(),
-            formatted
-        )?;
+fn list_tasks(
+    task_map: HashMap<Environment, HashMap<TaskName, Task>>,
+    summary: bool,
+) -> io::Result<()> {
+    if summary {
+        print_heading("Tasks per environment:");
+        for (env, tasks) in task_map {
+            let formatted: String = tasks
+                .keys()
+                .sorted()
+                .map(|name| name.fancy_display())
+                .join(", ");
+            eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
+        }
+        return Ok(());
     }
-    writer.flush()?;
+
+    let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
+    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
+
+    task_map.values().for_each(|tasks| {
+        tasks.iter().for_each(|(taskname, task)| {
+            all_tasks.insert(taskname.clone());
+            if let Some(description) = task.description() {
+                formatted_descriptions.insert(
+                    taskname.clone(),
+                    format!(
+                        " - {:<15} {}",
+                        taskname.fancy_display(),
+                        console::style(description).italic()
+                    ),
+                );
+            }
+        });
+    });
+
+    print_heading("Tasks that can run on this machine:");
+    let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
+    eprintln!("{}", formatted_tasks);
+
+    let formatted_descriptions: String = formatted_descriptions.values().join("\n");
+    eprintln!("\n{}", formatted_descriptions);
+
     Ok(())
+}
+
+fn get_tasks_per_env(
+    task_list: HashSet<TaskName>,
+    environments: Vec<Environment>,
+) -> HashMap<Environment, HashMap<TaskName, Task>> {
+    let mut tasks_per_env: HashMap<Environment, HashMap<TaskName, Task>> = HashMap::new();
+    for env in environments {
+        let mut tasks: HashMap<TaskName, Task> = HashMap::new();
+        let this_env_tasks = env.tasks(Some(env.best_platform())).unwrap_or_default();
+        for taskname in task_list.iter() {
+            // if the task is in the environment, add it to the list
+            if let Some(&task) = this_env_tasks.get(taskname) {
+                tasks.insert(taskname.clone(), task.clone());
+            }
+        }
+        tasks_per_env.insert(env, tasks);
+    }
+    tasks_per_env
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
@@ -344,25 +414,22 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
-            } else if args.summary {
-                print_heading("Tasks per environment:");
-                print_tasks_per_env(project.environments()).expect("io error when printing tasks");
-            } else if args.machine_readable {
+                return Ok(());
+            }
+
+            if args.machine_readable {
                 let unformatted: String = available_tasks
                     .iter()
                     .sorted()
                     .map(|name| name.as_str())
                     .join(" ");
                 eprintln!("{}", unformatted);
-            } else {
-                let formatted: String = available_tasks
-                    .iter()
-                    .sorted()
-                    .map(|name| name.fancy_display())
-                    .join(", ");
-                print_heading("Tasks that can run on this machine:");
-                eprintln!("{}", formatted);
+                return Ok(());
             }
+
+            let tasks_per_env = get_tasks_per_env(available_tasks, project.environments());
+
+            list_tasks(tasks_per_env, args.summary).expect("io error when printing tasks");
         }
     };
 
@@ -401,6 +468,9 @@ impl From<Task> for Item {
                 }
                 if let Some(env) = process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
+                }
+                if let Some(description) = process.description {
+                    table.insert("description", description.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }
