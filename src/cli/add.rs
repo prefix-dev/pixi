@@ -10,12 +10,13 @@ use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use rattler_conda_types::{
-    version_spec::{LogicalOperator, RangeOperator},
+    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType, VersionSpec,
 };
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
+use crate::config::PinningStrategy;
 use crate::{
     config::ConfigCli,
     environment::{verify_prefix_location_unchanged, LockFileUsage},
@@ -412,6 +413,7 @@ fn update_pypi_specs_from_lock_file(
                 })
                 .collect_vec()
                 .iter(),
+            PinningStrategy::PinMinor,
         );
 
         let version_spec =
@@ -464,14 +466,16 @@ fn update_conda_specs_from_lock_file(
         .collect_vec();
 
     for (name, (spec_type, _)) in conda_specs_to_add_constraints_for {
-        let version_constraint =
-            determine_version_constraint(conda_records.iter().filter_map(|record| {
+        let version_constraint = determine_version_constraint(
+            conda_records.iter().filter_map(|record| {
                 if record.package_record.name == name {
                     Some(record.package_record.version.version())
                 } else {
                     None
                 }
-            }));
+            }),
+            PinningStrategy::PinMinor,
+        );
 
         if let Some(version_constraint) = version_constraint {
             implicit_constraints
@@ -498,22 +502,58 @@ fn update_conda_specs_from_lock_file(
 /// Given a set of versions, determines the best version constraint to use that
 /// captures all of them.
 fn determine_version_constraint<'a>(
-    versions: impl IntoIterator<Item = &'a Version>,
+    versions: impl IntoIterator<Item = &'a Version> + Clone,
+    pinning_strategy: PinningStrategy,
 ) -> Option<VersionSpec> {
-    let (min_version, max_version) = versions.into_iter().minmax().into_option()?;
+    let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
     let lower_bound = min_version.clone();
     let upper_bound = max_version
         .pop_segments(1)
         .unwrap_or_else(|| max_version.clone())
         .bump(VersionBumpType::Last)
         .ok()?;
-    Some(VersionSpec::Group(
-        LogicalOperator::And,
-        vec![
-            VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
-            VersionSpec::Range(RangeOperator::Less, upper_bound),
-        ],
-    ))
+    let constraint = match pinning_strategy {
+        PinningStrategy::PinExactVersion => VersionSpec::Group(
+            LogicalOperator::Or,
+            versions
+                .into_iter()
+                .map(|v| VersionSpec::Exact(EqualityOperator::Equals, v.clone()))
+                .collect(),
+        ),
+        PinningStrategy::PinMajor => {
+            let upper_bound = max_version
+                .pop_segments(2)
+                .unwrap_or_else(|| upper_bound.clone())
+                .bump(VersionBumpType::Major)
+                .ok()?;
+            VersionSpec::Group(
+                LogicalOperator::And,
+                vec![
+                    VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                    VersionSpec::Range(RangeOperator::Less, upper_bound),
+                ],
+            )
+        }
+        PinningStrategy::PinMinor => {
+            let upper_bound = max_version
+                .pop_segments(1)
+                .unwrap_or_else(|| upper_bound.clone())
+                .bump(VersionBumpType::Minor)
+                .ok()?;
+            VersionSpec::Group(
+                LogicalOperator::And,
+                vec![
+                    VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                    VersionSpec::Range(RangeOperator::Less, upper_bound),
+                ],
+            )
+        }
+        PinningStrategy::PinLatestUp => {
+            VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound)
+        }
+        PinningStrategy::NoPin => VersionSpec::Any,
+    };
+    Some(constraint)
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
@@ -542,12 +582,21 @@ mod tests {
 
     #[test]
     fn test_determine_version_constraint() {
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap()])
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap()], PinningStrategy::PinMinor)
             .unwrap()
             .to_string(), @">=1.2.0,<1.3");
 
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()])
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMinor)
             .unwrap()
             .to_string(), @">=1.2.0,<1.4");
+
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinMajor).unwrap().to_string(), @">=1.2.0,<2");
+
+        insta::assert_snapshot!(determine_version_constraint(&["1.2".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2");
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinExactVersion).unwrap().to_string(), @"==1.2.0|==1.3.0");
+
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::PinLatestUp).unwrap().to_string(), @">=1.2.0");
+
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()], PinningStrategy::NoPin).unwrap().to_string(), @"*");
     }
 }
