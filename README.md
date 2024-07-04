@@ -55,7 +55,9 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 ## Status
 
-This project is currently in the _alpha stage_. It's actively under development, and we're planning to add many more features. The file formats are still subject to change, and you should expect breaking changes as we work towards a v1.0.
+Pixi is under active development, and we're planning to add many more features.
+We are working hard to keep file-format changes compatible with the previous
+versions so that you can rely on pixi with peace of mind.
 
 Some notable features we have in the pipeline are:
 
