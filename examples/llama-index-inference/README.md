@@ -5,7 +5,6 @@ This AI / Machine Learning example shows how to run LLM inference from a local m
 Run the example with:
 
 ```bash
-$ pixi install
 $ pixi run start
 ```
 
