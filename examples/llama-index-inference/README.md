@@ -6,7 +6,7 @@ Run the example with:
 
 ```bash
 $ pixi install
-$ pixi run python inference.py
+$ pixi run start
 ```
 
 The source code is derived from [the Llama Index documentation](https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp/). This particular set of tools and libraries was selected to show that production-grade deployments are possible with Pixi. The selected libraries in here are fairly lightweight and run a very advanced model locally. This was the performance I received on my local M1 Max machine:
