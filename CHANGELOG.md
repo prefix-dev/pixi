@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2024-07-05
+### ✨ Highlights
+- `pixi exec` command, execute commands in temporary environments, useful for testing in short-lived sessions.
+-  We've bumped the default system-requirements to higher defaults: glibc (2.17 -> 2.28), osx64 (10.15 -> 13.0), osx-arm64 (11.0 -> 13.0). Let us know if this causes any issues.
+
+
+### 📃 Details
+
+#### Changed
+
+- Bump system requirements by @wolfv in [#1553](https://github.com/prefix-dev/pixi/pull/1553)
+- Better error when exec is missing a cmd by @tdejager in [#1565](https://github.com/prefix-dev/pixi/pull/1565)
+- Make exec use authenticated client by @tdejager in [#1568](https://github.com/prefix-dev/pixi/pull/1568)
+
+
+#### Documentation
+
+- Automatic updating using github actions by @pavelzw in [#1456](https://github.com/prefix-dev/pixi/pull/1456)
+- Describe the --change-ps1 option for pixi shell by @Yura52 in [#1536](https://github.com/prefix-dev/pixi/pull/1536)
+- Add some other quantco repos by @pavelzw in [#1542](https://github.com/prefix-dev/pixi/pull/1542)
+- Add example using `geos-rs` by @Hofer-Julian in [#1563](https://github.com/prefix-dev/pixi/pull/1563)
+
+#### Fixed
+
+- Tiny error in basic_usage.md by @Sjouks in [#1513](https://github.com/prefix-dev/pixi/pull/1513)
+- Lazy initialize client by @baszalmstra in [#1511](https://github.com/prefix-dev/pixi/pull/1511)
+- URL typos in rtd examples by @kklein in [#1538](https://github.com/prefix-dev/pixi/pull/1538)
+- Fix satisfiability for short sha hashes by @tdejager in [#1530](https://github.com/prefix-dev/pixi/pull/1530)
+- Wrong path passed to dynamic check by @tdejager in [#1552](https://github.com/prefix-dev/pixi/pull/1552)
+- Don't error if no tasks is available on platform by @hoxbro in [#1550](https://github.com/prefix-dev/pixi/pull/1550)
+
+
+#### Refactor
+
+- Add to use update code by @baszalmstra in [#1508](https://github.com/prefix-dev/pixi/pull/1508)
+
+
+## New Contributors
+* @kklein made their first contribution in [#1538](https://github.com/prefix-dev/pixi/pull/1538)
+* @Yura52 made their first contribution in [#1536](https://github.com/prefix-dev/pixi/pull/1536)
+* @Sjouks made their first contribution in [#1513](https://github.com/prefix-dev/pixi/pull/1513)
+
 ## [0.24.2] - 2024-06-14
 #### Documentation
 - Add readthedocs examples  by @bollwyvl in [#1423](https://github.com/prefix-dev/pixi/pull/1423)
