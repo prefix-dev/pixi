@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.25.0] - 2024-07-05
 ### ✨ Highlights
 - `pixi exec` command, execute commands in temporary environments, useful for testing in short-lived sessions.
--  We've bumped the default system-requirements to higher defaults: glibc (2.17 -> 2.28), osx64 (10.15 -> 13.0), osx-arm64 (11.0 -> 13.0). Let us know if this causes any issues.
+-  We've bumped the default system-requirements to higher defaults: glibc (2.17 -> 2.28), osx64 (10.15 -> 13.0), osx-arm64 (11.0 -> 13.0). Let us know if this causes any issues. To keep the previous values please use a `system-requirements` table, this is explained [here](https://pixi.sh/latest/reference/project_configuration/#the-system-requirements-table)
 
 
 ### 📃 Details
