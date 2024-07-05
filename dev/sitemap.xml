@@ -2,147 +2,147 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/Community/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/FAQ/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/basic_usage/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/dev-release-steps/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/vision/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/authentication/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/channel_priority/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/explain_info_command/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/github_actions/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/pyproject_toml/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/examples/cpp-sdl/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/examples/opencv/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/examples/ros2-nav2/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/advanced_tasks/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/environment/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/lockfile/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/multi_environment/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/pycharm/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/r_studio/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/pixi_configuration/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/project_configuration/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/python/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/ros2/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/rust/</loc>
-         <lastmod>2024-07-04</lastmod>
+         <lastmod>2024-07-05</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
