@@ -1099,7 +1099,7 @@ This releases fixes a lot of issues encountered by the community as well as some
 
 ### [0.1.0] - 2023-08-11
 
-As this is our first [Semantic Versioning](semver.org) release, we'll change from the prototype to the developing phase, as semver describes.
+As this is our first [Semantic Versioning](https://semver.org) release, we'll change from the prototype to the developing phase, as semver describes.
 A 0.x release could be anything from a new major feature to a breaking change where the 0.0.x releases will be bugfixes or small improvements.
 
 #### Highlights
