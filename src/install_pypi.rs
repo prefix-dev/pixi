@@ -1,4 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
+};
 
 use distribution_filename::WheelFilename;
 use distribution_types::{
@@ -25,10 +27,13 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBui
 use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
+use uv_git::GitResolver;
 use uv_installer::{Downloader, InstalledEditable, ResolvedEditable, SitePackages};
-use uv_interpreter::{Interpreter, PythonEnvironment};
+// use uv_interpreter::{Interpreter, PythonEnvironment};
+use uv_configuration::PreviewMode;
 use uv_normalize::PackageName;
 use uv_resolver::{FlatIndex, InMemoryIndex};
+use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
 use crate::{
@@ -36,7 +41,7 @@ use crate::{
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{pypi_options::PypiOptions, SystemRequirements},
+    project::manifest::{pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -238,7 +243,8 @@ fn convert_to_dist(
                 VerbatimParsedUrl {
                     parsed_url: ParsedUrl::Path(ParsedPathUrl {
                         url: Url::from_file_path(&path).expect("could not convert path to url"),
-                        path: path.clone(),
+                        install_path: path.clone(),
+                        lock_path: path.clone(),
                         editable: pkg.editable,
                     }),
                     verbatim: VerbatimUrl::from_path(&path)?.with_given(path.display().to_string()),
@@ -660,7 +666,7 @@ async fn resolve_editables(
                 if ArchiveTimestamp::up_to_date_with(&editable.path, ArchiveTarget::Install(dist))
                     .into_diagnostic()?
                     // If the editable is dynamic, we need to rebuild it
-                    && !uv_installer::is_dynamic(&editable.path)
+                    && !is_dynamic(&editable.path)
                     // And the dist is already editable
                     && dist.is_editable()
                 {
@@ -706,6 +712,7 @@ async fn resolve_editables(
             registry_client,
             build_dispatch,
             uv_context.concurrency.builds,
+            PreviewMode::Disabled,
         );
 
         // Build the editables
@@ -782,7 +789,7 @@ pub async fn update_python_distributions(
             .into_diagnostic()?;
         FlatIndex::from_entries(
             entries,
-            &tags,
+            Some(&tags),
             &uv_types::HashStrategy::None,
             &uv_context.no_build,
             &uv_context.no_binary,
@@ -1085,6 +1092,27 @@ pub async fn update_python_distributions(
     }
 
     Ok(())
+}
+
+/// Returns `true` if the source tree at the given path contains dynamic metadata.
+fn is_dynamic(path: &Path) -> bool {
+    // return true;
+    // If there's no `pyproject.toml`, we assume it's dynamic.
+    let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
+        return true;
+    };
+    let Ok(pyproject_toml) = PyProjectToml::from(&contents) else {
+        return true;
+    };
+    // If `[project]` is not present, we assume it's dynamic.
+    let Some(project) = pyproject_toml.project else {
+        // ...unless it appears to be a Poetry project.
+        return pyproject_toml
+            .tool
+            .map_or(true, |tool| tool.poetry.is_none());
+    };
+    // `[project.dynamic]` must be present and non-empty.
+    project.dynamic.is_some_and(|dynamic| !dynamic.is_empty())
 }
 
 #[cfg(test)]

@@ -158,22 +158,6 @@ impl uv_installer::DownloadReporter for UvReporter {
         self.finish(id);
     }
 
-    fn on_editable_build_start(&self, dist: &distribution_types::LocalEditable) -> usize {
-        let path = dist.path.file_name();
-        if let Some(path) = path {
-            self.start_sync(format!(
-                "building editable source {}",
-                path.to_string_lossy()
-            ))
-        } else {
-            self.start_sync("building editable source".to_string())
-        }
-    }
-
-    fn on_editable_build_complete(&self, _dist: &distribution_types::LocalEditable, id: usize) {
-        self.finish(id);
-    }
-
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
         self.start_sync(format!("cloning {}", url))
     }
