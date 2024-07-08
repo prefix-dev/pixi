@@ -1,8 +1,6 @@
-use super::pypi_editables::build_editables;
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::project::manifest::pypi_options::PypiOptions;
-use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::HashMap;
 
@@ -29,9 +27,9 @@ use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
-use pep508_rs::{ExtraName, RequirementOrigin, VerbatimUrl, VersionOrUrl};
+use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest};
-use pypi_types::{Requirement, RequirementSource, VerbatimParsedUrl};
+use pypi_types::{RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -51,8 +49,8 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, BuiltEditableMetadata, DefaultResolverProvider, FlatIndex, InMemoryIndex,
-    Manifest, Options, Preference, PythonRequirement, Resolver,
+    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
+    PythonRequirement, Resolver,
 };
 use uv_toolchain::Interpreter;
 use uv_types::{BuildContext, EmptyInstalledPackages};
@@ -261,39 +259,13 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    // Get the Pypi requirements
-    // partition the requirements into editable and non-editable requirements
-    let (editables, requirements): (Vec<_>, Vec<_>) = dependencies
-        .iter()
-        .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
-        .map(|(name, req)| {
-            req.as_pep508(name, project_root)
-                .into_diagnostic()
-                .wrap_err(format!(
-                    "error while converting {} to pep508 requirement",
-                    name
-                ))
-        })
-        .collect::<miette::Result<Vec<_>>>()?
+    let requirements = dependencies
+        .values()
         .into_iter()
-        .partition(|req| matches!(req, RequirementOrEditable::Editable(_, _)));
-
-    let editables = editables
-        .into_iter()
-        .map(|req| {
-            req.into_editable()
-                .expect("wrong partitioning of editable and non-editable requirements")
-        })
-        .collect::<Vec<_>>();
-
-    let requirements = requirements
-        .into_iter()
-        .map(|req| {
-            req.into_requirement_with_parsed_url()
-                .map(pypi_types::Requirement::from)
-                .expect("editable requirements treated as non-editable requirements")
-        })
-        .collect::<Vec<_>>();
+        .flatten()
+        .map(|req| req.as_uv_req(project_root))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
@@ -347,6 +319,7 @@ pub async fn resolve_pypi(
     let config_settings = ConfigSettings::default();
 
     let options = Options::default();
+    let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
@@ -354,7 +327,7 @@ pub async fn resolve_pypi(
         &index_locations,
         &flat_index,
         &in_memory_index,
-        &GitResolver::default(),
+        &git_resolver,
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
@@ -391,14 +364,6 @@ pub async fn resolve_pypi(
             }
         })
         .collect::<Vec<_>>();
-
-    // Build any editables
-    let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
-        .await
-        .into_diagnostic()
-        .wrap_err("failed to build editables")?
-        .into_iter()
-        .collect_vec();
 
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
@@ -500,7 +465,6 @@ pub async fn resolve_pypi(
         &registry_client,
         flat_index_locations,
         resolution,
-        built_editables,
         context.concurrency.downloads,
     )
     .await
@@ -513,7 +477,6 @@ async fn lock_pypi_packages<'a>(
     registry_client: &Arc<RegistryClient>,
     flat_index_locations: Vec<FindLinksLocation>,
     resolution: Resolution,
-    built_editables: Vec<BuiltEditableMetadata>,
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
@@ -700,38 +663,5 @@ async fn lock_pypi_packages<'a>(
         locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
     }
 
-    // Add the editables to the locked packages as well.
-    for editable_metadata in built_editables {
-        // Compute the hash of the package based on the source tree.
-        let hash = PypiSourceTreeHashable::from_directory(&editable_metadata.built.path)
-            .into_diagnostic()
-            .context("failed to compute hash of pypi source tree")?
-            .hash();
-
-        // Create the url for the lock file. This is based on the passed in URL
-        // instead of from the source path to copy the path that was passed in from
-        // the requirement.
-        let url_or_path = editable_metadata
-            .built
-            .url
-            .given()
-            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-            // When using a direct url reference like https://foo/bla.whl we do not have a given
-            .unwrap_or_else(|| editable_metadata.built.url.to_url().into());
-
-        let pypi_package_data = PypiPackageData {
-            name: editable_metadata.metadata.name,
-            version: editable_metadata.metadata.version,
-            requires_dist: convert_uv_requirements_to_pep508(
-                editable_metadata.metadata.requires_dist.iter(),
-            ),
-            requires_python: editable_metadata.metadata.requires_python,
-            url_or_path,
-            hash: Some(hash),
-            editable: true,
-        };
-
-        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
-    }
     Ok(locked_packages)
 }

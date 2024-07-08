@@ -8,10 +8,11 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
-use pypi_types::VerbatimParsedUrl;
+use pypi_types::{RequirementSource, VerbatimParsedUrl};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
+use uv_git::{GitReference, GitSha};
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -523,6 +524,86 @@ impl PyPiRequirement {
             PyPiRequirement::Url { extras, .. } => extras,
             PyPiRequirement::RawVersion(_) => &[],
         }
+    }
+
+    /// Convert into a `pypi_types::Requirement`, which is an uv extended requirement type
+    pub fn as_uv_req(&self, project_root: &Path) -> Result<pypi_types::Requirement, AsPep508Error> {
+        let source = match self {
+            PyPiRequirement::Version { version, extras } => {
+                // TODO: implement index later
+                RequirementSource::Registry {
+                    specifier: version.clone().into(),
+                    index: None,
+                }
+            }
+            PyPiRequirement::Git {
+                git,
+                rev,
+                tag,
+                subdirectory,
+                extras,
+                branch,
+            } => RequirementSource::Git {
+                repository: git.clone(),
+                precise: rev.map(|s| GitSha::from_str(&s).expect("could not parse sha")),
+                reference: tag
+                    .map(|tag| GitReference::Tag(tag.clone()))
+                    .or(branch.map(|branch| GitReference::Branch(branch))),
+                subdirectory: subdirectory.map(|s| s.parse()),
+                url: create_uv_url(
+                    git,
+                    rev.as_deref(),
+                    subdirectory
+                        .as_deref()
+                        .map_err(|e| AsPep508Error::UrlParseError {
+                            source: e,
+                            url: git.to_string(),
+                        }),
+                )?,
+            },
+            PyPiRequirement::Path {
+                path,
+                editable,
+                extras,
+            } => {
+                let joined = project_root.join(path);
+                let canonicalized =
+                    dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
+                        source: e,
+                        path: joined.clone(),
+                    })?;
+                let given = path
+                    .to_str()
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(String::new);
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
+
+                RequirementSource::Path {
+                    install_path: canonicalized,
+                    lock_path: path,
+                    editable: editable.unwrap_or_default(),
+                    url: verbatim,
+                }
+            }
+            PyPiRequirement::Url { url, extras } => RequirementSource::Url {
+                // TODO: fill these later
+                subdirectory: (),
+                location: (),
+                url: VerbatimUrl::from_url(url),
+            },
+            PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
+                specifier: version.clone().into(),
+                index: None,
+            },
+        };
+
+        Ok(pypi_types::Requirement {
+            name: self.name.clone(),
+            extras: self.extras.clone(),
+            marker: None,
+            source,
+            origin: todo!(),
+        })
     }
 
     /// Returns the requirements as [`pep508_rs::Requirement`]s.

@@ -12,7 +12,6 @@ use uv_cache::Cache;
 use uv_configuration::BuildKind;
 use uv_dispatch::BuildDispatch;
 use uv_installer::DownloadReporter;
-use uv_resolver::BuiltEditableMetadata;
 use uv_types::{BuildContext, SourceBuildTrait};
 use zip::ZipArchive;
 
