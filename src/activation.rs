@@ -307,7 +307,7 @@ pub(crate) async fn initialize_env_variables(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::*;
 
@@ -354,7 +354,7 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let project = Project::from_str(Path::new("/tmp/test/pixi.toml"), project).unwrap();
         let env = project.get_metadata_env();
 
         assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
@@ -365,6 +365,12 @@ mod tests {
         assert_eq!(
             env.get("PIXI_PROJECT_MANIFEST").unwrap(),
             project.manifest_path().to_str().unwrap()
+        );
+        let project_path: PathBuf = env.get("PIXI_PROJECT_MANIFEST").unwrap().parse().unwrap();
+        assert!(
+            project_path.is_absolute(),
+            "Path is not absolute {}",
+            project_path.display()
         );
         assert_eq!(
             env.get("PIXI_PROJECT_VERSION").unwrap(),
