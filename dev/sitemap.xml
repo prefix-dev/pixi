@@ -145,4 +145,9 @@
          <lastmod>2024-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/CHANGELOG/</loc>
+         <lastmod>2024-07-08</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
 </urlset>
