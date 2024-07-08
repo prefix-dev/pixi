@@ -1,27 +1,29 @@
-use crate::consts::TASK_STYLE;
-use crate::lock_file::LockFileDerivedData;
-use crate::project::Environment;
-use crate::task::TaskName;
-use crate::{
-    task::task_graph::{TaskGraph, TaskId},
-    task::{quote_arguments, Task},
-    Project,
-};
-use deno_task_shell::{
-    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
-};
-use itertools::Itertools;
-use miette::Diagnostic;
 use std::{
     borrow::Cow,
     collections::HashMap,
     fmt::{Display, Formatter},
     path::PathBuf,
 };
+
+use deno_task_shell::{
+    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
+};
+use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
 use super::task_hash::{InputHashesError, TaskCache, TaskHash};
+use crate::{
+    consts::TASK_STYLE,
+    lock_file::LockFileDerivedData,
+    project::Environment,
+    task::{
+        task_graph::{TaskGraph, TaskId},
+        Task, TaskName,
+    },
+    Project,
+};
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -70,8 +72,9 @@ pub enum CanSkip {
     No(Option<TaskHash>),
 }
 
-/// A task that contains enough information to be able to execute it. The lifetime [`'p`] refers to
-/// the lifetime of the project that contains the tasks.
+/// A task that contains enough information to be able to execute it. The
+/// lifetime [`'p`] refers to the lifetime of the project that contains the
+/// tasks.
 #[derive(Clone)]
 pub struct ExecutableTask<'p> {
     pub project: &'p Project,
@@ -114,8 +117,9 @@ impl<'p> ExecutableTask<'p> {
         self.project
     }
 
-    /// Returns a [`SequentialList`] which can be executed by deno task shell. Returns `None` if the
-    /// command is not executable like in the case of an alias.
+    /// Returns a [`SequentialList`] which can be executed by deno task shell.
+    /// Returns `None` if the command is not executable like in the case of
+    /// an alias.
     pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let Some(task) = self.task.as_single_command() else {
@@ -137,8 +141,11 @@ impl<'p> ExecutableTask<'p> {
             }
         }
 
-        // Append the command line arguments
-        let cli_args = quote_arguments(self.additional_args.iter().map(|arg| arg.as_str()));
+        // Append the command line arguments verbatim
+        let cli_args = self
+            .additional_args
+            .iter()
+            .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)));
 
         // Skip the export if it's empty, to avoid newlines
         let full_script = if export.is_empty() {
@@ -173,11 +180,12 @@ impl<'p> ExecutableTask<'p> {
         })
     }
 
-    /// Returns the full command that should be executed for this task. This includes any
-    /// additional arguments that should be passed to the command.
+    /// Returns the full command that should be executed for this task. This
+    /// includes any additional arguments that should be passed to the
+    /// command.
     ///
-    /// This function returns `None` if the task does not define a command to execute. This is the
-    /// case for alias only commands.
+    /// This function returns `None` if the task does not define a command to
+    /// execute. This is the case for alias only commands.
     pub fn full_command(&self) -> Option<String> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
@@ -189,7 +197,8 @@ impl<'p> ExecutableTask<'p> {
         Some(cmd)
     }
 
-    /// Returns an object that implements [`Display`] which outputs the command of the wrapped task.
+    /// Returns an object that implements [`Display`] which outputs the command
+    /// of the wrapped task.
     pub fn display_command(&self) -> impl Display + '_ {
         ExecutableTaskConsoleDisplay { task: self }
     }
@@ -224,8 +233,9 @@ impl<'p> ExecutableTask<'p> {
         })
     }
 
-    /// We store the hashes of the inputs and the outputs of the task in a file in the cache.
-    /// The current name is something like `run_environment-task_name.json`.
+    /// We store the hashes of the inputs and the outputs of the task in a file
+    /// in the cache. The current name is something like
+    /// `run_environment-task_name.json`.
     pub(crate) fn cache_name(&self) -> String {
         format!(
             "{}-{}.json",
@@ -234,9 +244,11 @@ impl<'p> ExecutableTask<'p> {
         )
     }
 
-    /// Checks if the task can be skipped. If the task can be skipped, it returns `CanSkip::Yes`.
-    /// If the task cannot be skipped, it returns `CanSkip::No` and includes the hash of the task
-    /// that caused the task to not be skipped - we can use this later to update the cache file quickly.
+    /// Checks if the task can be skipped. If the task can be skipped, it
+    /// returns `CanSkip::Yes`. If the task cannot be skipped, it returns
+    /// `CanSkip::No` and includes the hash of the task that caused the task
+    /// to not be skipped - we can use this later to update the cache file
+    /// quickly.
     pub(crate) async fn can_skip(
         &self,
         lock_file: &LockFileDerivedData<'p>,
@@ -259,8 +271,9 @@ impl<'p> ExecutableTask<'p> {
         Ok(CanSkip::No(None))
     }
 
-    /// Saves the cache of the task. This function will update the cache file with the new hash of
-    /// the task (inputs and outputs). If the task has no hash, it will not save the cache.
+    /// Saves the cache of the task. This function will update the cache file
+    /// with the new hash of the task (inputs and outputs). If the task has
+    /// no hash, it will not save the cache.
     pub(crate) async fn save_cache(
         &self,
         lock_file: &LockFileDerivedData<'_>,
@@ -287,8 +300,8 @@ impl<'p> ExecutableTask<'p> {
     }
 }
 
-/// A helper object that implements [`Display`] to display (with ascii color) the command of the
-/// task.
+/// A helper object that implements [`Display`] to display (with ascii color)
+/// the command of the task.
 struct ExecutableTaskConsoleDisplay<'p, 't> {
     task: &'t ExecutableTask<'p>,
 }
