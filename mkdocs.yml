@@ -98,7 +98,7 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
-  - Updates: CHANGELOG.md
+  - Changelog: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
