@@ -200,7 +200,7 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
     ```toml title="default system requirements for linux"
     [system-requirements]
     linux = "5.10"
-    libc = { family="glibc", version="2.17" }
+    libc = { family="glibc", version="2.28" }
     ```
 
 === "Windows"
@@ -211,13 +211,13 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Osx"
     ```toml title="default system requirements for osx"
     [system-requirements]
-    macos = "10.15"
+    macos = "13.0"
     ```
 
 === "Osx-arm64"
     ```toml title="default system requirements for osx-arm64"
     [system-requirements]
-    macos = "11.0"
+    macos = "13.0
     ```
 
 Only if a project requires a different set should you define them.
