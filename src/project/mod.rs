@@ -209,11 +209,6 @@ impl Project {
         if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
                 if let Some(project_toml) = project_toml {
-                    tracing::warn!(
-                        "compare {} == {}",
-                        &env_manifest_path,
-                        project_toml.display()
-                    );
                     if env_manifest_path != project_toml.to_string_lossy() {
                         tracing::warn!(
                             "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
