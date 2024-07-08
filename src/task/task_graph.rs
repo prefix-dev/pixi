@@ -80,7 +80,7 @@ impl<'p> TaskNode<'p> {
 
         if !self.additional_args.is_empty() {
             // Pass each additional argument varbatim by wrapping it in single quotes
-            cmd.push_str(&format!("{}", self.format_additional_args()));
+            cmd.push_str(&format!(" {}", self.format_additional_args()));
         }
 
         Some(cmd)
@@ -394,7 +394,7 @@ mod test {
                 None,
                 None
             ),
-            vec!["echo root", "echo task1", "echo task2", "echo top --test"]
+            vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
     }
 
@@ -460,7 +460,7 @@ mod test {
                 None,
                 None
             ),
-            vec![r#""echo bla""#]
+            vec![r#"echo bla"#]
         );
     }
 
