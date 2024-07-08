@@ -9,6 +9,8 @@ repository = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"
 
+exclude = ["examples"]
+
 [features]
 default = ["native-tls"]
 native-tls = [
