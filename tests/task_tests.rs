@@ -219,9 +219,9 @@ async fn test_task_with_env() {
 
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::Default)
-        .with_commands(["echo From a $HELLO"])
+        .with_commands(["echo From a $HELLO_WORLD"])
         .with_env(vec![(
-            String::from("HELLO"),
+            String::from("HELLO_WORLD"),
             String::from("world with spaces"),
         )])
         .execute()
@@ -246,7 +246,6 @@ async fn test_clean_env() {
     pixi.init().without_channels().await.unwrap();
 
     std::env::set_var("HELLO", "world from env");
-
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::Default)
         .with_commands(["echo Hello is: $HELLO"])
@@ -282,3 +281,6 @@ async fn test_clean_env() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout, "Hello is: world from env\n");
 }
+
+// When adding another test with an environment variable, please choose a unique name
+// to avoid collisions
