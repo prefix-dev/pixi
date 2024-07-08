@@ -18,18 +18,18 @@ use crate::{
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
 
-use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
     SourceDist,
 };
+use distribution_types::{FileLocation, InstalledDist, InstalledRegistryDist};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
-use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pep508_rs::{ExtraName, RequirementOrigin, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest};
 use pypi_types::{Requirement, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
@@ -174,7 +174,7 @@ type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIden
 /// We need this function because we need to convert to the introduced `VerbaimParsedUrl`
 /// back to crates.io `VerbatimUrl`, for the locking
 fn convert_uv_requirements_to_pep508<'req>(
-    requires_dist: impl Iterator<Item = &'req pypi_types::Requirement>,
+    requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
 ) -> Vec<pep508_rs::Requirement> {
     // Convert back top PEP508 Requirement<VerbatimUrl>
     requires_dist
@@ -187,6 +187,27 @@ fn convert_uv_requirements_to_pep508<'req>(
             }),
             marker: r.marker.clone(),
             origin: r.origin.clone(),
+        })
+        .collect()
+}
+
+fn uv_pypi_types_requirement_to_pep508<'req>(
+    requirements: impl Iterator<Item = &'req pypi_types::Requirement>,
+) -> Vec<pep508_rs::Requirement> {
+    requirements
+        .map(|requirement| pep508_rs::Requirement {
+            name: requirement.name.clone(),
+            extras: requirement.extras.clone(),
+            version_or_url: match requirement.source {
+                RequirementSource::Registry { specifier, .. } => {
+                    Some(VersionOrUrl::VersionSpecifier(specifier))
+                }
+                RequirementSource::Url { url, .. }
+                | RequirementSource::Git { url, .. }
+                | RequirementSource::Path { url, .. } => Some(VersionOrUrl::Url(url)),
+            },
+            marker: requirement.marker.clone(),
+            origin: requirement.origin.clone(),
         })
         .collect()
 }
@@ -386,7 +407,14 @@ pub async fn resolve_pypi(
         .iter()
         .map(|record| {
             let (package_data, _) = record;
-            Preference::simple(package_data.name.clone(), package_data.version.clone())
+            // Fake being an InstalledRegistryDist
+            let installed = InstalledRegistryDist {
+                name: package_data.name.clone(),
+                version: package_data.version.clone(),
+                // This is not used, so we can just set it to a random value
+                path: PathBuf::new().join("does_not_exist"),
+            };
+            Preference::from_installed(&InstalledDist::Registry(installed))
         })
         .collect::<Vec<_>>();
 
@@ -394,6 +422,7 @@ pub async fn resolve_pypi(
         requirements,
         Constraints::from_requirements(constraints),
         Overrides::default(),
+        Default::default(),
         preferences,
         None,
         uv_resolver::Exclusions::None,
@@ -607,9 +636,9 @@ async fn lock_pypi_packages<'a>(
                     SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
-                        let hash = if path.path.is_dir() {
+                        let hash = if path.install_path.is_dir() {
                             Some(
-                                PypiSourceTreeHashable::from_directory(&path.path)
+                                PypiSourceTreeHashable::from_directory(&path.install_path)
                                     .into_diagnostic()
                                     .context("failed to compute hash of pypi source tree")?
                                     .hash(),
@@ -628,10 +657,11 @@ async fn lock_pypi_packages<'a>(
                         (url_or_path, hash, false)
                     }
                     SourceDist::Directory(dir) => {
+                        // TODO: check that `install_path` is correct
                         // Compute the hash of the package based on the source tree.
-                        let hash = if dir.path.is_dir() {
+                        let hash = if dir.install_path.is_dir() {
                             Some(
-                                PypiSourceTreeHashable::from_directory(&dir.path)
+                                PypiSourceTreeHashable::from_directory(&dir.install_path)
                                     .into_diagnostic()
                                     .context("failed to compute hash of pypi source tree")?
                                     .hash(),
@@ -655,7 +685,9 @@ async fn lock_pypi_packages<'a>(
                     name: metadata.name,
                     version: metadata.version,
                     // TODO make another conversion function
-                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
+                    requires_dist: uv_pypi_types_requirement_to_pep508(
+                        metadata.requires_dist.iter(),
+                    ),
                     requires_python: metadata.requires_python,
                     url_or_path,
                     hash,
