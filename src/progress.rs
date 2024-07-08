@@ -81,16 +81,16 @@ pub fn long_running_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::with_template("{prefix}{spinner:.green} {msg}").unwrap()
 }
 
-// /// Displays a spinner with the given message while running the specified function to completion.
-// pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, func: F) -> T {
-//     let pb = global_multi_progress().add(ProgressBar::new_spinner());
-//     pb.enable_steady_tick(Duration::from_millis(100));
-//     pb.set_style(long_running_progress_style());
-//     pb.set_message(msg);
-//     let result = func();
-//     pb.finish_and_clear();
-//     result
-// }
+/// Displays a spinner with the given message while running the specified function to completion.
+pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, func: F) -> T {
+    let pb = global_multi_progress().add(ProgressBar::new_spinner());
+    pb.enable_steady_tick(Duration::from_millis(100));
+    pb.set_style(long_running_progress_style());
+    pb.set_message(msg);
+    let result = func();
+    pb.finish_and_clear();
+    result
+}
 
 /// Displays a spinner with the given message while running the specified function to completion.
 pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Output = T>>(
