@@ -18,11 +18,11 @@ use crate::{
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
 
+use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
     SourceDist,
 };
-use distribution_types::{FileLocation, RequirementSource};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
@@ -31,7 +31,7 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest};
-use pypi_types::{RequirementSource, VerbatimParsedUrl};
+use pypi_types::{Requirement, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -49,7 +49,6 @@ use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
-use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
     AllowedYanks, BuiltEditableMetadata, DefaultResolverProvider, FlatIndex, InMemoryIndex,
@@ -175,7 +174,7 @@ type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIden
 /// We need this function because we need to convert to the introduced `VerbaimParsedUrl`
 /// back to crates.io `VerbatimUrl`, for the locking
 fn convert_uv_requirements_to_pep508<'req>(
-    requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
+    requires_dist: impl Iterator<Item = &'req pypi_types::Requirement>,
 ) -> Vec<pep508_rs::Requirement> {
     // Convert back top PEP508 Requirement<VerbatimUrl>
     requires_dist
@@ -409,7 +408,7 @@ pub async fn resolve_pypi(
             uv_configuration::PreviewMode::Disabled,
         ),
         &flat_index,
-        &tags,
+        Some(&tags),
         PythonRequirement::from_interpreter(&interpreter),
         AllowedYanks::default(),
         &context.hash_strategy,
