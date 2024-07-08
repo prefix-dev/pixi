@@ -58,6 +58,19 @@ You can now run your programs and tests as usual.
 ![PyCharm run tests](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-light.png#only-light)
 ![PyCharm run tests](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-dark.png#only-dark)
 
+!!!tip "Mark `.pixi` as excluded"
+    In order for PyCharm to not get confused about the `.pixi` directory, please mark it as excluded.
+
+    ![Mark Directory as excluded 1](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/mark-directory-as-excluded-1-light.png#only-light)
+    ![Mark Directory as excluded 1](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/mark-directory-as-excluded-1-dark.png#only-dark)
+    ![Mark Directory as excluded 2](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/mark-directory-as-excluded-2-light.png#only-light)
+    ![Mark Directory as excluded 2](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/mark-directory-as-excluded-2-dark.png#only-dark)
+
+    Also, when using a remote interpreter, you should exclude the `.pixi` directory on the remote machine.
+    Instead, you should run `pixi install` on the remote machine and select the conda shim from there.
+    ![Deployment exclude from remote machine](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/deployment-exclude-pixi-light.png#only-light)
+    ![Deployment exclude from remote machine](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/mark-as-excluded/.github/assets/deployment-exclude-pixi-dark.png#only-dark)
+
 ### Multiple environments
 
 If your project uses [multiple environments](../features/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
