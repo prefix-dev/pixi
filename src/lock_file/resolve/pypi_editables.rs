@@ -159,7 +159,7 @@ pub async fn build_editables(
     let reporter_clone = reporter.clone();
     let mut build_stream = futures::stream::iter(editables)
         .map(|editable| async {
-            let task = reporter_clone.on_editable_build_start(&editable);
+            let task = reporter_clone.on_build_start(&editable);
             let metadata = build_editable(cache, &editable, build_dispatch).await?;
             Ok::<_, BuildEditablesError>((editable, metadata, task))
         })
@@ -167,7 +167,7 @@ pub async fn build_editables(
 
     let reporter_clone = reporter.clone();
     while let Some((local_editable, metadata, task)) = build_stream.next().await.transpose()? {
-        reporter_clone.on_editable_build_complete(&local_editable, task);
+        reporter_clone.on_build_complete(&local_editable, task);
 
         // Convert the metadata into a set of requirements
         let requirements = Requirements {
@@ -175,7 +175,7 @@ pub async fn build_editables(
                 .requires_dist
                 .iter()
                 .cloned()
-                .map(distribution_types::Requirement::from)
+                .map(pypi_types::Requirement::from)
                 .collect(),
             optional_dependencies: IndexMap::default(),
         };
