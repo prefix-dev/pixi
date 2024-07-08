@@ -14,12 +14,13 @@ use rattler_conda_types::{Channel, GenericVirtualPackage, MatchSpec, PackageName
 use rattler_repodata_gateway::{ChannelConfig, Gateway};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
+use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
-    config,
-    config::{Config, ConfigCli},
+    config::{self, Config, ConfigCli},
     prefix::Prefix,
     progress::{await_in_progress, global_multi_progress, wrap_in_progress},
+    utils::reqwest::build_reqwest_clients,
 };
 
 /// Run a command in a temporary environment.
@@ -86,9 +87,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
+    let (_, client) = build_reqwest_clients(Some(&config));
 
     // Create the environment to run the command in.
-    let prefix = create_prefix(&args, &cache_dir, &config).await?;
+    let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation(&prefix).await?;
@@ -108,10 +110,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-pub async fn create_prefix(
+/// Creates a prefix for the `pixi exec` command.
+pub async fn create_exec_prefix(
     args: &Args,
     cache_dir: &Path,
     config: &Config,
+    client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
     let environment_name = EnvironmentHash::from(args).name();
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
@@ -125,6 +129,7 @@ pub async fn create_prefix(
     // Construct a gateway to get repodata.
     let gateway = Gateway::builder()
         .with_cache_dir(cache_dir.join("repodata"))
+        .with_client(client.clone())
         .with_channel_config(ChannelConfig::from(config))
         .finish();
 
