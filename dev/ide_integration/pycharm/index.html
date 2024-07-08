@@ -1417,6 +1417,18 @@ If you use multiple pixi projects, you might have to adjust the path accordingly
 <p>You can now run your programs and tests as usual.</p>
 <p><img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-light.png#only-light" />
 <img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-dark.png#only-dark" /></p>
+<div class="admonition tip">
+<p class="admonition-title">Mark <code>.pixi</code> as excluded</p>
+<p>In order for PyCharm to not get confused about the <code>.pixi</code> directory, please mark it as excluded.</p>
+<p><img alt="Mark Directory as excluded 1" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/mark-directory-as-excluded-1-light.png#only-light" />
+<img alt="Mark Directory as excluded 1" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/mark-directory-as-excluded-1-dark.png#only-dark" />
+<img alt="Mark Directory as excluded 2" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/mark-directory-as-excluded-2-light.png#only-light" />
+<img alt="Mark Directory as excluded 2" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/mark-directory-as-excluded-2-dark.png#only-dark" /></p>
+<p>Also, when using a remote interpreter, you should exclude the <code>.pixi</code> directory on the remote machine.
+Instead, you should run <code>pixi install</code> on the remote machine and select the conda shim from there.
+<img alt="Deployment exclude from remote machine" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/deployment-exclude-pixi-light.png#only-light" />
+<img alt="Deployment exclude from remote machine" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/deployment-exclude-pixi-dark.png#only-dark" /></p>
+</div>
 <h3 id="multiple-environments">Multiple environments<a class="headerlink" href="#multiple-environments" title="Permanent link">#</a></h3>
 <p>If your project uses <a href="../../features/multi_environment/">multiple environments</a> to tests different Python versions or dependencies, you can add multiple environments to PyCharm
 by specifying <em>Use existing environment</em> in the <em>Add Python Interpreter</em> dialog.</p>
