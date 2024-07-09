@@ -260,10 +260,11 @@ pub async fn resolve_pypi(
     }
 
     let requirements = dependencies
-        .values()
         .into_iter()
-        .flatten()
-        .map(|req| req.as_uv_req(project_root))
+        .flat_map(|(name, req)| {
+            req.into_iter()
+                .map(move |r| r.as_uv_req(&name, project_root))
+        })
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 

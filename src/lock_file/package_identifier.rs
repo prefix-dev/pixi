@@ -118,23 +118,35 @@ impl PypiPackageIdentifier {
         })
     }
 
-    pub fn satisfies(&self, requirement: &Requirement) -> bool {
+    pub fn satisfies(&self, requirement: &pypi_types::Requirement) -> bool {
         // Verify the name of the package
         if self.name.as_normalized() != &requirement.name {
             return false;
         }
 
         // Check the version of the requirement
-        match &requirement.version_or_url {
-            None => true,
-            Some(VersionOrUrl::Url(url)) => {
-                // Check if the URL matches
-                url.to_url() == self.url
+        match &requirement.source {
+            pypi_types::RequirementSource::Registry { specifier, index } => {
+                specifier.contains(&self.version)
             }
-            Some(VersionOrUrl::VersionSpecifier(required_spec)) => {
-                // Check if the locked version is contained in the required version specifier
-                required_spec.contains(&self.version)
-            }
+            pypi_types::RequirementSource::Url {
+                subdirectory,
+                location,
+                url,
+            } => url.raw() == &self.url,
+            pypi_types::RequirementSource::Git {
+                repository,
+                reference,
+                precise,
+                subdirectory,
+                url,
+            } => false,
+            pypi_types::RequirementSource::Path {
+                install_path,
+                lock_path,
+                editable,
+                url,
+            } => false,
         }
     }
 }

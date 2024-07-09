@@ -1,13 +1,13 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
-use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
+use crate::project::manifest::python::AsPep508Error;
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
-use pypi_types::ParsedGitUrl;
+use pypi_types::{ParsedGitUrl, RequirementSource};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -15,7 +15,6 @@ use rattler_conda_types::{
 use rattler_lock::{
     ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
 };
-use requirements_txt::EditableRequirement;
 use std::fmt::Display;
 use std::ops::Sub;
 use std::path::{Path, PathBuf};
@@ -75,10 +74,10 @@ pub enum PlatformUnsat {
     UnsatisfiableMatchSpec(MatchSpec, String),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(RequirementOrEditable, String),
+    UnsatisfiableRequirement(pypi_types::Requirement, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Requirement, String),
+    CondaUnsatisfiableRequirement(pypi_types::Requirement, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -113,7 +112,7 @@ pub enum PlatformUnsat {
     AsPep508Error(PackageName, #[source] AsPep508Error),
 
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, Box<EditableRequirement>),
+    EditableDependencyOnCondaInstalledPackage(PackageName, Box<pypi_types::RequirementSource>),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
@@ -281,14 +280,14 @@ pub fn verify_platform_satisfiability(
 
 enum Dependency {
     Conda(MatchSpec, Cow<'static, str>),
-    PyPi(RequirementOrEditable, Cow<'static, str>),
+    PyPi(pypi_types::Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_editable(
     locked_data: &PypiPackageData,
-    spec: &EditableRequirement,
+    spec: pypi_types::Requirement,
 ) -> bool {
     let spec_url = &spec.url;
 
@@ -354,7 +353,10 @@ fn seems_like_commit_sha(s: &str) -> bool {
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
-pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
+pub fn pypi_satifisfies_requirement(
+    locked_data: &PypiPackageData,
+    spec: &pypi_types::Requirement,
+) -> bool {
     if spec.name != locked_data.name {
         return false;
     }
@@ -455,7 +457,7 @@ pub fn verify_package_platform_satisfiability(
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
                 Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
-                    req.as_pep508(name.as_normalized(), project_root)
+                    req.as_uv_req(name.as_normalized(), project_root)
                         .map_err(|e| {
                             PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
                         })?,
@@ -512,7 +514,7 @@ pub fn verify_package_platform_satisfiability(
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
         .filter_map(|r| match r {
-            Dependency::PyPi(RequirementOrEditable::Pep508Requirement(req), _) => Some(req.clone()),
+            Dependency::PyPi(req, _) => Some(req.clone()),
             _ => None,
         })
         .collect::<HashSet<_>>();
@@ -592,36 +594,29 @@ pub fn verify_package_platform_satisfiability(
             Dependency::PyPi(requirement, source) => {
                 // Check if there is a pypi identifier that matches our requirement.
                 if let Some((identifier, repodata_idx, _)) =
-                    locked_conda_pypi_packages.get(requirement.name())
+                    locked_conda_pypi_packages.get(&requirement.name)
                 {
-                    // Check if the requirement is editable or a pep508 requirement
-                    match requirement {
-                        RequirementOrEditable::Editable(name, req) => {
-                            return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
-                                name,
-                                Box::new(req),
-                            ));
-                        }
-                        RequirementOrEditable::Pep508Requirement(req)
-                            if matches!(req.version_or_url, Some(VersionOrUrl::Url(_))) =>
-                        {
-                            return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
-                                req.name.clone(),
-                            ));
-                        }
-                        RequirementOrEditable::Pep508Requirement(req)
-                            if !identifier.satisfies(&req) =>
-                        {
-                            // The record does not match the spec, the lock-file is inconsistent.
-                            return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
-                                req,
-                                source.into_owned(),
-                            ));
-                        }
-                        _ => FoundPackage::Conda(*repodata_idx),
+                    if requirement.is_editable() {
+                        return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                            Box::new(requirement.source),
+                        ));
                     }
-                } else if let Some(idx) = locked_pypi_environment.index_by_name(requirement.name())
-                {
+                    if matches!(requirement.source, RequirementSource::Url { .. }) {
+                        return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                        ));
+                    }
+
+                    if !identifier.satisfies(&requirement) {
+                        // The record does not match the spec, the lock-file is inconsistent.
+                        return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
+                            requirement.clone(),
+                            source.into_owned(),
+                        ));
+                    }
+                    FoundPackage::Conda(*repodata_idx)
+                } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
                     match requirement {
                         RequirementOrEditable::Editable(package_name, requirement) => {
@@ -742,7 +737,7 @@ pub fn verify_package_platform_satisfiability(
                     }
 
                     pypi_queue.push(Dependency::PyPi(
-                        RequirementOrEditable::Pep508Requirement(requirement.clone()),
+                        requirement.clone(),
                         record.0.name.as_ref().to_string().into(),
                     ));
                 }

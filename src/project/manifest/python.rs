@@ -106,6 +106,15 @@ impl From<VersionOrStar> for Option<pep508_rs::VersionOrUrl> {
     }
 }
 
+impl From<VersionOrStar> for VersionSpecifiers {
+    fn from(value: VersionOrStar) -> Self {
+        match value {
+            VersionOrStar::Version(v) => v,
+            VersionOrStar::Star => VersionSpecifiers::empty(),
+        }
+    }
+}
+
 impl Serialize for VersionOrStar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -154,32 +163,6 @@ pub enum PyPiRequirement {
         extras: Vec<ExtraName>,
     },
     RawVersion(VersionOrStar),
-}
-
-impl PyPiRequirement {
-    /// Returns true if the requirement is a direct dependency.
-    /// I.e. a url, path or git requirement.
-    pub fn is_direct_dependency(&self) -> bool {
-        matches!(
-            self,
-            PyPiRequirement::Git { .. }
-                | PyPiRequirement::Path { .. }
-                | PyPiRequirement::Url { .. }
-        )
-    }
-
-    /// Define whether the requirement is editable.
-    pub fn set_editable(&mut self, editable: bool) {
-        match self {
-            PyPiRequirement::Path { editable: e, .. } => {
-                *e = Some(editable);
-            }
-            _ if editable => {
-                tracing::warn!("Ignoring editable flag for non-path requirements.");
-            }
-            _ => {}
-        }
-    }
 }
 
 impl Default for PyPiRequirement {
@@ -418,104 +401,31 @@ pub enum AsPep508Error {
     VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum RequirementOrEditable {
-    Editable(PackageName, requirements_txt::EditableRequirement),
-    Pep508Requirement(pep508_rs::Requirement),
-}
-
-impl Display for RequirementOrEditable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            RequirementOrEditable::Editable(name, req) => {
-                write!(f, "{} = {:?}", name, req)
-            }
-            RequirementOrEditable::Pep508Requirement(req) => {
-                write!(f, "{}", req)
-            }
-        }
-    }
-}
-
-impl RequirementOrEditable {
-    /// Returns the name of the package that this requirement is for.
-    pub fn name(&self) -> &PackageName {
-        match self {
-            RequirementOrEditable::Editable(name, _) => name,
-            RequirementOrEditable::Pep508Requirement(req) => &req.name,
-        }
-    }
-
-    /// Returns any extras that this requirement has.
-    pub fn extras(&self) -> &[ExtraName] {
-        match self {
-            RequirementOrEditable::Editable(_, req) => &req.extras,
-            RequirementOrEditable::Pep508Requirement(req) => &req.extras,
-        }
-    }
-
-    /// Returns an editable requirement if it is an editable requirement.
-    pub fn into_editable(self) -> Option<requirements_txt::EditableRequirement> {
-        match self {
-            RequirementOrEditable::Editable(_, editable) => Some(editable),
-            _ => None,
-        }
-    }
-
-    /// Returns a pep508 requirement if it is a pep508 requirement.
-    pub fn into_requirement(self) -> Option<pep508_rs::Requirement> {
-        match self {
-            RequirementOrEditable::Pep508Requirement(e) => Some(e),
-            _ => None,
-        }
-    }
-
-    /// Returns a pep508 requirement if it is a pep508 requirement, using the
-    /// parsed url type.
-    pub fn into_requirement_with_parsed_url(
-        self,
-    ) -> Option<pep508_rs::Requirement<VerbatimParsedUrl>> {
-        if let Some(req) = self.into_requirement() {
-            let version_or_parsed_url = req.version_or_url.map(|v| match v {
-                pep508_rs::VersionOrUrl::Url(url) => {
-                    let parsed_url =
-                        VerbatimParsedUrl::try_from(url).expect("could not convert to ParsedUrl");
-                    pep508_rs::VersionOrUrl::Url(parsed_url)
-                }
-                pep508_rs::VersionOrUrl::VersionSpecifier(v) => {
-                    pep508_rs::VersionOrUrl::VersionSpecifier(v)
-                }
-            });
-            Some(pep508_rs::Requirement {
-                name: req.name,
-                version_or_url: version_or_parsed_url,
-                extras: req.extras,
-                marker: req.marker,
-                origin: req.origin,
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Returns an editable requirement if it is an editable requirement.
-    pub fn as_editable(&self) -> Option<&requirements_txt::EditableRequirement> {
-        match self {
-            RequirementOrEditable::Editable(_name, editable) => Some(editable),
-            _ => None,
-        }
-    }
-
-    /// Returns a pep508 requirement if it is a pep508 requirement.
-    pub fn as_requirement(&self) -> Option<&pep508_rs::Requirement> {
-        match self {
-            RequirementOrEditable::Pep508Requirement(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
 impl PyPiRequirement {
+    /// Returns true if the requirement is a direct dependency.
+    /// I.e. a url, path or git requirement.
+    pub fn is_direct_dependency(&self) -> bool {
+        matches!(
+            self,
+            PyPiRequirement::Git { .. }
+                | PyPiRequirement::Path { .. }
+                | PyPiRequirement::Url { .. }
+        )
+    }
+
+    /// Define whether the requirement is editable.
+    pub fn set_editable(&mut self, editable: bool) {
+        match self {
+            PyPiRequirement::Path { editable: e, .. } => {
+                *e = Some(editable);
+            }
+            _ if editable => {
+                tracing::warn!("Ignoring editable flag for non-path requirements.");
+            }
+            _ => {}
+        }
+    }
+
     pub fn extras(&self) -> &[ExtraName] {
         match self {
             PyPiRequirement::Version { extras, .. } => extras,
@@ -527,7 +437,11 @@ impl PyPiRequirement {
     }
 
     /// Convert into a `pypi_types::Requirement`, which is an uv extended requirement type
-    pub fn as_uv_req(&self, project_root: &Path) -> Result<pypi_types::Requirement, AsPep508Error> {
+    pub fn as_uv_req(
+        &self,
+        name: &PackageName,
+        project_root: &Path,
+    ) -> Result<pypi_types::Requirement, AsPep508Error> {
         let source = match self {
             PyPiRequirement::Version { version, extras } => {
                 // TODO: implement index later
@@ -548,18 +462,17 @@ impl PyPiRequirement {
                 precise: rev.map(|s| GitSha::from_str(&s).expect("could not parse sha")),
                 reference: tag
                     .map(|tag| GitReference::Tag(tag.clone()))
-                    .or(branch.map(|branch| GitReference::Branch(branch))),
-                subdirectory: subdirectory.map(|s| s.parse()),
-                url: create_uv_url(
-                    git,
-                    rev.as_deref(),
-                    subdirectory
-                        .as_deref()
-                        .map_err(|e| AsPep508Error::UrlParseError {
+                    .or(branch.map(|branch| GitReference::Branch(branch)))
+                    .unwrap_or(GitReference::DefaultBranch),
+                subdirectory: subdirectory.map(|s| s.parse().ok()).flatten(),
+                url: VerbatimUrl::from_url(
+                    create_uv_url(git, rev.as_deref(), subdirectory.as_deref()).map_err(|e| {
+                        AsPep508Error::UrlParseError {
                             source: e,
                             url: git.to_string(),
-                        }),
-                )?,
+                        }
+                    })?,
+                ),
             },
             PyPiRequirement::Path {
                 path,
@@ -580,16 +493,16 @@ impl PyPiRequirement {
 
                 RequirementSource::Path {
                     install_path: canonicalized,
-                    lock_path: path,
+                    lock_path: path.clone(),
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
                 }
             }
             PyPiRequirement::Url { url, extras } => RequirementSource::Url {
                 // TODO: fill these later
-                subdirectory: (),
-                location: (),
-                url: VerbatimUrl::from_url(url),
+                subdirectory: None,
+                location: url.clone(),
+                url: VerbatimUrl::from_url(url.clone()),
             },
             PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
                 specifier: version.clone().into(),
@@ -598,11 +511,11 @@ impl PyPiRequirement {
         };
 
         Ok(pypi_types::Requirement {
-            name: self.name.clone(),
-            extras: self.extras.clone(),
+            name: name.clone(),
+            extras: self.extras().clone().to_vec(),
             marker: None,
             source,
-            origin: todo!(),
+            origin: None,
         })
     }
 
