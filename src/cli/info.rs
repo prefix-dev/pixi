@@ -280,11 +280,11 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
         .into_diagnostic()?
         .modified()
         .into_diagnostic()?;
-    let formated_time = DateTime::<Local>::from(time)
+    let formatted_time = DateTime::<Local>::from(time)
         .format("%d-%m-%Y %H:%M:%S")
         .to_string();
 
-    Ok(formated_time)
+    Ok(formatted_time)
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

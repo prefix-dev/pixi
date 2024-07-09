@@ -113,6 +113,9 @@ class Project(StrictBaseModel):
     conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
         None, alias="conda-pypi-map", description="The `conda` to PyPI mapping configuration"
     )
+    pypi_options: PyPIOptions | None = Field(
+        None, alias="pypi-options", description="Options related to PyPI indexes for this project"
+    )
 
 
 ########################
@@ -510,6 +513,11 @@ class BaseManifest(StrictBaseModel):
     )
     tool: dict[str, Any] = Field(
         None, description="Third-party tool configurations, ignored by pixi"
+    )
+    pypi_options: PyPIOptions | None = Field(
+        None,
+        alias="pypi-options",
+        description="Options related to PyPI indexes, on the default feature",
     )
 
 

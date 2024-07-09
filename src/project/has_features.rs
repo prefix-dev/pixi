@@ -124,11 +124,25 @@ pub trait HasFeatures<'p> {
     /// The index-url is a special case and can only be defined once. This should have been
     /// verified before-hand.
     fn pypi_options(&self) -> PypiOptions {
-        self.features()
-            .filter_map(|f| f.pypi_options())
-            .fold(PypiOptions::default(), |acc, opt| {
-                acc.union(opt)
-                    .expect("pypi-options should have been validated upfront")
+        // Collect all the pypi-options from the features in one set,
+        // deduplicate them and sort them on feature index, default feature comes last.
+        let pypi_options: Vec<_> = self
+            .features()
+            .filter_map(|feature| {
+                if feature.pypi_options().is_none() {
+                    self.project().manifest.parsed.project.pypi_options.as_ref()
+                } else {
+                    feature.pypi_options()
+                }
+            })
+            .collect();
+
+        // Merge all the pypi options into one.
+        pypi_options
+            .into_iter()
+            .fold(PypiOptions::default(), |acc, opts| {
+                acc.union(opts)
+                    .expect("merging of pypi-options should already have been checked")
             })
     }
 }

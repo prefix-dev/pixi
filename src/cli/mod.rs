@@ -16,6 +16,7 @@ pub mod add;
 pub mod clean;
 pub mod completion;
 pub mod config;
+mod exec;
 pub mod global;
 pub mod has_specs;
 pub mod info;
@@ -38,7 +39,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.24.2] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.25.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -96,6 +97,8 @@ pub enum Command {
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
+    #[clap(visible_alias = "x")]
+    Exec(exec::Args),
     #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
@@ -283,6 +286,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
+        Command::Exec(args) => exec::execute(args).await,
     }
 }
 

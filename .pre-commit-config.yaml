@@ -1,47 +1,74 @@
+exclude: (^.pixi/|.snap)
 repos:
-  -   repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v4.5.0
-      hooks:
-        -   id: check-yaml
-        -   id: end-of-file-fixer
-        -   id: trailing-whitespace
-  # Use ruff for python examples
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.3.4
+  - repo: local
     hooks:
+      - id: pixi-install
+        name: pixi-install
+        entry: pixi install -e lint
+        language: system
+        always_run: true
+        require_serial: true
+        pass_filenames: false
+      # pre-commit-hooks
+      - id: check-yaml
+        name: check-yaml
+        entry: pixi run -e lint check-yaml
+        language: system
+        types: [yaml]
+      - id: end-of-file
+        name: end-of-file
+        entry: pixi run -e lint end-of-file-fixer
+        language: system
+        types: [text]
+        stages: [commit, push, manual]
+      - id: trailing-whitespace
+        name: trailing-whitespace
+        entry: pixi run -e lint trailing-whitespace-fixer
+        language: system
+        types: [text]
+        stages: [commit, push, manual]
+      # Use ruff for python examples
       - id: ruff
-        args: [ --fix, --exit-non-zero-on-fix ]
+        name: ruff
+        entry: pixi run -e lint ruff check --fix --exit-non-zero-on-fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff-format
+        entry: pixi run -e lint ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      # typos
+      - id: typos
+        name: typos
+        entry: pixi run -e lint typos --write-changes --force-exclude
+        language: system
+        types: [text]
   # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
-  -   repo: https://github.com/DevinR528/cargo-sort
-      rev: v1.0.9
-      hooks:
-        -   id: cargo-sort
-  -   repo: local
-      hooks:
-        - id: fmt
-          name: fmt
-          language: system
-          types: [file, rust]
-          entry: cargo fmt
-          pass_filenames: false
-
-        - id: clippy
-          name: clippy
-          language: system
-          types: [file, rust]
-          entry: cargo clippy --all -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
-          pass_filenames: false
-
-        - id: test
-          name: test
-          language: system
-          stages: [push]
-          types: [file, rust]
-          entry: cargo test
-          pass_filenames: false
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+  - repo: https://github.com/DevinR528/cargo-sort
+    rev: v1.0.9
     hooks:
-    - id: codespell
-exclude: ".snap"
+      - id: cargo-sort
+  - repo: local
+    hooks:
+      - id: fmt
+        name: fmt
+        language: system
+        types: [file, rust]
+        entry: cargo fmt
+        pass_filenames: false
+      - id: clippy
+        name: clippy
+        language: system
+        types: [file, rust]
+        entry: cargo clippy --all-targets -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
+        pass_filenames: false
+      - id: test
+        name: test
+        language: system
+        stages: [push]
+        types: [file, rust]
+        entry: cargo test
+        pass_filenames: false

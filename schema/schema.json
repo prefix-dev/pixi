@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.24.2/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.25.0/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -13,7 +13,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.24.2/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.25.0/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -139,7 +139,7 @@
     },
     "pypi-options": {
       "$ref": "#/$defs/PyPIOptions",
-      "description": "Options related to PyPI indexes"
+      "description": "Options related to PyPI indexes, on the default feature"
     },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
@@ -707,6 +707,10 @@
               }
             ]
           }
+        },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this project"
         },
         "readme": {
           "title": "Readme",

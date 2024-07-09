@@ -249,7 +249,7 @@ impl Project {
             .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
 
         // Load the TOML document
-        let manifest = Manifest::from_path(manifest_path)?;
+        let manifest = Manifest::from_path(&full_path)?;
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
