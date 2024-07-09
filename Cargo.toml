@@ -156,6 +156,7 @@ dirs = { workspace = true }
 distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
+fd-lock = { workspace = true }
 flate2 = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
