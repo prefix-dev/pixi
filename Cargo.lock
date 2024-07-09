@@ -982,6 +982,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "672465ae37dc1bc6380a6547a8883d5dd397b0f1faaad4f265726cc7042a5345"
+dependencies = [
+ "nix 0.28.0",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1978,7 +1988,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3309,6 +3319,7 @@ dependencies = [
  "uv-git",
  "uv-installer",
  "uv-normalize",
+ "uv-requirements",
  "uv-resolver",
  "uv-toolchain",
  "uv-types",
@@ -4054,6 +4065,8 @@ dependencies = [
  "pep508_rs",
  "pypi-types",
  "regex",
+ "reqwest 0.12.4",
+ "reqwest-middleware",
  "thiserror",
  "tracing",
  "unscanny",
@@ -5934,6 +5947,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "uv-requirements"
+version = "0.1.0"
+source = "git+https://github.com/astral-sh/uv?tag=0.2.11#44041bccd2e3d72c81390a231021fbd03c66dbc1"
+dependencies = [
+ "anstream",
+ "anyhow",
+ "cache-key",
+ "configparser",
+ "console",
+ "ctrlc",
+ "distribution-filename",
+ "distribution-types",
+ "fs-err",
+ "futures",
+ "pep508_rs",
+ "pypi-types",
+ "requirements-txt",
+ "rustc-hash",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+ "url",
+ "uv-client",
+ "uv-configuration",
+ "uv-distribution",
+ "uv-fs",
+ "uv-git",
+ "uv-normalize",
+ "uv-resolver",
+ "uv-types",
+ "uv-warnings",
+]
+
+[[package]]
 name = "uv-resolver"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.2.11#44041bccd2e3d72c81390a231021fbd03c66dbc1"
@@ -5941,6 +5989,7 @@ dependencies = [
  "anyhow",
  "cache-key",
  "chrono",
+ "clap",
  "dashmap",
  "derivative",
  "distribution-filename",

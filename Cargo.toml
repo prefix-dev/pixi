@@ -144,6 +144,7 @@ uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-toolchain = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
