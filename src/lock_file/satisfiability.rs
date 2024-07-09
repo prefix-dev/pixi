@@ -188,32 +188,6 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
     }
 }
 
-impl IntoUvRequirement for PypiPackageData {
-    type E = ParsedUrlError;
-
-    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
-        // Extract information from path or url
-        let source = match self.url_or_path {
-            UrlOrPath::Url(url) => {
-                // Strip `direct+` if present from the url
-                let url = url
-                    .as_ref()
-                    .strip_prefix("direct+")
-                    .and_then(|str| Url::parse(str).ok())
-                    .unwrap_or(url);
-
-                let parsed_url = ParsedUrl::try_from(url)?;
-            }
-            UrlOrPath::Path(path) => ParsedPathUrl::from_source(
-                path,
-                path,
-                self.editable,
-                Url::from_file_path(path).expect("could not convert path to url"),
-            ),
-        };
-    }
-}
-
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
 /// packages present in the lock-file.
 ///
@@ -353,63 +327,30 @@ enum Dependency {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_editable(
-    locked_data: &PypiPackageData, // <--- pypi_types::Requirement
     spec: &pypi_types::Requirement,
+    locked_data: &PypiPackageData,
 ) -> bool {
-    let spec_url = &spec.url;
-
-    // In the case that both the spec and the locked data are direct git urls
-    // we need to compare the urls to see if they are the same
-    let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone()).ok();
-    let locked_git_url = locked_data
-        .url_or_path
-        .as_url()
-        .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
-
-    // Both are git url's
-    if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-        let base_is_same = spec_git_url.url.repository() == locked_data_url.url.repository();
-
-        // If the spec does not specify a revision than any will do
-        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-            return base_is_same;
-        }
-
-        // If the spec has a short commit than we can do a partial match
-        // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-        // Currently this resolves to BranchOrTag
-        if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
-            if seems_like_commit_sha(branch_or_tag) {
-                // We expect the lock file to have a long commit hash
-                // in this case
-                if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                    return base_is_same && sha.starts_with(branch_or_tag);
+    if spec.is_editable() != locked_data.editable {
+        return false;
+    }
+    match spec.source {
+        RequirementSource::Registry { .. } => false,
+        RequirementSource::Url { .. } => false,
+        RequirementSource::Git { .. } => false,
+        RequirementSource::Path {
+            install_path,
+            lock_path,
+            editable,
+            url,
+        } => match locked_data.url_or_path {
+            UrlOrPath::Url(url) => false,
+            UrlOrPath::Path(path) => {
+                if path != lock_path {
+                    return false;
                 }
+                true
             }
-        }
-
-        // If the spec does specify a revision than the revision must match
-        base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
-    } else {
-        let spec_path_or_url = spec_url
-            .given()
-            .and_then(|url| UrlOrPath::from_str(url).ok())
-            .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
-
-        // Strip the direct+ prefix if it exists for the direct url
-        // because this is not part of the `Requirement` spec
-        // we use this to record that it is a direct url
-        let locked_path_or_url = match locked_data.url_or_path.clone() {
-            UrlOrPath::Url(url) => UrlOrPath::Url(
-                url.as_ref()
-                    .strip_prefix("direct+")
-                    .and_then(|str| Url::parse(str).ok())
-                    .unwrap_or(url),
-            ),
-            UrlOrPath::Path(path) => UrlOrPath::Path(path),
-        };
-        spec_path_or_url == locked_path_or_url
+        },
     }
 }
 
@@ -421,83 +362,99 @@ fn seems_like_commit_sha(s: &str) -> bool {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_requirement(
-    locked_data: &PypiPackageData,
     spec: &pypi_types::Requirement,
+    locked_data: &PypiPackageData,
 ) -> bool {
-    // TODO: convert locked_data into pypi_types::Requirement
-
     if spec.name != locked_data.name {
         return false;
     }
 
-    // Check if the version of the requirement matches
-    match &spec.version_or_url {
-        None => true,
-        Some(VersionOrUrl::VersionSpecifier(spec)) => spec.contains(&locked_data.version),
-        Some(VersionOrUrl::Url(spec_url)) => {
-            // Both are git url's
-            if spec_url.as_str().starts_with("git+")
-                && locked_data
-                    .url_or_path
-                    .as_url()
-                    .map(|u| u.as_str().starts_with("git+"))
-                    .unwrap_or_default()
-            {
-                // In the case that both the spec and the locked data are direct git urls
-                // we need to compare the urls to see if they are the same
-                let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone());
-                let locked_git_url = locked_data
-                    .url_or_path
-                    .as_url()
-                    .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
+    match spec.source {
+        RequirementSource::Registry { specifier, index } => {
+            // Check if the locked version has a direct or git url, then we should not satify
+            if let UrlOrPath::Url(url) = locked_data.url_or_path {
+                if url.as_str().starts_with("git+") || url.as_str().starts_with("direct+") {
+                    return false;
+                }
+                // Check if the version of the requirement matches
+                return specifier.contains(&locked_data.version);
+            }
+            return false;
+        }
+        RequirementSource::Url {
+            subdirectory,
+            location,
+            url: spec_url,
+        } => {
+            if let UrlOrPath::Url(locked_url) = locked_data.url_or_path {
+                // Url may not start with git, and must start with direct+
+                if locked_url.as_str().starts_with("git+")
+                    || !locked_url.as_str().starts_with("direct+")
+                {
+                    return false;
+                }
+                let locked_url = locked_url
+                    .as_ref()
+                    .strip_prefix("direct+")
+                    .and_then(|str| Url::parse(str).ok())
+                    .unwrap_or(locked_url);
 
-                if let (Ok(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-                    let base_is_same =
-                        spec_git_url.url.repository() == locked_data_url.url.repository();
-
-                    // If the spec does not specify a revision than any will do
-                    // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                    if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-                        return base_is_same;
-                    }
-                    // If the spec has a short commit than we can do a partial match
-                    // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-                    // Currently this resolves to BranchOrTag
-                    if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
-                        if seems_like_commit_sha(branch_or_tag) {
-                            // We expect the lock file to have a long commit hash
-                            // in this case
-                            if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                                return base_is_same && sha.starts_with(branch_or_tag);
+                return *spec_url.raw() == locked_url;
+            }
+            return false;
+        }
+        RequirementSource::Git {
+            repository,
+            reference,
+            precise,
+            subdirectory,
+            url,
+        } => {
+            match locked_data.url_or_path {
+                UrlOrPath::Url(url) => {
+                    if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
+                        let repo_is_same = *locked_git_url.url.repository() == repository;
+                        // If the spec does not specify a revision than any will do
+                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                        if reference == GitReference::DefaultBranch {
+                            return repo_is_same;
+                        }
+                        // If the spec has a short commit than we can do a partial match
+                        // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
+                        // Currently this resolves to BranchOrTag
+                        if let GitReference::BranchOrTag(ref branch_or_tag) = reference {
+                            if seems_like_commit_sha(branch_or_tag) {
+                                // We expect the lock file to have a long commit hash
+                                // in this case
+                                if let GitReference::FullCommit(sha) =
+                                    locked_git_url.url.reference()
+                                {
+                                    return repo_is_same && sha.starts_with(branch_or_tag);
+                                }
                             }
                         }
+
+                        // If the spec does specify a revision than the revision must match
+                        return repo_is_same && *locked_git_url.url.reference() == reference;
                     }
-
-                    // If the spec does specify a revision than the revision must match
-                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
-                } else {
-                    false
+                    return false;
                 }
-            } else {
-                let spec_path_or_url = spec_url
-                    .given()
-                    .and_then(|url| UrlOrPath::from_str(url).ok())
-                    .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
-
-                // Strip the direct+ prefix if it exists for the direct url
-                // because this is not part of the `Requirement` spec
-                // we use this to record that it is a direct url
-                let locked_path_or_url = match locked_data.url_or_path.clone() {
-                    UrlOrPath::Url(url) => UrlOrPath::Url(
-                        url.as_ref()
-                            .strip_prefix("direct+")
-                            .and_then(|str| Url::parse(str).ok())
-                            .unwrap_or(url),
-                    ),
-                    UrlOrPath::Path(path) => UrlOrPath::Path(path),
-                };
-                spec_path_or_url == locked_path_or_url
+                UrlOrPath::Path(path) => return false,
             }
+        }
+        RequirementSource::Path {
+            install_path,
+            lock_path,
+            editable,
+            url,
+        } => {
+            if let UrlOrPath::Path(locked_path) = locked_data.url_or_path {
+                if locked_path != lock_path {
+                    return false;
+                }
+                return true;
+            }
+            return false;
         }
     }
 }
@@ -688,7 +645,7 @@ pub fn verify_package_platform_satisfiability(
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
-                        if !pypi_satifisfies_editable(&record.0, &requirement) {
+                        if !pypi_satifisfies_editable(&requirement, &record.0) {
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
                                 requirement,
                                 source.into_owned(),
@@ -702,7 +659,7 @@ pub fn verify_package_platform_satisfiability(
 
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
-                        if !pypi_satifisfies_requirement(&record.0, &requirement) {
+                        if !pypi_satifisfies_requirement(&requirement, &record.0) {
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
                                 requirement,
                                 source.into_owned(),
