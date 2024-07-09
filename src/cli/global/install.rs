@@ -344,7 +344,7 @@ pub(super) async fn globally_install_package(
         Installer::new()
             .with_download_client(authenticated_client)
             .with_io_concurrency_limit(100)
-            .with_execute_link_scripts(false)
+            .with_execute_link_scripts(true)
             .with_package_cache(package_cache)
             .with_target_platform(platform)
             .with_reporter(
