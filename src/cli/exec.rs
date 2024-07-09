@@ -19,9 +19,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use crate::{
     config::{self, Config, ConfigCli},
     prefix::Prefix,
-    prefix_guard::PrefixGuard,
     progress::{await_in_progress, global_multi_progress, wrap_in_progress},
-    utils::reqwest::build_reqwest_clients,
+    utils::{reqwest::build_reqwest_clients, PrefixGuard},
 };
 
 /// Run a command in a temporary environment.
