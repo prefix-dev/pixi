@@ -73,7 +73,7 @@ pub enum PlatformUnsat {
     UnsatisfiableMatchSpec(MatchSpec, String),
 
     #[error("failed to convert the requirement for '{0}'")]
-    FailedToConvertRequirement(PackageName, #[source] ParsedUrlError),
+    FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableRequirement(pypi_types::Requirement, String),
@@ -370,7 +370,7 @@ pub fn pypi_satifisfies_requirement(
                 // Check if the version of the requirement matches
                 return specifier.contains(&locked_data.version);
             }
-            return false;
+            false
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
@@ -388,7 +388,7 @@ pub fn pypi_satifisfies_requirement(
 
                 return *spec_url.raw() == locked_url;
             }
-            return false;
+            false
         }
         RequirementSource::Git {
             repository,
@@ -423,9 +423,13 @@ pub fn pypi_satifisfies_requirement(
                         // If the spec does specify a revision than the revision must match
                         return repo_is_same && locked_git_url.url.reference() == reference;
                     }
-                    return false;
+                    false
                 }
+<<<<<<< HEAD
                 UrlOrPath::Path(..) => return false,
+=======
+                UrlOrPath::Path(_) => false,
+>>>>>>> bd6415d (fix: satisfiability warnings)
             }
         }
         RequirementSource::Path { lock_path, .. } => {
@@ -435,7 +439,7 @@ pub fn pypi_satifisfies_requirement(
                 }
                 return true;
             }
-            return false;
+            false
         }
     }
 }
@@ -730,7 +734,10 @@ pub fn verify_package_platform_satisfiability(
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
                     let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
-                        PlatformUnsat::FailedToConvertRequirement(record.0.name.clone(), e)
+                        PlatformUnsat::FailedToConvertRequirement(
+                            record.0.name.clone(),
+                            Box::new(e),
+                        )
                     })?;
                     // Skip this requirement if it does not apply.
                     if !requirement.evaluate_markers(Some(marker_environment), &extras) {
