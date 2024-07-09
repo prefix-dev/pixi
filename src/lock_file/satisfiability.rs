@@ -425,11 +425,7 @@ pub fn pypi_satifisfies_requirement(
                     }
                     false
                 }
-<<<<<<< HEAD
-                UrlOrPath::Path(..) => return false,
-=======
                 UrlOrPath::Path(_) => false,
->>>>>>> bd6415d (fix: satisfiability warnings)
             }
         }
         RequirementSource::Path { lock_path, .. } => {
