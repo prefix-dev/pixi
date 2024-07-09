@@ -32,9 +32,7 @@ impl UvResolutionContext {
                 .context("failed to create uv cache directory")?;
         }
 
-        let cache = Cache::from_path(uv_cache)
-            .into_diagnostic()
-            .context("failed to create uv cache")?;
+        let cache = Cache::from_path(uv_cache);
 
         let keyring_provider = match project.config().pypi_config().use_keyring() {
             config::KeyringProvider::Subprocess => {

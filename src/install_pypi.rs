@@ -447,7 +447,7 @@ fn need_reinstall(
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
-    required: &[CombinedPypiPackageData],
+    required: &'a [CombinedPypiPackageData],
     // editables: &Vec<ResolvedEditable>,
     site_packages: &mut SitePackages,
     registry_index: &'a mut RegistryWheelIndex<'a>,

@@ -196,7 +196,7 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
         .map(|requirement| pep508_rs::Requirement {
             name: requirement.name.clone(),
             extras: requirement.extras.clone(),
-            version_or_url: match requirement.source {
+            version_or_url: match requirement.source.clone() {
                 RequirementSource::Registry { specifier, .. } => {
                     Some(VersionOrUrl::VersionSpecifier(specifier))
                 }

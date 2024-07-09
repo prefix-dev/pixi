@@ -455,16 +455,21 @@ impl PyPiRequirement {
                 rev,
                 tag,
                 subdirectory,
-                extras,
                 branch,
+                ..
             } => RequirementSource::Git {
                 repository: git.clone(),
-                precise: rev.map(|s| GitSha::from_str(&s).expect("could not parse sha")),
+                precise: rev
+                    .as_ref()
+                    .map(|s| GitSha::from_str(&s).expect("could not parse sha")),
                 reference: tag
+                    .as_ref()
                     .map(|tag| GitReference::Tag(tag.clone()))
-                    .or(branch.map(|branch| GitReference::Branch(branch)))
+                    .or(branch
+                        .as_ref()
+                        .map(|branch| GitReference::Branch(branch.to_string())))
                     .unwrap_or(GitReference::DefaultBranch),
-                subdirectory: subdirectory.map(|s| s.parse().ok()).flatten(),
+                subdirectory: subdirectory.as_ref().map(|s| s.parse().ok()).flatten(),
                 url: VerbatimUrl::from_url(
                     create_uv_url(git, rev.as_deref(), subdirectory.as_deref()).map_err(|e| {
                         AsPep508Error::UrlParseError {
@@ -477,7 +482,7 @@ impl PyPiRequirement {
             PyPiRequirement::Path {
                 path,
                 editable,
-                extras,
+                extras: _,
             } => {
                 let joined = project_root.join(path);
                 let canonicalized =
@@ -517,87 +522,6 @@ impl PyPiRequirement {
             source,
             origin: None,
         })
-    }
-
-    /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(
-        &self,
-        name: &PackageName,
-        project_root: &Path,
-    ) -> Result<RequirementOrEditable, AsPep508Error> {
-        let version_or_url = match self {
-            PyPiRequirement::Version { version, extras: _ } => version.clone().into(),
-            PyPiRequirement::Path {
-                path,
-                editable,
-                extras,
-            } => {
-                let joined = project_root.join(path);
-                let canonicalized =
-                    dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
-                        source: e,
-                        path: joined.clone(),
-                    })?;
-                let given = path
-                    .to_str()
-                    .map(|s| s.to_owned())
-                    .unwrap_or_else(String::new);
-                let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
-
-                if *editable == Some(true) {
-                    if !canonicalized.is_dir() {
-                        return Err(AsPep508Error::EditableIsNotDir { path: path.clone() });
-                    }
-
-                    return Ok(RequirementOrEditable::Editable(
-                        name.clone(),
-                        requirements_txt::EditableRequirement {
-                            url: verbatim,
-                            extras: extras.clone(),
-                            marker: None,
-                            path: canonicalized,
-                            origin: None,
-                        },
-                    ));
-                }
-
-                Some(pep508_rs::VersionOrUrl::Url(verbatim))
-            }
-            PyPiRequirement::Git {
-                git,
-                branch,
-                tag,
-                rev,
-                subdirectory: subdir,
-                extras: _,
-            } => {
-                if branch.is_some() && tag.is_some() {
-                    tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
-                }
-                let uv_url =
-                    create_uv_url(git, rev.as_deref(), subdir.as_deref()).map_err(|e| {
-                        AsPep508Error::UrlParseError {
-                            source: e,
-                            url: git.to_string(),
-                        }
-                    })?;
-                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
-            }
-            PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
-                VerbatimUrl::from_url(url.clone()),
-            )),
-            PyPiRequirement::RawVersion(version) => version.clone().into(),
-        };
-
-        Ok(RequirementOrEditable::Pep508Requirement(
-            pep508_rs::Requirement {
-                name: name.clone(),
-                extras: self.extras().to_vec(),
-                version_or_url,
-                marker: None,
-                origin: None,
-            },
-        ))
     }
 }
 
