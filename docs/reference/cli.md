@@ -228,6 +228,32 @@ pixi run --clean-env "echo \$PATH"
         pixi run start
         ```
 
+## `exec`
+
+Runs a command in a temporary environment disconnected from any project.
+This can be useful to quickly test out a certain package or version.
+
+Temporary environments are cached. If the same command is run again, the same environment will be reused.
+
+##### Arguments
+
+1. `<COMMAND>`: The command to run.
+
+#### Options:
+* `-s, --spec <SPECS>`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
+* `-c, --channel <CHANNELS>`: The channel to install the packages from. If not specified the default channel is used.
+* `--force-reinstall` If specified a new environment is always created even if one already exists.
+
+```shell
+pixi exec python
+
+# Add a constraint to the python version
+pixi exec -s python=3.9 python
+
+# Run ipython and include the py-rattler package in the environment
+pixi exec -s ipython -s py-rattler ipython
+```
+
 ## `remove`
 
 Removes dependencies from the [manifest file](project_configuration.md).
