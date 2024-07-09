@@ -11,4 +11,4 @@ readme.workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
