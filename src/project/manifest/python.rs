@@ -461,7 +461,7 @@ impl PyPiRequirement {
                 repository: git.clone(),
                 precise: rev
                     .as_ref()
-                    .map(|s| GitSha::from_str(&s).expect("could not parse sha")),
+                    .map(|s| GitSha::from_str(s).expect("could not parse sha")),
                 reference: tag
                     .as_ref()
                     .map(|tag| GitReference::Tag(tag.clone()))
@@ -469,7 +469,7 @@ impl PyPiRequirement {
                         .as_ref()
                         .map(|branch| GitReference::Branch(branch.to_string())))
                     .unwrap_or(GitReference::DefaultBranch),
-                subdirectory: subdirectory.as_ref().map(|s| s.parse().ok()).flatten(),
+                subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
                 url: VerbatimUrl::from_url(
                     create_uv_url(git, rev.as_deref(), subdirectory.as_deref()).map_err(|e| {
                         AsPep508Error::UrlParseError {

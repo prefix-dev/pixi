@@ -370,7 +370,7 @@ pub fn pypi_satifisfies_requirement(
                 // Check if the version of the requirement matches
                 return specifier.contains(&locked_data.version);
             }
-            return false;
+            false
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
@@ -388,7 +388,7 @@ pub fn pypi_satifisfies_requirement(
 
                 return *spec_url.raw() == locked_url;
             }
-            return false;
+            false
         }
         RequirementSource::Git {
             repository,
@@ -423,9 +423,9 @@ pub fn pypi_satifisfies_requirement(
                         // If the spec does specify a revision than the revision must match
                         return repo_is_same && locked_git_url.url.reference() == reference;
                     }
-                    return false;
+                    false
                 }
-                UrlOrPath::Path(..) => return false,
+                UrlOrPath::Path(..) => false,
             }
         }
         RequirementSource::Path { lock_path, .. } => {
@@ -435,7 +435,7 @@ pub fn pypi_satifisfies_requirement(
                 }
                 return true;
             }
-            return false;
+            false
         }
     }
 }

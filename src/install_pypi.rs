@@ -688,7 +688,7 @@ pub async fn update_python_distributions(
         extraneous,
         mut installer_mismatch,
     } = whats_the_plan(
-        &python_packages,
+        python_packages,
         // &editables_with_temp.resolved_editables,
         &mut site_packages,
         &mut registry_index,
