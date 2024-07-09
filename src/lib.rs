@@ -21,6 +21,7 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod uv_reporter;
 
+mod prefix_guard;
 pub mod pypi_mapping;
 mod repodata;
 

@@ -19,6 +19,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use crate::{
     config::{self, Config, ConfigCli},
     prefix::Prefix,
+    prefix_guard::PrefixGuard,
     progress::{await_in_progress, global_multi_progress, wrap_in_progress},
     utils::reqwest::build_reqwest_clients,
 };
@@ -120,11 +121,30 @@ pub async fn create_exec_prefix(
     let environment_name = EnvironmentHash::from(args).name();
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
 
+    let mut guard = PrefixGuard::new(prefix.root())
+        .into_diagnostic()
+        .context("failed to create prefix guard")?;
+
+    let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())
+        .into_diagnostic()
+        .context("failed to acquire write lock to prefix guard")?;
+
     // If the environment already exists, and we are not forcing a
     // reinstallation, we can return early.
-    if prefix.root().exists() && !args.force_reinstall {
+    if write_guard.is_ready() && !args.force_reinstall {
+        tracing::info!(
+            "reusing existing environment in {}",
+            prefix.root().display()
+        );
+        let _ = write_guard.finish();
         return Ok(prefix);
     }
+
+    // Update the prefix to indicate that we are installing it.
+    write_guard
+        .begin()
+        .into_diagnostic()
+        .context("failed to write lock status to prefix guard")?;
 
     // Construct a gateway to get repodata.
     let gateway = Gateway::builder()
@@ -217,6 +237,7 @@ pub async fn create_exec_prefix(
         .into_diagnostic()
         .context("failed to create environment")?;
 
+    let _ = write_guard.finish();
     Ok(prefix)
 }
 
