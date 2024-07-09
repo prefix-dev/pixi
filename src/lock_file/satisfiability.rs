@@ -6,10 +6,8 @@ use crate::{project::Environment, pypi_marker_env::determine_marker_environment}
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
-use pypi_types::{
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
-};
+use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pypi_types::{ParsedGitUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -20,13 +18,11 @@ use rattler_lock::{
 use std::fmt::Display;
 use std::ops::Sub;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
 use thiserror::Error;
-use tracing_subscriber::fmt::writer::OrElse;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
@@ -1040,19 +1036,27 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap();
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
-        let non_matching_spec =
-            Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
+        let non_matching_spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should not
         assert!(!pypi_satifisfies_requirement(
+            &non_matching_spec,
             &locked_data,
-            &non_matching_spec
         ));
         // Removing the rev from the Requirement should satisfy any revision
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
@@ -1069,8 +1073,11 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg").unwrap();
+        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 }
