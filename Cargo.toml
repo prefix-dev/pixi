@@ -52,6 +52,7 @@ dirs = "5.0.1"
 distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.11" }
 dunce = "1.0.4"
+fd-lock = "4.0.2"
 flate2 = "1.0.28"
 fs_extra = "1.3.0"
 futures = "0.3.30"

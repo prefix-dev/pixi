@@ -7,7 +7,7 @@ use crate::config::ConfigCli;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
-use miette::{miette, Context, Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 
 use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::verify_prefix_location_unchanged;
@@ -90,18 +90,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
-    // Split 'task' into arguments if it's a single string, supporting commands like:
-    // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
-    // This prevents shell interpretation of pixi run inputs.
-    // Use as-is if 'task' already contains multiple elements.
-    let task_args = if args.task.len() == 1 {
-        shlex::split(args.task[0].as_str())
-            .ok_or(miette!("Could not split task, assuming non valid task"))?
-    } else {
-        args.task
-    };
-    tracing::debug!("Task parsed from run command: {:?}", task_args);
-
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
@@ -110,7 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
+    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, args.task)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
