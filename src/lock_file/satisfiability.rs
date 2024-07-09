@@ -353,7 +353,7 @@ enum Dependency {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_editable(
-    locked_data: &PypiPackageData,
+    locked_data: &PypiPackageData, // <--- pypi_types::Requirement
     spec: &pypi_types::Requirement,
 ) -> bool {
     let spec_url = &spec.url;
@@ -424,6 +424,8 @@ pub fn pypi_satifisfies_requirement(
     locked_data: &PypiPackageData,
     spec: &pypi_types::Requirement,
 ) -> bool {
+    // TODO: convert locked_data into pypi_types::Requirement
+
     if spec.name != locked_data.name {
         return false;
     }
