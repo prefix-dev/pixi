@@ -5,7 +5,6 @@ use pep440_rs::VersionSpecifiers;
 use pyproject_toml::{self, BuildSystem, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-// use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
