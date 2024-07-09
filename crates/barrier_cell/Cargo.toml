@@ -1,0 +1,14 @@
+[package]
+name = "barrier_cell"
+version = "0.1.0"
+description = "An async synchronization primitive that enables waiting for a result to become available"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { workspace = true }
