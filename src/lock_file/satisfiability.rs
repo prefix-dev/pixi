@@ -329,17 +329,12 @@ pub fn pypi_satifisfies_editable(
     if spec.is_editable() != locked_data.editable {
         return false;
     }
-    match spec.source {
+    match &spec.source {
         RequirementSource::Registry { .. } => false,
         RequirementSource::Url { .. } => false,
         RequirementSource::Git { .. } => false,
-        RequirementSource::Path {
-            install_path,
-            lock_path,
-            editable,
-            url,
-        } => match locked_data.url_or_path {
-            UrlOrPath::Url(url) => false,
+        RequirementSource::Path { lock_path, .. } => match &locked_data.url_or_path {
+            UrlOrPath::Url(_) => false,
             UrlOrPath::Path(path) => {
                 if path != lock_path {
                     return false;
@@ -365,10 +360,10 @@ pub fn pypi_satifisfies_requirement(
         return false;
     }
 
-    match spec.source {
+    match &spec.source {
         RequirementSource::Registry { specifier, index } => {
             // Check if the locked version has a direct or git url, then we should not satify
-            if let UrlOrPath::Url(url) = locked_data.url_or_path {
+            if let UrlOrPath::Url(url) = &locked_data.url_or_path {
                 if url.as_str().starts_with("git+") || url.as_str().starts_with("direct+") {
                     return false;
                 }
@@ -377,12 +372,8 @@ pub fn pypi_satifisfies_requirement(
             }
             return false;
         }
-        RequirementSource::Url {
-            subdirectory,
-            location,
-            url: spec_url,
-        } => {
-            if let UrlOrPath::Url(locked_url) = locked_data.url_or_path {
+        RequirementSource::Url { url: spec_url, .. } => {
+            if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
                 // Url may not start with git, and must start with direct+
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
@@ -393,7 +384,7 @@ pub fn pypi_satifisfies_requirement(
                     .as_ref()
                     .strip_prefix("direct+")
                     .and_then(|str| Url::parse(str).ok())
-                    .unwrap_or(locked_url);
+                    .unwrap_or(locked_url.clone());
 
                 return *spec_url.raw() == locked_url;
             }
@@ -402,17 +393,16 @@ pub fn pypi_satifisfies_requirement(
         RequirementSource::Git {
             repository,
             reference,
-            precise,
-            subdirectory,
-            url,
+            precise: _precise,
+            ..
         } => {
-            match locked_data.url_or_path {
+            match &locked_data.url_or_path {
                 UrlOrPath::Url(url) => {
                     if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
-                        let repo_is_same = *locked_git_url.url.repository() == repository;
+                        let repo_is_same = locked_git_url.url.repository() == repository;
                         // If the spec does not specify a revision than any will do
                         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                        if reference == GitReference::DefaultBranch {
+                        if *reference == GitReference::DefaultBranch {
                             return repo_is_same;
                         }
                         // If the spec has a short commit than we can do a partial match
@@ -431,20 +421,15 @@ pub fn pypi_satifisfies_requirement(
                         }
 
                         // If the spec does specify a revision than the revision must match
-                        return repo_is_same && *locked_git_url.url.reference() == reference;
+                        return repo_is_same && locked_git_url.url.reference() == reference;
                     }
                     return false;
                 }
                 UrlOrPath::Path(path) => return false,
             }
         }
-        RequirementSource::Path {
-            install_path,
-            lock_path,
-            editable,
-            url,
-        } => {
-            if let UrlOrPath::Path(locked_path) = locked_data.url_or_path {
+        RequirementSource::Path { lock_path, .. } => {
+            if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
                 if locked_path != lock_path {
                     return false;
                 }
@@ -744,7 +729,7 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    let requirement = requirement.into_uv_requirement().map_err(|e| {
+                    let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
                         PlatformUnsat::FailedToConvertRequirement(record.0.name.clone(), e)
                     })?;
                     // Skip this requirement if it does not apply.
@@ -1036,23 +1021,24 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993")
+        let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
         // This should satisfy:
         assert!(pypi_satifisfies_requirement(&spec, &locked_data));
-        let non_matching_spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
-            .unwrap()
-            .into_uv_requirement()
-            .unwrap();
+        let non_matching_spec =
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
+                .unwrap()
+                .into_uv_requirement()
+                .unwrap();
         // This should not
         assert!(!pypi_satifisfies_requirement(
             &non_matching_spec,
             &locked_data,
         ));
         // Removing the rev from the Requirement should satisfy any revision
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg")
+        let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
@@ -1073,7 +1059,7 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
+        let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
