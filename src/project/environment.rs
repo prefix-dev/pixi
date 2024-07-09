@@ -741,7 +741,7 @@ mod tests {
             bar = { features = ["foo"], no-default-feature = true }
             "##;
 
-        let manifest = Project::from_str(Path::new("pixi.toml"), &contents).unwrap();
+        let manifest = Project::from_str(Path::new("pixi.toml"), contents).unwrap();
         assert_eq!(
             manifest
                 .default_environment()
