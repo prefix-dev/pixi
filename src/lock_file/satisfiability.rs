@@ -1040,19 +1040,27 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap();
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
-        let non_matching_spec =
-            Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
+        let non_matching_spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should not
         assert!(!pypi_satifisfies_requirement(
+            &non_matching_spec,
             &locked_data,
-            &non_matching_spec
         ));
         // Removing the rev from the Requirement should satisfy any revision
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
@@ -1069,8 +1077,11 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg").unwrap();
+        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 }
