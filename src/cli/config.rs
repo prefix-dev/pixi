@@ -48,15 +48,15 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, conflicts_with_all = &["global", "system"])]
+    #[arg(long, short, conflicts_with_all = &["global", "system"])]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, conflicts_with_all = &["local", "system"])]
+    #[arg(long, short, conflicts_with_all = &["local", "system"])]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, conflicts_with_all = &["local", "global"])]
+    #[arg(long, short, conflicts_with_all = &["local", "global"])]
     system: bool,
 }
 
