@@ -125,27 +125,12 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.source {
-            pypi_types::RequirementSource::Registry { specifier, index } => {
+            pypi_types::RequirementSource::Registry { specifier, .. } => {
                 specifier.contains(&self.version)
             }
-            pypi_types::RequirementSource::Url {
-                subdirectory,
-                location,
-                url,
-            } => url.raw() == &self.url,
-            pypi_types::RequirementSource::Git {
-                repository,
-                reference,
-                precise,
-                subdirectory,
-                url,
-            } => false,
-            pypi_types::RequirementSource::Path {
-                install_path,
-                lock_path,
-                editable,
-                url,
-            } => false,
+            pypi_types::RequirementSource::Url { url, .. } => url.raw() == &self.url,
+            pypi_types::RequirementSource::Git { .. } => false,
+            pypi_types::RequirementSource::Path { .. } => false,
         }
     }
 }

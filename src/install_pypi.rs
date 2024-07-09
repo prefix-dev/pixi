@@ -1,6 +1,4 @@
-use std::{
-    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
-};
+use std::{borrow::Cow, collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use distribution_filename::WheelFilename;
 use distribution_types::{
@@ -42,7 +40,7 @@ use crate::{
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
+    project::manifest::{pypi_options::PypiOptions, SystemRequirements},
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -470,39 +468,6 @@ fn whats_the_plan<'a>(
 
     let mut installer_mismatch = vec![];
 
-    // // First decide what we need to do with any editables
-    // for resolved_editable in editables {
-    //     match resolved_editable {
-    //         ResolvedEditable::Installed(dist) => {
-    //             tracing::debug!("Treating editable install as non-mutated: {dist}");
-
-    //             // Remove from the site-packages index, to avoid marking as extraneous.
-    //             let Some(editable) = dist.wheel.as_editable() else {
-    //                 tracing::warn!("Requested editable is actually not editable");
-    //                 continue;
-    //             };
-    //             let existing = site_packages.remove_editables(editable);
-    //             if existing.is_empty() {
-    //                 tracing::error!("Editable requirement is not installed: {dist}");
-    //                 continue;
-    //             }
-    //         }
-    //         ResolvedEditable::Built(built) => {
-    //             tracing::debug!("Treating editable requirement as mutable: {built}");
-
-    //             // Remove any editable installs.
-    //             let existing = site_packages.remove_editables(built.editable.raw());
-    //             reinstalls.extend(existing);
-
-    //             // Remove any non-editable installs of the same package.
-    //             let existing = site_packages.remove_packages(built.name());
-    //             reinstalls.extend(existing);
-
-    //             local.push(built.wheel.clone());
-    //         }
-    //     }
-    // }
-
     // Used to verify if there are any additional .dist-info installed
     // that should be removed
     let required_map_copy = required_map.clone();
@@ -703,46 +668,6 @@ pub async fn update_python_distributions(
         "Constructed site-packages with {} packages",
         site_packages.iter().count(),
     );
-    // // Resolve the editable packages first, as they need to be built before-hand
-    // let editables_with_temp = resolve_editables(
-    //     lock_file_dir,
-    //     editables,
-    //     &site_packages,
-    //     uv_context,
-    //     &tags,
-    //     &registry_client,
-    //     &build_dispatch,
-    // )
-    // .await?;
-
-    // convert to unnamed requirements from our type
-    // let requirements = python_packages
-    //     .iter()
-    //     .map(|(pkg, _)| {
-    //         if pkg.editable {
-    //             RequirementsSource::Editable(pkg.name.to_string())
-    //         } else {
-    //             RequirementsSource::from_package(pkg.name.to_string())
-    //         }
-    //         })
-    //     .collect::<Vec<_>>();
-
-    // let client_builder = BaseClientBuilder::new();
-
-    // let RequirementsSpecification { requirements, .. } = RequirementsSpecification::from_simple_sources(&requirements, &client_builder).await.unwrap();
-
-    // // Convert from unnamed to named requirements.
-    // let hasher = HashStrategy::default();
-
-    // let mut requirements = NamedRequirementsResolver::new(
-    //     requirements,
-    //     &hasher,
-    //     &in_memory_index,
-    //     DistributionDatabase::new(&registry_client, &build_dispatch, 1, PreviewMode::Disabled),
-    // ).resolve().await.unwrap();
-    // .with_reporter(ResolverReporter::from(printer))
-    // .resolve()
-    // .await?;
 
     // This is used to find wheels that are available from the registry
     let mut registry_index = RegistryWheelIndex::new(
@@ -975,28 +900,6 @@ pub async fn update_python_distributions(
     }
 
     Ok(())
-}
-
-/// Returns `true` if the source tree at the given path contains dynamic metadata.
-fn is_dynamic(path: &Path) -> bool {
-    // return true;
-    // If there's no `pyproject.toml`, we assume it's dynamic.
-    let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
-        return true;
-    };
-    let Ok(pyproject_toml) = PyProjectToml::from(&contents) else {
-        return true;
-    };
-    // // If `[project]` is not present, we assume it's dynamic.
-    // let Some(project) = pyproject_toml.project else {
-    //     // ...unless it appears to be a Poetry project.
-    //     return pyproject_toml
-    //         .tool
-    //         .map_or(true, |tool| tool.poetry.is_none());
-    // };
-    // `[project.dynamic]` must be present and non-empty.
-    // project.dynamic.is_some_and(|dynamic| !dynamic.is_empty())
-    return false;
 }
 
 #[cfg(test)]

@@ -361,7 +361,7 @@ pub fn pypi_satifisfies_requirement(
     }
 
     match &spec.source {
-        RequirementSource::Registry { specifier, index } => {
+        RequirementSource::Registry { specifier, .. } => {
             // Check if the locked version has a direct or git url, then we should not satify
             if let UrlOrPath::Url(url) = &locked_data.url_or_path {
                 if url.as_str().starts_with("git+") || url.as_str().starts_with("direct+") {
@@ -425,7 +425,7 @@ pub fn pypi_satifisfies_requirement(
                     }
                     return false;
                 }
-                UrlOrPath::Path(path) => return false,
+                UrlOrPath::Path(..) => return false,
             }
         }
         RequirementSource::Path { lock_path, .. } => {

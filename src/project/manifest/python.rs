@@ -1,14 +1,14 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Display, Formatter},
+    fmt::Formatter,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
-use pypi_types::{RequirementSource, VerbatimParsedUrl};
+use pypi_types::RequirementSource;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
@@ -443,7 +443,7 @@ impl PyPiRequirement {
         project_root: &Path,
     ) -> Result<pypi_types::Requirement, AsPep508Error> {
         let source = match self {
-            PyPiRequirement::Version { version, extras } => {
+            PyPiRequirement::Version { version, .. } => {
                 // TODO: implement index later
                 RequirementSource::Registry {
                     specifier: version.clone().into(),
@@ -503,7 +503,7 @@ impl PyPiRequirement {
                     url: verbatim,
                 }
             }
-            PyPiRequirement::Url { url, extras } => RequirementSource::Url {
+            PyPiRequirement::Url { url, .. } => RequirementSource::Url {
                 // TODO: fill these later
                 subdirectory: None,
                 location: url.clone(),
@@ -517,7 +517,7 @@ impl PyPiRequirement {
 
         Ok(pypi_types::Requirement {
             name: name.clone(),
-            extras: self.extras().clone().to_vec(),
+            extras: self.extras().to_vec(),
             marker: None,
             source,
             origin: None,
