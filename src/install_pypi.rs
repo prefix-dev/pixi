@@ -1,4 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
+};
 
 use distribution_filename::WheelFilename;
 use distribution_types::{
@@ -1083,7 +1085,6 @@ pub async fn update_python_distributions(
 
     Ok(())
 }
-
 
 /// Returns `true` if the source tree at the given path contains dynamic metadata.
 fn is_dynamic(path: &Path) -> bool {
