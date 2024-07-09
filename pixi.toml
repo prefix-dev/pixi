@@ -29,7 +29,7 @@ tbump = ">=6.9.0,<6.10"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
 ruff = ">=0.4.8,<0.5"
-codespell = ">=2.3.0,<3"
+typos = ">=1.23.1,<2"
 [feature.lint.tasks]
 pre-commit-install = "pre-commit-install"
 pre-commit-run = "pre-commit run --all"

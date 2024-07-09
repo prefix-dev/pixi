@@ -273,7 +273,7 @@ mod tests {
                 "version_misspelled",
                 r#"
         [system-requirements]
-        libc = { verion = "2.12" }
+        libc = { veion = "2.12" }
         "#,
             ),
             (

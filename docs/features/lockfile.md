@@ -127,7 +127,7 @@ Steps to check if the lock file is satisfiable:
 - All `channels` in the manifest file are in the lock file
 - All `packages` in the manifest file are in the lock file, and the versions in the lock file are compatible with the requirements in the manifest file, for both `conda` and `pypi` packages.
   - Conda packages use a `matchspec` which can match on all the information we store in the lockfile, even `timestamp`, `subdir` and `license`.
-- If `pypi-dependecies` are added, all `conda` package that are python packages in the lock file have a `purls` field.
+- If `pypi-dependencies` are added, all `conda` package that are python packages in the lock file have a `purls` field.
 - All hashes for the `pypi` editable packages are correct.
 - There is only a single entry for every package in the lock file.
 
