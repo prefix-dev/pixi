@@ -1556,8 +1556,10 @@ The installer will download pixi and add it to the path.</p>
 <h3 id="install-from-source">Install from source<a class="headerlink" href="#install-from-source" title="Permanent link">#</a></h3>
 <p>pixi is 100% written in Rust, and therefore it can be installed, built and tested with cargo.
 To start using pixi from a source build run:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cargo<span class="w"> </span>install<span class="w"> </span>--locked<span class="w"> </span>--git<span class="w"> </span>https://github.com/prefix-dev/pixi.git
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cargo<span class="w"> </span>install<span class="w"> </span>--locked<span class="w"> </span>--git<span class="w"> </span>https://github.com/prefix-dev/pixi.git<span class="w"> </span>pixi
 </span></code></pre></div>
+<p>We don't publish to <code>crates.io</code> anymore, so you need to install it from the repository.
+The reason for this is that we depend on some unpublished crates which disallows us to publish to <code>crates.io</code>.</p>
 <p>or when you want to make changes use:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cargo<span class="w"> </span>build
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cargo<span class="w"> </span><span class="nb">test</span>
