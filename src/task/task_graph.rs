@@ -1,23 +1,29 @@
-use crate::project::virtual_packages::{
-    verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
-};
-use crate::project::Environment;
-use crate::task::error::AmbiguousTaskError;
-use crate::task::task_environment::{FindTaskError, FindTaskSource, SearchEnvironments};
-use crate::task::{TaskDisambiguation, TaskName};
-use crate::{
-    task::{error::MissingTaskError, CmdArgs, Custom, Task},
-    Project,
-};
-use itertools::Itertools;
-use miette::Diagnostic;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     env, fmt,
+    fmt::Display,
     ops::Index,
 };
+
+use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
+
+use crate::{
+    project::{
+        virtual_packages::{
+            verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
+        },
+        Environment,
+    },
+    task::{
+        error::{AmbiguousTaskError, MissingTaskError},
+        task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
+        CmdArgs, Custom, Task, TaskDisambiguation, TaskName,
+    },
+    Project,
+};
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
 ///
@@ -37,7 +43,8 @@ pub struct TaskNode<'p> {
     /// A reference to a project task, or a owned custom task.
     pub task: Cow<'p, Task>,
 
-    /// Additional arguments to pass to the command
+    /// Additional arguments to pass to the command. These arguments are passed
+    /// verbatim, e.g. they will not be interpreted by deno.
     pub additional_args: Vec<String>,
 
     /// The id's of the task that this task depends on.
@@ -51,7 +58,7 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into()).0,
             self.run_environment.name(),
             self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
-            self.additional_args.join(", "),
+            self.format_additional_args(),
             self.dependencies
                 .iter()
                 .map(|id| id.0.to_string())
@@ -62,25 +69,33 @@ impl fmt::Display for TaskNode<'_> {
 }
 
 impl<'p> TaskNode<'p> {
-    /// Returns the full command that should be executed for this task. This includes any
-    /// additional arguments that should be passed to the command.
+    /// Returns the full command that should be executed for this task. This
+    /// includes any additional arguments that should be passed to the
+    /// command.
     ///
-    /// This function returns `None` if the task does not define a command to execute. This is the
-    /// case for alias only commands.
+    /// This function returns `None` if the task does not define a command to
+    /// execute. This is the case for alias only commands.
     pub fn full_command(&self) -> Option<String> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
-            cmd.push(' ');
-            cmd.push_str(&self.additional_args.join(" "));
+            // Pass each additional argument varbatim by wrapping it in single quotes
+            cmd.push_str(&format!(" {}", self.format_additional_args()));
         }
 
         Some(cmd)
     }
+
+    /// Format the additional arguments passed to this command
+    fn format_additional_args(&self) -> impl Display + '_ {
+        self.additional_args
+            .iter()
+            .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+    }
 }
 
-/// A [`TaskGraph`] is a graph of tasks that defines the relationships between different executable
-/// tasks.
+/// A [`TaskGraph`] is a graph of tasks that defines the relationships between
+/// different executable tasks.
 #[derive(Debug)]
 pub struct TaskGraph<'p> {
     /// The project that this graph references
@@ -119,7 +134,18 @@ impl<'p> TaskGraph<'p> {
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
     ) -> Result<Self, TaskGraphError> {
-        let mut args = args;
+        // Split 'args' into arguments if it's a single string, supporting commands
+        // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
+        // `"echo 'Hello World'"` This prevents shell interpretation of pixi run
+        // inputs. Use as-is if 'task' already contains multiple elements.
+        let (mut args, verbatim) = if args.len() == 1 {
+            (
+                shlex::split(args[0].as_str()).ok_or(TaskGraphError::InvalidTask)?,
+                false,
+            )
+        } else {
+            (args, true)
+        };
 
         if let Some(name) = args.first() {
             match search_envs.find_task(TaskName(name.clone()), FindTaskSource::CmdArgs) {
@@ -155,6 +181,19 @@ impl<'p> TaskGraph<'p> {
             .clone()
             .unwrap_or_else(|| project.default_environment());
         verify_current_platform_has_required_virtual_packages(&run_environment)?;
+
+        // Depending on whether we are passing arguments verbatim or now we allow deno
+        // to interpret them or not.
+        let (cmd, additional_args) = if verbatim {
+            let mut args = args.into_iter();
+            (
+                CmdArgs::Single(args.next().expect("must be at least one argument")),
+                args.collect(),
+            )
+        } else {
+            (CmdArgs::Multiple(args), vec![])
+        };
+
         Self::from_root(
             project,
             search_envs,
@@ -162,13 +201,13 @@ impl<'p> TaskGraph<'p> {
                 name: None,
                 task: Cow::Owned(
                     Custom {
-                        cmd: CmdArgs::from(args),
+                        cmd,
                         cwd: env::current_dir().ok(),
                     }
                     .into(),
                 ),
                 run_environment,
-                additional_args: vec![],
+                additional_args,
                 dependencies: vec![],
             },
         )
@@ -250,8 +289,9 @@ impl<'p> TaskGraph<'p> {
 
     /// Returns the topological order of the tasks in the graph.
     ///
-    /// The topological order is the order in which the tasks should be executed to ensure that
-    /// all dependencies of a task are executed before the task itself.
+    /// The topological order is the order in which the tasks should be executed
+    /// to ensure that all dependencies of a task are executed before the
+    /// task itself.
     pub fn topological_order(&self) -> Vec<TaskId> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
@@ -293,15 +333,21 @@ pub enum TaskGraphError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     UnsupportedPlatform(#[from] VerifyCurrentPlatformError),
+
+    #[error("could not split task, assuming non valid task")]
+    InvalidTask,
 }
 
 #[cfg(test)]
 mod test {
-    use crate::task::task_environment::SearchEnvironments;
-    use crate::task::task_graph::TaskGraph;
-    use crate::{EnvironmentName, Project};
-    use rattler_conda_types::Platform;
     use std::path::Path;
+
+    use rattler_conda_types::Platform;
+
+    use crate::{
+        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
+        EnvironmentName, Project,
+    };
 
     fn commands_in_order(
         project_str: &str,
@@ -348,7 +394,7 @@ mod test {
                 None,
                 None
             ),
-            vec!["echo root", "echo task1", "echo task2", "echo top --test"]
+            vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
     }
 
@@ -414,7 +460,7 @@ mod test {
                 None,
                 None
             ),
-            vec![r#""echo bla""#]
+            vec![r#"echo bla"#]
         );
     }
 
