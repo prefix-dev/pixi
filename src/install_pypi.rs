@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use distribution_filename::WheelFilename;
 use distribution_types::{
@@ -36,7 +36,7 @@ use crate::{
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{pypi_options::PypiOptions, SystemRequirements},
+    project::manifest::{pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -1082,6 +1082,28 @@ pub async fn update_python_distributions(
     }
 
     Ok(())
+}
+
+
+/// Returns `true` if the source tree at the given path contains dynamic metadata.
+fn is_dynamic(path: &Path) -> bool {
+    // return true;
+    // If there's no `pyproject.toml`, we assume it's dynamic.
+    let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
+        return true;
+    };
+    let Ok(pyproject_toml) = PyProjectToml::from_str(&contents) else {
+        return true;
+    };
+    // // If `[project]` is not present, we assume it's dynamic.
+    let Some(project) = pyproject_toml.project else {
+        // ...unless it appears to be a Poetry project.
+        return pyproject_toml
+            .tool
+            .map_or(true, |tool| tool.poetry.is_none());
+    };
+    // `[project.dynamic]` must be present and non-empty.
+    project.dynamic.is_some_and(|dynamic| !dynamic.is_empty())
 }
 
 #[cfg(test)]

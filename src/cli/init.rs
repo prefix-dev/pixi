@@ -217,9 +217,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
+            let pyproject = PyProjectToml::from_str(&file)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
-            if PyProjectToml::is_pixi_str(&file)? {
+            if pyproject.is_pixi() {
                 eprintln!(
                     "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
@@ -227,7 +228,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 return Ok(());
             }
 
-            let pyproject = PyProjectToml::from(&file)?;
             let name = pyproject.name();
             let environments = pyproject.environments_from_extras();
             let rv = env
