@@ -1087,6 +1087,7 @@ pub async fn update_python_distributions(
 }
 
 /// Returns `true` if the source tree at the given path contains dynamic metadata.
+#[allow(dead_code)]
 fn is_dynamic(path: &Path) -> bool {
     // return true;
     // If there's no `pyproject.toml`, we assume it's dynamic.

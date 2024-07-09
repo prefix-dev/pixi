@@ -5,7 +5,7 @@ use pep440_rs::VersionSpecifiers;
 use pyproject_toml::{self, BuildSystem, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use toml_edit::DocumentMut;
+// use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
@@ -21,15 +21,16 @@ pub struct PyProjectManifest {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct Tool {
+pub struct Tool {
     pub pixi: Option<ProjectManifest>,
+    #[allow(dead_code)]
     pub poetry: Option<ToolPoetry>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct ToolPoetry {
+pub struct ToolPoetry {
     #[allow(dead_code)]
-    name: Option<String>,
+    pub name: Option<String>,
 }
 
 impl std::ops::Deref for PyProjectManifest {
@@ -61,7 +62,7 @@ impl From<PyProjectManifest> for ProjectManifest {
     fn from(item: PyProjectManifest) -> Self {
         // Start by loading the data nested under "tool.pixi" as manifest,
         // and create a reference to the 'pyproject.toml' project table
-        let mut manifest = item.tool.pixi.clone();
+        let mut manifest = item.tool.pixi.clone().expect("pixi should be present");
         let pyproject = item
             .project
             .as_ref()
@@ -228,7 +229,9 @@ impl PyProjectToml {
     /// Checks whether a path is a valid `pyproject.toml` for use with pixi by
     /// checking if it contains a `[tool.pixi.project]` item.
     pub fn is_pixi(&self) -> bool {
-        self.tool.is_some_and(|project| project.pixi.is_some())
+        self.tool
+            .as_ref()
+            .is_some_and(|project| project.pixi.is_some())
     }
 }
 
