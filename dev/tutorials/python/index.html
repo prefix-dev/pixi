@@ -1665,7 +1665,7 @@ We can add these as well, which pixi will solve together with the default depend
 <p>which results in the addition to the <code>dependencies</code> key in the <code>pyproject.toml</code></p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;black&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>When using the <code>pypi-depenencies</code> you can make use of the <code>optional-dependencies</code> that other packages make available.
+<p>When using the <code>pypi-dependencies</code> you can make use of the <code>optional-dependencies</code> that other packages make available.
 For example, <code>black</code> makes the <code>cli</code> dependencies option, which can be added with the <code>--pypi</code> keyword:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>add<span class="w"> </span>black<span class="o">[</span>cli<span class="o">]</span><span class="w"> </span>--pypi
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>Added<span class="w"> </span>black<span class="o">[</span>cli<span class="o">]</span>
