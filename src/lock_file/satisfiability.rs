@@ -6,10 +6,8 @@ use crate::{project::Environment, pypi_marker_env::determine_marker_environment}
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
-use pypi_types::{
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
-};
+use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pypi_types::{ParsedGitUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -20,13 +18,11 @@ use rattler_lock::{
 use std::fmt::Display;
 use std::ops::Sub;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
 use thiserror::Error;
-use tracing_subscriber::fmt::writer::OrElse;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
