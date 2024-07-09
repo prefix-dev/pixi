@@ -28,6 +28,7 @@ dirs = "5.0.1"
 distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 distribution-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
 dunce = "1.0.4"
+fd-lock = "4.0.2"
 flate2 = "1.0.28"
 fs_extra = "1.3.0"
 futures = "0.3.30"

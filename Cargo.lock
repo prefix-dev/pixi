@@ -1368,6 +1368,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 
 [[package]]
+name = "fd-lock"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
+dependencies = [
+ "cfg-if",
+ "rustix 0.38.34",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "file_url"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3311,6 +3322,7 @@ dependencies = [
  "distribution-filename",
  "distribution-types",
  "dunce",
+ "fd-lock",
  "flate2",
  "fs_extra",
  "futures",
