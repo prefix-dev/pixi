@@ -40,10 +40,10 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
-      # codespell
-      - id: codespell
-        name: codespell
-        entry: pixi run -e lint codespell
+      # typos
+      - id: typos
+        name: typos
+        entry: pixi run -e lint typos
         language: system
         types: [text]
   # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml

@@ -37,7 +37,7 @@ impl PypiCondaClobberRegistry {
     /// this allow to warn the user about the overwriting of already installed packages
     /// in case of wrong mapping data
     /// or malicious packages
-    pub fn clobber_on_instalation(
+    pub fn clobber_on_installation(
         self,
         wheels: Vec<CachedDist>,
         venv: &PythonEnvironment,
