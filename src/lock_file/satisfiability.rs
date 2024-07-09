@@ -6,8 +6,10 @@ use crate::{project::Environment, pypi_marker_env::determine_marker_environment}
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl};
-use pypi_types::{ParsedGitUrl, RequirementSource};
+use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
+use pypi_types::{
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -24,6 +26,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 use thiserror::Error;
+use tracing_subscriber::fmt::writer::OrElse;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
@@ -72,6 +75,9 @@ pub struct EditablePackagesMismatch {
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
+
+    #[error("failed to convert the requirement for '{0}'")]
+    FailedToConvertRequirement(PackageName, #[source] ParsedUrlError),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableRequirement(pypi_types::Requirement, String),
@@ -144,6 +150,67 @@ impl PlatformUnsat {
                 | PlatformUnsat::EditablePackageMismatch(_)
                 | PlatformUnsat::SourceTreeHashMismatch(_),
         )
+    }
+}
+
+/// Convert something into a uv requirement.
+trait IntoUvRequirement {
+    type E;
+    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E>;
+}
+
+impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
+    type E = ParsedUrlError;
+
+    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
+        let parsed_url = if let Some(version_or_url) = self.version_or_url {
+            match version_or_url {
+                VersionOrUrl::VersionSpecifier(version) => {
+                    Some(VersionOrUrl::VersionSpecifier(version))
+                }
+                VersionOrUrl::Url(verbatim_url) => Some(VersionOrUrl::Url(
+                    VerbatimParsedUrl::try_from(verbatim_url)?,
+                )),
+            }
+        } else {
+            None
+        };
+
+        let converted = pep508_rs::Requirement {
+            name: self.name,
+            extras: self.extras,
+            marker: self.marker,
+            version_or_url: parsed_url,
+            origin: self.origin,
+        };
+
+        Ok(converted.into())
+    }
+}
+
+impl IntoUvRequirement for PypiPackageData {
+    type E = ParsedUrlError;
+
+    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
+        // Extract information from path or url
+        let source = match self.url_or_path {
+            UrlOrPath::Url(url) => {
+                // Strip `direct+` if present from the url
+                let url = url
+                    .as_ref()
+                    .strip_prefix("direct+")
+                    .and_then(|str| Url::parse(str).ok())
+                    .unwrap_or(url);
+
+                let parsed_url = ParsedUrl::try_from(url)?;
+            }
+            UrlOrPath::Path(path) => ParsedPathUrl::from_source(
+                path,
+                path,
+                self.editable,
+                Url::from_file_path(path).expect("could not convert path to url"),
+            ),
+        };
     }
 }
 
@@ -287,7 +354,7 @@ enum Dependency {
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_editable(
     locked_data: &PypiPackageData,
-    spec: pypi_types::Requirement,
+    spec: &pypi_types::Requirement,
 ) -> bool {
     let spec_url = &spec.url;
 
@@ -618,32 +685,28 @@ pub fn verify_package_platform_satisfiability(
                     FoundPackage::Conda(*repodata_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
-                    match requirement {
-                        RequirementOrEditable::Editable(package_name, requirement) => {
-                            if !pypi_satifisfies_editable(&record.0, &requirement) {
-                                return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                    RequirementOrEditable::Editable(package_name, requirement),
-                                    source.into_owned(),
-                                ));
-                            }
-
-                            // Record that we want this package to be editable. This is used to
-                            // check at the end if packages that should be editable are actually
-                            // editable and vice versa.
-                            expected_editable_pypi_packages.insert(package_name.clone());
-
-                            FoundPackage::PyPi(idx, requirement.extras)
+                    if requirement.is_editable() {
+                        if !pypi_satifisfies_editable(&record.0, &requirement) {
+                            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                                requirement,
+                                source.into_owned(),
+                            ));
                         }
-                        RequirementOrEditable::Pep508Requirement(requirement) => {
-                            if !pypi_satifisfies_requirement(&record.0, &requirement) {
-                                return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                    RequirementOrEditable::Pep508Requirement(requirement),
-                                    source.into_owned(),
-                                ));
-                            }
 
-                            FoundPackage::PyPi(idx, requirement.extras)
+                        // Record that we want this package to be editable. This is used to
+                        // check at the end if packages that should be editable are actually
+                        // editable and vice versa.
+                        expected_editable_pypi_packages.insert(requirement.name.clone());
+
+                        FoundPackage::PyPi(idx, requirement.extras)
+                    } else {
+                        if !pypi_satifisfies_requirement(&record.0, &requirement) {
+                            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                                requirement,
+                                source.into_owned(),
+                            ));
                         }
+                        FoundPackage::PyPi(idx, requirement.extras)
                     }
                 } else {
                     // The record does not match the spec, the lock-file is inconsistent.
@@ -726,8 +789,11 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
+                    let requirement = requirement.into_uv_requirement().map_err(|e| {
+                        PlatformUnsat::FailedToConvertRequirement(record.0.name.clone(), e)
+                    })?;
                     // Skip this requirement if it does not apply.
-                    if !requirement.evaluate_markers(marker_environment, &extras) {
+                    if !requirement.evaluate_markers(Some(marker_environment), &extras) {
                         continue;
                     }
 
