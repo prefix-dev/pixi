@@ -151,10 +151,11 @@ apk add pixi
 To start using `pixi` from a source build run:
 
 ```shell
-cargo install --locked pixi
-# Or to use the the latest `main` branch
-cargo install --locked --git https://github.com/prefix-dev/pixi.git
+cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
 ```
+
+We don't publish to `crates.io` anymore, so you need to install it from the repository.
+The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
 
 or when you want to make changes use:
 
