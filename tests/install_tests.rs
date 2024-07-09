@@ -18,7 +18,7 @@ use pixi::{
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
-use uv_interpreter::PythonEnvironment;
+use uv_toolchain::PythonEnvironment;
 
 use crate::common::{
     builders::{string_from_iter, HasDependencyConfig},
@@ -282,8 +282,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(python, cache).unwrap();
-    uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_toolchain::Interpreter::query(python, cache).unwrap();
+    uv_toolchain::PythonEnvironment::from_interpreter(interpreter)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
