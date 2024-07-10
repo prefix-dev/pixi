@@ -107,24 +107,59 @@ winget install prefix-dev.pixi
 
 ### Autocompletion
 
-To get autocompletion run:
+To get autocompletion follow the instructions for your shell.
+Afterwards, restart the shell or source the shell config file.
 
-```shell
-# Bash (default on most Linux systems)
+#### Bash (default on most Linux systems)
+
+```bash
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
-# Zsh (default on macOS)
+```
+#### Zsh (default on macOS)
+
+```zsh
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
-# Fish
-echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
-# Nushell
-pixi completion --shell nushell | save --append $nu.config-path
-# Elvish
-echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
-# Powershell (pre-installed on all Windows systems)
+```
+
+#### PowerShell (pre-installed on all Windows systems)
+
+```pwsh
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 
-And then restart the shell or source the shell config file.
+If this fails with "Failure because no profile file exists", make sure your profile file exists.
+If not, create it with:
+
+```PowerShell
+New-Item -Path $PROFILE -ItemType File -Force
+```
+
+#### Fish
+
+```fish
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+```
+
+#### Nushell
+
+Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+
+```nushell
+mkdir ~/.cache/pixi
+pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
+```
+
+And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
+
+```nushell
+use ~/.cache/pixi/completions.nu *
+```
+
+#### Elvish
+
+```elv
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
 
 ### Distro Packages
 
