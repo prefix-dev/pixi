@@ -326,9 +326,10 @@ pub fn pypi_satifisfies_editable(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
 ) -> bool {
-    if spec.is_editable() != locked_data.editable {
-        return false;
-    }
+    // We dont match on spec.is_editable() != locked_data.editable
+    // as it will happen later in verify_package_platform_satisfiability
+    // TODO: could be a potential refactoring opportunity
+
     match &spec.source {
         RequirementSource::Registry { .. } => false,
         RequirementSource::Url { .. } => false,
@@ -360,17 +361,11 @@ pub fn pypi_satifisfies_requirement(
         return false;
     }
 
+    eprintln!("inside pypi_sat_requirement, spec source is  {:?} and locked data is {:?} and has url {:?}", spec.source, locked_data.version, locked_data.url_or_path);
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
-            // Check if the locked version has a direct or git url, then we should not satify
-            if let UrlOrPath::Url(url) = &locked_data.url_or_path {
-                if url.as_str().starts_with("git+") || url.as_str().starts_with("direct+") {
-                    return false;
-                }
-                // Check if the version of the requirement matches
-                return specifier.contains(&locked_data.version);
-            }
-            false
+            // In the old way we always satisfy based on version so let's keep it similar here
+            specifier.contains(&locked_data.version)
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
@@ -458,6 +453,7 @@ pub fn verify_package_platform_satisfiability(
         return Err(PlatformUnsat::TooManyCondaPackages);
     }
 
+    // Transform from PyPiPackage name into UV Requirement type
     let pypi_requirements = environment
         .pypi_dependencies(Some(platform))
         .iter()
@@ -627,6 +623,7 @@ pub fn verify_package_platform_satisfiability(
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
                         if !pypi_satifisfies_editable(&requirement, &record.0) {
+                            eprintln!("error on pypi_satifisfies_editable");
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
                                 requirement,
                                 source.into_owned(),
@@ -641,6 +638,7 @@ pub fn verify_package_platform_satisfiability(
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
                         if !pypi_satifisfies_requirement(&requirement, &record.0) {
+                            eprintln!("cannot satisfy pypi requirement");
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
                                 requirement,
                                 source.into_owned(),
@@ -1062,6 +1060,12 @@ mod tests {
             requires_python: None,
             editable: false,
         };
+        let pepreq = pep508_rs::Requirement::<VerbatimUrl>::from_str(
+            "mypkg @ file:///C:\\Users\\username\\mypkg",
+        )
+        .unwrap();
+        eprintln!("pep req is {:?}", pepreq);
+
         let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
             .unwrap()
             .into_uv_requirement()

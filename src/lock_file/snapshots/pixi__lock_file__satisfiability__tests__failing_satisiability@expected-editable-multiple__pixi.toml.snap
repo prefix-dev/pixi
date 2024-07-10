@@ -1,8 +1,9 @@
 ---
 source: src/lock_file/satisfiability.rs
+assertion_line: 874
 expression: s
 input_file: tests/non-satisfiability/expected-editable-multiple/pixi.toml
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64
     Diagnostic severity: error
-    Caused by: the requirement 'bar @ file:///Users/tdejager/development/prefix/pixi/tests/non-satisfiability/expected-editable-multiple/bar' could not be satisfied (required by '<environment>')
+    Caused by: expected bar and foo to be editable but in the lock-file but they are not, whereas baz is NOT expected to be editable which in the lock-file it is
