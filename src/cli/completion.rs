@@ -1,5 +1,7 @@
 use crate::cli::Args as CommandArgs;
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::{shells, Generator};
+use clap_complete_nushell::Nushell;
 use miette::IntoDiagnostic;
 use regex::Regex;
 use std::borrow::Cow;
@@ -8,25 +10,61 @@ use std::io::Write;
 /// Generates a completion script for a shell.
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The shell to generate a completion script for (defaults to 'bash').
+    /// The shell to generate a completion script for
     #[arg(short, long)]
-    shell: Option<clap_complete::Shell>,
+    shell: Shell,
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(ValueEnum, Clone, Debug, Copy, Eq, Hash, PartialEq)]
+enum Shell {
+    /// Bourne Again SHell (bash)
+    Bash,
+    /// Elvish shell
+    Elvish,
+    /// Friendly Interactive SHell (fish)
+    Fish,
+    /// Nushell
+    Nushell,
+    /// PowerShell
+    PowerShell,
+    /// Z SHell (zsh)
+    Zsh,
+}
+
+impl Generator for Shell {
+    fn file_name(&self, name: &str) -> String {
+        match self {
+            Shell::Bash => shells::Bash.file_name(name),
+            Shell::Elvish => shells::Elvish.file_name(name),
+            Shell::Fish => shells::Fish.file_name(name),
+            Shell::Nushell => Nushell.file_name(name),
+            Shell::PowerShell => shells::PowerShell.file_name(name),
+            Shell::Zsh => shells::Zsh.file_name(name),
+        }
+    }
+
+    fn generate(&self, cmd: &clap::Command, buf: &mut dyn std::io::Write) {
+        match self {
+            Shell::Bash => shells::Bash.generate(cmd, buf),
+            Shell::Elvish => shells::Elvish.generate(cmd, buf),
+            Shell::Fish => shells::Fish.generate(cmd, buf),
+            Shell::Nushell => Nushell.generate(cmd, buf),
+            Shell::PowerShell => shells::PowerShell.generate(cmd, buf),
+            Shell::Zsh => shells::Zsh.generate(cmd, buf),
+        }
+    }
 }
 
 /// Generate completions for the pixi cli, and print those to the stdout
 pub(crate) fn execute(args: Args) -> miette::Result<()> {
-    let clap_shell = args
-        .shell
-        .or(clap_complete::Shell::from_env())
-        .unwrap_or(clap_complete::Shell::Bash);
-
     // Generate the original completion script.
-    let script = get_completion_script(clap_shell);
+    let script = get_completion_script(args.shell);
 
     // For supported shells, modify the script to include more context sensitive completions.
-    let script = match clap_shell {
-        clap_complete::Shell::Bash => replace_bash_completion(&script),
-        clap_complete::Shell::Zsh => replace_zsh_completion(&script),
+    let script = match args.shell {
+        Shell::Bash => replace_bash_completion(&script),
+        Shell::Zsh => replace_zsh_completion(&script),
         _ => Cow::Owned(script),
     };
 
@@ -39,7 +77,7 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
 }
 
 /// Generate the completion script using clap_complete for a specified shell.
-fn get_completion_script(shell: clap_complete::Shell) -> String {
+fn get_completion_script(shell: Shell) -> String {
     let mut buf = vec![];
     clap_complete::generate(shell, &mut CommandArgs::command(), "pixi", &mut buf);
     String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
@@ -181,7 +219,7 @@ _arguments "${_arguments_options[@]}" \
     #[test]
     pub fn test_bash_completion_working_regex() {
         // Generate the original completion script.
-        let script = get_completion_script(clap_complete::Shell::Bash);
+        let script = get_completion_script(Shell::Bash);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_bash_completion(&script), script);
     }
@@ -189,7 +227,7 @@ _arguments "${_arguments_options[@]}" \
     #[test]
     pub fn test_zsh_completion_working_regex() {
         // Generate the original completion script.
-        let script = get_completion_script(clap_complete::Shell::Zsh);
+        let script = get_completion_script(Shell::Zsh);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_zsh_completion(&script), script);
     }

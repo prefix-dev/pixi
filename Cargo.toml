@@ -42,6 +42,7 @@ clap = { version = "4.5.4", default-features = false, features = [
 ] }
 clap-verbosity-flag = "2.2.0"
 clap_complete = "4.5.2"
+clap_complete_nushell = "4.5.2"
 concat-idents = "1.1.5"
 console = { version = "0.15.8", features = ["windows-console-colors"] }
 crossbeam-channel = "0.5.12"

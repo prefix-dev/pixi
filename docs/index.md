@@ -49,25 +49,20 @@ You can find more options for the installation script [here](#installer-script-o
 
 To get autocompletion run:
 
-=== "Linux & macOS"
-    ```shell
-    # Pick your shell (use `echo $SHELL` to find the shell you are using.):
-    echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
-    echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
-    echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
-    echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```shell
+# Pick your shell (The default for macOS is zsh, for Windows PowerShell and for most Linux systems bash):
+echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+pixi completion --shell nushell | save --append $nu.config-path
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
+```
+!!! tip "Failure because no profile file exists" on PowerShell
+    Make sure your profile file exists, otherwise create it with:
+    ```PowerShell
+    New-Item -Path $PROFILE -ItemType File -Force
     ```
-=== "Windows"
-
-    PowerShell:
-    ```powershell
-    Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
-    ```
-    !!! tip "Failure because no profile file exists"
-        Make sure your profile file exists, otherwise create it with:
-        ```PowerShell
-        New-Item -Path $PROFILE -ItemType File -Force
-        ```
 
 And then restart the shell or source the shell config file.
 

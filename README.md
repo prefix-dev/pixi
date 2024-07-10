@@ -110,16 +110,12 @@ winget install prefix-dev.pixi
 To get autocompletion run:
 
 ```shell
-# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
+# Pick your shell (The default for macOS is zsh, for Windows PowerShell and for most Linux systems bash):
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
 echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+pixi completion --shell nushell | save --append $nu.config-path
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
-```
-
-For PowerShell on Windows, run the following command and then restart the shell or source the shell config file:
-
-```pwsh
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 
