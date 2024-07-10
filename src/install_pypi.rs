@@ -849,7 +849,7 @@ pub async fn update_python_distributions(
     // Verify if pypi wheels will override existing conda packages
     // and warn if they are
     if let Ok(Some(clobber_packages)) =
-        pypi_conda_clobber.clobber_on_instalation(wheels.clone(), &venv)
+        pypi_conda_clobber.clobber_on_installation(wheels.clone(), &venv)
     {
         let packages_names = clobber_packages.iter().join(", ");
 
