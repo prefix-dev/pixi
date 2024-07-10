@@ -50,12 +50,17 @@ You can find more options for the installation script [here](#installer-script-o
 To get autocompletion run:
 
 ```shell
-# Pick your shell (The default for macOS is zsh, for Windows PowerShell and for most Linux systems bash):
+# Bash (default on most Linux systems)
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+# Zsh (default on macOS)
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+# Fish
 echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+# Nushell
 pixi completion --shell nushell | save --append $nu.config-path
+# Elvish
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+# Powershell (pre-installed on all Windows systems)
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 !!! tip "Failure because no profile file exists" on PowerShell
