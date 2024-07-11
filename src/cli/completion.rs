@@ -28,7 +28,7 @@ enum Shell {
     /// Nushell
     Nushell,
     /// PowerShell
-    PowerShell,
+    Powershell,
     /// Z SHell (zsh)
     Zsh,
 }
@@ -40,7 +40,7 @@ impl Generator for Shell {
             Shell::Elvish => shells::Elvish.file_name(name),
             Shell::Fish => shells::Fish.file_name(name),
             Shell::Nushell => Nushell.file_name(name),
-            Shell::PowerShell => shells::PowerShell.file_name(name),
+            Shell::Powershell => shells::PowerShell.file_name(name),
             Shell::Zsh => shells::Zsh.file_name(name),
         }
     }
@@ -51,7 +51,7 @@ impl Generator for Shell {
             Shell::Elvish => shells::Elvish.generate(cmd, buf),
             Shell::Fish => shells::Fish.generate(cmd, buf),
             Shell::Nushell => Nushell.generate(cmd, buf),
-            Shell::PowerShell => shells::PowerShell.generate(cmd, buf),
+            Shell::Powershell => shells::PowerShell.generate(cmd, buf),
             Shell::Zsh => shells::Zsh.generate(cmd, buf),
         }
     }
