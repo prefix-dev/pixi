@@ -95,17 +95,17 @@ pub struct DependencyConfig {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// The specified dependencies are host dependencies. Conflicts with `build` and `pypi`
+    /// The specified dependencies are host dependencies. Conflicts with `build`
     /// and `pypi`
     #[arg(long, conflicts_with_all = ["build", "pypi"])]
     pub host: bool,
 
-    /// The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
+    /// The specified dependencies are build dependencies. Conflicts with `host`
     /// and `pypi`
     #[arg(long, conflicts_with_all = ["host", "pypi"])]
     pub build: bool,
 
-    /// The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
+    /// The specified dependencies are pypi dependencies. Conflicts with `host`
     /// and `build`
     #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
