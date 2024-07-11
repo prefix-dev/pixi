@@ -134,6 +134,62 @@ impl<'de> Deserialize<'de> for VersionOrStar {
     }
 }
 
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
+#[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
+pub enum GitRev {
+    Short(String),
+    Full(String),
+}
+
+impl GitRev {
+    fn as_full(&self) -> Option<&str> {
+        match self {
+            GitRev::Full(full) => Some(full.as_str()),
+            GitRev::Short(_) => None,
+        }
+    }
+
+    fn to_git_reference(&self) -> GitReference {
+        match self {
+            GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
+            GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
+        }
+    }
+}
+
+impl From<&str> for GitRev {
+    fn from(s: &str) -> Self {
+        if s.len() == 40 {
+            GitRev::Full(s.to_string())
+        } else {
+            GitRev::Short(s.to_string())
+        }
+    }
+}
+
+impl ToString for GitRev {
+    fn to_string(&self) -> String {
+        match self {
+            GitRev::Short(s) => s.clone(),
+            GitRev::Full(s) => s.clone(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for GitRev {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        if s.len() == 40 {
+            Ok(GitRev::Full(s))
+        } else {
+            Ok(GitRev::Short(s))
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
 pub enum PyPiRequirement {
@@ -141,7 +197,7 @@ pub enum PyPiRequirement {
         git: Url,
         branch: Option<String>,
         tag: Option<String>,
-        rev: Option<String>,
+        rev: Option<GitRev>,
         subdirectory: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
@@ -246,7 +302,7 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 if let Some(rev) = rev {
                     table.insert(
                         "rev",
-                        toml_edit::Value::String(toml_edit::Formatted::new(rev.clone())),
+                        toml_edit::Value::String(toml_edit::Formatted::new(rev.to_string())),
                     );
                 }
                 insert_extras(&mut table, extras);
@@ -312,7 +368,7 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                                 git: url,
                                 branch: None,
                                 tag: None,
-                                rev: Some(version.to_string()),
+                                rev: Some(GitRev::from(version)),
                                 subdirectory: None,
                                 extras: req.extras,
                             }
@@ -365,15 +421,16 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
 /// Create a url that uv can use to install a version
 fn create_uv_url(
     url: &Url,
-    rev: Option<&str>,
+    rev: Option<&GitRev>,
     subdir: Option<&str>,
 ) -> Result<Url, url::ParseError> {
     // Create the url.
     let url = format!("git+{url}");
     // Add the tag or rev if it exists.
-    let url = rev
-        .as_ref()
-        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+    let url = rev.as_ref().map_or_else(
+        || url.clone(),
+        |tag_or_rev| format!("{url}@{}", tag_or_rev.to_string()),
+    );
 
     // Add the subdirectory if it exists.
     let url = subdir.as_ref().map_or_else(
@@ -461,17 +518,21 @@ impl PyPiRequirement {
                 repository: git.clone(),
                 precise: rev
                     .as_ref()
-                    .map(|s| GitSha::from_str(s).expect("could not parse sha")),
+                    .map(|s| s.as_full())
+                    .and_then(|s| s.map(GitSha::from_str))
+                    .transpose()
+                    .expect("could not parse sha"),
                 reference: tag
                     .as_ref()
                     .map(|tag| GitReference::Tag(tag.clone()))
                     .or(branch
                         .as_ref()
                         .map(|branch| GitReference::Branch(branch.to_string())))
+                    .or(rev.as_ref().map(|rev| rev.to_git_reference()))
                     .unwrap_or(GitReference::DefaultBranch),
                 subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
                 url: VerbatimUrl::from_url(
-                    create_uv_url(git, rev.as_deref(), subdirectory.as_deref()).map_err(|e| {
+                    create_uv_url(git, rev.as_ref(), subdirectory.as_deref()).map_err(|e| {
                         AsPep508Error::UrlParseError {
                             source: e,
                             url: git.to_string(),
@@ -825,7 +886,7 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
                 git: Url::parse("https://test.url.git").unwrap(),
-                rev: Some("123456".to_string()),
+                rev: Some("123456".into()),
                 tag: None,
                 branch: None,
                 subdirectory: None,
@@ -870,7 +931,7 @@ mod tests {
                 git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                 branch: None,
                 tag: None,
-                rev: Some("b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()),
+                rev: Some("b283011c6df4a9e034baca9aea19aa8e5a70e3ab".into()),
                 subdirectory: None,
                 extras: vec![]
             }

@@ -7,7 +7,9 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
-use pypi_types::{ParsedGitUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl};
+use pypi_types::{
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -18,6 +20,7 @@ use rattler_lock::{
 use std::fmt::Display;
 use std::ops::Sub;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -164,14 +167,34 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                 VersionOrUrl::VersionSpecifier(version) => {
                     Some(VersionOrUrl::VersionSpecifier(version))
                 }
-                VersionOrUrl::Url(verbatim_url) => Some(VersionOrUrl::Url(
-                    VerbatimParsedUrl::try_from(verbatim_url)?,
-                )),
+                VersionOrUrl::Url(verbatim_url) => {
+                    let url_or_path =
+                        UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
+
+                    // it is actually a path
+                    let url = if let UrlOrPath::Path(path) = url_or_path {
+                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
+                            path.clone(),
+                            path.clone(),
+                            false,
+                            verbatim_url.to_url(),
+                        ));
+
+                        VerbatimParsedUrl {
+                            parsed_url,
+                            verbatim: verbatim_url,
+                        }
+                    } else {
+                        VerbatimParsedUrl::try_from(verbatim_url)?
+                    };
+
+                    Some(VersionOrUrl::Url(url))
+                }
             }
         } else {
             None
         };
-
+        eprintln!("parsed url is {:?}", parsed_url);
         let converted = pep508_rs::Requirement {
             name: self.name,
             extras: self.extras,
@@ -1060,11 +1083,6 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let pepreq = pep508_rs::Requirement::<VerbatimUrl>::from_str(
-            "mypkg @ file:///C:\\Users\\username\\mypkg",
-        )
-        .unwrap();
-        eprintln!("pep req is {:?}", pepreq);
 
         let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
             .unwrap()

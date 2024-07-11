@@ -423,7 +423,7 @@ pub async fn resolve_pypi(
         Some(&marker_environment),
         &PythonRequirement::from_interpreter(&interpreter),
         &in_memory_index,
-        &GitResolver::default(),
+        &git_resolver,
         provider,
         EmptyInstalledPackages,
     )
