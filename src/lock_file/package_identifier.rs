@@ -128,7 +128,7 @@ impl PypiPackageIdentifier {
             pypi_types::RequirementSource::Registry { specifier, .. } => {
                 specifier.contains(&self.version)
             }
-            pypi_types::RequirementSource::Url { url, .. } => url.raw() == &self.url,
+            pypi_types::RequirementSource::Url { .. } => false,
             pypi_types::RequirementSource::Git { .. } => false,
             pypi_types::RequirementSource::Path { .. } => false,
         }

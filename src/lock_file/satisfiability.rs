@@ -660,7 +660,6 @@ pub fn verify_package_platform_satisfiability(
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
                         if !pypi_satifisfies_requirement(&requirement, &record.0) {
-                            eprintln!("cannot satisfy pypi requirement");
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
                                 requirement,
                                 source.into_owned(),
