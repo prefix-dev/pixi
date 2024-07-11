@@ -194,7 +194,7 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
         } else {
             None
         };
-        eprintln!("parsed url is {:?}", parsed_url);
+
         let converted = pep508_rs::Requirement {
             name: self.name,
             extras: self.extras,
@@ -384,7 +384,6 @@ pub fn pypi_satifisfies_requirement(
         return false;
     }
 
-    eprintln!("inside pypi_sat_requirement, spec source is  {:?} and locked data is {:?} and has url {:?}", spec.source, locked_data.version, locked_data.url_or_path);
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
             // In the old way we always satisfy based on version so let's keep it similar here

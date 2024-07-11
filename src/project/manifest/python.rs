@@ -15,6 +15,8 @@ use url::Url;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 
+use crate::util::extract_directory_from_url;
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /// A package name for PyPI that also stores the source version of the name.
 pub struct PyPiPackageName {
@@ -210,6 +212,7 @@ pub enum PyPiRequirement {
     },
     Url {
         url: Url,
+        subdirectory: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -329,12 +332,24 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 insert_extras(&mut table, extras);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PyPiRequirement::Url { url, extras } => {
+            PyPiRequirement::Url {
+                url,
+                extras,
+                subdirectory,
+            } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "url",
                     toml_edit::Value::String(toml_edit::Formatted::new(url.to_string())),
                 );
+                if let Some(subdirectory) = subdirectory {
+                    table.insert(
+                        "subdirectory",
+                        toml_edit::Value::String(toml_edit::Formatted::new(
+                            subdirectory.to_string(),
+                        )),
+                    );
+                }
                 insert_extras(&mut table, extras);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
@@ -399,9 +414,11 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                                 extras: req.extras,
                             }
                         } else {
+                            let subdirectory = extract_directory_from_url(&url);
                             PyPiRequirement::Url {
                                 url,
                                 extras: req.extras,
+                                subdirectory,
                             }
                         }
                     }
@@ -564,12 +581,16 @@ impl PyPiRequirement {
                     url: verbatim,
                 }
             }
-            PyPiRequirement::Url { url, .. } => RequirementSource::Url {
-                // TODO: fill these later
-                subdirectory: None,
-                location: url.clone(),
-                url: VerbatimUrl::from_url(url.clone()),
-            },
+            PyPiRequirement::Url {
+                url, subdirectory, ..
+            } => {
+                RequirementSource::Url {
+                    // TODO: fill these later
+                    subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
+                    location: url.clone(),
+                    url: VerbatimUrl::from_url(url.clone()),
+                }
+            }
             PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
                 specifier: version.clone().into(),
                 index: None,
@@ -785,7 +806,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Url {
                 url: Url::parse("https://test.url.com").unwrap(),
-                extras: vec![]
+                extras: vec![],
+                subdirectory: None,
             }
         );
     }
@@ -886,7 +908,7 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
                 git: Url::parse("https://test.url.git").unwrap(),
-                rev: Some("123456".into()),
+                rev: Some(GitRev::Short("123456".to_string())),
                 tag: None,
                 branch: None,
                 subdirectory: None,
@@ -931,7 +953,9 @@ mod tests {
                 git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                 branch: None,
                 tag: None,
-                rev: Some("b283011c6df4a9e034baca9aea19aa8e5a70e3ab".into()),
+                rev: Some(GitRev::Full(
+                    "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
+                )),
                 subdirectory: None,
                 extras: vec![]
             }
@@ -939,11 +963,11 @@ mod tests {
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PyPiRequirement = pypi.into();
-        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![] });
+        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![], subdirectory: None });
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PyPiRequirement = pypi.into();
-        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()] });
+        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()], subdirectory: None });
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();

@@ -21,16 +21,13 @@ use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_configuration::PreviewMode;
 use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
 use uv_installer::{Downloader, SitePackages};
-// use uv_interpreter::{Interpreter, PythonEnvironment};
-// use uv_
-use uv_configuration::PreviewMode;
 use uv_normalize::PackageName;
-// use uv_requirements::{NamedRequirementsResolver, RequirementsSource, RequirementsSpecification};
 use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
@@ -445,7 +442,6 @@ fn need_reinstall(
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
     required: &'a [CombinedPypiPackageData],
-    // editables: &Vec<ResolvedEditable>,
     site_packages: &mut SitePackages,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
@@ -650,16 +646,6 @@ pub async fn update_python_distributions(
         .into_diagnostic()
         .with_context(|| "error locking installation directory")?;
 
-    // // Partition into editables and non-editables
-    // let (editables, python_packages) = python_packages
-    //     .iter()
-    //     .partition::<Vec<_>, _>(|(pkg, _)| pkg.editable);
-    // tracing::debug!(
-    //     "Partitioned into {} editables and {} python packages",
-    //     editables.len(),
-    //     python_packages.len()
-    // );
-
     // Find out what packages are already installed
     let mut site_packages =
         SitePackages::from_executable(&venv).expect("could not create site-packages");
@@ -689,7 +675,6 @@ pub async fn update_python_distributions(
         mut installer_mismatch,
     } = whats_the_plan(
         python_packages,
-        // &editables_with_temp.resolved_editables,
         &mut site_packages,
         &mut registry_index,
         &uv_context.cache,
