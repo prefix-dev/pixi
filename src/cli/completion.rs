@@ -15,6 +15,7 @@ pub struct Args {
     shell: Shell,
 }
 
+/// Defines the shells for which we can provide completions
 #[allow(clippy::enum_variant_names)]
 #[derive(ValueEnum, Clone, Debug, Copy, Eq, Hash, PartialEq)]
 enum Shell {
