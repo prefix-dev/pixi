@@ -10,7 +10,7 @@ use super::error::DependencyError;
 use crate::{
     project::{
         manifest::{
-            activation::Activation, python::PyPiPackageName, DependencyOverwriteBehavior,
+            activation::Activation, pypi::PyPiPackageName, DependencyOverwriteBehavior,
             PyPiRequirement,
         },
         SpecType,
@@ -196,7 +196,11 @@ impl Target {
             .and_then(|deps| deps.get(&PyPiPackageName::from_normalized(requirement.name.clone())));
 
         match (current_requirement, exact) {
-            (Some(r), true) => *r == PyPiRequirement::from(requirement.clone()),
+            (Some(r), true) => {
+                // TODO: would be nice to compare pep508 == PyPiRequirement directly
+                *r == PyPiRequirement::try_from(requirement.clone())
+                    .expect("could not convert pep508 requirement")
+            }
             (Some(_), false) => true,
             (None, _) => false,
         }
@@ -225,7 +229,9 @@ impl Target {
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
     ) {
-        let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+        // TODO: add proper error handling for this
+        let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())
+            .expect("could not convert pep508 requirm");
         if let Some(editable) = editable {
             pypi_requirement.set_editable(editable);
         }

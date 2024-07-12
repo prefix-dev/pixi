@@ -138,7 +138,7 @@ impl UvReporter {
     }
 }
 
-impl uv_installer::DownloadReporter for UvReporter {
+impl uv_installer::PrepareReporter for UvReporter {
     fn on_progress(&self, dist: &CachedDist) {
         if let Some(id) = self.name_to_id.get(&format!("{}", dist.name())) {
             self.finish(*id);
@@ -155,22 +155,6 @@ impl uv_installer::DownloadReporter for UvReporter {
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
-        self.finish(id);
-    }
-
-    fn on_editable_build_start(&self, dist: &distribution_types::LocalEditable) -> usize {
-        let path = dist.path.file_name();
-        if let Some(path) = path {
-            self.start_sync(format!(
-                "building editable source {}",
-                path.to_string_lossy()
-            ))
-        } else {
-            self.start_sync("building editable source".to_string())
-        }
-    }
-
-    fn on_editable_build_complete(&self, _dist: &distribution_types::LocalEditable, id: usize) {
         self.finish(id);
     }
 

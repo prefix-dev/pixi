@@ -5,9 +5,8 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-pub mod pypi_options;
+pub mod pypi;
 pub mod pyproject;
-pub mod python;
 mod system_requirements;
 mod target;
 mod validation;
@@ -31,8 +30,8 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
+pub use pypi::pypi_requirement::PyPiRequirement;
 use pyproject::PyProjectManifest;
-pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
@@ -58,8 +57,8 @@ use crate::{
             channel::PrioritizedChannel,
             environment::TomlEnvironmentMapOrSeq,
             error::{DependencyError, UnknownFeature},
-            pypi_options::PypiOptions,
-            python::PyPiPackageName,
+            pypi::pypi_options::PypiOptions,
+            pypi::PyPiPackageName,
         },
         SpecType,
     },

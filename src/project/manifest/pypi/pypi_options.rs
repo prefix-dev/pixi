@@ -194,7 +194,8 @@ pub enum PypiOptionsMergeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::manifest::pypi_options::{FindLinksUrlOrPath, PypiOptions};
+    use crate::project::manifest::pypi::pypi_options::PypiOptions;
+    use rattler_lock::FindLinksUrlOrPath;
     use url::Url;
 
     #[test]

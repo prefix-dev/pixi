@@ -1,5 +1,5 @@
 ---
-source: src/project/manifest/pypi_options.rs
+source: src/project/manifest/pypi/pypi_options.rs
 expression: merged_opts
 ---
 index-url: "https://example.com/pypi"
