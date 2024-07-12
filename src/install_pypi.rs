@@ -11,8 +11,8 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use pypi_types::{
-    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError,
-    VerbatimParsedUrl,
+    HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
+    ParsedUrlError, VerbatimParsedUrl,
 };
 
 use rattler_conda_types::{Platform, RepoDataRecord};
@@ -227,22 +227,33 @@ fn convert_to_dist(
             }
         }
         UrlOrPath::Path(path) => {
-            // uv always expects an absolute path.
-            let path = if path.is_absolute() {
+            let abs_path = if path.is_absolute() {
                 path.clone()
             } else {
                 lock_file_dir.join(path)
             };
 
+            let parsed_url = if abs_path.is_dir() {
+                ParsedUrl::Directory(ParsedDirectoryUrl {
+                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
+                    install_path: abs_path.clone(),
+                    lock_path: path.clone(),
+                    editable: pkg.editable,
+                })
+            } else {
+                ParsedUrl::Path(ParsedPathUrl {
+                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
+                    install_path: abs_path.clone(),
+                    lock_path: path.clone(),
+                })
+            };
+
             Dist::from_url(
                 pkg.name.clone(),
                 VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::Path(ParsedPathUrl {
-                        url: Url::from_file_path(&path).expect("could not convert path to url"),
-                        install_path: path.clone(),
-                        lock_path: path.clone(),
-                    }),
-                    verbatim: VerbatimUrl::from_path(&path)?.with_given(path.display().to_string()),
+                    parsed_url,
+                    verbatim: VerbatimUrl::from_path(&abs_path)?
+                        .with_given(abs_path.display().to_string()),
                 },
             )
             .expect("could not convert path into uv dist")
@@ -751,7 +762,7 @@ pub async fn update_python_distributions(
             .with_length(remote.len() as u64)
             .with_capacity(remote.len() + 30)
             .with_starting_tasks(remote.iter().map(|d| format!("{}", d.name())))
-            .with_top_level_message("Downloading");
+            .with_top_level_message("Preparing distributions");
 
         let distribution_database = DistributionDatabase::new(
             registry_client.as_ref(),
@@ -779,13 +790,13 @@ pub async fn update_python_distributions(
             .prepare(remote.clone(), &uv_context.in_flight)
             .await
             .into_diagnostic()
-            .context("Failed to download distributions")?;
+            .context("Failed to prepare distributions")?;
 
         let s = if wheels.len() == 1 { "" } else { "s" };
         tracing::info!(
             "{}",
             format!(
-                "Downloaded {} in {}",
+                "Prepared {} in {}",
                 format!("{} package{}", wheels.len(), s),
                 elapsed(start.elapsed())
             )
