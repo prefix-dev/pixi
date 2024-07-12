@@ -122,6 +122,9 @@ pub enum PlatformUnsat {
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
 
+    #[error("git dependency on a conda installed package '{0}' is not supported")]
+    GitDependencyOnCondaInstalledPackage(PackageName),
+
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
@@ -354,10 +357,13 @@ pub fn pypi_satifisfies_editable(
     // TODO: could be a potential refactoring opportunity
 
     match &spec.source {
-        RequirementSource::Registry { .. } => false,
-        RequirementSource::Url { .. } => false,
-        RequirementSource::Git { .. } => false,
+        RequirementSource::Registry { .. }
+        | RequirementSource::Url { .. }
+        | RequirementSource::Git { .. } => {
+            unreachable!("editable requirement cannot be from registry, url or git")
+        }
         RequirementSource::Path { lock_path, .. } => match &locked_data.url_or_path {
+            // If we have an url requirement locked, but the editable is requested, this does not satifsfy
             UrlOrPath::Url(_) => false,
             UrlOrPath::Path(path) => {
                 if path != lock_path {
@@ -627,8 +633,15 @@ pub fn verify_package_platform_satisfiability(
                             Box::new(requirement.source),
                         ));
                     }
+
                     if matches!(requirement.source, RequirementSource::Url { .. }) {
                         return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                        ));
+                    }
+
+                    if matches!(requirement.source, RequirementSource::Git { .. }) {
+                        return Err(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
                             requirement.name.clone(),
                         ));
                     }
