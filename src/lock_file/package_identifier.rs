@@ -1,5 +1,4 @@
-use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
-use pep508_rs::{Requirement, VersionOrUrl};
+use crate::{project::manifest::pypi::PyPiPackageName, pypi_mapping};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
@@ -7,7 +6,7 @@ use url::Url;
 
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 /// Defines information about a Pypi package extracted from either a python package or from a
-/// conda package.
+/// conda package. That can be used for comparison in both
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
@@ -118,22 +117,31 @@ impl PypiPackageIdentifier {
         })
     }
 
-    pub fn satisfies(&self, requirement: &Requirement) -> bool {
+    /// Checks of a found pypi requirement satisfies with the information
+    /// in this package identifier.
+    pub fn satisfies(&self, requirement: &pypi_types::Requirement) -> bool {
         // Verify the name of the package
         if self.name.as_normalized() != &requirement.name {
             return false;
         }
 
         // Check the version of the requirement
-        match &requirement.version_or_url {
-            None => true,
-            Some(VersionOrUrl::Url(url)) => {
-                // Check if the URL matches
-                url.to_url() == self.url
+        match &requirement.source {
+            pypi_types::RequirementSource::Registry { specifier, .. } => {
+                specifier.contains(&self.version)
             }
-            Some(VersionOrUrl::VersionSpecifier(required_spec)) => {
-                // Check if the locked version is contained in the required version specifier
-                required_spec.contains(&self.version)
+            // a pypi -> conda requirement on these versions are not supported
+            pypi_types::RequirementSource::Url { .. } => {
+                unreachable!("direct url requirement on conda package is not supported")
+            }
+            pypi_types::RequirementSource::Git { .. } => {
+                unreachable!("git requirement on conda package is not supported")
+            }
+            pypi_types::RequirementSource::Path { .. } => {
+                unreachable!("path requirement on conda package is not supported")
+            }
+            pypi_types::RequirementSource::Directory { .. } => {
+                unreachable!("directory requirement on conda package is not supported")
             }
         }
     }

@@ -1,4 +1,4 @@
-use super::pypi_options::PypiOptions;
+use super::pypi::pypi_options::PypiOptions;
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexSet;
 use rattler_conda_types::{Platform, Version};

@@ -1,13 +1,15 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
-use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
+use crate::project::manifest::pypi::pypi_requirement::AsPep508Error;
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl};
-use pypi_types::ParsedGitUrl;
+use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pypi_types::{
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
@@ -15,7 +17,6 @@ use rattler_conda_types::{
 use rattler_lock::{
     ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
 };
-use requirements_txt::EditableRequirement;
 use std::fmt::Display;
 use std::ops::Sub;
 use std::path::{Path, PathBuf};
@@ -74,11 +75,14 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
 
+    #[error("failed to convert the requirement for '{0}'")]
+    FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
+
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(RequirementOrEditable, String),
+    UnsatisfiableRequirement(pypi_types::Requirement, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Requirement, String),
+    CondaUnsatisfiableRequirement(pypi_types::Requirement, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -113,10 +117,13 @@ pub enum PlatformUnsat {
     AsPep508Error(PackageName, #[source] AsPep508Error),
 
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, Box<EditableRequirement>),
+    EditableDependencyOnCondaInstalledPackage(PackageName, Box<pypi_types::RequirementSource>),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
+
+    #[error("git dependency on a conda installed package '{0}' is not supported")]
+    GitDependencyOnCondaInstalledPackage(PackageName),
 
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
@@ -145,6 +152,60 @@ impl PlatformUnsat {
                 | PlatformUnsat::EditablePackageMismatch(_)
                 | PlatformUnsat::SourceTreeHashMismatch(_),
         )
+    }
+}
+
+/// Convert something into a uv requirement.
+trait IntoUvRequirement {
+    type E;
+    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E>;
+}
+
+impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
+    type E = ParsedUrlError;
+
+    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
+        let parsed_url = if let Some(version_or_url) = self.version_or_url {
+            match version_or_url {
+                VersionOrUrl::VersionSpecifier(version) => {
+                    Some(VersionOrUrl::VersionSpecifier(version))
+                }
+                VersionOrUrl::Url(verbatim_url) => {
+                    let url_or_path =
+                        UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
+
+                    // it is actually a path
+                    let url = if let UrlOrPath::Path(path) = url_or_path {
+                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
+                            path.clone(),
+                            path.clone(),
+                            verbatim_url.to_url(),
+                        ));
+
+                        VerbatimParsedUrl {
+                            parsed_url,
+                            verbatim: verbatim_url,
+                        }
+                    } else {
+                        VerbatimParsedUrl::try_from(verbatim_url)?
+                    };
+
+                    Some(VersionOrUrl::Url(url))
+                }
+            }
+        } else {
+            None
+        };
+
+        let converted = pep508_rs::Requirement {
+            name: self.name,
+            extras: self.extras,
+            marker: self.marker,
+            version_or_url: parsed_url,
+            origin: self.origin,
+        };
+
+        Ok(converted.into())
     }
 }
 
@@ -281,69 +342,38 @@ pub fn verify_platform_satisfiability(
 
 enum Dependency {
     Conda(MatchSpec, Cow<'static, str>),
-    PyPi(RequirementOrEditable, Cow<'static, str>),
+    PyPi(pypi_types::Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies_editable(
+    spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
-    spec: &EditableRequirement,
 ) -> bool {
-    let spec_url = &spec.url;
+    // We dont match on spec.is_editable() != locked_data.editable
+    // as it will happen later in verify_package_platform_satisfiability
+    // TODO: could be a potential refactoring opportunity
 
-    // In the case that both the spec and the locked data are direct git urls
-    // we need to compare the urls to see if they are the same
-    let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone()).ok();
-    let locked_git_url = locked_data
-        .url_or_path
-        .as_url()
-        .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
-
-    // Both are git url's
-    if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-        let base_is_same = spec_git_url.url.repository() == locked_data_url.url.repository();
-
-        // If the spec does not specify a revision than any will do
-        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-            return base_is_same;
+    match &spec.source {
+        RequirementSource::Registry { .. }
+        | RequirementSource::Url { .. }
+        | RequirementSource::Path { .. }
+        | RequirementSource::Git { .. } => {
+            unreachable!(
+                "editable requirement cannot be from registry, url, git or path (non-directory)"
+            )
         }
-
-        // If the spec has a short commit than we can do a partial match
-        // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-        // Currently this resolves to BranchOrTag
-        if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
-            if seems_like_commit_sha(branch_or_tag) {
-                // We expect the lock file to have a long commit hash
-                // in this case
-                if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                    return base_is_same && sha.starts_with(branch_or_tag);
+        RequirementSource::Directory { lock_path, .. } => match &locked_data.url_or_path {
+            // If we have an url requirement locked, but the editable is requested, this does not satifsfy
+            UrlOrPath::Url(_) => false,
+            UrlOrPath::Path(path) => {
+                if path != lock_path {
+                    return false;
                 }
+                true
             }
-        }
-
-        // If the spec does specify a revision than the revision must match
-        base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
-    } else {
-        let spec_path_or_url = spec_url
-            .given()
-            .and_then(|url| UrlOrPath::from_str(url).ok())
-            .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
-
-        // Strip the direct+ prefix if it exists for the direct url
-        // because this is not part of the `Requirement` spec
-        // we use this to record that it is a direct url
-        let locked_path_or_url = match locked_data.url_or_path.clone() {
-            UrlOrPath::Url(url) => UrlOrPath::Url(
-                url.as_ref()
-                    .strip_prefix("direct+")
-                    .and_then(|str| Url::parse(str).ok())
-                    .unwrap_or(url),
-            ),
-            UrlOrPath::Path(path) => UrlOrPath::Path(path),
-        };
-        spec_path_or_url == locked_path_or_url
+        },
     }
 }
 
@@ -354,79 +384,84 @@ fn seems_like_commit_sha(s: &str) -> bool {
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url references
-pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
+pub fn pypi_satifisfies_requirement(
+    spec: &pypi_types::Requirement,
+    locked_data: &PypiPackageData,
+) -> bool {
     if spec.name != locked_data.name {
         return false;
     }
 
-    // Check if the version of the requirement matches
-    match &spec.version_or_url {
-        None => true,
-        Some(VersionOrUrl::VersionSpecifier(spec)) => spec.contains(&locked_data.version),
-        Some(VersionOrUrl::Url(spec_url)) => {
-            // Both are git url's
-            if spec_url.as_str().starts_with("git+")
-                && locked_data
-                    .url_or_path
-                    .as_url()
-                    .map(|u| u.as_str().starts_with("git+"))
-                    .unwrap_or_default()
-            {
-                // In the case that both the spec and the locked data are direct git urls
-                // we need to compare the urls to see if they are the same
-                let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone());
-                let locked_git_url = locked_data
-                    .url_or_path
-                    .as_url()
-                    .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
+    match &spec.source {
+        RequirementSource::Registry { specifier, .. } => {
+            // In the old way we always satisfy based on version so let's keep it similar here
+            specifier.contains(&locked_data.version)
+        }
+        RequirementSource::Url { url: spec_url, .. } => {
+            if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
+                // Url may not start with git, and must start with direct+
+                if locked_url.as_str().starts_with("git+")
+                    || !locked_url.as_str().starts_with("direct+")
+                {
+                    return false;
+                }
+                let locked_url = locked_url
+                    .as_ref()
+                    .strip_prefix("direct+")
+                    .and_then(|str| Url::parse(str).ok())
+                    .unwrap_or(locked_url.clone());
 
-                if let (Ok(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
-                    let base_is_same =
-                        spec_git_url.url.repository() == locked_data_url.url.repository();
-
-                    // If the spec does not specify a revision than any will do
-                    // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                    if *spec_git_url.url.reference() == GitReference::DefaultBranch {
-                        return base_is_same;
-                    }
-                    // If the spec has a short commit than we can do a partial match
-                    // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-                    // Currently this resolves to BranchOrTag
-                    if let GitReference::BranchOrTag(branch_or_tag) = spec_git_url.url.reference() {
-                        if seems_like_commit_sha(branch_or_tag) {
-                            // We expect the lock file to have a long commit hash
-                            // in this case
-                            if let GitReference::FullCommit(sha) = locked_data_url.url.reference() {
-                                return base_is_same && sha.starts_with(branch_or_tag);
+                return *spec_url.raw() == locked_url;
+            }
+            false
+        }
+        RequirementSource::Git {
+            repository,
+            reference,
+            precise: _precise,
+            ..
+        } => {
+            match &locked_data.url_or_path {
+                UrlOrPath::Url(url) => {
+                    if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
+                        let repo_is_same = locked_git_url.url.repository() == repository;
+                        // If the spec does not specify a revision than any will do
+                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                        if *reference == GitReference::DefaultBranch {
+                            return repo_is_same;
+                        }
+                        // If the spec has a short commit than we can do a partial match
+                        // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
+                        // Currently this resolves to BranchOrTag
+                        if let GitReference::BranchOrTag(ref branch_or_tag) = reference {
+                            if seems_like_commit_sha(branch_or_tag) {
+                                // We expect the lock file to have a long commit hash
+                                // in this case
+                                if let GitReference::FullCommit(sha) =
+                                    locked_git_url.url.reference()
+                                {
+                                    return repo_is_same && sha.starts_with(branch_or_tag);
+                                }
                             }
                         }
-                    }
 
-                    // If the spec does specify a revision than the revision must match
-                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
-                } else {
+                        // If the spec does specify a revision than the revision must match
+                        return repo_is_same && locked_git_url.url.reference() == reference;
+                    }
                     false
                 }
-            } else {
-                let spec_path_or_url = spec_url
-                    .given()
-                    .and_then(|url| UrlOrPath::from_str(url).ok())
-                    .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
-
-                // Strip the direct+ prefix if it exists for the direct url
-                // because this is not part of the `Requirement` spec
-                // we use this to record that it is a direct url
-                let locked_path_or_url = match locked_data.url_or_path.clone() {
-                    UrlOrPath::Url(url) => UrlOrPath::Url(
-                        url.as_ref()
-                            .strip_prefix("direct+")
-                            .and_then(|str| Url::parse(str).ok())
-                            .unwrap_or(url),
-                    ),
-                    UrlOrPath::Path(path) => UrlOrPath::Path(path),
-                };
-                spec_path_or_url == locked_path_or_url
+                UrlOrPath::Path(_) => false,
             }
+        }
+        RequirementSource::Path { lock_path, .. }
+        | RequirementSource::Directory { lock_path, .. } => {
+            if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
+                if locked_path != lock_path {
+                    return false;
+                }
+                return true;
+            }
+            false
         }
     }
 }
@@ -449,13 +484,14 @@ pub fn verify_package_platform_satisfiability(
         return Err(PlatformUnsat::TooManyCondaPackages);
     }
 
+    // Transform from PyPiPackage name into UV Requirement type
     let pypi_requirements = environment
         .pypi_dependencies(Some(platform))
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
                 Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
-                    req.as_pep508(name.as_normalized(), project_root)
+                    req.as_uv_req(name.as_normalized(), project_root)
                         .map_err(|e| {
                             PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
                         })?,
@@ -512,7 +548,7 @@ pub fn verify_package_platform_satisfiability(
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
         .filter_map(|r| match r {
-            Dependency::PyPi(RequirementOrEditable::Pep508Requirement(req), _) => Some(req.clone()),
+            Dependency::PyPi(req, _) => Some(req.clone()),
             _ => None,
         })
         .collect::<HashSet<_>>();
@@ -592,63 +628,60 @@ pub fn verify_package_platform_satisfiability(
             Dependency::PyPi(requirement, source) => {
                 // Check if there is a pypi identifier that matches our requirement.
                 if let Some((identifier, repodata_idx, _)) =
-                    locked_conda_pypi_packages.get(requirement.name())
+                    locked_conda_pypi_packages.get(&requirement.name)
                 {
-                    // Check if the requirement is editable or a pep508 requirement
-                    match requirement {
-                        RequirementOrEditable::Editable(name, req) => {
-                            return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
-                                name,
-                                Box::new(req),
-                            ));
-                        }
-                        RequirementOrEditable::Pep508Requirement(req)
-                            if matches!(req.version_or_url, Some(VersionOrUrl::Url(_))) =>
-                        {
-                            return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
-                                req.name.clone(),
-                            ));
-                        }
-                        RequirementOrEditable::Pep508Requirement(req)
-                            if !identifier.satisfies(&req) =>
-                        {
-                            // The record does not match the spec, the lock-file is inconsistent.
-                            return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
-                                req,
+                    if requirement.is_editable() {
+                        return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                            Box::new(requirement.source),
+                        ));
+                    }
+
+                    if matches!(requirement.source, RequirementSource::Url { .. }) {
+                        return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                        ));
+                    }
+
+                    if matches!(requirement.source, RequirementSource::Git { .. }) {
+                        return Err(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
+                            requirement.name.clone(),
+                        ));
+                    }
+
+                    if !identifier.satisfies(&requirement) {
+                        // The record does not match the spec, the lock-file is inconsistent.
+                        return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
+                            requirement.clone(),
+                            source.into_owned(),
+                        ));
+                    }
+                    FoundPackage::Conda(*repodata_idx)
+                } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
+                    let record = &locked_pypi_environment.records[idx];
+                    if requirement.is_editable() {
+                        if !pypi_satifisfies_editable(&requirement, &record.0) {
+                            eprintln!("error on pypi_satifisfies_editable");
+                            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                                requirement,
                                 source.into_owned(),
                             ));
                         }
-                        _ => FoundPackage::Conda(*repodata_idx),
-                    }
-                } else if let Some(idx) = locked_pypi_environment.index_by_name(requirement.name())
-                {
-                    let record = &locked_pypi_environment.records[idx];
-                    match requirement {
-                        RequirementOrEditable::Editable(package_name, requirement) => {
-                            if !pypi_satifisfies_editable(&record.0, &requirement) {
-                                return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                    RequirementOrEditable::Editable(package_name, requirement),
-                                    source.into_owned(),
-                                ));
-                            }
 
-                            // Record that we want this package to be editable. This is used to
-                            // check at the end if packages that should be editable are actually
-                            // editable and vice versa.
-                            expected_editable_pypi_packages.insert(package_name.clone());
+                        // Record that we want this package to be editable. This is used to
+                        // check at the end if packages that should be editable are actually
+                        // editable and vice versa.
+                        expected_editable_pypi_packages.insert(requirement.name.clone());
 
-                            FoundPackage::PyPi(idx, requirement.extras)
+                        FoundPackage::PyPi(idx, requirement.extras)
+                    } else {
+                        if !pypi_satifisfies_requirement(&requirement, &record.0) {
+                            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                                requirement,
+                                source.into_owned(),
+                            ));
                         }
-                        RequirementOrEditable::Pep508Requirement(requirement) => {
-                            if !pypi_satifisfies_requirement(&record.0, &requirement) {
-                                return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                    RequirementOrEditable::Pep508Requirement(requirement),
-                                    source.into_owned(),
-                                ));
-                            }
-
-                            FoundPackage::PyPi(idx, requirement.extras)
-                        }
+                        FoundPackage::PyPi(idx, requirement.extras)
                     }
                 } else {
                     // The record does not match the spec, the lock-file is inconsistent.
@@ -731,8 +764,14 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
+                    let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
+                        PlatformUnsat::FailedToConvertRequirement(
+                            record.0.name.clone(),
+                            Box::new(e),
+                        )
+                    })?;
                     // Skip this requirement if it does not apply.
-                    if !requirement.evaluate_markers(marker_environment, &extras) {
+                    if !requirement.evaluate_markers(Some(marker_environment), &extras) {
                         continue;
                     }
 
@@ -742,7 +781,7 @@ pub fn verify_package_platform_satisfiability(
                     }
 
                     pypi_queue.push(Dependency::PyPi(
-                        RequirementOrEditable::Pep508Requirement(requirement.clone()),
+                        requirement.clone(),
                         record.0.name.as_ref().to_string().into(),
                     ));
                 }
@@ -1020,19 +1059,28 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap();
+        let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
         let non_matching_spec =
-            Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
+                .unwrap()
+                .into_uv_requirement()
+                .unwrap();
         // This should not
         assert!(!pypi_satifisfies_requirement(
+            &non_matching_spec,
             &locked_data,
-            &non_matching_spec
         ));
         // Removing the rev from the Requirement should satisfy any revision
-        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
@@ -1049,8 +1097,12 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg").unwrap();
+
+        let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
+            .unwrap()
+            .into_uv_requirement()
+            .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 }

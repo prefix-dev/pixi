@@ -6,7 +6,7 @@ use rattler_conda_types::{Channel, Platform};
 use crate::{Project, SpecType};
 
 use super::{
-    manifest::{pypi_options::PypiOptions, Feature, SystemRequirements},
+    manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements},
     CondaDependencies, PyPiDependencies,
 };
 

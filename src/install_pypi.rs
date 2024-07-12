@@ -4,33 +4,34 @@ use std::{
 
 use distribution_filename::WheelFilename;
 use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
-    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
+    RegistryBuiltWheel, RegistrySourceDist, SourceDist,
 };
 use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
-use miette::{miette, IntoDiagnostic, WrapErr};
+use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use platform_tags::Tags;
 use pypi_types::{
-    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError,
-    VerbatimParsedUrl,
+    HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
+    ParsedUrlError, VerbatimParsedUrl,
 };
+
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
-use tempfile::{tempdir, TempDir};
 use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, SetupPyStrategy};
+use uv_configuration::{IndexStrategy, PreviewMode};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
-use uv_installer::{Downloader, InstalledEditable, ResolvedEditable, SitePackages};
-use uv_interpreter::{Interpreter, PythonEnvironment};
+use uv_git::GitResolver;
+use uv_installer::{Preparer, SitePackages};
 use uv_normalize::PackageName;
 use uv_resolver::{FlatIndex, InMemoryIndex};
+use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
 use crate::{
@@ -38,7 +39,7 @@ use crate::{
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
+    project::manifest::{pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -228,22 +229,33 @@ fn convert_to_dist(
             }
         }
         UrlOrPath::Path(path) => {
-            // uv always expects an absolute path.
-            let path = if path.is_absolute() {
+            let abs_path = if path.is_absolute() {
                 path.clone()
             } else {
                 lock_file_dir.join(path)
             };
 
+            let parsed_url = if abs_path.is_dir() {
+                ParsedUrl::Directory(ParsedDirectoryUrl {
+                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
+                    install_path: abs_path.clone(),
+                    lock_path: path.clone(),
+                    editable: pkg.editable,
+                })
+            } else {
+                ParsedUrl::Path(ParsedPathUrl {
+                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
+                    install_path: abs_path.clone(),
+                    lock_path: path.clone(),
+                })
+            };
+
             Dist::from_url(
                 pkg.name.clone(),
                 VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::Path(ParsedPathUrl {
-                        url: Url::from_file_path(&path).expect("could not convert path to url"),
-                        path: path.clone(),
-                        editable: pkg.editable,
-                    }),
-                    verbatim: VerbatimUrl::from_path(&path)?.with_given(path.display().to_string()),
+                    parsed_url,
+                    verbatim: VerbatimUrl::from_path(&abs_path)?
+                        .with_given(abs_path.display().to_string()),
                 },
             )
             .expect("could not convert path into uv dist")
@@ -413,7 +425,8 @@ fn need_reinstall(
             }
         }
         // Figure out what to do with these
-        InstalledDist::EggInfo(_) => {}
+        InstalledDist::EggInfoFile(_) => {}
+        InstalledDist::EggInfoDirectory(_) => {}
         InstalledDist::LegacyEditable(_) => {}
     };
 
@@ -440,8 +453,7 @@ fn need_reinstall(
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
-    required: &[&'a CombinedPypiPackageData],
-    editables: &Vec<ResolvedEditable>,
+    required: &'a [CombinedPypiPackageData],
     site_packages: &mut SitePackages,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
@@ -463,39 +475,6 @@ fn whats_the_plan<'a>(
     let mut reinstalls = vec![];
 
     let mut installer_mismatch = vec![];
-
-    // First decide what we need to do with any editables
-    for resolved_editable in editables {
-        match resolved_editable {
-            ResolvedEditable::Installed(dist) => {
-                tracing::debug!("Treating editable install as non-mutated: {dist}");
-
-                // Remove from the site-packages index, to avoid marking as extraneous.
-                let Some(editable) = dist.wheel.as_editable() else {
-                    tracing::warn!("Requested editable is actually not editable");
-                    continue;
-                };
-                let existing = site_packages.remove_editables(editable);
-                if existing.is_empty() {
-                    tracing::error!("Editable requirement is not installed: {dist}");
-                    continue;
-                }
-            }
-            ResolvedEditable::Built(built) => {
-                tracing::debug!("Treating editable requirement as mutable: {built}");
-
-                // Remove any editable installs.
-                let existing = site_packages.remove_editables(built.editable.raw());
-                reinstalls.extend(existing);
-
-                // Remove any non-editable installs of the same package.
-                let existing = site_packages.remove_packages(built.name());
-                reinstalls.extend(existing);
-
-                local.push(built.wheel.clone());
-            }
-        }
-    }
 
     // Used to verify if there are any additional .dist-info installed
     // that should be removed
@@ -592,155 +571,6 @@ fn whats_the_plan<'a>(
     })
 }
 
-/// Result of resolving editables
-/// we need to store the temp_dir until the install is finished
-struct EditablesWithTemp {
-    resolved_editables: Vec<ResolvedEditable>,
-    // In the uv code they are also keeping track of the temp_dir
-    // which I do not completely understand because the wheels
-    // should already be in the cache
-    // But lets follow their lead for now
-    #[allow(dead_code)]
-    temp_dir: Option<TempDir>,
-}
-
-/// Function to figure out what we should do with any editables:
-///
-/// So we need to figure out if the editables still need to be built, or if they
-/// are *ready* to be installed Because an editable install is metadata and a
-/// .pth file containing the path the building of it is a bit different when
-/// compared to regular wheels. They are kind of stripped wheels essentially.
-///
-/// UV has the concept of a `ResolvedEditable`, which is an editable that has
-/// either just been built or is already installed. We can use this to figure
-/// out what we need to do with an editable in the prefix.
-async fn resolve_editables(
-    lock_file_dir: &Path,
-    editables: Vec<&CombinedPypiPackageData>,
-    site_packages: &SitePackages,
-    uv_context: &UvResolutionContext,
-    tags: &Tags,
-    registry_client: &RegistryClient,
-    build_dispatch: &BuildDispatch<'_>,
-) -> miette::Result<EditablesWithTemp> {
-    let mut to_build = vec![];
-    let mut installed = vec![];
-
-    for (pkg, _) in editables {
-        tracing::debug!("Resolving editable {}", pkg.name);
-        let absolute_path = dunce::canonicalize(
-            lock_file_dir.join(
-                pkg.url_or_path
-                    .as_path()
-                    .expect("editable can only be a path"),
-            ),
-        )
-        .into_diagnostic()?;
-        let url =
-            Url::from_file_path(&absolute_path).map_err(|_| miette!("invalid editable path"))?;
-        let existing = site_packages.get_editables(&url);
-
-        let editable = LocalEditable {
-            url: VerbatimUrl::from_url(url.clone()),
-            // We do not have any extras for an editable coming from the lock
-            // But I'm unsure if its ever used for metadata building
-            // as we do take it into account for resolution
-            extras: vec![],
-            path: absolute_path,
-        };
-
-        // Check if the editable is present in the site-packages
-        // If it is, we need to check if it is up to date
-        // We keep track of an extra bool to check if it is present in the prefix
-        match existing.as_slice() {
-            // The editable is not present in the site-packages
-            // Build it
-            [] => to_build.push(editable),
-            [dist] => {
-                // Check if the editable is up to date
-                // with the installed distribution
-                if ArchiveTimestamp::up_to_date_with(&editable.path, ArchiveTarget::Install(dist))
-                    .into_diagnostic()?
-                    // If the editable is dynamic, we need to rebuild it
-                    && !uv_installer::is_dynamic(&editable.path)
-                    // And the dist is already editable
-                    && dist.is_editable()
-                {
-                    // Keep it as is
-                    installed.push(InstalledEditable {
-                        editable,
-                        wheel: (**dist).clone(),
-                        metadata: dist
-                            .metadata()
-                            .map_err(|e| miette!("metadata error: {}", e))?,
-                    });
-                } else {
-                    // The editable is not up to date but present
-                    // rebuild it
-                    to_build.push(editable);
-                }
-            }
-            // Somehow `existing` gives us multiple editables
-            // let's just build it and re-install all
-            _ => {
-                to_build.push(editable);
-            }
-        }
-    }
-
-    // Now we need to build the editables
-    let (built_dists, temp_dir) = if !to_build.is_empty() {
-        // Set-up the reporter
-        let options = UvReporterOptions::new()
-            .with_length(to_build.len() as u64)
-            .with_capacity(to_build.len() + 30)
-            .with_starting_tasks(
-                to_build
-                    .iter()
-                    .map(|local| format!("building: {}", local.path.display())),
-            )
-            .with_top_level_message("Resolving editables");
-
-        // Create a tempdir to store the built editables
-        let temp = tempdir().into_diagnostic()?;
-
-        let database = DistributionDatabase::new(
-            registry_client,
-            build_dispatch,
-            uv_context.concurrency.builds,
-        );
-
-        // Build the editables
-        let built_editables = Downloader::new(
-            &uv_context.cache,
-            tags,
-            &uv_types::HashStrategy::None,
-            database,
-        )
-        .with_reporter(UvReporter::new(options))
-        .build_editables(
-            LocalEditables::from_editables(to_build.into_iter()),
-            temp.path(),
-        )
-        .await
-        .into_diagnostic()?;
-        (built_editables, Some(temp))
-    } else {
-        (vec![], None)
-    };
-
-    // Map into the ResolvedEditableExt struct
-    // contains InstalledDist or BuiltDist
-    // for previously installed and currently built distributions respectively
-    let built_editables = built_dists.into_iter().map(ResolvedEditable::Built);
-    let installed_editables = installed.into_iter().map(ResolvedEditable::Installed);
-
-    Ok(EditablesWithTemp {
-        resolved_editables: built_editables.chain(installed_editables).collect(),
-        temp_dir,
-    })
-}
-
 /// Installs and/or remove python distributions.
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
@@ -784,10 +614,9 @@ pub async fn update_python_distributions(
             .into_diagnostic()?;
         FlatIndex::from_entries(
             entries,
-            &tags,
+            Some(&tags),
             &uv_types::HashStrategy::None,
-            &uv_context.no_build,
-            &uv_context.no_binary,
+            &uv_context.build_options,
         )
     };
 
@@ -800,6 +629,8 @@ pub async fn update_python_distributions(
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
     let venv = PythonEnvironment::from_interpreter(interpreter);
+
+    let git_resolver = GitResolver::default();
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &registry_client,
@@ -808,14 +639,17 @@ pub async fn update_python_distributions(
         &index_locations,
         &flat_index,
         &in_memory_index,
+        &git_resolver,
         &uv_context.in_flight,
+        IndexStrategy::default(),
         SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
-        &uv_context.no_build,
-        &uv_context.no_binary,
+        &uv_context.build_options,
+        None,
         uv_context.concurrency,
+        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -824,35 +658,14 @@ pub async fn update_python_distributions(
         .into_diagnostic()
         .with_context(|| "error locking installation directory")?;
 
-    // Partition into editables and non-editables
-    let (editables, python_packages) = python_packages
-        .iter()
-        .partition::<Vec<_>, _>(|(pkg, _)| pkg.editable);
-    tracing::debug!(
-        "Partitioned into {} editables and {} python packages",
-        editables.len(),
-        python_packages.len()
-    );
-
     // Find out what packages are already installed
     let mut site_packages =
-        SitePackages::from_executable(&venv).expect("could not create site-packages");
+        SitePackages::from_environment(&venv).expect("could not create site-packages");
 
     tracing::debug!(
         "Constructed site-packages with {} packages",
         site_packages.iter().count(),
     );
-    // Resolve the editable packages first, as they need to be built before-hand
-    let editables_with_temp = resolve_editables(
-        lock_file_dir,
-        editables,
-        &site_packages,
-        uv_context,
-        &tags,
-        &registry_client,
-        &build_dispatch,
-    )
-    .await?;
 
     // This is used to find wheels that are available from the registry
     let mut registry_index = RegistryWheelIndex::new(
@@ -873,8 +686,7 @@ pub async fn update_python_distributions(
         extraneous,
         mut installer_mismatch,
     } = whats_the_plan(
-        &python_packages,
-        &editables_with_temp.resolved_editables,
+        python_packages,
         &mut site_packages,
         &mut registry_index,
         &uv_context.cache,
@@ -952,12 +764,13 @@ pub async fn update_python_distributions(
             .with_length(remote.len() as u64)
             .with_capacity(remote.len() + 30)
             .with_starting_tasks(remote.iter().map(|d| format!("{}", d.name())))
-            .with_top_level_message("Downloading");
+            .with_top_level_message("Preparing distributions");
 
         let distribution_database = DistributionDatabase::new(
             registry_client.as_ref(),
             &build_dispatch,
             uv_context.concurrency.downloads,
+            PreviewMode::Disabled,
         );
 
         // Before hitting the network let's make sure the credentials are available to
@@ -967,7 +780,7 @@ pub async fn update_python_distributions(
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
-        let downloader = Downloader::new(
+        let preparer = Preparer::new(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
@@ -975,17 +788,17 @@ pub async fn update_python_distributions(
         )
         .with_reporter(UvReporter::new(options));
 
-        let wheels = downloader
-            .download(remote.clone(), &uv_context.in_flight)
+        let wheels = preparer
+            .prepare(remote.clone(), &uv_context.in_flight)
             .await
             .into_diagnostic()
-            .context("Failed to download distributions")?;
+            .context("Failed to prepare distributions")?;
 
         let s = if wheels.len() == 1 { "" } else { "s" };
         tracing::info!(
             "{}",
             format!(
-                "Downloaded {} in {}",
+                "Prepared {} in {}",
                 format!("{} package{}", wheels.len(), s),
                 elapsed(start.elapsed())
             )

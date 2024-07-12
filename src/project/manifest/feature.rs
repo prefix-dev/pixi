@@ -12,7 +12,7 @@ use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::{serde_as, SerializeDisplay};
 
 use super::{
-    pypi_options::PypiOptions, Activation, PyPiRequirement, SystemRequirements, Target,
+    pypi::pypi_options::PypiOptions, Activation, PyPiRequirement, SystemRequirements, Target,
     TargetSelector,
 };
 use crate::{
@@ -21,7 +21,7 @@ use crate::{
         manifest::{
             channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
             deserialize_opt_package_map, deserialize_package_map,
-            python::PyPiPackageName,
+            pypi::PyPiPackageName,
             target::Targets,
         },
         SpecType,

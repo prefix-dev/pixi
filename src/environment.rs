@@ -2,7 +2,7 @@ use crate::consts::PIXI_UV_INSTALLER;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
 use crate::project::has_features::HasFeatures;
-use crate::project::manifest::pypi_options::PypiOptions;
+use crate::project::manifest::pypi::pypi_options::PypiOptions;
 use crate::{
     consts, install_pypi,
     lock_file::UpdateLockFileOptions,
