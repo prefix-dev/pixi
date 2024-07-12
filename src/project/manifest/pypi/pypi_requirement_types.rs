@@ -147,12 +147,27 @@ impl GitRev {
     }
 }
 
-impl From<&str> for GitRev {
-    fn from(s: &str) -> Self {
-        if s.len() == 40 {
-            GitRev::Full(s.to_string())
-        } else {
-            GitRev::Short(s.to_string())
+#[derive(thiserror::Error, Clone, Debug, Eq, PartialEq)]
+pub enum GitRevParseError {
+    #[error("Invalid length must be less than 40, actual size: {0}")]
+    InvalidLength(usize),
+    #[error("Found invalid characters for git revision {0}")]
+    InvalidCharacters(String),
+}
+
+impl FromStr for GitRev {
+    type Err = GitRevParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !s.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(GitRevParseError::InvalidCharacters(s.to_string()));
+        }
+
+        // Parse the git revision
+        match s.len() {
+            0..=39 => Ok(GitRev::Short(s.to_string())),
+            40 => Ok(GitRev::Full(s.to_string())),
+            _ => Err(GitRevParseError::InvalidLength(s.len())),
         }
     }
 }
@@ -177,5 +192,42 @@ impl<'de> Deserialize<'de> for GitRev {
         } else {
             Ok(GitRev::Short(s))
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_git_rev_from_str_valid_short() {
+        let rev = GitRev::from_str("abc123").unwrap();
+        assert_eq!(rev, GitRev::Short("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_git_rev_from_str_valid_full() {
+        let rev = GitRev::from_str("0123456789abcdef0123456789abcdef01234567").unwrap();
+        assert_eq!(
+            rev,
+            GitRev::Full("0123456789abcdef0123456789abcdef01234567".to_string())
+        );
+    }
+
+    #[test]
+    fn test_git_rev_from_str_invalid_characters() {
+        let rev = GitRev::from_str("\x1b");
+        assert!(rev.is_err());
+        assert_eq!(
+            rev.unwrap_err(),
+            GitRevParseError::InvalidCharacters("\x1b".to_string())
+        );
+    }
+
+    #[test]
+    fn test_git_rev_from_str_invalid_length() {
+        let rev = GitRev::from_str("0123456789abcdef0123456789abcdef0123456789");
+        assert!(rev.is_err());
+        assert_eq!(rev.unwrap_err(), GitRevParseError::InvalidLength(42));
     }
 }

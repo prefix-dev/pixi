@@ -271,7 +271,7 @@ impl ManifestSource {
                 }
             }
             ManifestSource::PixiToml(_) => {
-                let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+                let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())?;
                 if let Some(editable) = editable {
                     pypi_requirement.set_editable(editable);
                 }

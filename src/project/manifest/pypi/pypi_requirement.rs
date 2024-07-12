@@ -15,7 +15,7 @@ use uv_normalize::{ExtraName, PackageName};
 
 use crate::util::extract_directory_from_url;
 
-use super::{GitRev, VersionOrStar};
+use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
@@ -185,10 +185,23 @@ impl From<PyPiRequirement> for toml_edit::Value {
     }
 }
 
+#[derive(Error, Clone, Debug)]
+pub enum Pep508ToPyPiRequirementError {
+    #[error(transparent)]
+    ParseUrl(#[from] url::ParseError),
+
+    #[error(transparent)]
+    ParseGitRev(#[from] GitRevParseError),
+
+    #[error("could not convert '{0}' to a file path")]
+    PathUrlIntoPath(Url),
+}
+
 /// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
-impl From<pep508_rs::Requirement> for PyPiRequirement {
-    fn from(req: pep508_rs::Requirement) -> Self {
-        if let Some(version_or_url) = req.version_or_url {
+impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
+    type Error = Pep508ToPyPiRequirementError;
+    fn try_from(req: pep508_rs::Requirement) -> Result<Self, Self::Error> {
+        let converted = if let Some(version_or_url) = req.version_or_url {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
                     version: if v.is_empty() {
@@ -202,19 +215,17 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     // If serialization starts with `git+` then it is a git url.
                     if let Some(stripped_url) = u.to_string().strip_prefix("git+") {
                         if let Some((url, version)) = stripped_url.split_once('@') {
-                            let url = Url::parse(url)
-                                .expect("expect proper url as it is previously parsed");
+                            let url = Url::parse(url)?;
                             PyPiRequirement::Git {
                                 git: url,
                                 branch: None,
                                 tag: None,
-                                rev: Some(GitRev::from(version)),
+                                rev: Some(GitRev::from_str(version)?),
                                 subdirectory: None,
                                 extras: req.extras,
                             }
                         } else {
-                            let url = Url::parse(stripped_url)
-                                .expect("expect proper url as it is previously parsed");
+                            let url = Url::parse(stripped_url)?;
                             PyPiRequirement::Git {
                                 git: url,
                                 branch: None,
@@ -230,9 +241,9 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                         // i.e. package @ file:///path/to/package
                         if url.scheme() == "file" {
                             // Convert the file url to a path.
-                            let file = url
-                                .to_file_path()
-                                .expect("could not convert to file url to path");
+                            let file = url.to_file_path().map_err(|_| {
+                                Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
+                            })?;
                             PyPiRequirement::Path {
                                 path: file,
                                 editable: None,
@@ -256,7 +267,8 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
             }
         } else {
             PyPiRequirement::RawVersion(VersionOrStar::Star)
-        }
+        };
+        Ok(converted)
     }
 }
 
@@ -448,14 +460,14 @@ mod tests {
     fn test_pypi_to_string() {
         let req = pep508_rs::Requirement::from_str("numpy[testing]==1.0.0; os_name == \"posix\"")
             .unwrap();
-        let pypi = PyPiRequirement::from(req);
+        let pypi = PyPiRequirement::try_from(req).unwrap();
         assert_eq!(
             pypi.to_string(),
             "{ version = \"==1.0.0\", extras = [\"testing\"] }"
         );
 
         let req = pep508_rs::Requirement::from_str("numpy").unwrap();
-        let pypi = PyPiRequirement::from(req);
+        let pypi = PyPiRequirement::try_from(req).unwrap();
         assert_eq!(pypi.to_string(), "\"*\"");
     }
 
@@ -747,19 +759,19 @@ mod tests {
     #[test]
     fn test_from_args() {
         let pypi: Requirement = "numpy".parse().unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         // convert to toml and snapshot
         assert_snapshot!(as_pypi_req.to_string());
 
         let pypi: Requirement = "numpy[test,extrastuff]".parse().unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         // convert to toml and snapshot
         assert_snapshot!(as_pypi_req.to_string());
 
         let pypi: Requirement = "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
             .parse()
             .unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
@@ -773,7 +785,7 @@ mod tests {
         );
 
         let pypi: Requirement = "exchangelib @ git+https://github.com/ecederstrand/exchangelib@b283011c6df4a9e034baca9aea19aa8e5a70e3ab".parse().unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
@@ -789,11 +801,11 @@ mod tests {
         );
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![], subdirectory: None });
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
         assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()], subdirectory: None });
 
         #[cfg(target_os = "windows")]
@@ -801,7 +813,7 @@ mod tests {
         #[cfg(not(target_os = "windows"))]
         let pypi: Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
 
-        let as_pypi_req: PyPiRequirement = pypi.into();
+        let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
 
         #[cfg(target_os = "windows")]
         assert_eq!(

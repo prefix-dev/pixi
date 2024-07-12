@@ -7,6 +7,8 @@ use thiserror::Error;
 
 use crate::{consts, project::manifest::ProjectManifest};
 
+use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
+
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
     #[error("{} is already a dependency.", console::style(.0).bold())]
@@ -42,6 +44,8 @@ pub enum TomlError {
         array_name: String,
         table_name: String,
     },
+    #[error("Could not convert pep508 to pixi pypi requirement")]
+    Conversion(#[from] Pep508ToPyPiRequirementError),
 }
 
 impl TomlError {
