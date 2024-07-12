@@ -1,6 +1,6 @@
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
-use crate::project::manifest::pypi_options::PypiOptions;
+use crate::project::manifest::pypi::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::HashMap;
 

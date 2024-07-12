@@ -10,7 +10,7 @@ use super::error::DependencyError;
 use crate::{
     project::{
         manifest::{
-            activation::Activation, python::PyPiPackageName, DependencyOverwriteBehavior,
+            activation::Activation, pypi::PyPiPackageName, DependencyOverwriteBehavior,
             PyPiRequirement,
         },
         SpecType,

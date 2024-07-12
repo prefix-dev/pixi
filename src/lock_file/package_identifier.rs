@@ -1,4 +1,4 @@
-use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
+use crate::{project::manifest::pypi::PyPiPackageName, pypi_mapping};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;

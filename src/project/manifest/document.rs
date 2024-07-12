@@ -4,7 +4,7 @@ use pep508_rs::VerbatimUrl;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
-use super::{error::TomlError, python::PyPiPackageName, PyPiRequirement};
+use super::{error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
 const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";

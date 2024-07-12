@@ -3,7 +3,7 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
 
-use crate::{project::manifest::python::PyPiPackageName, Project};
+use crate::{project::manifest::pypi::PyPiPackageName, Project};
 
 /// A trait to facilitate extraction of packages data from arguments
 pub(crate) trait HasSpecs {

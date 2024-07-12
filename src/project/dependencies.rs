@@ -3,7 +3,7 @@ use itertools::Either;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
 use std::{borrow::Cow, hash::Hash};
 
-use super::manifest::{python::PyPiPackageName, PyPiRequirement};
+use super::manifest::{pypi::PyPiPackageName, PyPiRequirement};
 
 pub type PyPiDependencies = Dependencies<PyPiPackageName, PyPiRequirement>;
 pub type CondaDependencies = Dependencies<PackageName, NamelessMatchSpec>;
