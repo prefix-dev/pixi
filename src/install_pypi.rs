@@ -39,7 +39,9 @@ use crate::{
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements},
+    project::manifest::{
+        pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements,
+    },
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
