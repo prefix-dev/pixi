@@ -31,7 +31,7 @@ assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 cfg-if = "1.0"
 chrono = "0.4.38"
-clap = { version = "4.5.4", default-features = false, features = [
+clap = { version = "4.5.9", default-features = false, features = [
     "derive",
     "usage",
     "wrap_help",
@@ -49,8 +49,8 @@ csv = "1.3.0"
 deno_task_shell = "0.16.0"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-distribution-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 dunce = "1.0.4"
 fd-lock = "4.0.2"
 flate2 = "1.0.28"
@@ -62,7 +62,7 @@ humantime = "2.1.0"
 ignore = "0.4.22"
 indexmap = { version = "2.2.6", features = ["serde"] }
 indicatif = "0.17.8"
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -77,12 +77,11 @@ miette = { version = "7.2.0", features = [
 minijinja = { version = "1.0.20", features = ["builtins"] }
 once_cell = "1.19.0"
 parking_lot = "0.12.2"
-
-pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 percent-encoding = "2.3.1"
-platform-tags = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-pypi-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pyproject-toml = "0.11.0"
 rattler = { version = "0.26.4", default-features = false, features = [
     "cli-tools",
@@ -105,7 +104,7 @@ rattler_solve = { version = "0.24.2", default-features = false, features = [
 
 rattler_virtual_packages = { version = "0.19.3", default-features = false }
 regex = "1.10.4"
-requirements-txt = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 reqwest = { version = "0.12.4", default-features = false, features = [
     "http2",
     "macos-system-configuration",
@@ -136,19 +135,20 @@ toml_edit = { version = "0.22.11", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-uv-auth = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-build = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-cache = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-client = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-git = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-installer = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-uv-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-toolchain = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 xxhash-rust = "0.8.10"
 zip = { version = "0.6.6", default-features = false, features = [
     "deflate",
@@ -187,8 +187,8 @@ tokio = { version = "1.37.0", features = ["rt"] }
 # For pyproject-toml
 # pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
-pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 # deno_task_shell = { path = "../deno_task_shell" }
 #rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }

@@ -18,7 +18,7 @@ use pixi::{
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
-use uv_interpreter::PythonEnvironment;
+use uv_toolchain::PythonEnvironment;
 
 use crate::common::{
     builders::{string_from_iter, HasDependencyConfig},
@@ -282,8 +282,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(python, cache).unwrap();
-    uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_toolchain::Interpreter::query(python, cache).unwrap();
+    uv_toolchain::PythonEnvironment::from_interpreter(interpreter)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -313,7 +313,7 @@ async fn pypi_reinstall_python() {
 
     // Check if site-packages has entries
     let env = create_uv_environment(&prefix, &cache);
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
     // sleep for a few seconds to make sure we can remove stuff (Windows file system
@@ -330,7 +330,7 @@ async fn pypi_reinstall_python() {
     ));
 
     // Check if site-packages has entries, should be empty now
-    let installed_312 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_312 = uv_installer::SitePackages::from_environment(&env).unwrap();
 
     if cfg!(not(target_os = "windows")) {
         // On non-windows the site-packages should be empty
@@ -365,7 +365,7 @@ async fn pypi_add_remove() {
 
     // Check if site-packages has entries
     let env = create_uv_environment(&prefix, &cache);
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
     pixi.remove("flask[dotenv]")
@@ -374,7 +374,7 @@ async fn pypi_add_remove() {
         .await
         .unwrap();
 
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() == 0);
 }
 

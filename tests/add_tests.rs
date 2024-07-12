@@ -195,8 +195,8 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package to a target
-    pixi.add("boltons")
+    // Add a pypi package to a target with short hash
+    pixi.add("boltons @ git+https://github.com/mahmoud/boltons.git@d463c")
         .set_type(DependencyType::PypiDependency)
         .with_install(true)
         .set_platforms(&[Platform::Osx64])

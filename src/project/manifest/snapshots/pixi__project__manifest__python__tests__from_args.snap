@@ -1,5 +1,0 @@
----
-source: src/project/manifest/python.rs
-expression: as_pypi_req.to_string()
----
-"*"

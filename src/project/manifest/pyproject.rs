@@ -232,14 +232,13 @@ impl PyProjectToml {
 mod tests {
     use std::{path::Path, str::FromStr};
 
+    use crate::{
+        project::manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, Manifest},
+        FeatureName,
+    };
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
-
-    use crate::{
-        project::manifest::{python::PyPiPackageName, DependencyOverwriteBehavior, Manifest},
-        FeatureName,
-    };
 
     const PYPROJECT_FULL: &str = r#"
         [project]
