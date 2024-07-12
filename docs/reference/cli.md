@@ -236,7 +236,7 @@ This can be useful to quickly test out a certain package or version.
 Temporary environments are cached. If the same command is run again, the same environment will be reused.
 
 ??? note "Cleaning temporary environments"
-    Currently, temporary environments can only be cleaned up manually. 
+    Currently, temporary environments can only be cleaned up manually.
     Environments for `pixi exec` are stored under `cached-envs-v0/` in the cache directory.
     Run `pixi info` to find the cache directory.
 
