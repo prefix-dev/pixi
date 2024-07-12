@@ -228,7 +228,7 @@ async fn install_locked_with_config() {
     let line = result.stdout.lines().next().unwrap();
     let target_dir_canonical = target_dir.canonicalize().unwrap();
     let line_path = PathBuf::from(line).canonicalize().unwrap();
-    assert!(line_path.starts_with(&target_dir_canonical));
+    assert!(line_path.starts_with(target_dir_canonical));
 }
 
 /// Test `pixi install/run --frozen` functionality

@@ -38,7 +38,7 @@ The last option, username & password, are used for "Basic HTTP Authentication". 
 Login to prefix.dev:
 
 ```shell
-pixi auth login prefix.dev --token pfx_jj8WDzvnuTEHGdAhwRZMC1Ag8gSto8
+pixi auth login prefix.dev --token pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
 ```
 
 Login to anaconda.org:

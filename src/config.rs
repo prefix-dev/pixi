@@ -768,7 +768,7 @@ tls-no-verify = true
 detached-environments = "{}"
 UNUSED = "unused"
         "#,
-            env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
+            env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
         let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);

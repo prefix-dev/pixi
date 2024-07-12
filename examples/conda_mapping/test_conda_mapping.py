@@ -12,9 +12,8 @@ import yaml
 
 PACKAGE_NAME_TO_TEST = {
     "boltons": "my-boltons-name?source=project-defined-mapping",
-    "jupyter-ros": "my-name-from-mapping?source=project-defined-mapping"
+    "jupyter-ros": "my-name-from-mapping?source=project-defined-mapping",
 }
-
 
 
 # We test if having a null for conda name
@@ -47,7 +46,6 @@ if __name__ == "__main__":
         expected_purl = f"pkg:pypi/{PACKAGE_NAME_TO_TEST[package_name]}"
 
         assert purls[0] == expected_purl
-
 
     for package in expected_null_packages:
         # The package should have an empty list of purls

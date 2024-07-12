@@ -159,7 +159,7 @@ which results in the addition to the `dependencies` key in the `pyproject.toml`
 dependencies = ["black"]
 ```
 
-When using the `pypi-depenencies` you can make use of the `optional-dependencies` that other packages make available.
+When using the `pypi-dependencies` you can make use of the `optional-dependencies` that other packages make available.
 For example, `black` makes the `cli` dependencies option, which can be added with the `--pypi` keyword:
 
 ```shell

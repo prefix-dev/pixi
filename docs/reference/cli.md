@@ -770,7 +770,7 @@ Store authentication information for given host.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
 
 ```shell
-pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
+pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --username john --password xxxxxx
 ```
@@ -795,15 +795,21 @@ Use this command to manage the configuration.
 
 ##### Options
 
-- `--system`: Specify management scope to system configuration.
-- `--global`: Specify management scope to global configuration.
-- `--local`: Specify management scope to local configuration.
+- `--system (-s)`: Specify management scope to system configuration.
+- `--global (-g)`: Specify management scope to global configuration.
+- `--local (-l)`: Specify management scope to local configuration.
 
 Checkout the [pixi configuration](./pixi_configuration.md) for more information about the locations.
 
 ### `config edit`
 
 Edit the configuration file in the default editor.
+
+```shell
+pixi config edit --system
+pixi config edit --local
+pixi config edit -g
+```
 
 ### `config list`
 
@@ -820,6 +826,8 @@ List the configuration
 ```shell
 pixi config list default-channels
 pixi config list --json
+pixi config list --system
+pixi config list -g
 ```
 
 ### `config prepend`

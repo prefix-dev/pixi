@@ -1,0 +1,13 @@
+[files]
+extend-exclude = [
+    ".git/",
+    ".pixi/",
+    "**/*.snap",
+    ".codespellrc",
+    "tests/mapping_files/*"
+]
+ignore-hidden = false
+
+[default.extend-identifiers]
+solvePnPRansac = "solvePnPRansac"
+pn = "pn"

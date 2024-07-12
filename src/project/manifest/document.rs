@@ -618,12 +618,12 @@ platforms = ["linux-64", "win-64"]
         source
             .add_environment("bar", Some(vec![String::from("default")]), None, false)
             .unwrap();
-        assert_eq!(source.remove_environment("default").unwrap(), false);
+        assert!(!source.remove_environment("default").unwrap());
         source
             .add_environment("default", Some(vec![String::from("default")]), None, false)
             .unwrap();
-        assert_eq!(source.remove_environment("default").unwrap(), true);
-        assert_eq!(source.remove_environment("foo").unwrap(), true);
+        assert!(source.remove_environment("default").unwrap());
+        assert!(source.remove_environment("foo").unwrap());
         assert_snapshot!(
             format!("test_remove_environment_{}", source.file_name()),
             source.to_string()

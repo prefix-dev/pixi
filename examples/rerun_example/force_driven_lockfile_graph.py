@@ -26,8 +26,9 @@ for package in package_data:
 rr.init("fdg", spawn=True)
 rr.connect()
 
+
 def hash_string_to_int(string):
-    return int(hashlib.sha256(string.encode("utf-8")).hexdigest(), 16) % (10 ** 8)
+    return int(hashlib.sha256(string.encode("utf-8")).hexdigest(), 16) % (10**8)
 
 
 # Memoization dictionary
@@ -57,12 +58,11 @@ def apply_forces_and_log(graph, pos):
 
         # Degree-based repulsive forces
         for i, node1 in enumerate(graph):
-            for node2 in list(graph)[i + 1:]:
+            for node2 in list(graph)[i + 1 :]:
                 diff = pos[node1] - pos[node2]
                 dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
-                degree_factor = (
-                        (graph.degree(node1) + graph.degree(node2)) * degree_scale)
-                repel = repulsive_force * degree_factor / dist ** 2
+                degree_factor = (graph.degree(node1) + graph.degree(node2)) * degree_scale
+                repel = repulsive_force * degree_factor / dist**2
                 force_vector = repel * diff  # / dist
                 force[node1] += np.clip(force_vector, -max_force, max_force)
                 force[node2] -= np.clip(force_vector, -max_force, max_force)
@@ -74,7 +74,7 @@ def apply_forces_and_log(graph, pos):
             dist = dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
             if dist > 0:
                 degree_factor = (graph.degree(u) + graph.degree(v)) * degree_scale
-                attract = (attractive_force * dist ** 2) / degree_factor
+                attract = (attractive_force * dist**2) / degree_factor
                 force[u] -= attract * diff / dist
                 force[v] += attract * diff / dist
 
@@ -83,17 +83,19 @@ def apply_forces_and_log(graph, pos):
             pos[node] += force[node] * damping
             position = np.array(pos[node])
             color = get_color_for_node(node)  # Retrieve color, memoized
-            rr.log(f"graph_nodes/{node}",
-                   rr.Points3D([position],
-                               colors=[color],
-                               radii=max(graph.degree(node) / 20, 0.5)),
-                   rr.AnyValues(node))
+            rr.log(
+                f"graph_nodes/{node}",
+                rr.Points3D([position], colors=[color], radii=max(graph.degree(node) / 20, 0.5)),
+                rr.AnyValues(node),
+            )
 
         edges_array = np.array([[pos[u], pos[v]] for u, v in graph.edges()])
 
         # Log the edges array
-        rr.log("graph_nodes/graph_edges",
-               rr.LineStrips3D(edges_array, radii=0.02, colors=[1, 1, 1, 0.1]))
+        rr.log(
+            "graph_nodes/graph_edges",
+            rr.LineStrips3D(edges_array, radii=0.02, colors=[1, 1, 1, 0.1]),
+        )
 
     return pos
 
