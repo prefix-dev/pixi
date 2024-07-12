@@ -313,7 +313,7 @@ async fn pypi_reinstall_python() {
 
     // Check if site-packages has entries
     let env = create_uv_environment(&prefix, &cache);
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
     // sleep for a few seconds to make sure we can remove stuff (Windows file system
@@ -330,7 +330,7 @@ async fn pypi_reinstall_python() {
     ));
 
     // Check if site-packages has entries, should be empty now
-    let installed_312 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_312 = uv_installer::SitePackages::from_environment(&env).unwrap();
 
     if cfg!(not(target_os = "windows")) {
         // On non-windows the site-packages should be empty
@@ -365,7 +365,7 @@ async fn pypi_add_remove() {
 
     // Check if site-packages has entries
     let env = create_uv_environment(&prefix, &cache);
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
     pixi.remove("flask[dotenv]")
@@ -374,7 +374,7 @@ async fn pypi_add_remove() {
         .await
         .unwrap();
 
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
     assert!(installed_311.iter().count() == 0);
 }
 

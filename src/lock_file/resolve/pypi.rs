@@ -39,7 +39,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use uv_configuration::{
-    ConfigSettings, Constraints, NoBuild, Overrides, PreviewMode, SetupPyStrategy,
+    ConfigSettings, Constraints, IndexStrategy, Overrides, PreviewMode, SetupPyStrategy,
 };
 use uv_git::GitResolver;
 
@@ -50,10 +50,10 @@ use uv_distribution::DistributionDatabase;
 use uv_normalize::PackageName;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PythonRequirement, Resolver,
+    Preferences, PythonRequirement, Resolver,
 };
 use uv_toolchain::Interpreter;
-use uv_types::{BuildContext, EmptyInstalledPackages};
+use uv_types::EmptyInstalledPackages;
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -202,6 +202,7 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
                 }
                 RequirementSource::Url { url, .. }
                 | RequirementSource::Git { url, .. }
+                | RequirementSource::Directory { url, .. }
                 | RequirementSource::Path { url, .. } => Some(VersionOrUrl::Url(url)),
             },
             marker: requirement.marker.clone(),
@@ -310,8 +311,7 @@ pub async fn resolve_pypi(
             entries,
             Some(&tags),
             &context.hash_strategy,
-            &context.no_build,
-            &context.no_binary,
+            &context.build_options,
         )
     };
 
@@ -330,16 +330,16 @@ pub async fn resolve_pypi(
         &in_memory_index,
         &git_resolver,
         &context.in_flight,
+        IndexStrategy::default(),
         SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
-        &context.no_build,
-        &context.no_binary,
+        &context.build_options,
+        None,
         context.concurrency,
         PreviewMode::Disabled,
     )
-    .with_options(options)
     .with_build_extra_env_vars(env_variables.iter());
 
     // Constrain the conda packages to the specific python packages
@@ -389,7 +389,7 @@ pub async fn resolve_pypi(
         Constraints::from_requirements(constraints),
         Overrides::default(),
         Default::default(),
-        preferences,
+        Preferences::from_iter(preferences, Some(&marker_environment)),
         None,
         uv_resolver::Exclusions::None,
         Vec::new(),
@@ -408,8 +408,7 @@ pub async fn resolve_pypi(
         AllowedYanks::default(),
         &context.hash_strategy,
         options.exclude_newer,
-        build_dispatch.no_binary(),
-        &NoBuild::None,
+        &context.build_options,
     );
     let provider = CondaResolverProvider {
         fallback: fallback_provider,

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
-use uv_configuration::{Concurrency, NoBinary, NoBuild};
+use uv_configuration::{BuildOptions, Concurrency};
 use uv_types::{HashStrategy, InFlight};
 
 use crate::{
@@ -15,8 +15,7 @@ use crate::{
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: Arc<InFlight>,
-    pub no_build: NoBuild,
-    pub no_binary: NoBinary,
+    pub build_options: BuildOptions,
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
     pub keyring_provider: uv_configuration::KeyringProviderType,
@@ -49,10 +48,9 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight,
-            no_build: NoBuild::None,
-            no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
+            build_options: BuildOptions::default(),
             keyring_provider,
             concurrency: Concurrency::default(),
         })

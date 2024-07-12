@@ -138,7 +138,7 @@ impl UvReporter {
     }
 }
 
-impl uv_installer::DownloadReporter for UvReporter {
+impl uv_installer::PrepareReporter for UvReporter {
     fn on_progress(&self, dist: &CachedDist) {
         if let Some(id) = self.name_to_id.get(&format!("{}", dist.name())) {
             self.finish(*id);

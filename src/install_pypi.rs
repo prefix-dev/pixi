@@ -21,12 +21,12 @@ use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::PreviewMode;
 use uv_configuration::{ConfigSettings, SetupPyStrategy};
+use uv_configuration::{IndexStrategy, PreviewMode};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
-use uv_installer::{Downloader, SitePackages};
+use uv_installer::{Preparer, SitePackages};
 use uv_normalize::PackageName;
 use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_toolchain::{Interpreter, PythonEnvironment};
@@ -241,7 +241,6 @@ fn convert_to_dist(
                         url: Url::from_file_path(&path).expect("could not convert path to url"),
                         install_path: path.clone(),
                         lock_path: path.clone(),
-                        editable: pkg.editable,
                     }),
                     verbatim: VerbatimUrl::from_path(&path)?.with_given(path.display().to_string()),
                 },
@@ -604,8 +603,7 @@ pub async fn update_python_distributions(
             entries,
             Some(&tags),
             &uv_types::HashStrategy::None,
-            &uv_context.no_build,
-            &uv_context.no_binary,
+            &uv_context.build_options,
         )
     };
 
@@ -630,12 +628,13 @@ pub async fn update_python_distributions(
         &in_memory_index,
         &git_resolver,
         &uv_context.in_flight,
+        IndexStrategy::default(),
         SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
-        &uv_context.no_build,
-        &uv_context.no_binary,
+        &uv_context.build_options,
+        None,
         uv_context.concurrency,
         PreviewMode::Disabled,
     )
@@ -648,7 +647,7 @@ pub async fn update_python_distributions(
 
     // Find out what packages are already installed
     let mut site_packages =
-        SitePackages::from_executable(&venv).expect("could not create site-packages");
+        SitePackages::from_environment(&venv).expect("could not create site-packages");
 
     tracing::debug!(
         "Constructed site-packages with {} packages",
@@ -768,7 +767,7 @@ pub async fn update_python_distributions(
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
-        let downloader = Downloader::new(
+        let preparer = Preparer::new(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
@@ -776,8 +775,8 @@ pub async fn update_python_distributions(
         )
         .with_reporter(UvReporter::new(options));
 
-        let wheels = downloader
-            .download(remote.clone(), &uv_context.in_flight)
+        let wheels = preparer
+            .prepare(remote.clone(), &uv_context.in_flight)
             .await
             .into_diagnostic()
             .context("Failed to download distributions")?;

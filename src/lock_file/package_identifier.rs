@@ -140,6 +140,9 @@ impl PypiPackageIdentifier {
             pypi_types::RequirementSource::Path { .. } => {
                 unreachable!("path requirement on conda package is not supported")
             }
+            pypi_types::RequirementSource::Directory { .. } => {
+                unreachable!("directory requirement on conda package is not supported")
+            }
         }
     }
 }

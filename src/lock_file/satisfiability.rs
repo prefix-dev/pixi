@@ -179,7 +179,6 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                         let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                             path.clone(),
                             path.clone(),
-                            false,
                             verbatim_url.to_url(),
                         ));
 
@@ -359,10 +358,13 @@ pub fn pypi_satifisfies_editable(
     match &spec.source {
         RequirementSource::Registry { .. }
         | RequirementSource::Url { .. }
+        | RequirementSource::Path { .. }
         | RequirementSource::Git { .. } => {
-            unreachable!("editable requirement cannot be from registry, url or git")
+            unreachable!(
+                "editable requirement cannot be from registry, url, git or path (non-directory)"
+            )
         }
-        RequirementSource::Path { lock_path, .. } => match &locked_data.url_or_path {
+        RequirementSource::Directory { lock_path, .. } => match &locked_data.url_or_path {
             // If we have an url requirement locked, but the editable is requested, this does not satifsfy
             UrlOrPath::Url(_) => false,
             UrlOrPath::Path(path) => {
@@ -451,7 +453,8 @@ pub fn pypi_satifisfies_requirement(
                 UrlOrPath::Path(_) => false,
             }
         }
-        RequirementSource::Path { lock_path, .. } => {
+        RequirementSource::Path { lock_path, .. }
+        | RequirementSource::Directory { lock_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
                 if locked_path != lock_path {
                     return false;
