@@ -240,8 +240,8 @@ Temporary environments are cached. If the same command is run again, the same en
 1. `<COMMAND>`: The command to run.
 
 #### Options:
-* `-s, --spec <SPECS>`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
-* `-c, --channel <CHANNELS>`: The channel to install the packages from. If not specified the default channel is used.
+* `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
+* `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
 * `--force-reinstall` If specified a new environment is always created even if one already exists.
 
 ```shell
