@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use barrier_cell::BarrierCell;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::IndexSet;
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
@@ -49,7 +50,6 @@ use crate::{
     pypi_mapping::{self, Reporter},
     pypi_marker_env::determine_marker_environment,
     pypi_tags::is_python_record,
-    utils::BarrierCell,
     EnvironmentName, Project,
 };
 

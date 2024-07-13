@@ -48,9 +48,10 @@ repos:
         types: [text]
   # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
   - repo: https://github.com/DevinR528/cargo-sort
-    rev: v1.0.9
+    rev: 55ec89082466f6bb246d870a8d56d166a8e1f08b
     hooks:
       - id: cargo-sort
+        args: [ '--workspace', '--grouped' ]
   - repo: local
     hooks:
       - id: fmt

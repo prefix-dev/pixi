@@ -451,6 +451,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "barrier_cell"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -979,16 +987,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5efa2b3d7902f4b634a20cae3c9c4e6209dc4779feb6863329607560143efa70"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "ctrlc"
-version = "3.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "672465ae37dc1bc6380a6547a8883d5dd397b0f1faaad4f265726cc7042a5345"
-dependencies = [
- "nix 0.28.0",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3242,6 +3240,7 @@ dependencies = [
  "ahash 0.8.11",
  "assert_matches",
  "async-once-cell",
+ "barrier_cell",
  "cfg-if",
  "chrono",
  "clap",
@@ -3331,7 +3330,6 @@ dependencies = [
  "uv-git",
  "uv-installer",
  "uv-normalize",
- "uv-requirements",
  "uv-resolver",
  "uv-toolchain",
  "uv-types",
@@ -4077,8 +4075,6 @@ dependencies = [
  "pep508_rs",
  "pypi-types",
  "regex",
- "reqwest 0.12.4",
- "reqwest-middleware",
  "thiserror",
  "tracing",
  "unscanny",
@@ -5285,9 +5281,9 @@ checksum = "b130bd8a58c163224b44e217b4239ca7b927d82bf6cc2fea1fc561d15056e3f7"
 
 [[package]]
 name = "tokio"
-version = "1.37.0"
+version = "1.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1adbebffeca75fcfd058afa480fb6c0b81e165a0323f9c9d39c9697e37c46787"
+checksum = "ba4f4a02a7a80d6f274636f0aa95c7e383b912d41fe721a31f29e29698585a4a"
 dependencies = [
  "backtrace",
  "bytes",
@@ -5304,9 +5300,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
+checksum = "5f5ae998a069d4b5aba8ee9dad856af7d520c3699e6159b185c2acd48155d39a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5973,41 +5969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uv-requirements"
-version = "0.1.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.18#13b0beb56fdc607c1f38d820dbf8c95c8fd0ce84"
-dependencies = [
- "anstream",
- "anyhow",
- "cache-key",
- "configparser",
- "console",
- "ctrlc",
- "distribution-filename",
- "distribution-types",
- "fs-err",
- "futures",
- "pep508_rs",
- "pypi-types",
- "requirements-txt",
- "rustc-hash 2.0.0",
- "serde",
- "thiserror",
- "toml",
- "tracing",
- "url",
- "uv-client",
- "uv-configuration",
- "uv-distribution",
- "uv-fs",
- "uv-git",
- "uv-normalize",
- "uv-resolver",
- "uv-types",
- "uv-warnings",
-]
-
-[[package]]
 name = "uv-resolver"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.2.18#13b0beb56fdc607c1f38d820dbf8c95c8fd0ce84"
@@ -6015,7 +5976,6 @@ dependencies = [
  "anyhow",
  "cache-key",
  "chrono",
- "clap",
  "dashmap",
  "derivative",
  "distribution-filename",
