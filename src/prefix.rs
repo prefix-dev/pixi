@@ -35,7 +35,7 @@ impl Prefix {
                 .context("failed to constructor environment activator")?;
 
         activator
-            .run_activation(ActivationVariables::from_env().unwrap_or_default())
+            .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
             .into_diagnostic()
             .context("failed to run activation")
     }
