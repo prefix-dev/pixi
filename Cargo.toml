@@ -18,6 +18,7 @@ chrono = "0.4.38"
 clap = { version = "4.5.9", default-features = false }
 clap-verbosity-flag = "2.2.0"
 clap_complete = "4.5.2"
+clap_complete_nushell = "4.5.2"
 concat-idents = "1.1.5"
 console = "0.15.8"
 crossbeam-channel = "0.5.12"
