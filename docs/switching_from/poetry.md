@@ -4,7 +4,7 @@ This document compares key commands and concepts between these tools, highlighti
 With `pixi`, you'll experience a project-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
 
 ## Why Pixi?
-Poetry is most-likely the closed tool to pixi in terms of project management, in the python ecosystem.
+Poetry is most-likely the closest tool to pixi in terms of project management, in the python ecosystem.
 `pixi` however adds the power of the conda ecosystem, allowing for a more flexible and powerful environment management.
 Not limited but including the PyPI ecosystem.
 
