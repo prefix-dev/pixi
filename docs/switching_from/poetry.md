@@ -23,7 +23,7 @@ On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allo
 | Environment directory       | `~/.cache/pypoetry/virtualenvs/myenv`                             | `./.pixi` Defaults to the project folder, move this using the [`detached-environments`](../reference/pixi_configuration.md#detached-environments) |
 
 ## Support both `poetry` and `pixi` in my project
-You can allow users to either `poetry` and `pixi` in the same project, they will not touch each other's parts of the configuration or system. 
+You can allow users to use `poetry` and `pixi` in the same project, they will not touch each other's parts of the configuration or system. 
 It's best to duplicate the dependencies, basically making an exact copy of the `tool.poetry.dependencies` into `tool.pixi.pypi-dependencies`.
 Make sure that `python` is only defined in the `tool.pixi.dependencies` and not in the `tool.pixi.pypi-dependencies`.
 
