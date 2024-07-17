@@ -1,0 +1,17 @@
+---
+source: src/config.rs
+expression: results
+---
+Strategy: 'Semver' results in '>=1.2.0,<2' for these version: ["1.2.0", "1.3.0"]
+Strategy: 'Semver' results in '>=0.2.0,<0.4' for these version: ["0.2.0", "0.3.0"]
+Strategy: 'Semver' results in '>=0.2.0,<2' for these version: ["0.2.0", "1.3.0"]
+Strategy: 'Semver' results in '>=0.2.0,<0.3' for these version: ["0.2.0"]
+Strategy: 'Semver' results in '>=0.0.0,<0.0.1' for these version: ["0.0.0"]
+Strategy: 'Major' results in '>=1.2.0,<2' for these version: ["1.2.0", "1.3.0"]
+Strategy: 'Major' results in '>=1.2.0,<3' for these version: ["1.2.0", "2.0.0"]
+Strategy: 'Minor' results in '>=1.2.0,<2.1' for these version: ["1.2.0", "2.0.0"]
+Strategy: 'Minor' results in '>=0.0.0,<0.1' for these version: ["0.0.0"]
+Strategy: 'ExactVersion' results in '==1.2' for these version: ["1.2"]
+Strategy: 'ExactVersion' results in '==1.2.0|==1.3.0' for these version: ["1.2.0", "1.2.0", "1.3.0"]
+Strategy: 'LatestUp' results in '>=1.2.0' for these version: ["1.2.0", "1.3.0"]
+Strategy: 'NoPin' results in '*' for these version: ["1.2.0", "1.3.0"]

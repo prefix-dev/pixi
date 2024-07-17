@@ -1,6 +1,10 @@
 use clap::{ArgAction, Parser};
+use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
-use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
+use rattler_conda_types::version_spec::{EqualityOperator, LogicalOperator, RangeOperator};
+use rattler_conda_types::{
+    Channel, ChannelConfig, ParseChannelError, Version, VersionBumpType, VersionSpec,
+};
 use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -218,7 +222,7 @@ impl PyPIConfig {
 }
 
 /// The strategy for that will be used for pinning a version of a package.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
     /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0" becomes ">=0.1.0, <0.2"
@@ -241,6 +245,84 @@ impl FromStr for PinningStrategy {
     type Err = serde::de::value::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::deserialize(s.into_deserializer())
+    }
+}
+
+impl PinningStrategy {
+    /// Given a set of versions, determines the best version constraint to use that
+    /// captures all of them based on the strategy.
+    pub fn determine_version_constraint<'a>(
+        self,
+        versions: impl IntoIterator<Item = &'a Version> + Clone,
+    ) -> Option<VersionSpec> {
+        let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
+        let lower_bound = min_version.clone();
+
+        let constraint = match self {
+            Self::ExactVersion => VersionSpec::Group(
+                LogicalOperator::Or,
+                versions
+                    .into_iter()
+                    .dedup()
+                    .map(|v| VersionSpec::Exact(EqualityOperator::Equals, v.clone()))
+                    .collect(),
+            ),
+            Self::Major => {
+                let upper_bound = max_version
+                    .clone()
+                    .pop_segments(2)
+                    .unwrap_or(max_version.to_owned())
+                    .bump(VersionBumpType::Major)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            }
+            Self::Minor => {
+                let upper_bound = max_version
+                    .clone()
+                    .pop_segments(1)
+                    .unwrap_or(max_version.to_owned())
+                    .bump(VersionBumpType::Minor)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            }
+            Self::LatestUp => VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+            Self::NoPin => VersionSpec::Any,
+            Self::Semver => {
+                // Pin the first left most non-zero segment for the upperbound
+                let mut left_most_non_zero_offset = None;
+                for (index, segment) in max_version.segments().enumerate() {
+                    if !segment.is_zero() {
+                        left_most_non_zero_offset = Some(index);
+                        break;
+                    }
+                }
+                let upper_bound = max_version
+                    .with_segments(0..=left_most_non_zero_offset.unwrap_or(max_version.segment_count()))
+                    .unwrap_or(max_version.clone())
+                    .bump(VersionBumpType::Last)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            },
+        };
+        Some(constraint)
     }
 }
 
@@ -1122,5 +1204,73 @@ UNUSED = "unused"
         let mut config = Config::default();
         config.set(key, value).unwrap();
         assert_eq!(config.pinning_strategy, expected);
+    }
+
+    #[test]
+    fn test_version_constraints() {
+        let test_cases = vec![
+            (
+                vec!["1.2.0", "1.3.0"],
+                PinningStrategy::Semver,
+                ">=1.2.0,<2",
+            ),
+            (
+                vec!["0.2.0", "0.3.0"],
+                PinningStrategy::Semver,
+                ">=0.2.0,<0.4",
+            ),
+            (
+                vec!["0.2.0", "1.3.0"],
+                PinningStrategy::Semver,
+                ">=0.2.0,<2",
+            ),
+            (vec!["0.2.0"], PinningStrategy::Semver, ">=0.2.0,<0.3"),
+            (vec!["0.0.0"], PinningStrategy::Semver, ">=0.0.0,<0.0.1"),
+            (vec!["1.2.0", "1.3.0"], PinningStrategy::Major, ">=1.2.0,<2"),
+            (vec!["1.2.0", "2.0.0"], PinningStrategy::Major, ">=1.2.0,<3"),
+            (
+                vec!["1.2.0", "2.0.0"],
+                PinningStrategy::Minor,
+                ">=1.2.0,<2.1",
+            ),
+            (vec!["0.0.0"], PinningStrategy::Minor, ">=0.0.0,<0.1"),
+            (vec!["1.2"], PinningStrategy::ExactVersion, "==1.2"),
+            (
+                vec!["1.2.0", "1.2.0", "1.3.0"],
+                PinningStrategy::ExactVersion,
+                "==1.2.0|==1.3.0",
+            ),
+            (vec!["1.2.0", "1.3.0"], PinningStrategy::LatestUp, ">=1.2.0"),
+            (vec!["1.2.0", "1.3.0"], PinningStrategy::NoPin, "*"),
+        ];
+
+        let results = test_cases
+            .into_iter()
+            .map(|(versions, strategy, expected)| {
+                let constraint = strategy
+                    .determine_version_constraint(
+                        versions
+                            .clone()
+                            .into_iter()
+                            .map(|v| v.parse().unwrap())
+                            .collect::<Vec<Version>>()
+                            .as_slice(),
+                    )
+                    .unwrap()
+                    .to_string();
+                assert_eq!(
+                    constraint, expected,
+                    "Expected: {}, Got: {} where {:?} was the input",
+                    expected, constraint, versions
+                );
+                format!(
+                    "Strategy: '{:?}' results in '{}' for these version: {:?}",
+                    strategy, constraint, versions
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        insta::assert_snapshot!(results);
     }
 }
