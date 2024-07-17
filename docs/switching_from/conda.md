@@ -76,8 +76,7 @@ Encountering issues? Here are solutions to some common problems when being used 
 
 - Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`
   This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../advanced/channel_priority.md) for more information.
-- `pixi global install pip`, pip doesn't work. 
+- `pixi global install pip`, pip doesn't work.
   `pip` is installed in the global isolated environment. Use `pixi add pip` in a project to install `pip` in the project environment and use that project.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'`
    The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a project to install the library in the project environment and use that project.
-
