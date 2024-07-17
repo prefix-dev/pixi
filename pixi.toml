@@ -32,7 +32,7 @@ typos = ">=1.23.1,<2"
 [feature.lint.tasks]
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all"
-lint = {depends-on = ["pre-commit-run"]}
+lint = { depends-on = ["pre-commit-run"] }
 
 [feature.build.dependencies]
 # Needed for building
