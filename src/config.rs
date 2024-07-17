@@ -309,7 +309,9 @@ impl PinningStrategy {
                     }
                 }
                 let upper_bound = max_version
-                    .with_segments(0..=left_most_non_zero_offset.unwrap_or(max_version.segment_count()))
+                    .with_segments(
+                        0..=left_most_non_zero_offset.unwrap_or(max_version.segment_count()),
+                    )
                     .unwrap_or(max_version.clone())
                     .bump(VersionBumpType::Last)
                     .ok()?;
@@ -320,7 +322,7 @@ impl PinningStrategy {
                         VersionSpec::Range(RangeOperator::Less, upper_bound),
                     ],
                 )
-            },
+            }
         };
         Some(constraint)
     }
