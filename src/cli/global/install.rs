@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use crate::cli::has_specs::HasSpecs;
 use crate::config::{Config, ConfigCli};
@@ -245,11 +247,52 @@ pub(super) async fn create_executable_scripts(
     Ok(())
 }
 
+/// Warn user on dangerous package installations, interactive yes no prompt
+pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<bool> {
+    let dangerous_packages = HashMap::from([
+        ("pixi", "Installing `pixi` globally doesn't work as expected. Use `pixi self-update` to update pixi. And `pixi self-update --version x.y.z` for a specific version."),
+        ("pip", "Installing `pip` using pixi global will not make the pip installed package globally available. Use a pixi project instead, and install the PyPI package into that project using `pip`.")
+    ]);
+
+    // Check if any of the packages are dangerous, and prompt the user to ask if they want to continue, including the advice.
+    for package in packages {
+        if let Some(advice) = dangerous_packages.get(&package.as_normalized()) {
+            let prompt = format!(
+                "{}\nDo you want to continue?",
+                console::style(advice).yellow()
+            );
+            if !dialoguer::Confirm::new()
+                .with_prompt(prompt)
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?
+            {
+                return Ok(false);
+            }
+        }
+    }
+
+    Ok(true)
+}
+
 /// Install a global command
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
+
+    let package_names: Result<Vec<PackageName>, _> = args
+        .packages()
+        .iter()
+        .map(|s| PackageName::from_str(s))
+        .collect();
+    let package_names = package_names.into_diagnostic()?;
+
+    // Warn user on dangerous package installations, interactive yes no prompt
+    if !prompt_user_to_continue(package_names)? {
+        return Ok(());
+    }
 
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
