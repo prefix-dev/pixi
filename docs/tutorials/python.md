@@ -21,14 +21,14 @@ In this tutorial, we will use the `pyproject.toml` format because it is the most
 Let's start out by making a directory and creating a new `pyproject.toml` file.
 
 ```shell
-pixi init pixi_py --pyproject
+pixi init pixi-py --pyproject
 ```
 
 This gives you the following pyproject.toml:
 
 ```toml
 [project]
-name = "pixi_py"
+name = "pixi-py"
 version = "0.1.0"
 description = "Add a short description here"
 authors = [{name = "Tim de Jager", email = "tim@prefix.dev"}]
@@ -44,7 +44,7 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
-pixi_py = { path = ".", editable = true }
+pixi-py = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 ```
@@ -53,14 +53,14 @@ Let's add the Python project to the tree:
 
 === "Linux & macOS"
     ```shell
-    cd pixi_py # move into the project directory
+    cd pixi-py # move into the project directory
     mkdir pixi_py
     touch pixi_py/__init__.py
     ```
 
 === "Windows"
     ```shell
-    cd pixi_py
+    cd pixi-py
     mkdir pixi_py
     type nul > pixi_py\__init__.py
     ```
@@ -100,7 +100,7 @@ This means that the package is installed in editable mode, so you can make chang
 ```toml
 # Editable installs
 [tool.pixi.pypi-dependencies]
-pixi_py = { path = ".", editable = true }
+pixi-py = { path = ".", editable = true }
 ```
 
 In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file.
@@ -188,7 +188,7 @@ Now let's `install` the project with `pixi install`:
 
 ```shell
 $ pixi install
-✔ Project in /path/to/pixi_py is ready to use!
+✔ Project in /path/to/pixi-py is ready to use!
 ```
 
 We now have a new directory called `.pixi` in the project root.
@@ -220,7 +220,7 @@ python           3.12.3        h4a7b5fc_0_cpython  12.6 MiB   conda  python-3.12
 readline         8.2           h92ec313_1          244.5 KiB  conda  readline-8.2-h92ec313_1.conda
 tk               8.6.13        h5083fa2_1          3 MiB      conda  tk-8.6.13-h5083fa2_1.conda
 tzdata           2024a         h0c530f3_0          117 KiB    conda  tzdata-2024a-h0c530f3_0.conda
-pixi_py          0.1.0                                        pypi   . (editable)
+pixi-py          0.1.0                                        pypi   . (editable)
 xz               5.2.6         h57fd34a_0          230.2 KiB  conda  xz-5.2.6-h57fd34a_0.tar.bz2
 ```
 
@@ -231,7 +231,7 @@ xz               5.2.6         h57fd34a_0          230.2 KiB  conda  xz-5.2.6-h5
     This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 Here, you can see the different conda and Pypi packages listed.
-As you can see, the `pixi_py` package that we are working on is installed in editable mode.
+As you can see, the `pixi-py` package that we are working on is installed in editable mode.
 Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
 
@@ -256,7 +256,7 @@ You can execute commands in this environment with e.g. `pixi run -e test python`
 
 ## Getting code to run
 
-Let's add some code to the `pixi_py` package.
+Let's add some code to the `pixi-py` package.
 We will add a new function to the `pixi_py/__init__.py` file:
 
 ```python
@@ -329,7 +329,7 @@ $ pixi r test
 ✨ Pixi task (test): pytest .
 ================================================================================================= test session starts =================================================================================================
 platform darwin -- Python 3.12.2, pytest-8.1.1, pluggy-1.4.0
-rootdir: /private/tmp/pixi_py
+rootdir: /private/tmp/pixi-py
 configfile: pyproject.toml
 collected 1 item
 
