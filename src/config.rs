@@ -1210,69 +1210,59 @@ UNUSED = "unused"
 
     #[test]
     fn test_version_constraints() {
-        let test_cases = vec![
-            (
-                vec!["1.2.0", "1.3.0"],
-                PinningStrategy::Semver,
-                ">=1.2.0,<2",
-            ),
-            (
-                vec!["0.2.0", "0.3.0"],
-                PinningStrategy::Semver,
-                ">=0.2.0,<0.4",
-            ),
-            (
-                vec!["0.2.0", "1.3.0"],
-                PinningStrategy::Semver,
-                ">=0.2.0,<2",
-            ),
-            (vec!["0.2.0"], PinningStrategy::Semver, ">=0.2.0,<0.3"),
-            (vec!["0.0.0"], PinningStrategy::Semver, ">=0.0.0,<0.0.1"),
-            (vec!["1.2.0", "1.3.0"], PinningStrategy::Major, ">=1.2.0,<2"),
-            (vec!["1.2.0", "2.0.0"], PinningStrategy::Major, ">=1.2.0,<3"),
-            (
-                vec!["1.2.0", "2.0.0"],
-                PinningStrategy::Minor,
-                ">=1.2.0,<2.1",
-            ),
-            (vec!["0.0.0"], PinningStrategy::Minor, ">=0.0.0,<0.1"),
-            (vec!["1.2"], PinningStrategy::ExactVersion, "==1.2"),
-            (
-                vec!["1.2.0", "1.2.0", "1.3.0"],
-                PinningStrategy::ExactVersion,
-                "==1.2.0|==1.3.0",
-            ),
-            (vec!["1.2.0", "1.3.0"], PinningStrategy::LatestUp, ">=1.2.0"),
-            (vec!["1.2.0", "1.3.0"], PinningStrategy::NoPin, "*"),
+        let versions = vec![
+            vec!["1.2.3"],
+            vec!["0.0.0"],
+            vec!["1!1"],
+            vec!["1!0.0.0"],
+            vec!["1.2.3a1"],
+            vec!["1.2.3a1", "1.2.3"],
+            vec!["1.2.3", "1.2.3a1", "1.2.3b1", "1.2.3rc1", "2", "10000"],
+            vec!["1.2.0", "1.3.0"],
+            vec!["0.2.0", "0.3.0"],
+            vec!["0.2.0", "1.3.0"],
+            vec!["1.2"],
+            vec!["1.2", "2"],
+            vec!["1.2", "1!2.0"],
         ];
 
-        let results = test_cases
+        // We could use `strum` for this, but it requires another dependency
+        let strategies = vec![
+            PinningStrategy::Semver,
+            PinningStrategy::Major,
+            PinningStrategy::Minor,
+            PinningStrategy::ExactVersion,
+            PinningStrategy::LatestUp,
+            PinningStrategy::NoPin,
+        ];
+
+        let results = strategies
             .into_iter()
-            .map(|(versions, strategy, expected)| {
-                let constraint = strategy
-                    .determine_version_constraint(
-                        versions
-                            .clone()
-                            .into_iter()
-                            .map(|v| v.parse().unwrap())
-                            .collect::<Vec<Version>>()
-                            .as_slice(),
-                    )
-                    .unwrap()
-                    .to_string();
-                assert_eq!(
-                    constraint, expected,
-                    "Expected: {}, Got: {} where {:?} was the input",
-                    expected, constraint, versions
-                );
+            .map(|strategy| {
+                let constraints: Vec<String> = versions
+                    .iter()
+                    .map(|v| {
+                        let constraint = strategy
+                            .determine_version_constraint(
+                                v.clone()
+                                    .into_iter()
+                                    .map(|v| v.parse().unwrap())
+                                    .collect::<Vec<Version>>()
+                                    .as_slice(),
+                            )
+                            .unwrap()
+                            .to_string();
+                        format!("{} from {}", constraint, v.join(", "))
+                    })
+                    .collect();
                 format!(
-                    "Strategy: '{:?}' results in '{}' for these version: {:?}",
-                    strategy, constraint, versions
+                    "### Strategy: '{:?}'\n{}\n",
+                    strategy,
+                    constraints.join("\n")
                 )
             })
             .collect::<Vec<_>>()
             .join("\n");
-
         insta::assert_snapshot!(results);
     }
 }
