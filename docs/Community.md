@@ -38,6 +38,7 @@ When you want to show your users and contributors that they can use pixi in your
   - [MODFLOW 6](https://github.com/MODFLOW-USGS/modflow6): USGS modular hydrological model
 - QuantCo:
   - [glum](https://github.com/quantco/glum): High performance Python GLMs with all the features!
+  - [pixi-pack](https://github.com/quantco/pixi-pack): A tool to pack and unpack conda environments created with pixi
   - [polarify](https://github.com/Quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
   - [datajudge](https://github.com/Quantco/datajudge): Assessing whether data from database complies with reference information
   - [ndonnx](https://github.com/Quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
