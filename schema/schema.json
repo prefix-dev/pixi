@@ -256,6 +256,15 @@
         }
       }
     },
+    "ChannelPriority": {
+      "title": "ChannelPriority",
+      "description": "The priority of the channel.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "strict"
+      ]
+    },
     "Environment": {
       "title": "Environment",
       "description": "A composition of the dependencies of features which can be activated to run tasks or provide a shell",
@@ -310,6 +319,14 @@
               }
             ]
           }
+        },
+        "channel-priority": {
+          "$ref": "#/$defs/ChannelPriority",
+          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "examples": [
+            "strict",
+            "disabled"
+          ]
         },
         "channels": {
           "title": "Channels",
@@ -569,6 +586,14 @@
           },
           "examples": [
             "John Doe <j.doe@prefix.dev>"
+          ]
+        },
+        "channel-priority": {
+          "$ref": "#/$defs/ChannelPriority",
+          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "examples": [
+            "strict",
+            "disabled"
           ]
         },
         "channels": {
