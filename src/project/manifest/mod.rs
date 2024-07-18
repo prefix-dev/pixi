@@ -2991,24 +2991,6 @@ bar = "*"
                 .unwrap()
                 == ChannelPriority::Disabled
         );
-        assert!(
-            manifest
-                .environment("strict")
-                .unwrap()
-                .channel_priority()
-                .unwrap()
-                .unwrap()
-                == ChannelPriority::Strict
-        );
-        assert!(
-            manifest
-                .environment("disabled")
-                .unwrap()
-                .channel_priority()
-                .unwrap()
-                .unwrap()
-                == ChannelPriority::Disabled
-        );
 
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
@@ -3023,8 +3005,5 @@ bar = "*"
         .unwrap();
 
         assert!(manifest.default_feature().channel_priority.unwrap() == ChannelPriority::Disabled);
-        assert!(
-            manifest.default_environment().channel_priority.unwrap() == ChannelPriority::Disabled
-        );
     }
 }

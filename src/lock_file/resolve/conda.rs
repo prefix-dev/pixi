@@ -15,7 +15,6 @@ pub async fn resolve_conda(
     available_packages: Vec<RepoData>,
     channel_priority: ChannelPriority,
 ) -> miette::Result<LockedCondaPackages> {
-    dbg!(channel_priority);
     tokio::task::spawn_blocking(move || {
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
