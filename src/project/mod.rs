@@ -600,7 +600,10 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 if path.is_file() {
                     match *manifest {
                         PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST if PyProjectToml::is_pixi(&path) => {
+                        PYPROJECT_MANIFEST
+                            if PyProjectToml::from_path(&path)
+                                .is_ok_and(|project| project.is_pixi()) =>
+                        {
                             Some(path.to_path_buf())
                         }
                         _ => None,

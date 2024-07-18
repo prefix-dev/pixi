@@ -47,29 +47,60 @@ You can find more options for the installation script [here](#installer-script-o
 
 ## Autocompletion
 
-To get autocompletion run:
+To get autocompletion follow the instructions for your shell.
+Afterwards, restart the shell or source the shell config file.
 
-=== "Linux & macOS"
-    ```shell
-    # Pick your shell (use `echo $SHELL` to find the shell you are using.):
-    echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
-    echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
-    echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
-    echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+
+### Bash (default on most Linux systems)
+
+```bash
+echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+```
+### Zsh (default on macOS)
+
+```zsh
+echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+```
+
+### PowerShell (pre-installed on all Windows systems)
+
+```pwsh
+Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
+```
+
+!!! tip "Failure because no profile file exists"
+    Make sure your profile file exists, otherwise create it with:
+    ```PowerShell
+    New-Item -Path $PROFILE -ItemType File -Force
     ```
-=== "Windows"
 
-    PowerShell:
-    ```powershell
-    Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
-    ```
-    !!! tip "Failure because no profile file exists"
-        Make sure your profile file exists, otherwise create it with:
-        ```PowerShell
-        New-Item -Path $PROFILE -ItemType File -Force
-        ```
 
-And then restart the shell or source the shell config file.
+### Fish
+
+```fish
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+```
+
+### Nushell
+
+Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+
+```nushell
+mkdir ~/.cache/pixi
+pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
+```
+
+And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
+
+```nushell
+use ~/.cache/pixi/completions.nu *
+```
+
+### Elvish
+
+```elv
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
 
 ## Alternative installation methods
 
@@ -94,8 +125,11 @@ pixi is 100% written in Rust, and therefore it can be installed, built and teste
 To start using pixi from a source build run:
 
 ```shell
-cargo install --locked --git https://github.com/prefix-dev/pixi.git
+cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
 ```
+
+We don't publish to `crates.io` anymore, so you need to install it from the repository.
+The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
 
 or when you want to make changes use:
 

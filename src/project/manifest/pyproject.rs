@@ -1,11 +1,10 @@
 use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
-use miette::Report;
+use miette::{IntoDiagnostic, Report};
 use pep440_rs::VersionSpecifiers;
-use pyproject_toml::{self, Project};
+use pyproject_toml::{self, BuildSystem, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
@@ -21,8 +20,16 @@ pub struct PyProjectManifest {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct Tool {
-    pixi: ProjectManifest,
+pub struct Tool {
+    pub pixi: Option<ProjectManifest>,
+    #[allow(dead_code)]
+    pub poetry: Option<ToolPoetry>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ToolPoetry {
+    #[allow(dead_code)]
+    pub name: Option<String>,
 }
 
 impl std::ops::Deref for PyProjectManifest {
@@ -54,7 +61,7 @@ impl From<PyProjectManifest> for ProjectManifest {
     fn from(item: PyProjectManifest) -> Self {
         // Start by loading the data nested under "tool.pixi" as manifest,
         // and create a reference to the 'pyproject.toml' project table
-        let mut manifest = item.tool.pixi.clone();
+        let mut manifest = item.tool.pixi.clone().expect("pixi should be present");
         let pyproject = item
             .project
             .as_ref()
@@ -143,21 +150,24 @@ fn version_or_url_to_nameless_matchspec(
 }
 
 /// A struct wrapping pyproject_toml::PyProjectToml
-/// ensuring it has a project table
 ///
 /// This is used during 'pixi init' to parse a potentially non-pixi
 /// 'pyproject.toml'
+#[derive(Deserialize, Clone)]
 pub struct PyProjectToml {
-    inner: pyproject_toml::PyProjectToml,
+    /// Build-related data
+    pub build_system: Option<BuildSystem>,
+    /// Project metadata
+    pub project: Option<Project>,
+    // Tool section
+    pub tool: Option<Tool>,
 }
 
 impl PyProjectToml {
     /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
     /// making sure it contains a 'project' table
-    pub fn from(source: &str) -> Result<PyProjectToml, Report> {
-        match toml_edit::de::from_str::<pyproject_toml::PyProjectToml>(source)
-            .map_err(TomlError::from)
-        {
+    pub fn from_str(source: &str) -> Result<PyProjectToml, Report> {
+        match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
             Err(e) => e.to_fancy("pyproject.toml", source),
             Ok(pyproject) => {
                 // Make sure [project] exists in pyproject.toml,
@@ -165,10 +175,17 @@ impl PyProjectToml {
                 if pyproject.project.is_none() {
                     TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
                 } else {
-                    Ok(PyProjectToml { inner: pyproject })
+                    Ok(pyproject)
                 }
             }
         }
+    }
+
+    /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
+    /// making sure it contains a 'project' table
+    pub fn from_path(path: &PathBuf) -> Result<PyProjectToml, Report> {
+        let source = fs::read_to_string(path).into_diagnostic()?;
+        PyProjectToml::from_str(&source)
     }
 
     pub fn name(&self) -> String {
@@ -176,7 +193,7 @@ impl PyProjectToml {
     }
 
     pub fn project(&self) -> &Project {
-        self.inner.project.as_ref().unwrap()
+        self.project.as_ref().unwrap()
     }
 
     /// Builds a list of pixi environments from pyproject groups of extra
@@ -210,21 +227,10 @@ impl PyProjectToml {
 
     /// Checks whether a path is a valid `pyproject.toml` for use with pixi by
     /// checking if it contains a `[tool.pixi.project]` item.
-    pub fn is_pixi(path: &PathBuf) -> bool {
-        let source = fs::read_to_string(path).unwrap();
-        Self::is_pixi_str(&source).unwrap_or(false)
-    }
-    /// Checks whether a string is a valid `pyproject.toml` for use with pixi by
-    /// checking if it contains a `[tool.pixi.project]` item.
-    pub fn is_pixi_str(source: &str) -> Result<bool, Report> {
-        match source.parse::<DocumentMut>().map_err(TomlError::from) {
-            Err(e) => e.to_fancy("pyproject.toml", source),
-            Ok(doc) => Ok(doc
-                .get("tool")
-                .and_then(|t| t.get("pixi"))
-                .and_then(|p| p.get("project"))
-                .is_some()),
-        }
+    pub fn is_pixi(&self) -> bool {
+        self.tool
+            .as_ref()
+            .is_some_and(|project| project.pixi.is_some())
     }
 }
 
@@ -232,14 +238,13 @@ impl PyProjectToml {
 mod tests {
     use std::{path::Path, str::FromStr};
 
+    use crate::{
+        project::manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, Manifest},
+        FeatureName,
+    };
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
-
-    use crate::{
-        project::manifest::{python::PyPiPackageName, DependencyOverwriteBehavior, Manifest},
-        FeatureName,
-    };
 
     const PYPROJECT_FULL: &str = r#"
         [project]

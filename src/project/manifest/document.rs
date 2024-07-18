@@ -4,7 +4,7 @@ use pep508_rs::VerbatimUrl;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
-use super::{error::TomlError, python::PyPiPackageName, PyPiRequirement};
+use super::{error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
 const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
@@ -271,7 +271,7 @@ impl ManifestSource {
                 }
             }
             ManifestSource::PixiToml(_) => {
-                let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+                let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())?;
                 if let Some(editable) = editable {
                     pypi_requirement.set_editable(editable);
                 }
@@ -618,12 +618,12 @@ platforms = ["linux-64", "win-64"]
         source
             .add_environment("bar", Some(vec![String::from("default")]), None, false)
             .unwrap();
-        assert_eq!(source.remove_environment("default").unwrap(), false);
+        assert!(!source.remove_environment("default").unwrap());
         source
             .add_environment("default", Some(vec![String::from("default")]), None, false)
             .unwrap();
-        assert_eq!(source.remove_environment("default").unwrap(), true);
-        assert_eq!(source.remove_environment("foo").unwrap(), true);
+        assert!(source.remove_environment("default").unwrap());
+        assert!(source.remove_environment("foo").unwrap());
         assert_snapshot!(
             format!("test_remove_environment_{}", source.file_name()),
             source.to_string()

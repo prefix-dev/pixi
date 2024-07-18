@@ -1,5 +1,7 @@
 use crate::cli::Args as CommandArgs;
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::{shells, Generator};
+use clap_complete_nushell::Nushell;
 use miette::IntoDiagnostic;
 use regex::Regex;
 use std::borrow::Cow;
@@ -8,25 +10,63 @@ use std::io::Write;
 /// Generates a completion script for a shell.
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The shell to generate a completion script for (defaults to 'bash').
+    /// The shell to generate a completion script for
     #[arg(short, long)]
-    shell: Option<clap_complete::Shell>,
+    shell: Shell,
+}
+
+/// Defines the shells for which we can provide completions
+#[allow(clippy::enum_variant_names)]
+#[derive(ValueEnum, Clone, Debug, Copy, Eq, Hash, PartialEq)]
+enum Shell {
+    /// Bourne Again SHell (bash)
+    Bash,
+    /// Elvish shell
+    Elvish,
+    /// Friendly Interactive SHell (fish)
+    Fish,
+    /// Nushell
+    Nushell,
+    /// PowerShell
+    Powershell,
+    /// Z SHell (zsh)
+    Zsh,
+}
+
+impl Generator for Shell {
+    fn file_name(&self, name: &str) -> String {
+        match self {
+            Shell::Bash => shells::Bash.file_name(name),
+            Shell::Elvish => shells::Elvish.file_name(name),
+            Shell::Fish => shells::Fish.file_name(name),
+            Shell::Nushell => Nushell.file_name(name),
+            Shell::Powershell => shells::PowerShell.file_name(name),
+            Shell::Zsh => shells::Zsh.file_name(name),
+        }
+    }
+
+    fn generate(&self, cmd: &clap::Command, buf: &mut dyn std::io::Write) {
+        match self {
+            Shell::Bash => shells::Bash.generate(cmd, buf),
+            Shell::Elvish => shells::Elvish.generate(cmd, buf),
+            Shell::Fish => shells::Fish.generate(cmd, buf),
+            Shell::Nushell => Nushell.generate(cmd, buf),
+            Shell::Powershell => shells::PowerShell.generate(cmd, buf),
+            Shell::Zsh => shells::Zsh.generate(cmd, buf),
+        }
+    }
 }
 
 /// Generate completions for the pixi cli, and print those to the stdout
 pub(crate) fn execute(args: Args) -> miette::Result<()> {
-    let clap_shell = args
-        .shell
-        .or(clap_complete::Shell::from_env())
-        .unwrap_or(clap_complete::Shell::Bash);
-
     // Generate the original completion script.
-    let script = get_completion_script(clap_shell);
+    let script = get_completion_script(args.shell);
 
     // For supported shells, modify the script to include more context sensitive completions.
-    let script = match clap_shell {
-        clap_complete::Shell::Bash => replace_bash_completion(&script),
-        clap_complete::Shell::Zsh => replace_zsh_completion(&script),
+    let script = match args.shell {
+        Shell::Bash => replace_bash_completion(&script),
+        Shell::Zsh => replace_zsh_completion(&script),
+        Shell::Nushell => replace_nushell_completion(&script),
         _ => Cow::Owned(script),
     };
 
@@ -39,7 +79,7 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
 }
 
 /// Generate the completion script using clap_complete for a specified shell.
-fn get_completion_script(shell: clap_complete::Shell) -> String {
+fn get_completion_script(shell: Shell) -> String {
     let mut buf = vec![];
     clap_complete::generate(shell, &mut CommandArgs::command(), "pixi", &mut buf);
     String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
@@ -47,9 +87,9 @@ fn get_completion_script(shell: clap_complete::Shell) -> String {
 
 /// Replace the parts of the bash completion script that need different functionality.
 fn replace_bash_completion(script: &str) -> Cow<str> {
-    let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
+    let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
     let replacement = r#"pixi__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
@@ -66,12 +106,12 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
     re.replace(script, replacement)
 }
 
-/// Replace the parts of the bash completion script that need different functionality.
+/// Replace the parts of the zsh completion script that need different functionality.
 fn replace_zsh_completion(script: &str) -> Cow<str> {
-    let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
-    let zsh_replacement = r#"$1
+    let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
+    let replacement = r#"$1
 local tasks
 tasks=("$${(@s/ /)$$(pixi task list --machine-readable 2> /dev/null)}")
 
@@ -83,7 +123,29 @@ fi
 $2::task"#;
 
     let re = Regex::new(pattern).unwrap();
-    re.replace(script, zsh_replacement)
+    re.replace(script, replacement)
+}
+
+/// Replace the parts of the nushell completion script that need different functionality.
+fn replace_nushell_completion(script: &str) -> Cow<str> {
+    // Adds tab completion to the pixi run command.
+    // NOTE THIS IS FORMATTED BY HAND
+    let pattern = r#"
+  export extern "pixi run" \[
+    ...task: string"#;
+    let replacement = r#"
+  def "nu-complete pixi run" [] {
+    let result = (^pixi task list --machine-readable | complete)
+    if $$result.exit_code == 0 {
+      $$result.stderr | split row " "
+    }
+  }
+
+  export extern "pixi run" [
+    ...task: string@"nu-complete pixi run""#;
+
+    let re = Regex::new(pattern).unwrap();
+    re.replace(script, replacement)
 }
 
 #[cfg(test)]
@@ -179,9 +241,33 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
+    pub fn test_nushell_completion() {
+        // NOTE THIS IS FORMATTED BY HAND!
+        let script = r#"
+  export extern "pixi run" [
+    ...task: string           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
+    --manifest-path: string   # The path to 'pixi.toml' or 'pyproject.toml'
+    --frozen                  # Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+    --locked                  # Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+    --environment(-e): string # The environment to run the task in
+    --tls-no-verify           # Do not verify the TLS certificate of the server
+    --auth-file: string       # Path to the file containing the authentication token
+    --pypi-keyring-provider: string@"nu-complete pixi run pypi_keyring_provider" # Specifies if we want to use uv keyring provider
+    --clean-env               # Use a clean environment to run the task
+    --verbose(-v)             # Increase logging verbosity
+    --quiet(-q)               # Decrease logging verbosity
+    --color: string@"nu-complete pixi run color" # Whether the log needs to be colored
+    --no-progress             # Hide all progress bars
+    --help(-h)                # Print help (see more with '--help')
+  ]"#;
+        let result = replace_nushell_completion(script);
+        insta::assert_snapshot!(result);
+    }
+
+    #[test]
     pub fn test_bash_completion_working_regex() {
         // Generate the original completion script.
-        let script = get_completion_script(clap_complete::Shell::Bash);
+        let script = get_completion_script(Shell::Bash);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_bash_completion(&script), script);
     }
@@ -189,8 +275,16 @@ _arguments "${_arguments_options[@]}" \
     #[test]
     pub fn test_zsh_completion_working_regex() {
         // Generate the original completion script.
-        let script = get_completion_script(clap_complete::Shell::Zsh);
+        let script = get_completion_script(Shell::Zsh);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_zsh_completion(&script), script);
+    }
+
+    #[test]
+    pub fn test_nushell_completion_working_regex() {
+        // Generate the original completion script.
+        let script = get_completion_script(Shell::Nushell);
+        // Test if there was a replacement done on the clap generated completions
+        assert_ne!(replace_nushell_completion(&script), script);
     }
 }

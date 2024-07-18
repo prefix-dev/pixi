@@ -1,8 +1,6 @@
-use super::pypi_editables::build_editables;
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
-use crate::project::manifest::pypi_options::PypiOptions;
-use crate::project::manifest::python::RequirementOrEditable;
+use crate::project::manifest::pypi::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::HashMap;
 
@@ -22,7 +20,7 @@ use distribution_types::{
     BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
     SourceDist,
 };
-use distribution_types::{FileLocation, RequirementSource};
+use distribution_types::{FileLocation, InstalledDist, InstalledRegistryDist};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
@@ -30,8 +28,8 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
-use pypi_types::VerbatimParsedUrl;
 use pypi_types::{HashAlgorithm, HashDigest};
+use pypi_types::{RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -40,19 +38,22 @@ use rattler_lock::{
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use uv_configuration::{ConfigSettings, Constraints, NoBuild, Overrides, SetupPyStrategy};
+use uv_configuration::{
+    ConfigSettings, Constraints, IndexStrategy, Overrides, PreviewMode, SetupPyStrategy,
+};
+use uv_git::GitResolver;
 
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
-use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, BuiltEditableMetadata, DefaultResolverProvider, FlatIndex, InMemoryIndex,
-    Manifest, Options, Preference, PythonRequirement, Resolver,
+    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
+    Preferences, PythonRequirement, Resolver,
 };
-use uv_types::{BuildContext, EmptyInstalledPackages};
+use uv_toolchain::Interpreter;
+use uv_types::EmptyInstalledPackages;
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -89,7 +90,7 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 
 /// Given a pyproject.toml and either case:
 ///   1) dependencies = [ foo @ /home/foo ]
-///   2) tool.pixi.pypi-depencies.foo = { path = "/home/foo"}
+///   2) tool.pixi.pypi-dependencies.foo = { path = "/home/foo"}
 /// uv has different behavior for each.
 ///
 ///   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
@@ -188,6 +189,28 @@ fn convert_uv_requirements_to_pep508<'req>(
         .collect()
 }
 
+fn uv_pypi_types_requirement_to_pep508<'req>(
+    requirements: impl Iterator<Item = &'req pypi_types::Requirement>,
+) -> Vec<pep508_rs::Requirement> {
+    requirements
+        .map(|requirement| pep508_rs::Requirement {
+            name: requirement.name.clone(),
+            extras: requirement.extras.clone(),
+            version_or_url: match requirement.source.clone() {
+                RequirementSource::Registry { specifier, .. } => {
+                    Some(VersionOrUrl::VersionSpecifier(specifier))
+                }
+                RequirementSource::Url { url, .. }
+                | RequirementSource::Git { url, .. }
+                | RequirementSource::Directory { url, .. }
+                | RequirementSource::Path { url, .. } => Some(VersionOrUrl::Url(url)),
+            },
+            marker: requirement.marker.clone(),
+            origin: requirement.origin.clone(),
+        })
+        .collect()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -237,39 +260,14 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    // Get the Pypi requirements
-    // partition the requirements into editable and non-editable requirements
-    let (editables, requirements): (Vec<_>, Vec<_>) = dependencies
-        .iter()
-        .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
-        .map(|(name, req)| {
-            req.as_pep508(name, project_root)
-                .into_diagnostic()
-                .wrap_err(format!(
-                    "error while converting {} to pep508 requirement",
-                    name
-                ))
-        })
-        .collect::<miette::Result<Vec<_>>>()?
+    let requirements = dependencies
         .into_iter()
-        .partition(|req| matches!(req, RequirementOrEditable::Editable(_, _)));
-
-    let editables = editables
-        .into_iter()
-        .map(|req| {
-            req.into_editable()
-                .expect("wrong partitioning of editable and non-editable requirements")
+        .flat_map(|(name, req)| {
+            req.into_iter()
+                .map(move |r| r.as_uv_req(&name, project_root))
         })
-        .collect::<Vec<_>>();
-
-    let requirements = requirements
-        .into_iter()
-        .map(|req| {
-            req.into_requirement_with_parsed_url()
-                .map(distribution_types::Requirement::from)
-                .expect("editable requirements treated as non-editable requirements")
-        })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
@@ -311,10 +309,9 @@ pub async fn resolve_pypi(
             .wrap_err("failed to query find-links locations")?;
         FlatIndex::from_entries(
             entries,
-            &tags,
+            Some(&tags),
             &context.hash_strategy,
-            &context.no_build,
-            &context.no_binary,
+            &context.build_options,
         )
     };
 
@@ -323,6 +320,7 @@ pub async fn resolve_pypi(
     let config_settings = ConfigSettings::default();
 
     let options = Options::default();
+    let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
@@ -330,16 +328,18 @@ pub async fn resolve_pypi(
         &index_locations,
         &flat_index,
         &in_memory_index,
+        &git_resolver,
         &context.in_flight,
+        IndexStrategy::default(),
         SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
-        &context.no_build,
-        &context.no_binary,
+        &context.build_options,
+        None,
         context.concurrency,
+        PreviewMode::Disabled,
     )
-    .with_options(options)
     .with_build_extra_env_vars(env_variables.iter());
 
     // Constrain the conda packages to the specific python packages
@@ -356,7 +356,7 @@ pub async fn resolve_pypi(
                 index: None,
             };
 
-            distribution_types::Requirement {
+            pypi_types::Requirement {
                 name: p.name.as_normalized().clone(),
                 extras: vec![],
                 marker: None,
@@ -366,14 +366,6 @@ pub async fn resolve_pypi(
         })
         .collect::<Vec<_>>();
 
-    // Build any editables
-    let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
-        .await
-        .into_diagnostic()
-        .wrap_err("failed to build editables")?
-        .into_iter()
-        .collect_vec();
-
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
     // TODO refactor this later into function
@@ -381,7 +373,14 @@ pub async fn resolve_pypi(
         .iter()
         .map(|record| {
             let (package_data, _) = record;
-            Preference::simple(package_data.name.clone(), package_data.version.clone())
+            // Fake being an InstalledRegistryDist
+            let installed = InstalledRegistryDist {
+                name: package_data.name.clone(),
+                version: package_data.version.clone(),
+                // This is not used, so we can just set it to a random value
+                path: PathBuf::new().join("does_not_exist"),
+            };
+            Preference::from_installed(&InstalledDist::Registry(installed))
         })
         .collect::<Vec<_>>();
 
@@ -389,9 +388,9 @@ pub async fn resolve_pypi(
         requirements,
         Constraints::from_requirements(constraints),
         Overrides::default(),
-        preferences,
+        Default::default(),
+        Preferences::from_iter(preferences, Some(&marker_environment)),
         None,
-        built_editables.clone(),
         uv_resolver::Exclusions::None,
         Vec::new(),
     );
@@ -401,15 +400,15 @@ pub async fn resolve_pypi(
             &registry_client,
             &build_dispatch,
             context.concurrency.downloads,
+            uv_configuration::PreviewMode::Disabled,
         ),
         &flat_index,
-        &tags,
-        PythonRequirement::new(&interpreter, interpreter.python_full_version()),
+        Some(&tags),
+        PythonRequirement::from_interpreter(&interpreter),
         AllowedYanks::default(),
         &context.hash_strategy,
         options.exclude_newer,
-        build_dispatch.no_binary(),
-        &NoBuild::None,
+        &context.build_options,
     );
     let provider = CondaResolverProvider {
         fallback: fallback_provider,
@@ -421,8 +420,9 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         Some(&marker_environment),
-        &PythonRequirement::new(&interpreter, interpreter.python_full_version()),
+        &PythonRequirement::from_interpreter(&interpreter),
         &in_memory_index,
+        &git_resolver,
         provider,
         EmptyInstalledPackages,
     )
@@ -465,7 +465,6 @@ pub async fn resolve_pypi(
         &registry_client,
         flat_index_locations,
         resolution,
-        built_editables,
         context.concurrency.downloads,
     )
     .await
@@ -478,11 +477,15 @@ async fn lock_pypi_packages<'a>(
     registry_client: &Arc<RegistryClient>,
     flat_index_locations: Vec<FindLinksLocation>,
     resolution: Resolution,
-    built_editables: Vec<BuiltEditableMetadata>,
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
+    let database = DistributionDatabase::new(
+        registry_client,
+        build_dispatch,
+        concurrent_downloads,
+        PreviewMode::Disabled,
+    );
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
@@ -596,9 +599,9 @@ async fn lock_pypi_packages<'a>(
                     SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
-                        let hash = if path.path.is_dir() {
+                        let hash = if path.install_path.is_dir() {
                             Some(
-                                PypiSourceTreeHashable::from_directory(&path.path)
+                                PypiSourceTreeHashable::from_directory(&path.install_path)
                                     .into_diagnostic()
                                     .context("failed to compute hash of pypi source tree")?
                                     .hash(),
@@ -617,10 +620,11 @@ async fn lock_pypi_packages<'a>(
                         (url_or_path, hash, false)
                     }
                     SourceDist::Directory(dir) => {
+                        // TODO: check that `install_path` is correct
                         // Compute the hash of the package based on the source tree.
-                        let hash = if dir.path.is_dir() {
+                        let hash = if dir.install_path.is_dir() {
                             Some(
-                                PypiSourceTreeHashable::from_directory(&dir.path)
+                                PypiSourceTreeHashable::from_directory(&dir.install_path)
                                     .into_diagnostic()
                                     .context("failed to compute hash of pypi source tree")?
                                     .hash(),
@@ -643,7 +647,10 @@ async fn lock_pypi_packages<'a>(
                 PypiPackageData {
                     name: metadata.name,
                     version: metadata.version,
-                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
+                    // TODO make another conversion function
+                    requires_dist: uv_pypi_types_requirement_to_pep508(
+                        metadata.requires_dist.iter(),
+                    ),
                     requires_python: metadata.requires_python,
                     url_or_path,
                     hash,
@@ -656,38 +663,5 @@ async fn lock_pypi_packages<'a>(
         locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
     }
 
-    // Add the editables to the locked packages as well.
-    for editable_metadata in built_editables {
-        // Compute the hash of the package based on the source tree.
-        let hash = PypiSourceTreeHashable::from_directory(&editable_metadata.built.path)
-            .into_diagnostic()
-            .context("failed to compute hash of pypi source tree")?
-            .hash();
-
-        // Create the url for the lock file. This is based on the passed in URL
-        // instead of from the source path to copy the path that was passed in from
-        // the requirement.
-        let url_or_path = editable_metadata
-            .built
-            .url
-            .given()
-            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-            // When using a direct url reference like https://foo/bla.whl we do not have a given
-            .unwrap_or_else(|| editable_metadata.built.url.to_url().into());
-
-        let pypi_package_data = PypiPackageData {
-            name: editable_metadata.metadata.name,
-            version: editable_metadata.metadata.version,
-            requires_dist: convert_uv_requirements_to_pep508(
-                editable_metadata.metadata.requires_dist.iter(),
-            ),
-            requires_python: editable_metadata.metadata.requires_python,
-            url_or_path,
-            hash: Some(hash),
-            editable: true,
-        };
-
-        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
-    }
     Ok(locked_packages)
 }

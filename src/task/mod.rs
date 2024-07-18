@@ -354,11 +354,6 @@ pub fn quote(in_str: &str) -> Cow<str> {
     }
 }
 
-/// Quotes multiple string arguments and joins them together to form a single string.
-pub fn quote_arguments<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
-    args.into_iter().map(quote).join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::quote;

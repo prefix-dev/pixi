@@ -107,23 +107,59 @@ winget install prefix-dev.pixi
 
 ### Autocompletion
 
-To get autocompletion run:
+To get autocompletion follow the instructions for your shell.
+Afterwards, restart the shell or source the shell config file.
 
-```shell
-# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
+#### Bash (default on most Linux systems)
+
+```bash
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+```
+#### Zsh (default on macOS)
+
+```zsh
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
-echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
-echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
 ```
 
-For PowerShell on Windows, run the following command and then restart the shell or source the shell config file:
+#### PowerShell (pre-installed on all Windows systems)
 
 ```pwsh
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 
-And then restart the shell or source the shell config file.
+If this fails with "Failure because no profile file exists", make sure your profile file exists.
+If not, create it with:
+
+```PowerShell
+New-Item -Path $PROFILE -ItemType File -Force
+```
+
+#### Fish
+
+```fish
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+```
+
+#### Nushell
+
+Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+
+```nushell
+mkdir ~/.cache/pixi
+pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
+```
+
+And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
+
+```nushell
+use ~/.cache/pixi/completions.nu *
+```
+
+#### Elvish
+
+```elv
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
 
 ### Distro Packages
 
@@ -151,10 +187,11 @@ apk add pixi
 To start using `pixi` from a source build run:
 
 ```shell
-cargo install --locked pixi
-# Or to use the the latest `main` branch
-cargo install --locked --git https://github.com/prefix-dev/pixi.git
+cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
 ```
+
+We don't publish to `crates.io` anymore, so you need to install it from the repository.
+The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
 
 or when you want to make changes use:
 

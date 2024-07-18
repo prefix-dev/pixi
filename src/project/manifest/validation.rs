@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::pypi_options::PypiOptions;
+use super::pypi::pypi_options::PypiOptions;
 use crate::project::manifest::{
     Environment, Feature, FeatureName, ProjectManifest, SystemRequirements, TargetSelector,
 };

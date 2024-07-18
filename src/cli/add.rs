@@ -21,7 +21,7 @@ use crate::{
     project::{
         grouped_environment::GroupedEnvironment,
         has_features::HasFeatures,
-        manifest::{python::PyPiPackageName, DependencyOverwriteBehavior},
+        manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior},
         DependencyType, Project, SpecType,
     },
     FeatureName,

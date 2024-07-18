@@ -98,6 +98,9 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
+  - Switching from:
+      - Poetry: switching_from/poetry.md
+      - Conda/Mamba: switching_from/conda.md
   - Changelog: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
