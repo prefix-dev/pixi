@@ -172,7 +172,18 @@ Options:
 ```toml
 channel-priority = "disabled"
 ```
-
+!!! warning "Caution: Use `channel-priority = "disabled"` with understanding."
+    Disabling channel priority may lead to unpredictable dependency resolutions.
+    This is a possible security risk as it may lead to packages being installed from unexpected channels.
+    It's advisable to maintain the default strict setting and order channels thoughtfully.
+    If necessary, specify a channel directly for a dependency.
+    ```toml
+    [project]
+    # Putting conda-forge first solves most issues
+    channels = ["conda-forge", "channel-name"]
+    [dependencies]
+    package = {version = "*", channel = "channel-name"}
+    ```
 
 ## The `tasks` table
 
