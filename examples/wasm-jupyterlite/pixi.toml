@@ -3,7 +3,7 @@ name = "wasm-jupyterlite"
 version = "0.1.0"
 description = "Setup a pixi environment for building a jupyterlite app with WASM"
 authors = ["Wolf Vollprecht <wolf@prefix.dev>"]
-platforms = ["emscripten-wasm32", "osx-arm64", "osx-64", "linux-64", "win-64"]
+platforms = ["emscripten-wasm32", "osx-arm64", "osx-64", "linux-64"] # Windows is not working yet: "win-64"]
 channels = ["conda-forge"]
 
 [feature.wasm]
@@ -20,7 +20,7 @@ matplotlib = "*"
 
 [feature.host]
 channels = ["conda-forge"]
-platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64"]
 dependencies = { python = "*", jupyterlite-xeus = "*", jupyter_server = "*" }
 
 # make sure that we have the WASM environment installed before building the app
