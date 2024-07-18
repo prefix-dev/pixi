@@ -250,8 +250,8 @@ pub(super) async fn create_executable_scripts(
 /// Warn user on dangerous package installations, interactive yes no prompt
 pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<bool> {
     let dangerous_packages = HashMap::from([
-        ("pixi", "Installing `pixi` globally doesn't work as expected. Use `pixi self-update` to update pixi. And `pixi self-update --version x.y.z` for a specific version."),
-        ("pip", "Installing `pip` using pixi global will not make the pip installed package globally available. Use a pixi project instead, and install the PyPI package into that project using `pip`.")
+        ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
+        ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
     ]);
 
     // Check if any of the packages are dangerous, and prompt the user to ask if they want to continue, including the advice.
