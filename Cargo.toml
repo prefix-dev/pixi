@@ -113,7 +113,7 @@ winapi = { version = "0.3.9", default-features = false }
 
 [package]
 name = "pixi"
-version = "0.25.0"
+version = "0.26.0"
 description = "A package management and workflow tool"
 edition.workspace = true
 authors.workspace = true
