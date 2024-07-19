@@ -163,9 +163,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             if out.is_empty() {
                 eprintln!("Configuration not set");
-            } else {
-                eprintln!("{}", out);
             }
+            println!("{}", out);
         }
         Subcommand::Prepend(args) => alter_config(
             &args.common,
