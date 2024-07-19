@@ -131,10 +131,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if project.environments().len() > 1 {
                     format!(
                         " in {}",
-                        executable_task
-                            .run_environment
-                            .name()
-                            .fancy_display()
+                        executable_task.run_environment.name().fancy_display()
                     )
                 } else {
                     "".to_string()
