@@ -219,9 +219,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
-        let pyproject  = if (!args.pixi || !args.pyproject) && pyproject_manifest_path.is_file(){
+        let pyproject  = if !pixi_manifest_path.is_file() && (!args.pixi && !args.pyproject) && pyproject_manifest_path.is_file(){
             dialoguer::Confirm::new()
-                .with_prompt("A 'pyproject.toml' file already exists.\nDo you want to extend it with the [tool.pixi] configuration?")
+                .with_prompt("\nA 'pyproject.toml' file already exists.\nDo you want to extend it with the [tool.pixi] configuration?")
                 .default(false)
                 .show_default(true)
                 .interact()
@@ -288,7 +288,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
 
         // Create a 'pyproject.toml' manifest
-        } else if args.pyproject {
+        } else if pyproject {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
@@ -304,7 +304,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     },
                 )
                 .unwrap();
-            fs::write(&pyproject_manifest_path, rv).into_diagnostic()?;
+            save_manifest_file(&pyproject_manifest_path, rv)?;
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
@@ -321,7 +321,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 index_url.as_ref(),
                 &extra_index_urls,
             );
-            fs::write(&pixi_manifest_path, rv).into_diagnostic()?;
+            save_manifest_file(&pixi_manifest_path, rv)?;
         };
     }
 
@@ -378,6 +378,17 @@ fn render_project(
         },
     )
     .unwrap()
+}
+
+/// Save the rendered template to a file, and print a message to the user.
+fn save_manifest_file(path: &Path, content: String) -> miette::Result<()> {
+    fs::write(path, content).into_diagnostic()?;
+    eprintln!(
+        "{}Created {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        path.display()
+    );
+    Ok(())
 }
 
 fn get_name_from_dir(path: &Path) -> miette::Result<String> {
