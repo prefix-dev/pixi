@@ -218,8 +218,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let index_url = config.pypi_config.index_url;
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
+        // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
+        let pyproject  = if (!args.pixi || !args.pyproject) && pyproject_manifest_path.is_file(){
+            dialoguer::Confirm::new()
+                .with_prompt("A 'pyproject.toml' file already exists.\nDo you want to extend it with the [tool.pixi] configuration?")
+                .default(false)
+                .show_default(true)
+                .interact()
+        } else {
+            Ok(args.pyproject)
+        }.into_diagnostic()?;
+
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
-        if pyproject_manifest_path.is_file() && !args.pixi {
+        if pyproject {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
             let pyproject = PyProjectToml::from_str(&file)?;
 
