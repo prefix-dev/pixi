@@ -4068,9 +4068,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.17"
+version = "0.19.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81f702993942e138f69bebb9e6751d1aa737313d430087a8045ea2a89c770c46"
+checksum = "81e0d3f960081736895ec2ab3819dc4336e9160973ed47ce4a5ac1a3759422de"
 dependencies = [
  "archspec",
  "libloading",

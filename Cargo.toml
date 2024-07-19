@@ -61,7 +61,7 @@ rattler_networking = { version = "0.20.10", default-features = false }
 rattler_repodata_gateway = { version = "0.21.1", default-features = false }
 rattler_shell = { version = "0.21.1", default-features = false }
 rattler_solve = { version = "0.25.1", default-features = false }
-rattler_virtual_packages = { version = "0.19.17", default-features = false }
+rattler_virtual_packages = { version = "0.19.18", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 reqwest = { version = "0.12.4", default-features = false }
