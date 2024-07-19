@@ -172,7 +172,7 @@ Options:
 ```toml
 channel-priority = "disabled"
 ```
-!!! warning "Caution: Use `channel-priority = "disabled"` with understanding."
+!!! warning "`channel-priority = "disabled"` is a security risk"
     Disabling channel priority may lead to unpredictable dependency resolutions.
     This is a possible security risk as it may lead to packages being installed from unexpected channels.
     It's advisable to maintain the default strict setting and order channels thoughtfully.
