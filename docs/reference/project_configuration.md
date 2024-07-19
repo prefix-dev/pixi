@@ -172,6 +172,11 @@ Options:
      
     We strongly recommend not to switch the default.
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
+  Care should be taken when using this option. 
+  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible. 
+  This can cause hard to debug ABI incompatibilities.
+  
+  We strongly discourage using this option.
 
 ```toml
 channel-priority = "disabled"
