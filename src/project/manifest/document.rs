@@ -478,7 +478,7 @@ mod tests {
             "rattler >=1",
             "conda-forge::rattler",
             "conda-forge::rattler[version=>3.0]",
-            "rattler=1=*cuda",
+            "rattler 1 *cuda",
             "rattler >=1 *cuda",
         ];
 

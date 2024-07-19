@@ -1,10 +1,9 @@
 ---
 source: src/project/manifest/document.rs
-assertion_line: 438
 expression: table
 ---
 "rattler >=1" = ">=1"
 "conda-forge::rattler" = { version = "*", channel = "conda-forge" }
 "conda-forge::rattler[version=>3.0]" = { version = ">3.0", channel = "conda-forge" }
-"rattler=1=*cuda" = { version = "==1", build = "*cuda" }
+"rattler 1 *cuda" = { version = "==1", build = "*cuda" }
 "rattler >=1 *cuda" = { version = ">=1", build = "*cuda" }
