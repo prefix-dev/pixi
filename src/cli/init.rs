@@ -287,8 +287,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
-        // Create a 'pyproject.toml' manifest
-        } else if pyproject {
+            // Create a 'pyproject.toml' manifest
+        }
+        if pyproject {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
