@@ -23,6 +23,7 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use url::Url;
@@ -876,6 +877,12 @@ impl<'p> UpdateContext<'p> {
             // Determine the source of the solve information
             let source = GroupedEnvironment::from(environment.clone());
 
+            // Determine the channel priority, if no channel priority is set we use the default.
+            let channel_priority = source
+                .channel_priority()
+                .into_diagnostic()?
+                .unwrap_or_default();
+
             for platform in ordered_platforms {
                 // Is there an existing pending task to solve the group?
                 if self
@@ -903,6 +910,7 @@ impl<'p> UpdateContext<'p> {
                     platform,
                     self.conda_solve_semaphore.clone(),
                     project.client().clone(),
+                    channel_priority,
                 )
                 .boxed_local();
 
@@ -1414,6 +1422,7 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
     client: reqwest::Client,
+    channel_priority: ChannelPriority,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.dependencies(None, Some(platform));
@@ -1484,6 +1493,7 @@ async fn spawn_solve_conda_environment_task(
                 virtual_packages,
                 existing_repodata_records.records.clone(),
                 available_packages,
+                channel_priority,
             )
             .await
             .with_context(|| {

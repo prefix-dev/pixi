@@ -191,7 +191,7 @@ rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = ["sparse", "gateway"] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
-rattler_solve = { workspace = true, features = ["resolvo"] }
+rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }

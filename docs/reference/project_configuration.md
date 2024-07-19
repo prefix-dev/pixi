@@ -159,6 +159,41 @@ If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev`
 conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
 ```
 
+### `channel-priority` (optional)
+
+This is the setting for the priority of the channels in the solver step.
+
+Options:
+
+- `strict`: **Default**, The channels are used in the order they are defined in the `channels` list.
+    Only packages from the first channel that has the package are used.
+    This ensures that different variants for a single package are not mixed from different channels.
+    Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
+
+    We strongly recommend not to switch the default.
+- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
+  Care should be taken when using this option.
+  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
+  This can cause hard to debug ABI incompatibilities.
+
+  We strongly discourage using this option.
+
+```toml
+channel-priority = "disabled"
+```
+!!! warning "`channel-priority = "disabled"` is a security risk"
+    Disabling channel priority may lead to unpredictable dependency resolutions.
+    This is a possible security risk as it may lead to packages being installed from unexpected channels.
+    It's advisable to maintain the default strict setting and order channels thoughtfully.
+    If necessary, specify a channel directly for a dependency.
+    ```toml
+    [project]
+    # Putting conda-forge first solves most issues
+    channels = ["conda-forge", "channel-name"]
+    [dependencies]
+    package = {version = "*", channel = "channel-name"}
+    ```
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your project.
@@ -614,17 +649,19 @@ The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
+- `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
 - `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at project level.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at project level.
+- `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
 
 These tables are all also available without the `feature` prefix.
 When those are used we call them the `default` feature. This is a protected name you can not use for your own feature.
 
-```toml title="Full feature table specification"
+```toml title="Cuda feature table example"
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
 # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
@@ -637,7 +674,7 @@ tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
-```toml title="Full feature table but written as separate tables"
+```toml title="Cuda feature table example but written as separate tables"
 [feature.cuda.activation]
 scripts = ["cuda_activation.sh"]
 
