@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### [0.26.0] - 2024-07-19
 #### ✨ Highlights
-- Specify how pixi **pins your dependencies** with the `pinning-strategy` in de config. e.g. `semver` -> `>=1.2.3,<2` and `no-pin` -> `*`)  [#1516](https://github.com/prefix-dev/pixi/pull/1516)
+- Specify how pixi **pins your dependencies** with the `pinning-strategy` in the config. e.g. `semver` -> `>=1.2.3,<2` and `no-pin` -> `*`)  [#1516](https://github.com/prefix-dev/pixi/pull/1516)
 - Specify how pixi **solves multiple channels** with `channel-priority` in the manifest. [#1631](https://github.com/prefix-dev/pixi/pull/1631)
 #### Added
 
