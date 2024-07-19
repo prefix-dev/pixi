@@ -166,16 +166,16 @@ This is the setting for the priority of the channels in the solver step.
 Options:
 
 - `strict`: **Default**, The channels are used in the order they are defined in the `channels` list.
-    Only packages from the first channel that has the package are used. 
-    This ensures that different variants for a single package are not mixed from different channels. 
-    Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities. 
-     
+    Only packages from the first channel that has the package are used.
+    This ensures that different variants for a single package are not mixed from different channels.
+    Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
+
     We strongly recommend not to switch the default.
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
-  Care should be taken when using this option. 
-  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible. 
+  Care should be taken when using this option.
+  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
   This can cause hard to debug ABI incompatibilities.
-  
+
   We strongly discourage using this option.
 
 ```toml
