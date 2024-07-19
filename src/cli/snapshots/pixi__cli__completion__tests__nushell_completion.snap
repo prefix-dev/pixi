@@ -2,19 +2,22 @@
 source: src/cli/completion.rs
 expression: result
 ---
+  
   def "nu-complete pixi run" [] {
-    let result = (^pixi task list --machine-readable | complete)
-    if $result.exit_code == 0 {
-      $result.stderr | split row " "
-    }
+    ^pixi info --json | from json | get environments_info | get tasks | flatten | uniq
   }
 
+  def "nu-complete pixi run environment" [] {
+    ^pixi info --json | from json | get environments_info | get name
+  }
+
+  # Runs task in project
   export extern "pixi run" [
     ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
     --manifest-path: string   # The path to 'pixi.toml' or 'pyproject.toml'
     --frozen                  # Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
     --locked                  # Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-    --environment(-e): string # The environment to run the task in
+    --environment(-e): string@"nu-complete pixi run environment" # The environment to run the task in
     --tls-no-verify           # Do not verify the TLS certificate of the server
     --auth-file: string       # Path to the file containing the authentication token
     --pypi-keyring-provider: string@"nu-complete pixi run pypi_keyring_provider" # Specifies if we want to use uv keyring provider
