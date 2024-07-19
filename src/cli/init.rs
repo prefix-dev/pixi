@@ -34,8 +34,12 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    #[arg(long, conflicts_with = "env_file")]
+    #[arg(long, conflicts_with_all = ["env_file", "pixi"])]
     pub pyproject: bool,
+
+    /// Create a pixi.toml, even if a pyproject.toml already exists
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject"])]
+    pub pixi: bool,
 }
 
 /// The pixi.toml template
@@ -215,7 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
-        if pyproject_manifest_path.is_file() {
+        if pyproject_manifest_path.is_file() && !args.pixi {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
             let pyproject = PyProjectToml::from_str(&file)?;
 

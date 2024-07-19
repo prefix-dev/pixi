@@ -32,6 +32,7 @@ It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if 
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
 - `--pyproject`: Create a `pyproject.toml` manifest, rather than a `pixi.toml` manifest. Recommended for a python project.
+- `--pixi`: Create a `pixi.toml` manifest, rather than a `pyproject.toml` manifest. Use when there is already a `pyproject.toml` in the directory.
 
 !!! info "Importing an environment.yml"
   When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
@@ -45,6 +46,8 @@ pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
 pixi init --import environment.yml
+pixi init --pyproject myproject
+pixi init --pixi myproject # Use when there is already a pyproject.toml in the directory.
 ```
 
 ## `add`
