@@ -423,7 +423,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     .sorted()
                     .map(|name| name.as_str())
                     .join(" ");
-                eprintln!("{}", unformatted);
+                println!("{}", unformatted);
                 return Ok(());
             }
 
