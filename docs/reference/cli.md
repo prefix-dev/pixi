@@ -93,6 +93,14 @@ pixi add --no-lockfile-update numpy
 pixi add --feature featurex numpy
 ```
 
+!!! tip
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](reference/pixi_configuration#pinning-strategy).
+    ```
+    pixi config set pinning-strategy no-pin --global
+    ```
+    The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
+
+
 ## `install`
 
 Installs an environment based on the [manifest file](project_configuration.md).
