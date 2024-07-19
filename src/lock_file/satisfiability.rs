@@ -12,7 +12,7 @@ use pypi_types::{
 };
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, ParseMatchSpecError, Platform, RepoDataRecord,
 };
 use rattler_lock::{
     ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
