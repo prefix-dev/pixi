@@ -118,7 +118,7 @@ case "$(basename "$SHELL")" in
             # Default to bashrc as that is used in non login shells instead of the profile.
             BASH_FILE=~/.bashrc
         fi
-        LINE="export PATH=\$PATH:${BIN_DIR}"
+        LINE="export PATH=${BIN_DIR}:\$PATH"
         update_shell $BASH_FILE "$LINE"
         ;;
 
@@ -128,12 +128,12 @@ case "$(basename "$SHELL")" in
         ;;
 
     zsh)
-        LINE="export PATH=\$PATH:${BIN_DIR}"
+        LINE="export PATH=${BIN_DIR}:\$PATH"
         update_shell ~/.zshrc "$LINE"
         ;;
 
     tcsh)
-        LINE="set path = ( \$path ${BIN_DIR} )"
+        LINE="set path = ( ${BIN_DIR} \$path )"
         update_shell ~/.tcshrc "$LINE"
         ;;
 
