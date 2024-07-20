@@ -121,17 +121,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}{} in {}{}{}{}",
+                "{}{}{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
                 console::style(executable_task.name().unwrap_or("unnamed"))
                     .green()
                     .bold(),
-                executable_task
-                    .run_environment
-                    .name()
-                    .fancy_display()
-                    .bold(),
+                // Only print environment if multiple environments are available
+                if project.environments().len() > 1 {
+                    format!(
+                        " in {}",
+                        executable_task.run_environment.name().fancy_display()
+                    )
+                } else {
+                    "".to_string()
+                },
                 console::style("): ").bold(),
                 executable_task.display_command(),
                 if let Some(description) = executable_task.task().description() {

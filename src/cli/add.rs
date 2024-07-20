@@ -9,10 +9,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use rattler_conda_types::{
-    version_spec::{LogicalOperator, RangeOperator},
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType, VersionSpec,
-};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
@@ -398,9 +395,11 @@ fn update_pypi_specs_from_lock_file(
         .flatten()
         .collect_vec();
 
+    let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
+
     // Determine the versions of the packages in the lock-file
     for (name, _) in pypi_specs_to_add_constraints_for {
-        let version_constraint = determine_version_constraint(
+        let version_constraint = pinning_strategy.determine_version_constraint(
             pypi_records
                 .iter()
                 .filter_map(|(data, _)| {
@@ -463,15 +462,18 @@ fn update_conda_specs_from_lock_file(
         .flatten()
         .collect_vec();
 
+    let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
+
     for (name, (spec_type, _)) in conda_specs_to_add_constraints_for {
-        let version_constraint =
-            determine_version_constraint(conda_records.iter().filter_map(|record| {
+        let version_constraint = pinning_strategy.determine_version_constraint(
+            conda_records.iter().filter_map(|record| {
                 if record.package_record.name == name {
                     Some(record.package_record.version.version())
                 } else {
                     None
                 }
-            }));
+            }),
+        );
 
         if let Some(version_constraint) = version_constraint {
             implicit_constraints
@@ -495,27 +497,6 @@ fn update_conda_specs_from_lock_file(
     Ok(implicit_constraints)
 }
 
-/// Given a set of versions, determines the best version constraint to use that
-/// captures all of them.
-fn determine_version_constraint<'a>(
-    versions: impl IntoIterator<Item = &'a Version>,
-) -> Option<VersionSpec> {
-    let (min_version, max_version) = versions.into_iter().minmax().into_option()?;
-    let lower_bound = min_version.clone();
-    let upper_bound = max_version
-        .pop_segments(1)
-        .unwrap_or_else(|| max_version.clone())
-        .bump(VersionBumpType::Last)
-        .ok()?;
-    Some(VersionSpec::Group(
-        LogicalOperator::And,
-        vec![
-            VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
-            VersionSpec::Range(RangeOperator::Less, upper_bound),
-        ],
-    ))
-}
-
 /// Constructs a new lock-file where some of the constraints have been removed.
 fn unlock_packages(
     project: &Project,
@@ -534,20 +515,4 @@ fn unlock_packages(
             true
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_determine_version_constraint() {
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap()])
-            .unwrap()
-            .to_string(), @">=1.2.0,<1.3");
-
-        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()])
-            .unwrap()
-            .to_string(), @">=1.2.0,<1.4");
-    }
 }

@@ -2,6 +2,7 @@ use super::pypi::pypi_options::PypiOptions;
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexSet;
 use rattler_conda_types::{Platform, Version};
+use rattler_solve::ChannelPriority;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use std::{collections::HashMap, path::PathBuf};
@@ -29,6 +30,10 @@ pub struct ProjectMetadata {
     /// The channels used by the project
     #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
     pub channels: IndexSet<super::channel::PrioritizedChannel>,
+
+    /// Channel priority for the whole project
+    #[serde(default)]
+    pub channel_priority: Option<ChannelPriority>,
 
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it

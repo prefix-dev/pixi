@@ -93,6 +93,14 @@ pixi add --no-lockfile-update numpy
 pixi add --feature featurex numpy
 ```
 
+!!! tip
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](reference/pixi_configuration#pinning-strategy).
+    ```
+    pixi config set pinning-strategy no-pin --global
+    ```
+    The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
+
+
 ## `install`
 
 Installs an environment based on the [manifest file](project_configuration.md).
@@ -1038,7 +1046,7 @@ pixi project channel add bioconda conda-forge robostack
 pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
-pixi project channel add --feature cuda nividia
+pixi project channel add --feature cuda nvidia
 ```
 
 ### `project channel list`
@@ -1077,7 +1085,7 @@ List the channels in the manifest file
 pixi project channel remove conda-forge
 pixi project channel remove https://conda.anaconda.org/conda-forge/
 pixi project channel remove --no-install conda-forge
-pixi project channel remove --feature cuda nividia
+pixi project channel remove --feature cuda nvidia
 ```
 
 ### `project description get`

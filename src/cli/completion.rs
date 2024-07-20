@@ -130,19 +130,17 @@ $2::task"#;
 fn replace_nushell_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
-    let pattern = r#"
-  export extern "pixi run" \[
-    ...task: string"#;
+    let pattern = r#"(#.*\n  export extern "pixi run".*\n.*...task: string)([^\]]*--environment\(-e\): string)"#;
     let replacement = r#"
   def "nu-complete pixi run" [] {
-    let result = (^pixi task list --machine-readable | complete)
-    if $$result.exit_code == 0 {
-      $$result.stderr | split row " "
-    }
+    ^pixi info --json | from json | get environments_info | get tasks | flatten | uniq
   }
 
-  export extern "pixi run" [
-    ...task: string@"nu-complete pixi run""#;
+  def "nu-complete pixi run environment" [] {
+    ^pixi info --json | from json | get environments_info | get name
+  }
+
+  ${1}@"nu-complete pixi run"${2}@"nu-complete pixi run environment""#;
 
     let re = Regex::new(pattern).unwrap();
     re.replace(script, replacement)
@@ -244,6 +242,7 @@ _arguments "${_arguments_options[@]}" \
     pub fn test_nushell_completion() {
         // NOTE THIS IS FORMATTED BY HAND!
         let script = r#"
+  # Runs task in project
   export extern "pixi run" [
     ...task: string           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
     --manifest-path: string   # The path to 'pixi.toml' or 'pyproject.toml'
