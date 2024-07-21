@@ -112,14 +112,9 @@ update_shell() {
 
 case "$(basename "$SHELL")" in
     bash)
-        if [ -w ~/.bash_profile ]; then
-            BASH_FILE=~/.bash_profile
-        else
-            # Default to bashrc as that is used in non login shells instead of the profile.
-            BASH_FILE=~/.bashrc
-        fi
+        # Default to bashrc as that is used in non login shells instead of the profile.
         LINE="export PATH=${BIN_DIR}:\$PATH"
-        update_shell $BASH_FILE "$LINE"
+        update_shell ~/.bashrc "$LINE"
         ;;
 
     fish)
