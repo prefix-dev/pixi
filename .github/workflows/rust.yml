@@ -200,7 +200,6 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.5
 
       - name: Setup | Install cargo-wix [Windows]
-        continue-on-error: ${{ !steps.is-release.outputs.IS_RELEASE }}
         # aarch64 is only supported in wix 4.0 development builds
         if: startsWith(matrix.os, 'windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: cargo install --version 0.3.4 cargo-wix
@@ -263,7 +262,6 @@ jobs:
           echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Build msi Installer
-        continue-on-error: ${{ !steps.is-release.outputs.IS_RELEASE }}
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
@@ -374,7 +372,6 @@ jobs:
           path: ${{ steps.package.outputs.BIN_PATH }}
 
       - name: "Artifact upload: windows installer"
-        continue-on-error: ${{ !steps.is-release.outputs.IS_RELEASE }}
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         uses: actions/upload-artifact@v4
         with:
