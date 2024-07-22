@@ -1046,7 +1046,7 @@ pixi project channel add bioconda conda-forge robostack
 pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
-pixi project channel add --feature cuda nividia
+pixi project channel add --feature cuda nvidia
 ```
 
 ### `project channel list`
@@ -1085,7 +1085,7 @@ List the channels in the manifest file
 pixi project channel remove conda-forge
 pixi project channel remove https://conda.anaconda.org/conda-forge/
 pixi project channel remove --no-install conda-forge
-pixi project channel remove --feature cuda nividia
+pixi project channel remove --feature cuda nvidia
 ```
 
 ### `project description get`
