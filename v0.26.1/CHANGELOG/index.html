@@ -1,0 +1,3699 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/v0.26.1/CHANGELOG/">
+      
+      
+        <link rel="prev" href="../switching_from/conda/">
+      
+      
+        <link rel="next" href="../ide_integration/jupyterlab/">
+      
+      
+      <link rel="icon" href="../assets/pixi.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.20">
+    
+    
+      
+        <title>Changelog - Pixi by prefix.dev</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.66ac8b77.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Red+Hat+Text:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Red Hat Text";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+      
+        <meta  property="og:type"  content="website" >
+      
+        <meta  property="og:title"  content="Changelog - Pixi by prefix.dev" >
+      
+        <meta  property="og:description"  content="None" >
+      
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/v0.26.1/assets/images/social/CHANGELOG.png" >
+      
+        <meta  property="og:image:type"  content="image/png" >
+      
+        <meta  property="og:image:width"  content="1200" >
+      
+        <meta  property="og:image:height"  content="630" >
+      
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/v0.26.1/CHANGELOG/" >
+      
+        <meta  name="twitter:card"  content="summary_large_image" >
+      
+        <meta  name="twitter:title"  content="Changelog - Pixi by prefix.dev" >
+      
+        <meta  name="twitter:description"  content="None" >
+      
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/v0.26.1/assets/images/social/CHANGELOG.png" >
+      
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-header__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
+      
+  <img src="../assets/pixi.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pixi by prefix.dev
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69m-9.15 3.96h2.3L12 9l-1.15 3.65Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="prefix-light" data-md-color-accent="prefix-light"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="prefix" data-md-color-accent="prefix"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/prefix-dev/pixi/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-nav__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
+      
+  <img src="../assets/pixi.png" alt="logo">
+
+    </a>
+    Pixi by prefix.dev
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/prefix-dev/pixi/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../basic_usage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Basic Usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Switching from
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Switching from
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../switching_from/poetry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Poetry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../switching_from/conda/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conda/Mamba
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0261-2024-07-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.26.1] - 2024-07-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0260-2024-07-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.26.0] - 2024-07-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0250-2024-07-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.25.0] - 2024-07-05
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0242-2024-06-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.2] - 2024-06-14
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0241-2024-06-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.1] - 2024-06-12
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0240-2024-06-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.0] - 2024-06-12
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0230-2024-05-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.23.0] - 2024-05-27
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0220-2024-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.22.0] - 2024-05-13
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0211-2024-05-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.21.1] - 2024-05-07
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0210-2024-05-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.21.0] - 2024-05-06
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0201-2024-04-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.20.1] - 2024-04-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0200-2024-04-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.20.0] - 2024-04-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0191-2024-04-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.19.1] - 2024-04-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0190-2024-04-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.19.0] - 2024-04-10
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0180-2024-04-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.18.0] - 2024-04-02
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0171-2024-03-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.17.1] - 2024-03-21
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0170-2024-03-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.17.0] - 2024-03-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0161-2024-03-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.16.1] - 2024-03-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0160-2024-03-09" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.16.0] - 2024-03-09
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0152-2024-02-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.2] - 2024-02-29
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0151-2024-02-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.1] - 2024-02-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0150-2024-02-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.0] - 2024-02-23
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0140-2024-02-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.14.0] - 2024-02-15
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0130-2024-02-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.13.0] - 2024-02-01
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0120-2024-01-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.12.0] - 2024-01-15
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0111-2024-01-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.11.1] - 2024-01-06
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0110-2024-01-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.11.0] - 2024-01-05
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0100-2023-12-8" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.10.0] - 2023-12-8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#091-2023-11-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.9.1] - 2023-11-29
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#090-2023-11-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.9.0] - 2023-11-28
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#080-2023-11-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.8.0] - 2023-11-27
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#070-2023-11-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.7.0] - 2023-11-14
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#060-2023-10-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.6.0] - 2023-10-17
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#050-2023-10-03" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.5.0] - 2023-10-03
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2023-09-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.4.0] - 2023-09-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2023-09-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.0] - 2023-09-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020-2023-08-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.2.0] - 2023-08-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#010-2023-08-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.1.0] - 2023-08-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#008-2023-08-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.8] - 2023-08-01
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#007-2023-07-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.7] - 2023-07-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#006-2023-06-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.6] - 2023-06-30
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#005-2023-06-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.5] - 2023-06-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#004-2023-06-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.4] - 2023-06-26
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    IDE Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            IDE Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide_integration/jupyterlab/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    JupyterLab
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide_integration/pycharm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PyCharm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide_integration/r_studio/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RStudio
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/python/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Python
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/ros2/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ROS 2
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/rust/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rust
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Examples
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/cpp-sdl/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    C++/Cmake
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/opencv/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenCV
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/ros2-nav2/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ROS 2
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/environment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Environments
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/advanced_tasks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tasks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/multi_platform_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Multi Platform
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/multi_environment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Multi Environment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/lockfile/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lockfile
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Advanced
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/authentication/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/explain_info_command/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Info Command
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/channel_priority/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Channel Logic
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/github_actions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GitHub Actions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/updates_github_actions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Updates using GitHub Actions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/pyproject_toml/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/project_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Project Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/pixi_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Misc
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            Misc
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi vision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Community/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0261-2024-07-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.26.1] - 2024-07-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0260-2024-07-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.26.0] - 2024-07-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0250-2024-07-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.25.0] - 2024-07-05
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0242-2024-06-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.2] - 2024-06-14
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0241-2024-06-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.1] - 2024-06-12
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0240-2024-06-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.24.0] - 2024-06-12
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0230-2024-05-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.23.0] - 2024-05-27
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0220-2024-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.22.0] - 2024-05-13
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0211-2024-05-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.21.1] - 2024-05-07
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0210-2024-05-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.21.0] - 2024-05-06
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0201-2024-04-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.20.1] - 2024-04-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0200-2024-04-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.20.0] - 2024-04-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0191-2024-04-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.19.1] - 2024-04-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0190-2024-04-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.19.0] - 2024-04-10
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0180-2024-04-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.18.0] - 2024-04-02
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0171-2024-03-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.17.1] - 2024-03-21
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0170-2024-03-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.17.0] - 2024-03-19
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0161-2024-03-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.16.1] - 2024-03-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0160-2024-03-09" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.16.0] - 2024-03-09
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0152-2024-02-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.2] - 2024-02-29
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0151-2024-02-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.1] - 2024-02-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0150-2024-02-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.15.0] - 2024-02-23
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0140-2024-02-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.14.0] - 2024-02-15
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0130-2024-02-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.13.0] - 2024-02-01
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0120-2024-01-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.12.0] - 2024-01-15
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0111-2024-01-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.11.1] - 2024-01-06
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0110-2024-01-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.11.0] - 2024-01-05
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0100-2023-12-8" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.10.0] - 2023-12-8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#091-2023-11-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.9.1] - 2023-11-29
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#090-2023-11-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.9.0] - 2023-11-28
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#080-2023-11-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.8.0] - 2023-11-27
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#070-2023-11-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.7.0] - 2023-11-14
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#060-2023-10-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.6.0] - 2023-10-17
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#050-2023-10-03" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.5.0] - 2023-10-03
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2023-09-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.4.0] - 2023-09-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2023-09-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.0] - 2023-09-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020-2023-08-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.2.0] - 2023-08-22
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#010-2023-08-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.1.0] - 2023-08-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#008-2023-08-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.8] - 2023-08-01
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#007-2023-07-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.7] - 2023-07-11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#006-2023-06-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.6] - 2023-06-30
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#005-2023-06-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.5] - 2023-06-26
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#004-2023-06-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.0.4] - 2023-06-26
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/CHANGELOG.md" title="Edit this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">#</a></h1>
+<p>All notable changes to this project will be documented in this file.</p>
+<p>The format is based on <a href="https://keepachangelog.com/en/1.0.0/">Keep a Changelog</a>,
+and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
+<h3 id="0261-2024-07-22">[0.26.1] - 2024-07-22<a class="headerlink" href="#0261-2024-07-22" title="Permanent link">#</a></h3>
+<h4 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">#</a></h4>
+<ul>
+<li>Make sure we also build the msi installer by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1645">#1645</a></li>
+</ul>
+<h3 id="0260-2024-07-19">[0.26.0] - 2024-07-19<a class="headerlink" href="#0260-2024-07-19" title="Permanent link">#</a></h3>
+<h4 id="highlights">✨ Highlights<a class="headerlink" href="#highlights" title="Permanent link">#</a></h4>
+<ul>
+<li>Specify how pixi <strong>pins your dependencies</strong> with the <code>pinning-strategy</code> in the config. e.g. <code>semver</code> -&gt; <code>&gt;=1.2.3,&lt;2</code> and <code>no-pin</code> -&gt; <code>*</code>)  <a href="https://github.com/prefix-dev/pixi/pull/1516">#1516</a></li>
+<li>Specify how pixi <strong>solves multiple channels</strong> with <code>channel-priority</code> in the manifest. <a href="https://github.com/prefix-dev/pixi/pull/1631">#1631</a></li>
+</ul>
+<h4 id="added">Added<a class="headerlink" href="#added" title="Permanent link">#</a></h4>
+<ul>
+<li>Add short options to config location flags by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1586">#1586</a></li>
+<li>Add a file guard to indicate if an environment is being installed by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1593">#1593</a></li>
+<li>Add <code>pinning-strategy</code> to the configuration by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1516">#1516</a></li>
+<li>Add <code>channel-priority</code> to the manifest and solve by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1631">#1631</a></li>
+<li>Add <code>nushell</code> completion by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1599">#1599</a></li>
+<li>Add <code>nushell</code> completions for <code>pixi run</code> by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1627">#1627</a></li>
+<li>Add completion for <code>pixi run --environment</code> for nushell by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1636">#1636</a></li>
+</ul>
+<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">#</a></h4>
+<ul>
+<li>Upgrade uv 0.2.18 by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1540">#1540</a></li>
+<li>Refactor <code>pyproject.toml</code> parser by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1592">#1592</a></li>
+<li>Interactive warning for packages in <code>pixi global install</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1626">#1626</a></li>
+</ul>
+<h4 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">#</a></h4>
+<ul>
+<li>Add WASM example with JupyterLite by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1623">#1623</a></li>
+<li>Added LLM example by @ytjhai in <a href="https://github.com/prefix-dev/pixi/pull/1545">#1545</a></li>
+<li>Add note to mark directory as excluded in pixi-pycharm by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1579">#1579</a></li>
+<li>Add changelog to docs by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1574">#1574</a></li>
+<li>Updated the values of the system requirements by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1575">#1575</a></li>
+<li>Tell cargo install which bin to install by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1584">#1584</a></li>
+<li>Update conflict docs for <code>cargo add</code> by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1600">#1600</a></li>
+<li>Revert "Update conflict docs for <code>cargo add</code> " by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1605">#1605</a></li>
+<li>Add reference documentation for the exec command by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1587">#1587</a></li>
+<li>Add transitioning docs for <code>poetry</code> and <code>conda</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1624">#1624</a></li>
+<li>Add pixi-pack by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1629">#1629</a></li>
+<li>Use '-' instead of '_' for package name by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1628">#1628</a></li>
+</ul>
+<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Flaky task test by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1581">#1581</a></li>
+<li>Pass command line arguments verbatim by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1582">#1582</a></li>
+<li>Run clippy on all targets by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1588">#1588</a></li>
+<li>Pre-commit install pixi task by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1590">#1590</a></li>
+<li>Add <code>clap_complete_nushell</code> to dependencies by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1625">#1625</a></li>
+<li>Write to <code>stdout</code> for machine readable output by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1639">#1639</a></li>
+</ul>
+<h4 id="refactor">Refactor<a class="headerlink" href="#refactor" title="Permanent link">#</a></h4>
+<ul>
+<li>Migrate to workspace by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1597">#1597</a></li>
+</ul>
+<h4 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove double manifest warning by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1580">#1580</a></li>
+</ul>
+<h4 id="new-contributors">New Contributors<a class="headerlink" href="#new-contributors" title="Permanent link">#</a></h4>
+<ul>
+<li>@ytjhai made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1545">#1545</a></li>
+</ul>
+<h3 id="0250-2024-07-05">[0.25.0] - 2024-07-05<a class="headerlink" href="#0250-2024-07-05" title="Permanent link">#</a></h3>
+<h4 id="highlights_1">✨ Highlights<a class="headerlink" href="#highlights_1" title="Permanent link">#</a></h4>
+<ul>
+<li><code>pixi exec</code> command, execute commands in temporary environments, useful for testing in short-lived sessions.</li>
+<li>We've bumped the default system-requirements to higher defaults: glibc (2.17 -&gt; 2.28), osx64 (10.15 -&gt; 13.0), osx-arm64 (11.0 -&gt; 13.0). Let us know if this causes any issues. To keep the previous values please use a <code>system-requirements</code> table, this is explained <a href="https://pixi.sh/latest/reference/project_configuration/#the-system-requirements-table">here</a></li>
+</ul>
+<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Bump system requirements by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1553">#1553</a></li>
+<li>Better error when exec is missing a cmd by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1565">#1565</a></li>
+<li>Make exec use authenticated client by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1568">#1568</a></li>
+</ul>
+<h4 id="documentation_1">Documentation<a class="headerlink" href="#documentation_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Automatic updating using github actions by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1456">#1456</a></li>
+<li>Describe the --change-ps1 option for pixi shell by @Yura52 in <a href="https://github.com/prefix-dev/pixi/pull/1536">#1536</a></li>
+<li>Add some other quantco repos by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1542">#1542</a></li>
+<li>Add example using <code>geos-rs</code> by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1563">#1563</a></li>
+</ul>
+<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Tiny error in basic_usage.md by @Sjouks in <a href="https://github.com/prefix-dev/pixi/pull/1513">#1513</a></li>
+<li>Lazy initialize client by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1511">#1511</a></li>
+<li>URL typos in rtd examples by @kklein in <a href="https://github.com/prefix-dev/pixi/pull/1538">#1538</a></li>
+<li>Fix satisfiability for short sha hashes by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1530">#1530</a></li>
+<li>Wrong path passed to dynamic check by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1552">#1552</a></li>
+<li>Don't error if no tasks is available on platform by @hoxbro in <a href="https://github.com/prefix-dev/pixi/pull/1550">#1550</a></li>
+</ul>
+<h4 id="refactor_1">Refactor<a class="headerlink" href="#refactor_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Add to use update code by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1508">#1508</a></li>
+</ul>
+<h4 id="new-contributors_1">New Contributors<a class="headerlink" href="#new-contributors_1" title="Permanent link">#</a></h4>
+<ul>
+<li>@kklein made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1538">#1538</a></li>
+<li>@Yura52 made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1536">#1536</a></li>
+<li>@Sjouks made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1513">#1513</a></li>
+</ul>
+<h3 id="0242-2024-06-14">[0.24.2] - 2024-06-14<a class="headerlink" href="#0242-2024-06-14" title="Permanent link">#</a></h3>
+<h4 id="documentation_2">Documentation<a class="headerlink" href="#documentation_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Add readthedocs examples  by @bollwyvl in <a href="https://github.com/prefix-dev/pixi/pull/1423">#1423</a></li>
+<li>Fix typo in  project_configuration.md  by @RaulPL in <a href="https://github.com/prefix-dev/pixi/pull/1502">#1502</a></li>
+</ul>
+<h4 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">#</a></h4>
+<ul>
+<li>Too much shell variables in activation of <code>pixi shell</code>  by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1507">#1507</a></li>
+</ul>
+<h3 id="0241-2024-06-12">[0.24.1] - 2024-06-12<a class="headerlink" href="#0241-2024-06-12" title="Permanent link">#</a></h3>
+<h4 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Replace http code %2b with + by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1500">#1500</a></li>
+</ul>
+<h3 id="0240-2024-06-12">[0.24.0] - 2024-06-12<a class="headerlink" href="#0240-2024-06-12" title="Permanent link">#</a></h3>
+<h4 id="highlights_2">✨ Highlights<a class="headerlink" href="#highlights_2" title="Permanent link">#</a></h4>
+<ul>
+<li>You can now run in a more isolated environment on <code>unix</code> machines, using <code>pixi run --clean-env TASK_NAME</code>.</li>
+<li>You can new easily clean your environment with <code>pixi clean</code> or the cache with <code>pixi clean cache</code></li>
+</ul>
+<h4 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>pixi clean</code> command by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1325">#1325</a></li>
+<li>Add <code>--clean-env</code> flag to tasks and run command by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1395">#1395</a></li>
+<li>Add <code>description</code> field to <code>task</code> by @jjjermiah in <a href="https://github.com/prefix-dev/pixi/pull/1479">#1479</a></li>
+<li>Add pixi file to the environment to add pixi specific details by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1495">#1495</a></li>
+</ul>
+<h4 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Project environment cli by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1433">#1433</a></li>
+<li>Update task list console output by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1443">#1443</a></li>
+<li>Upgrade uv by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1436">#1436</a></li>
+<li>Sort packages in <code>list_global_packages</code> by @dhirschfeld in <a href="https://github.com/prefix-dev/pixi/pull/1458">#1458</a></li>
+<li>Added test for special chars wheel filename by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1454">#1454</a></li>
+</ul>
+<h4 id="documentation_3">Documentation<a class="headerlink" href="#documentation_3" title="Permanent link">#</a></h4>
+<ul>
+<li>Improve multi env tasks documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1494">#1494</a></li>
+</ul>
+<h4 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">#</a></h4>
+<ul>
+<li>Use the activated environment when running a task by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1461">#1461</a></li>
+<li>Fix authentication pypi-deps for download from lockfile by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1460">#1460</a></li>
+<li>Display channels correctly in <code>pixi info</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1459">#1459</a></li>
+<li>Render help for <code>--frozen</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1468">#1468</a></li>
+<li>Don't record purl for non conda-forge channels by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1451">#1451</a></li>
+<li>Use best_platform to verify the run platform by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1472">#1472</a></li>
+<li>Creation of parent dir of symlink by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1483">#1483</a></li>
+<li><code>pixi install --all</code> output missing newline by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1487">#1487</a></li>
+<li>Don't error on already existing dependency by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1449">#1449</a></li>
+<li>Remove debug true in release by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1477">#1477</a></li>
+</ul>
+<h4 id="new-contributors_2">New Contributors<a class="headerlink" href="#new-contributors_2" title="Permanent link">#</a></h4>
+<ul>
+<li>@dhirschfeld made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1458">#1458</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.23.0..HEAD">Full commit history</a></p>
+<h3 id="0230-2024-05-27">[0.23.0] - 2024-05-27<a class="headerlink" href="#0230-2024-05-27" title="Permanent link">#</a></h3>
+<h4 id="highlights_3">✨ Highlights<a class="headerlink" href="#highlights_3" title="Permanent link">#</a></h4>
+<ul>
+<li>This release adds two new commands <code>pixi config</code> and <code>pixi update</code><ul>
+<li><code>pixi config</code> allows you to <code>edit</code>, <code>set</code>, <code>unset</code>, <code>append</code>, <code>prepend</code> and <code>list</code> your local/global or system configuration.</li>
+<li><code>pixi update</code> re-solves the full lockfile or use <code>pixi update PACKAGE</code> to only update <code>PACKAGE</code>, making sure your project is using the latest versions that the manifest allows for.</li>
+</ul>
+</li>
+</ul>
+<h4 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>pixi config</code> command by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/1339">#1339</a></li>
+<li>Add <code>pixi list --explicit</code> flag command by @jjjermiah in <a href="https://github.com/prefix-dev/pixi/pull/1403">#1403</a></li>
+<li>Add <code>[activation.env]</code> table for environment variables by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1156">#1156</a></li>
+<li>Allow installing multiple envs, including <code>--all</code> at once by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1413">#1413</a></li>
+<li>Add <code>pixi update</code> command to re-solve the lockfile by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1431">#1431</a> (fixes 20 :thumbsup:)</li>
+<li>Add <code>detached-environments</code> to the config, move environments outside the project folder by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1381">#1381</a> (fixes 11 :thumbsup:)</li>
+</ul>
+<h4 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">#</a></h4>
+<ul>
+<li>Use the gateway to fetch repodata by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1307">#1307</a></li>
+<li>Switch to compressed mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1335">#1335</a></li>
+<li>Warn on pypi conda clobbering by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1353">#1353</a></li>
+<li>Align <code>remove</code> arguments with <code>add</code> by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1406">#1406</a></li>
+<li>Add backward compat logic for older lock files by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1425">#1425</a></li>
+</ul>
+<h4 id="documentation_4">Documentation<a class="headerlink" href="#documentation_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Fix small screen by removing getting started section. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1393">#1393</a></li>
+<li>Improve caching docs by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1422">#1422</a></li>
+<li>Add example, python library using gcp upload by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1380">#1380</a></li>
+<li>Correct typos with <code>--no-lockfile-update</code>. by @tobiasraabe in <a href="https://github.com/prefix-dev/pixi/pull/1396">#1396</a></li>
+</ul>
+<h4 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">#</a></h4>
+<ul>
+<li>Trim channel url when filter packages_for_prefix_mapping by @zen-xu in <a href="https://github.com/prefix-dev/pixi/pull/1391">#1391</a></li>
+<li>Use the right channels when upgrading global packages by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1326">#1326</a></li>
+<li>Fish prompt display looks wrong in tide by @tfriedel in <a href="https://github.com/prefix-dev/pixi/pull/1424">#1424</a></li>
+<li>Use local mapping instead of remote by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1430">#1430</a></li>
+</ul>
+<h4 id="refactor_2">Refactor<a class="headerlink" href="#refactor_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove unused fetch_sparse_repodata by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1411">#1411</a></li>
+<li>Remove project level method that are per environment by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1412">#1412</a></li>
+<li>Update lockfile functionality for reusability by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1426">#1426</a></li>
+</ul>
+<h4 id="new-contributors_3">New Contributors<a class="headerlink" href="#new-contributors_3" title="Permanent link">#</a></h4>
+<ul>
+<li>@tfriedel made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1424">#1424</a></li>
+<li>@jjjermiah made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1403">#1403</a></li>
+<li>@tobiasraabe made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1396">#1396</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.22.0..v0.23.0">Full commit history</a></p>
+<h3 id="0220-2024-05-13">[0.22.0] - 2024-05-13<a class="headerlink" href="#0220-2024-05-13" title="Permanent link">#</a></h3>
+<h4 id="highlights_4">✨ Highlights<a class="headerlink" href="#highlights_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Support for source pypi dependencies through the cli:<ul>
+<li><code>pixi add --pypi 'package @ package.whl'</code>, perfect for adding just build wheels to your environment in CI.</li>
+<li><code>pixi add --pypi 'package_from_git @ git+https://github.com/org/package.git'</code>, to add a package from a git repository.</li>
+<li><code>pixi add --pypi 'package_from_path @ file:///path/to/package' --editable</code>, to add a package from a local path.</li>
+</ul>
+</li>
+</ul>
+<h4 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">#</a></h4>
+<ul>
+<li>Implement more functions for <code>pixi add --pypi</code> by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1244">#1244</a></li>
+</ul>
+<h4 id="documentation_5">Documentation<a class="headerlink" href="#documentation_5" title="Permanent link">#</a></h4>
+<ul>
+<li>Update <code>install</code> cli doc by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1336">#1336</a></li>
+<li>Replace empty default example with no-default-feature by @beenje in <a href="https://github.com/prefix-dev/pixi/pull/1352">#1352</a></li>
+<li>Document the add &amp; remove cli behaviour with pyproject.toml manifest by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1338">#1338</a></li>
+<li>Add environment activation to GitHub actions docs by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1371">#1371</a></li>
+<li>Clarify in CLI that run can also take commands by @twrightsman in <a href="https://github.com/prefix-dev/pixi/pull/1368">#1368</a></li>
+</ul>
+<h4 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">#</a></h4>
+<ul>
+<li>Automated update of install script in pixi.sh by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1351">#1351</a></li>
+<li>Wrong description on <code>pixi project help</code> by @notPlancha in <a href="https://github.com/prefix-dev/pixi/pull/1358">#1358</a></li>
+<li>Don't need a python interpreter when not having <code>pypi</code> dependencies. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1366">#1366</a></li>
+<li>Don't error on not editable not path by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1365">#1365</a></li>
+<li>Align shell-hook cli with shell by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1364">#1364</a></li>
+<li>Only write prefix file if needed by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1363">#1363</a></li>
+</ul>
+<h4 id="refactor_3">Refactor<a class="headerlink" href="#refactor_3" title="Permanent link">#</a></h4>
+<ul>
+<li>Lock-file resolve functionality in separated modules by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1337">#1337</a></li>
+<li>Use generic for RepoDataRecordsByName and PypiRecordsByName by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1341">#1341</a></li>
+</ul>
+<h4 id="new-contributors_4">New Contributors<a class="headerlink" href="#new-contributors_4" title="Permanent link">#</a></h4>
+<ul>
+<li>@twrightsman made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1368">#1368</a></li>
+<li>@notPlancha made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1358">#1358</a></li>
+<li>@vigneshmanick made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1336">#1336</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.21.1..v0.22.0">Full commit history</a></p>
+<h3 id="0211-2024-05-07">[0.21.1] - 2024-05-07<a class="headerlink" href="#0211-2024-05-07" title="Permanent link">#</a></h3>
+<h4 id="fixed_8">Fixed<a class="headerlink" href="#fixed_8" title="Permanent link">#</a></h4>
+<ul>
+<li>Use read timeout, not global timeout by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1329">#1329</a></li>
+<li>Channel priority logic by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1332">#1332</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.21.0..v0.21.1">Full commit history</a></p>
+<h3 id="0210-2024-05-06">[0.21.0] - 2024-05-06<a class="headerlink" href="#0210-2024-05-06" title="Permanent link">#</a></h3>
+<h4 id="highlights_5">✨ Highlights<a class="headerlink" href="#highlights_5" title="Permanent link">#</a></h4>
+<ul>
+<li>This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.</li>
+<li>We now support cross-platform running, for <code>osx-64</code> on <code>osx-arm64</code> and <code>wasm</code> environments.</li>
+<li>There is now a <code>no-default-feature</code> option to simplify usage of environments.</li>
+</ul>
+<h4 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Add pypi config for global local config file + keyring support by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1279">#1279</a></li>
+<li>Allow for cross-platform running, for <code>osx-64</code> on <code>osx-arm64</code> and <code>wasm</code> environments by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1020">#1020</a></li>
+</ul>
+<h4 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>no-default-feature</code> option to environments by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1092">#1092</a></li>
+<li>Add <code>/etc/pixi/config.toml</code> to global configuration search paths by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1304">#1304</a></li>
+<li>Change global config fields to kebab-case by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1308">#1308</a></li>
+<li>Show all available task with <code>task list</code> by @Hoxbro in <a href="https://github.com/prefix-dev/pixi/pull/1286">#1286</a></li>
+<li>Allow to emit activation environment variables as JSON by @borchero in <a href="https://github.com/prefix-dev/pixi/pull/1317">#1317</a></li>
+<li>Use locked pypi packages as preferences in the pypi solve to get minimally updating lock files by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1320">#1320</a></li>
+<li>Allow to upgrade several global packages at once by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1324">#1324</a></li>
+</ul>
+<h4 id="documentation_6">Documentation<a class="headerlink" href="#documentation_6" title="Permanent link">#</a></h4>
+<ul>
+<li>Typo in tutorials python by @carschandler in <a href="https://github.com/prefix-dev/pixi/pull/1297">#1297</a></li>
+<li>Python Tutorial: Dependencies, PyPI, Order, Grammar by @JesperDramsch in <a href="https://github.com/prefix-dev/pixi/pull/1313">#1313</a></li>
+</ul>
+<h4 id="fixed_9">Fixed<a class="headerlink" href="#fixed_9" title="Permanent link">#</a></h4>
+<ul>
+<li>Schema version and add it to tbump by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1284">#1284</a></li>
+<li>Make integration test fail in ci and fix ssh issue by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1301">#1301</a></li>
+<li>Automate adding install scripts to the docs by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1302">#1302</a></li>
+<li>Do not always request for prefix mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1300">#1300</a></li>
+<li>Align CLI aliases and add missing by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1316">#1316</a></li>
+<li>Alias <code>depends_on</code> to <code>depends-on</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1310">#1310</a></li>
+<li>Add error if channel or platform doesn't exist on remove by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1315">#1315</a></li>
+<li>Allow spec in <code>pixi q</code> instead of only name by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1314">#1314</a></li>
+<li>Remove dependency on sysroot for linux by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1319">#1319</a></li>
+<li>Fix linking symlink issue, by updating to the latest <code>rattler</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1327">#1327</a></li>
+</ul>
+<h4 id="refactor_4">Refactor<a class="headerlink" href="#refactor_4" title="Permanent link">#</a></h4>
+<ul>
+<li>Use IndexSet instead of Vec for collections of unique elements by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1289">#1289</a></li>
+<li>Use generics over PyPiDependencies and CondaDependencies by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1303">#1303</a></li>
+</ul>
+<h4 id="new-contributors_5">New Contributors<a class="headerlink" href="#new-contributors_5" title="Permanent link">#</a></h4>
+<ul>
+<li>@borchero made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1317">#1317</a></li>
+<li>@JesperDramsch made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1313">#1313</a></li>
+<li>@Hoxbro made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1286">#1286</a></li>
+<li>@carschandler made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1297">#1297</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.20.1..v0.21.0">Full commit history</a></p>
+<h3 id="0201-2024-04-26">[0.20.1] - 2024-04-26<a class="headerlink" href="#0201-2024-04-26" title="Permanent link">#</a></h3>
+<h4 id="highlights_6">✨ Highlights<a class="headerlink" href="#highlights_6" title="Permanent link">#</a></h4>
+<ul>
+<li>Big improvements on the pypi-editable installs.</li>
+</ul>
+<h4 id="fixed_10">Fixed<a class="headerlink" href="#fixed_10" title="Permanent link">#</a></h4>
+<ul>
+<li>Editable non-satisfiable by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1251">#1251</a></li>
+<li>Satisfiability with pypi extras by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1253">#1253</a></li>
+<li>Change global install activation script permission from 0o744 -&gt; 0o755 by @zen-xu in <a href="https://github.com/prefix-dev/pixi/pull/1250">#1250</a></li>
+<li>Avoid creating Empty TOML tables by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1270">#1270</a></li>
+<li>Uses the special-case uv path handling for both built and source by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1263">#1263</a></li>
+<li>Modify test before attempting to write to .bash_profile in install.sh by @bruchim-cisco in <a href="https://github.com/prefix-dev/pixi/pull/1267">#1267</a></li>
+<li>Parse properly 'default' as environment Cli argument by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1247">#1247</a></li>
+<li>Apply <code>schema.json</code> normalization, add to docs by @bollwyvl in <a href="https://github.com/prefix-dev/pixi/pull/1265">#1265</a></li>
+<li>Improve absolute path satisfiability by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1252">#1252</a></li>
+<li>Improve parse deno error and make task a required field in the cli by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1260">#1260</a></li>
+</ul>
+<h4 id="new-contributors_6">New Contributors<a class="headerlink" href="#new-contributors_6" title="Permanent link">#</a></h4>
+<ul>
+<li>@bollwyvl made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1265">#1265</a></li>
+<li>@bruchim-cisco made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1267">#1267</a></li>
+<li>@zen-xu made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1250">#1250</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.20.0..v0.20.1">Full commit history</a></p>
+<h3 id="0200-2024-04-19">[0.20.0] - 2024-04-19<a class="headerlink" href="#0200-2024-04-19" title="Permanent link">#</a></h3>
+<h4 id="highlights_7">✨ Highlights<a class="headerlink" href="#highlights_7" title="Permanent link">#</a></h4>
+<ul>
+<li>We now support <code>env</code> variables in the <code>task</code> definition, these can also be used as default values for parameters in your task which you can overwrite with your shell's env variables.
+e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PATH" } }</code></li>
+<li>We made a big effort on fixing issues and improving documentation!</li>
+</ul>
+<h4 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>env</code> to the tasks to specify tasks specific environment variables by @wolfv in https://github.com/prefix-dev/pixi/pull/972</li>
+</ul>
+<h4 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>--pyproject</code> option to <code>pixi init</code> with a pyproject.toml by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1188">#1188</a></li>
+<li>Upgrade to new uv version 0.1.32 by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1208">#1208</a></li>
+</ul>
+<h4 id="documentation_7">Documentation<a class="headerlink" href="#documentation_7" title="Permanent link">#</a></h4>
+<ul>
+<li>Document <code>pixi.lock</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1209">#1209</a></li>
+<li>Document channel <code>priority</code> definition by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1234">#1234</a></li>
+<li>Add rust tutorial including openssl example by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1155">#1155</a></li>
+<li>Add python tutorial to documentation by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1179">#1179</a></li>
+<li>Add JupyterLab integration docs by @renan-r-santos in <a href="https://github.com/prefix-dev/pixi/pull/1147">#1147</a></li>
+</ul>
+<ul>
+<li>Add Windows support for PyCharm integration by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1192">#1192</a></li>
+<li>Setup_pixi for local pixi installation by @ytausch in <a href="https://github.com/prefix-dev/pixi/pull/1181">#1181</a></li>
+<li>Update pypi docs by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1215">#1215</a></li>
+<li>Fix order of <code>--no-deps</code> when pip installing in editable mode by @glemaitre in <a href="https://github.com/prefix-dev/pixi/pull/1220">#1220</a></li>
+<li>Fix frozen documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1167">#1167</a></li>
+</ul>
+<h4 id="fixed_11">Fixed<a class="headerlink" href="#fixed_11" title="Permanent link">#</a></h4>
+<ul>
+<li>Small typo in list cli by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1169">#1169</a></li>
+<li>Issue with invalid solve group by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1190">#1190</a></li>
+<li>Improve error on parsing lockfile by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1180">#1180</a></li>
+<li>Replace <code>_</code> with <code>-</code> when creating environments from features by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1203">#1203</a></li>
+<li>Prevent duplicate direct dependencies in tree by @abkfenris in <a href="https://github.com/prefix-dev/pixi/pull/1184">#1184</a></li>
+<li>Use project root directory instead of task.working_directory for base dir when hashing by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1202">#1202</a></li>
+<li>Do not leak env vars from bat scripts in cmd.exe by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1205">#1205</a></li>
+<li>Make file globbing behave more as expected by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1204">#1204</a></li>
+<li>Fix for using file::// in pyproject.toml dependencies by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1196">#1196</a></li>
+<li>Improve pypi version conversion in pyproject.toml dependencies by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1201">#1201</a></li>
+<li>Update to the latest rattler by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1235">#1235</a></li>
+</ul>
+<h4 id="breaking"><strong>BREAKING</strong><a class="headerlink" href="#breaking" title="Permanent link">#</a></h4>
+<ul>
+<li><code>task = { cmd = "task to run", cwd = "folder", inputs = "input.txt", output = "output.txt"}</code> Where <code>input.txt</code> and <code>output.txt</code> where previously in <code>folder</code> they are now relative the project root. This changed in: <a href="https://github.com/prefix-dev/pixi/pull/1202">#1202</a></li>
+<li><code>task = { cmd = "task to run", inputs = "input.txt"}</code> previously searched for all <code>input.txt</code> files now only for the ones in the project root. This changed in:  <a href="https://github.com/prefix-dev/pixi/pull/1204">#1204</a></li>
+</ul>
+<h4 id="new-contributors_7">New Contributors<a class="headerlink" href="#new-contributors_7" title="Permanent link">#</a></h4>
+<ul>
+<li>@glemaitre made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1220">#1220</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.19.1..v0.20.0">Full commit history</a></p>
+<h3 id="0191-2024-04-11">[0.19.1] - 2024-04-11<a class="headerlink" href="#0191-2024-04-11" title="Permanent link">#</a></h3>
+<h4 id="highlights_8">✨ Highlights<a class="headerlink" href="#highlights_8" title="Permanent link">#</a></h4>
+<p>This fixes the issue where pixi would generate broken environments/lockfiles when a mapping for a brand-new version of a package is missing.</p>
+<h4 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">#</a></h4>
+<ul>
+<li>Add fallback mechanism for missing mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1166">#1166</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.19.0..v0.19.1">Full commit history</a></p>
+<h3 id="0190-2024-04-10">[0.19.0] - 2024-04-10<a class="headerlink" href="#0190-2024-04-10" title="Permanent link">#</a></h3>
+<h4 id="highlights_9">✨ Highlights<a class="headerlink" href="#highlights_9" title="Permanent link">#</a></h4>
+<ul>
+<li>This release adds a new <code>pixi tree</code> command to show the dependency tree of the project.</li>
+<li>Pixi now persists the manifest and environment when activating a shell, so you can use pixi as if you are in that folder while in the shell.</li>
+</ul>
+<h4 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">#</a></h4>
+<ul>
+<li><code>pixi tree</code> command to show dependency tree by @abkfenris in <a href="https://github.com/prefix-dev/pixi/pull/1069">#1069</a></li>
+<li>Persistent shell manifests by @abkfenris in <a href="https://github.com/prefix-dev/pixi/pull/1080">#1080</a></li>
+<li>Add to pypi in feature (<code>pixi add --feature test --pypi package</code>) by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1135">#1135</a></li>
+<li>Use new mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/888">#888</a></li>
+<li><code>--no-progress</code> to disable all progress bars by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1105">#1105</a></li>
+<li>Create a table if channel is specified (<code>pixi add conda-forge::rattler-build</code>) by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1079">#1079</a></li>
+</ul>
+<h4 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">#</a></h4>
+<ul>
+<li>Add the project itself as an editable dependency by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1084">#1084</a></li>
+<li>Get <code>tool.pixi.project.name</code> from <code>project.name</code> by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1112">#1112</a></li>
+<li>Create <code>features</code> and <code>environments</code> from extras by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1077">#1077</a></li>
+<li>Pypi supports come out of Beta by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1120">#1120</a></li>
+<li>Enable to force <code>PIXI_ARCH</code> for pixi installation by @beenje in <a href="https://github.com/prefix-dev/pixi/pull/1129">#1129</a></li>
+<li>Improve tool.pixi.project detection logic by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1127">#1127</a></li>
+<li>Add purls for packages if adding pypi dependencies by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1148">#1148</a></li>
+<li>Add env name if not default to <code>tree</code> and <code>list</code> commands by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1145">#1145</a></li>
+</ul>
+<h4 id="documentation_8">Documentation<a class="headerlink" href="#documentation_8" title="Permanent link">#</a></h4>
+<ul>
+<li>Add MODFLOW 6 to community docs by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1125">#1125</a></li>
+<li>Addition of ros2 tutorial by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1116">#1116</a></li>
+<li>Improve install script docs by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1136">#1136</a></li>
+<li>More structured table of content by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1142">#1142</a></li>
+</ul>
+<h4 id="fixed_12">Fixed<a class="headerlink" href="#fixed_12" title="Permanent link">#</a></h4>
+<ul>
+<li>Amend syntax in <code>conda-meta/history</code> to prevent <code>conda.history.History.parse()</code> error by @jaimergp in <a href="https://github.com/prefix-dev/pixi/pull/1117">#1117</a></li>
+<li>Fix docker example and include <code>pyproject.toml</code> by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1121">#1121</a></li>
+</ul>
+<h4 id="new-contributors_8">New Contributors<a class="headerlink" href="#new-contributors_8" title="Permanent link">#</a></h4>
+<ul>
+<li>@abkfenris made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1069">#1069</a></li>
+<li>@beenje made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1129">#1129</a></li>
+<li>@jaimergp made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1117">#1117</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.18.0..v0.19.0">Full commit history</a></p>
+<h3 id="0180-2024-04-02">[0.18.0] - 2024-04-02<a class="headerlink" href="#0180-2024-04-02" title="Permanent link">#</a></h3>
+<h4 id="highlights_10">✨ Highlights<a class="headerlink" href="#highlights_10" title="Permanent link">#</a></h4>
+<ul>
+<li>This release adds support for <code>pyproject.toml</code>, now pixi reads from the <code>[tool.pixi]</code> table.</li>
+<li>We now support editable PyPI dependencies, and PyPI source dependencies, including <code>git</code>, <code>path</code>, and <code>url</code> dependencies.</li>
+</ul>
+<blockquote>
+<p>[!TIP]
+These new features are part of the ongoing effort to make pixi more flexible, powerful, and comfortable for the python users.
+They are still in progress so expect more improvements on these features soon, so please report any issues you encounter and follow our next releases!</p>
+</blockquote>
+<h4 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">#</a></h4>
+<ul>
+<li>Support for <code>pyproject.toml</code> by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/999">#999</a></li>
+<li>Support for PyPI source dependencies by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/985">#985</a></li>
+<li>Support for editable PyPI dependencies by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1044">#1044</a></li>
+</ul>
+<h4 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">#</a></h4>
+<ul>
+<li><code>XDG_CONFIG_HOME</code> and <code>XDG_CACHE_HOME</code> compliance by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/1050">#1050</a></li>
+<li>Build pixi for windows arm by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1053">#1053</a></li>
+<li>Platform literals by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1054">#1054</a></li>
+<li>Cli docs: --user is actually --username</li>
+<li>Fixed error in auth example (CLI docs) by @ytausch in <a href="https://github.com/prefix-dev/pixi/pull/1076">#1076</a></li>
+</ul>
+<h4 id="documentation_9">Documentation<a class="headerlink" href="#documentation_9" title="Permanent link">#</a></h4>
+<ul>
+<li>Add lockfile update description in preparation for pixi update by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1073">#1073</a></li>
+<li><code>zsh</code> may be used for installation on macOS by @pya in <a href="https://github.com/prefix-dev/pixi/pull/1091">#1091</a></li>
+<li>Fix typo in <code>pixi auth</code> documentation by @ytausch in <a href="https://github.com/prefix-dev/pixi/pull/1076">#1076</a></li>
+<li>Add <code>rstudio</code> to the IDE integration docs by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1144">#1144</a></li>
+</ul>
+<h4 id="fixed_13">Fixed<a class="headerlink" href="#fixed_13" title="Permanent link">#</a></h4>
+<ul>
+<li>Test failure on riscv64 by @hack3ric in <a href="https://github.com/prefix-dev/pixi/pull/1045">#1045</a></li>
+<li>Validation test was testing on a wrong pixi.toml by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1056">#1056</a></li>
+<li>Pixi list shows path and editable by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1100">#1100</a></li>
+<li>Docs ci by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1074">#1074</a></li>
+<li>Add error for unsupported pypi dependencies by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1052">#1052</a></li>
+<li>Interactively delete environment when it was relocated by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1102">#1102</a></li>
+<li>Allow solving for different platforms by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1101">#1101</a></li>
+<li>Don't allow extra keys in pypi requirements by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1104">#1104</a></li>
+<li>Solve when moving dependency from conda to pypi by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1099">#1099</a></li>
+</ul>
+<h4 id="new-contributors_9">New Contributors<a class="headerlink" href="#new-contributors_9" title="Permanent link">#</a></h4>
+<ul>
+<li>@pya made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1091">#1091</a></li>
+<li>@ytausch made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1076">#1076</a></li>
+<li>@hack3ric made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1045">#1045</a></li>
+<li>@olivier-lacroix made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/999">#999</a></li>
+<li>@henryiii made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1063">#1063</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.17.1..v0.18.0">Full commit history</a></p>
+<h3 id="0171-2024-03-21">[0.17.1] - 2024-03-21<a class="headerlink" href="#0171-2024-03-21" title="Permanent link">#</a></h3>
+<h4 id="highlights_11">✨ Highlights<a class="headerlink" href="#highlights_11" title="Permanent link">#</a></h4>
+<p>A quick bug-fix release for <code>pixi list</code>.</p>
+<h4 id="documentation_10">Documentation<a class="headerlink" href="#documentation_10" title="Permanent link">#</a></h4>
+<ul>
+<li>Fix typo by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1028">#1028</a></li>
+</ul>
+<h4 id="fixed_14">Fixed<a class="headerlink" href="#fixed_14" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove the need for a python interpreter in <code>pixi list</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1033">#1033</a></li>
+</ul>
+<h3 id="0170-2024-03-19">[0.17.0] - 2024-03-19<a class="headerlink" href="#0170-2024-03-19" title="Permanent link">#</a></h3>
+<h4 id="highlights_12">✨ Highlights<a class="headerlink" href="#highlights_12" title="Permanent link">#</a></h4>
+<ul>
+<li>This release greatly improves <code>pixi global</code> commands, thanks to @chawyehsu!</li>
+<li>We now support global (or local) configuration for pixi's own behavior, including mirrors, and OCI registries.</li>
+<li>We support channel mirrors for corporate environments!</li>
+<li>Faster <code>task</code> execution thanks to caching 🚀 Tasks that already executed successfully can be skipped based on the hash of the <code>inputs</code> and <code>outputs</code>.</li>
+<li>PyCharm and GitHub Actions integration thanks to @pavelzw – read more about it in the docs!</li>
+</ul>
+<h4 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">#</a></h4>
+<ul>
+<li>Add citation file by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/908">#908</a></li>
+<li>Add a pixi badge by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/961">#961</a></li>
+<li>Add deserialization of pypi source dependencies from toml by @ruben-arts and @wolf in <a href="https://github.com/prefix-dev/pixi/pull/895">#895</a> <a href="https://github.com/prefix-dev/pixi/pull/984">#984</a></li>
+<li>Implement mirror and OCI settings by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/988">#988</a></li>
+<li>Implement <code>inputs</code> and <code>outputs</code> hash based task skipping by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/933">#933</a></li>
+</ul>
+<h4 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">#</a></h4>
+<ul>
+<li>Refined global upgrade commands by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/948">#948</a></li>
+<li>Global upgrade supports matchspec by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/962">#962</a></li>
+<li>Improve <code>pixi search</code> with platform selection and making limit optional by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/979">#979</a></li>
+<li>Implement global config options by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/960">#960</a> <a href="https://github.com/prefix-dev/pixi/pull/1015">#1015</a> <a href="https://github.com/prefix-dev/pixi/pull/1019">#1019</a></li>
+<li>Update auth to use rattler cli by @kassoulait by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/986">#986</a></li>
+</ul>
+<h4 id="documentation_11">Documentation<a class="headerlink" href="#documentation_11" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove cache: true from setup-pixi by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/950">#950</a></li>
+<li>Add GitHub Actions documentation by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/955">#955</a></li>
+<li>Add PyCharm documentation by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/974">#974</a></li>
+<li>Mention <code>watch_file</code> in direnv usage by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/983">#983</a></li>
+<li>Add tip to help users when no PROFILE file exists by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/991">#991</a></li>
+<li>Move yaml comments into mkdocs annotations by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1003">#1003</a></li>
+<li>Fix --env and extend actions examples by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1005">#1005</a></li>
+<li>Add Wflow to projects built with pixi by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1006">#1006</a></li>
+<li>Removed <code>linenums</code> to avoid buggy visualization by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1002">#1002</a></li>
+<li>Fix typos by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1016">#1016</a></li>
+</ul>
+<h4 id="fixed_15">Fixed<a class="headerlink" href="#fixed_15" title="Permanent link">#</a></h4>
+<ul>
+<li>Pypi dependencies not being removed by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/952">#952</a></li>
+<li>Permissions for lint pr by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/852">#852</a></li>
+<li>Install Windows executable with <code>install.sh</code> in Git Bash by @jdblischak in <a href="https://github.com/prefix-dev/pixi/pull/966">#966</a></li>
+<li>Proper scanning of the conda-meta folder for <code>json</code> entries by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/971">#971</a></li>
+<li>Global shim scripts for Windows by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/975">#975</a></li>
+<li>Correct fish prompt by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/981">#981</a></li>
+<li>Prefix_file rename by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/959">#959</a></li>
+<li>Conda transitive dependencies of pypi packages are properly extracted by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/967">#967</a></li>
+<li>Make tests more deterministic and use single * for glob expansion by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/987">#987</a></li>
+<li>Create conda-meta/history file by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/995">#995</a></li>
+<li>Pypi dependency parsing was too lenient by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/984">#984</a></li>
+<li>Add reactivation of the environment in pixi shell by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/982">#982</a></li>
+<li>Add <code>tool</code> to strict json schema by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/969">#969</a></li>
+</ul>
+<h4 id="new-contributors_10">New Contributors<a class="headerlink" href="#new-contributors_10" title="Permanent link">#</a></h4>
+<ul>
+<li>@jdblischak made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/966">#966</a></li>
+<li>@kassoulait made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/986">#986</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.16.1..v0.17.0">Full commit history</a></p>
+<h3 id="0161-2024-03-11">[0.16.1] - 2024-03-11<a class="headerlink" href="#0161-2024-03-11" title="Permanent link">#</a></h3>
+<h4 id="fixed_16">Fixed<a class="headerlink" href="#fixed_16" title="Permanent link">#</a></h4>
+<ul>
+<li>Parse lockfile matchspecs lenient, fixing bug introduced in <code>0.16.0</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/951">#951</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.16.0..v0.16.1">Full commit history</a></p>
+<h3 id="0160-2024-03-09">[0.16.0] - 2024-03-09<a class="headerlink" href="#0160-2024-03-09" title="Permanent link">#</a></h3>
+<h4 id="highlights_13">✨ Highlights<a class="headerlink" href="#highlights_13" title="Permanent link">#</a></h4>
+<ul>
+<li>This release removes <a href="https://github.com/prefix-dev/rip"><code>rip</code></a> and add <a href="https://github.com/astral-sh/uv"><code>uv</code></a> as the PyPI resolver and installer.</li>
+</ul>
+<h4 id="added_9">Added<a class="headerlink" href="#added_9" title="Permanent link">#</a></h4>
+<ul>
+<li>Add tcsh install support by @obust in <a href="https://github.com/prefix-dev/pixi/pull/898">#898</a></li>
+<li>Add user agent to pixi http client by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/892">#892</a></li>
+<li>Add a schema for the pixi.toml by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/936">#936</a></li>
+</ul>
+<h4 id="changed_10">Changed<a class="headerlink" href="#changed_10" title="Permanent link">#</a></h4>
+<ul>
+<li>Switch from rip to uv by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/863">#863</a></li>
+<li>Move uv options into context by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/911">#911</a></li>
+<li>Add Deltares projects to Community.md by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/920">#920</a></li>
+<li>Upgrade to uv 0.1.16, updated for changes in the API by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/935">#935</a></li>
+</ul>
+<h4 id="fixed_17">Fixed<a class="headerlink" href="#fixed_17" title="Permanent link">#</a></h4>
+<ul>
+<li>Made the uv re-install logic a bit more clear by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/894">#894</a></li>
+<li>Avoid duplicate pip dependency while importing environment.yaml by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/890">#890</a></li>
+<li>Handle custom channels when importing from env yaml by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/901">#901</a></li>
+<li>Pip editable installs getting uninstalled by @renan-r-santos in <a href="https://github.com/prefix-dev/pixi/pull/902">#902</a></li>
+<li>Highlight pypi deps in pixi list by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/907">#907</a></li>
+<li>Default to the default environment if possible by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/921">#921</a></li>
+<li>Switching channels by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/923">#923</a></li>
+<li>Use correct name of the channel on adding by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/928">#928</a></li>
+<li>Turn back on jlap for faster repodata fetching by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/937">#937</a></li>
+<li>Remove dists site-packages's when python interpreter changes by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/896">#896</a></li>
+</ul>
+<h4 id="new-contributors_11">New Contributors<a class="headerlink" href="#new-contributors_11" title="Permanent link">#</a></h4>
+<ul>
+<li>@obust made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/898">#898</a></li>
+<li>@renan-r-santos made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/902">#902</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.15.2..v0.16.0">Full Commit history</a></p>
+<h3 id="0152-2024-02-29">[0.15.2] - 2024-02-29<a class="headerlink" href="#0152-2024-02-29" title="Permanent link">#</a></h3>
+<h4 id="changed_11">Changed<a class="headerlink" href="#changed_11" title="Permanent link">#</a></h4>
+<ul>
+<li>Add more info to a failure of activation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/873">#873</a></li>
+</ul>
+<h4 id="fixed_18">Fixed<a class="headerlink" href="#fixed_18" title="Permanent link">#</a></h4>
+<ul>
+<li>Improve global list UX when there is no global env dir created by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/865">#865</a></li>
+<li>Update rattler to <code>v0.19.0</code> by @AliPiccioniQC in <a href="https://github.com/prefix-dev/pixi/pull/885">#885</a></li>
+<li>Error on <code>pixi run</code> if platform is not supported by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/878">#878</a></li>
+</ul>
+<h4 id="new-contributors_12">New Contributors<a class="headerlink" href="#new-contributors_12" title="Permanent link">#</a></h4>
+<ul>
+<li>@sumanth-manchala made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/865">#865</a></li>
+<li>@AliPiccioniQC made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/885">#885</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.15.1..v0.15.2">Full commit history</a></p>
+<h3 id="0151-2024-02-26">[0.15.1] - 2024-02-26<a class="headerlink" href="#0151-2024-02-26" title="Permanent link">#</a></h3>
+<h4 id="added_10">Added<a class="headerlink" href="#added_10" title="Permanent link">#</a></h4>
+<ul>
+<li>Add prefix to project info json output by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/859">#859</a></li>
+</ul>
+<h4 id="changed_12">Changed<a class="headerlink" href="#changed_12" title="Permanent link">#</a></h4>
+<ul>
+<li>New <code>pixi global list</code> display format by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/723">#723</a></li>
+<li>Add direnv usage by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/845">#845</a></li>
+<li>Add docker example by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/846">#846</a></li>
+<li>Install/remove multiple packages globally by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/854">#854</a></li>
+</ul>
+<h4 id="fixed_19">Fixed<a class="headerlink" href="#fixed_19" title="Permanent link">#</a></h4>
+<ul>
+<li>Prefix file in <code>init --import</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/855">#855</a></li>
+<li>Environment and feature names in pixi info --json by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/857">#857</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.15.0..v0.15.1">Full commit history</a></p>
+<h3 id="0150-2024-02-23">[0.15.0] - 2024-02-23<a class="headerlink" href="#0150-2024-02-23" title="Permanent link">#</a></h3>
+<h4 id="highlights_14">✨ Highlights<a class="headerlink" href="#highlights_14" title="Permanent link">#</a></h4>
+<ul>
+<li><code>[pypi-dependencies]</code> now get build in the created environment so it uses the conda installed build tools.</li>
+<li><code>pixi init --import env.yml</code> to import an existing conda environment file.</li>
+<li><code>[target.unix.dependencies]</code> to specify dependencies for unix systems instead of per platform.</li>
+</ul>
+<blockquote>
+<p>[!WARNING]
+This versions build failed, use <code>v0.15.1</code></p>
+</blockquote>
+<h4 id="added_11">Added<a class="headerlink" href="#added_11" title="Permanent link">#</a></h4>
+<ul>
+<li>pass environment variables during pypi resolution and install (<a href="https://github.com/prefix-dev/pixi/pull/818">#818</a>)</li>
+<li>skip micromamba style selector lines and warn about them (<a href="https://github.com/prefix-dev/pixi/pull/830">#830</a>)</li>
+<li>add import yml flag (<a href="https://github.com/prefix-dev/pixi/pull/792">#792</a>)</li>
+<li>check duplicate dependencies (<a href="https://github.com/prefix-dev/pixi/pull/717">#717</a>)</li>
+<li><em>(ci)</em> check conventional PR title (<a href="https://github.com/prefix-dev/pixi/pull/820">#820</a>)</li>
+<li>add <code>--feature</code> to <code>pixi add</code> (<a href="https://github.com/prefix-dev/pixi/pull/803">#803</a>)</li>
+<li>add windows, macos, linux and unix to targets (<a href="https://github.com/prefix-dev/pixi/pull/832">#832</a>)</li>
+</ul>
+<h4 id="fixed_20">Fixed<a class="headerlink" href="#fixed_20" title="Permanent link">#</a></h4>
+<ul>
+<li>cache and retry pypi name mapping (<a href="https://github.com/prefix-dev/pixi/pull/839">#839</a>)</li>
+<li>check duplicates while adding dependencies (<a href="https://github.com/prefix-dev/pixi/pull/829">#829</a>)</li>
+<li>logic <code>PIXI_NO_PATH_UPDATE</code> variable (<a href="https://github.com/prefix-dev/pixi/pull/822">#822</a>)</li>
+</ul>
+<h4 id="other">Other<a class="headerlink" href="#other" title="Permanent link">#</a></h4>
+<ul>
+<li>add <code>mike</code> to the documentation and update looks (<a href="https://github.com/prefix-dev/pixi/pull/809">#809</a>)</li>
+<li>add instructions for installing on Alpine Linux (<a href="https://github.com/prefix-dev/pixi/pull/828">#828</a>)</li>
+<li>more error reporting in <code>self-update</code> (<a href="https://github.com/prefix-dev/pixi/pull/823">#823</a>)</li>
+<li>disabled <code>jlap</code> for now (<a href="https://github.com/prefix-dev/pixi/pull/823">#836</a>)</li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.14.0..v0.15.0">Full commit history</a></p>
+<h3 id="0140-2024-02-15">[0.14.0] - 2024-02-15<a class="headerlink" href="#0140-2024-02-15" title="Permanent link">#</a></h3>
+<h4 id="highlights_15">✨ Highlights<a class="headerlink" href="#highlights_15" title="Permanent link">#</a></h4>
+<p>Now, <code>solve-groups</code> can be used in <code>[environments]</code> to ensure dependency alignment across different environments without simultaneous installation.
+This feature is particularly beneficial for managing identical dependencies in <code>test</code> and <code>production</code> environments.
+Example configuration:</p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[environments]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;prod&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-groups</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;group1&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">prod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;prod&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-groups</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;group1&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+This setup simplifies managing dependencies that must be consistent across <code>test</code> and <code>production</code>.</p>
+<h4 id="added_12">Added<a class="headerlink" href="#added_12" title="Permanent link">#</a></h4>
+<ul>
+<li>Add index field to pypi requirements by @vlad-ivanov-name in <a href="https://github.com/prefix-dev/pixi/pull/784">#784</a></li>
+<li>Add <code>-f</code>/<code>--feature</code> to the <code>pixi project platform</code> command by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/785">#785</a></li>
+<li>Warn user when unused features are defined by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/762">#762</a></li>
+<li>Disambiguate tasks interactive by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/766">#766</a></li>
+<li>Solve groups for conda by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/783">#783</a></li>
+<li>Pypi solve groups by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/802">#802</a></li>
+<li>Enable reflinks by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/729">#729</a></li>
+</ul>
+<h4 id="changed_13">Changed<a class="headerlink" href="#changed_13" title="Permanent link">#</a></h4>
+<ul>
+<li>Add environment name to the progress by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/788">#788</a></li>
+<li>Set color scheme by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/773">#773</a></li>
+<li>Update lock on <code>pixi list</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/775">#775</a></li>
+<li>Use default env if task available in it. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/772">#772</a></li>
+<li>Color environment name in install step by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/795">#795</a></li>
+</ul>
+<h4 id="fixed_21">Fixed<a class="headerlink" href="#fixed_21" title="Permanent link">#</a></h4>
+<ul>
+<li>Running cuda env and using those tasks. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/764">#764</a></li>
+<li>Make svg a gif by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/782">#782</a></li>
+<li>Fmt by @ruben-arts</li>
+<li>Check for correct platform in task env creation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/759">#759</a></li>
+<li>Remove using source name by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/765">#765</a></li>
+<li>Auto-guessing of the shell in the <code>shell-hook</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/811</li>
+<li><code>sdist</code> with direct references by @nichmor in https://github.com/prefix-dev/pixi/pull/813</li>
+</ul>
+<h4 id="miscellaneous">Miscellaneous<a class="headerlink" href="#miscellaneous" title="Permanent link">#</a></h4>
+<ul>
+<li>Add slim-trees to community projects by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/760">#760</a></li>
+<li>Add test to default env in polarify example</li>
+<li>Add multiple machine example by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/757">#757</a></li>
+<li>Add more documentation on <code>environments</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/790">#790</a></li>
+<li>Update rip and rattler by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/798">#798</a></li>
+<li>Rattler 0.18.0 by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/805">#805</a></li>
+<li>Rip 0.8.0 by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/806">#806</a></li>
+<li>Fix authentication path by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/796">#796</a></li>
+<li>Initial addition of integration test by @ruben-arts in https://github.com/prefix-dev/pixi/pull/804</li>
+</ul>
+<h4 id="new-contributors_13">New Contributors<a class="headerlink" href="#new-contributors_13" title="Permanent link">#</a></h4>
+<ul>
+<li>@vlad-ivanov-name made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/784">#784</a></li>
+<li>@nichmor made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/806">#806</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.13.0..v0.14.0">Full commit history</a></p>
+<h3 id="0130-2024-02-01">[0.13.0] - 2024-02-01<a class="headerlink" href="#0130-2024-02-01" title="Permanent link">#</a></h3>
+<h4 id="highlights_16">✨ Highlights<a class="headerlink" href="#highlights_16" title="Permanent link">#</a></h4>
+<p>This release is pretty crazy in amount of features! The major ones are:
+- We added support for multiple environments. :tada: Checkout the <a href="https://pixi.sh/configuration/#the-feature-and-environments-tables">documentation</a>
+- We added support for <code>sdist</code> installation, which greatly improves the amount of packages that can be installed from PyPI. :rocket:</p>
+<blockquote>
+<p>[!IMPORTANT]</p>
+<p>Renaming of <code>PIXI_PACKAGE_*</code> variables:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>PIXI_PACKAGE_ROOT -&gt; PIXI_PROJECT_ROOT
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>PIXI_PACKAGE_NAME -&gt;  PIXI_PROJECT_NAME
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>PIXI_PACKAGE_MANIFEST -&gt; PIXI_PROJECT_MANIFEST
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>PIXI_PACKAGE_VERSION -&gt; PIXI_PROJECT_VERSION
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>PIXI_PACKAGE_PLATFORMS -&gt; PIXI_ENVIRONMENT_PLATFORMS
+</span></code></pre></div>
+Check documentation here: https://pixi.sh/environment/</p>
+<p>[!IMPORTANT]</p>
+<p>The <code>.pixi/env/</code> folder has been moved to accommodate multiple environments.
+If you only have one environment it is now named <code>.pixi/envs/default</code>.</p>
+</blockquote>
+<h4 id="added_13">Added<a class="headerlink" href="#added_13" title="Permanent link">#</a></h4>
+<ul>
+<li>Add support for multiple environment:<ul>
+<li>Update to rattler lock v4 by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/698">#698</a></li>
+<li>Multi-env installation and usage by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/721">#721</a></li>
+<li>Update all environments in the lock-file when requesting an environment by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/711">#711</a></li>
+<li>Run tasks in the env they are defined by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/731">#731</a></li>
+<li><code>polarify</code> use-case as an example by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/735">#735</a></li>
+<li>Make environment name parsing strict by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/673">#673</a></li>
+<li>Use named environments (only "default" for now) by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/674">#674</a></li>
+<li>Use task graph instead of traversal by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/725">#725</a></li>
+<li>Multi env documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/703">#703</a></li>
+<li><code>pixi info -e/--environment</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/676">#676</a></li>
+<li><code>pixi channel add -f/--feature</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/700">#700</a></li>
+<li><code>pixi channel remove -f/--feature</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/706">#706</a></li>
+<li><code>pixi remove -f/--feature</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/680">#680</a></li>
+<li><code>pixi task list -e/--environment</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/694">#694</a></li>
+<li><code>pixi task remove -f/--feature</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/694">#694</a></li>
+<li><code>pixi install -e/--environment</code> option by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/722">#722</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>Support for sdists in <code>pypi-dependencies</code> by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/664">#664</a></li>
+<li>Add pre-release support to <code>pypi-dependencies</code> by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/716">#716</a></li>
+</ul>
+<ul>
+<li>Support adding dependencies for project's unsupported platforms by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/668">#668</a></li>
+<li>Add <code>pixi list</code> command by @hadim in <a href="https://github.com/prefix-dev/pixi/pull/665">#665</a></li>
+<li>Add <code>pixi shell-hook</code> command by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/672">#672</a><a href="https://github.com/prefix-dev/pixi/pull/679">#679</a> <a href="https://github.com/prefix-dev/pixi/pull/684">#684</a></li>
+<li>Use env variable to configure locked, frozen and color by @hadim in <a href="https://github.com/prefix-dev/pixi/pull/726">#726</a></li>
+<li><code>pixi self-update</code> by @hadim in <a href="https://github.com/prefix-dev/pixi/pull/675">#675</a></li>
+<li>Add <code>PIXI_NO_PATH_UPDATE</code> for PATH update suppression by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/692">#692</a></li>
+<li>Set the cache directory by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/683">#683</a></li>
+</ul>
+<h4 id="changed_14">Changed<a class="headerlink" href="#changed_14" title="Permanent link">#</a></h4>
+<ul>
+<li>Use consistent naming for tests module by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/678">#678</a></li>
+<li>Install pixi and add to the path in docker example by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/743">#743</a></li>
+<li>Simplify the deserializer of <code>PyPiRequirement</code> by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/744">#744</a></li>
+<li>Use <code>tabwriter</code> instead of <code>comfy_table</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/745">#745</a></li>
+<li>Document environment variables by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/746">#746</a></li>
+</ul>
+<h4 id="fixed_22">Fixed<a class="headerlink" href="#fixed_22" title="Permanent link">#</a></h4>
+<ul>
+<li>Quote part of the task that has brackets (<code>[ or ]</code>) by @JafarAbdi in <a href="https://github.com/prefix-dev/pixi/pull/677">#677</a></li>
+<li>Package clobber and <code>__pycache__</code> removal issues by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/573">#573</a></li>
+<li>Non-global reqwest client by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/693">#693</a></li>
+<li>Fix broken pipe error during search by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/699">#699</a></li>
+<li>Make <code>pixi search</code> result correct by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/713">#713</a></li>
+<li>Allow the tasks for all platforms to be shown in <code>pixi info</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/728">#728</a></li>
+<li>Flaky tests while installing pypi dependencies by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/732">#732</a></li>
+<li>Linux install script by @mariusvniekerk in <a href="https://github.com/prefix-dev/pixi/pull/737">#737</a></li>
+<li>Download wheels in parallel to avoid deadlock by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/752">#752</a></li>
+</ul>
+<h4 id="new-contributors_14">New Contributors<a class="headerlink" href="#new-contributors_14" title="Permanent link">#</a></h4>
+<ul>
+<li>@JafarAbdi made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/677">#677</a></li>
+<li>@mariusvniekerk made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/737">#737</a></li>
+</ul>
+<p><a href="https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0">Full commit history</a></p>
+<h3 id="0120-2024-01-15">[0.12.0] - 2024-01-15<a class="headerlink" href="#0120-2024-01-15" title="Permanent link">#</a></h3>
+<h4 id="highlights_17">✨ Highlights<a class="headerlink" href="#highlights_17" title="Permanent link">#</a></h4>
+<ul>
+<li>Some great community contributions, <code>pixi global upgrade</code>, <code>pixi project version</code> commands, a <code>PIXI_HOME</code> variable.</li>
+<li>A ton of refactor work to prepare for the <a href="https://pixi.sh/design_proposals/multi_environment_proposal/">multi-environment</a> feature.<ul>
+<li>Note that there are no extra environments created yet, but you can just specify them in the <code>pixi.toml</code> file already.</li>
+<li>Next we'll build the actual environments.</li>
+</ul>
+</li>
+</ul>
+<h4 id="added_14">Added<a class="headerlink" href="#added_14" title="Permanent link">#</a></h4>
+<ul>
+<li>Add <code>global upgrade</code> command to pixi by @trueleo in <a href="https://github.com/prefix-dev/pixi/pull/614">#614</a></li>
+<li>Add configurable <code>PIXI_HOME</code> by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/627">#627</a></li>
+<li>Add <code>--pypi</code> option to <code>pixi remove</code> by @marcelotrevisani in https://github.com/prefix-dev/pixi/pull/602</li>
+<li>PrioritizedChannels to specify channel priority by @ruben-arts in https://github.com/prefix-dev/pixi/pull/658</li>
+<li>Add <code>project version {major,minor,patch}</code> CLIs by @hadim in https://github.com/prefix-dev/pixi/pull/633</li>
+</ul>
+<h4 id="changed_15">Changed<a class="headerlink" href="#changed_15" title="Permanent link">#</a></h4>
+<ul>
+<li>Refactored project model using targets, features and environments by @baszalmstra in https://github.com/prefix-dev/pixi/pull/616</li>
+<li>Move code from <code>Project</code> to <code>Environment</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/630">#630</a></li>
+<li>Refactored <code>system-requirements</code> from Environment by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/632">#632</a></li>
+<li>Extract <code>activation.scripts</code> into Environment by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/659">#659</a></li>
+<li>Extract <code>pypi-dependencies</code> from Environment by @baszalmstra in https://github.com/prefix-dev/pixi/pull/656</li>
+<li>De-serialization of <code>features</code> and <code>environments</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/636</li>
+</ul>
+<h4 id="fixed_23">Fixed<a class="headerlink" href="#fixed_23" title="Permanent link">#</a></h4>
+<ul>
+<li>Make install.sh also work with wget if curl is not available by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/644">#644</a></li>
+<li>Use source build for rattler by @ruben-arts</li>
+<li>Check for pypi-dependencies before amending the pypi purls by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/661">#661</a></li>
+<li>Don't allow the use of reflinks by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/662">#662</a></li>
+</ul>
+<h4 id="removed_1">Removed<a class="headerlink" href="#removed_1" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove windows and unix system requirements by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/635">#635</a></li>
+</ul>
+<h4 id="documentation_12">Documentation<a class="headerlink" href="#documentation_12" title="Permanent link">#</a></h4>
+<ul>
+<li>Document the channel logic by @ruben-arts in https://github.com/prefix-dev/pixi/pull/610</li>
+<li>Update the instructions for installing on Arch Linux by @orhun in https://github.com/prefix-dev/pixi/pull/653</li>
+<li>Update Community.md by @KarelZe in https://github.com/prefix-dev/pixi/pull/654</li>
+<li>Replace contributions.md with contributing.md and make it more standardized by @ruben-arts in https://github.com/prefix-dev/pixi/pull/649</li>
+<li>Remove <code>windows</code> and <code>unix</code> system requirements by @baszalmstra in https://github.com/prefix-dev/pixi/pull/635</li>
+<li>Add <code>CODE_OF_CONDUCT.md</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/648</li>
+<li>Removed remaining .ps1 references by @bahugo in https://github.com/prefix-dev/pixi/pull/643</li>
+</ul>
+<h4 id="new-contributors_15">New Contributors<a class="headerlink" href="#new-contributors_15" title="Permanent link">#</a></h4>
+<ul>
+<li>@marcelotrevisani made their first contribution in https://github.com/prefix-dev/pixi/pull/602</li>
+<li>@trueleo made their first contribution in https://github.com/prefix-dev/pixi/pull/614</li>
+<li>@bahugo made their first contribution in https://github.com/prefix-dev/pixi/pull/643</li>
+<li>@KarelZe made their first contribution in https://github.com/prefix-dev/pixi/pull/654</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.11.0...v0.12.0</p>
+<h3 id="0111-2024-01-06">[0.11.1] - 2024-01-06<a class="headerlink" href="#0111-2024-01-06" title="Permanent link">#</a></h3>
+<h4 id="fixed_24">Fixed<a class="headerlink" href="#fixed_24" title="Permanent link">#</a></h4>
+<ul>
+<li>Upgrading rattler to fix <code>pixi auth</code> in <a href="https://github.com/prefix-dev/pixi/pull/642">#642</a></li>
+</ul>
+<h3 id="0110-2024-01-05">[0.11.0] - 2024-01-05<a class="headerlink" href="#0110-2024-01-05" title="Permanent link">#</a></h3>
+<h4 id="highlights_18">✨ Highlights<a class="headerlink" href="#highlights_18" title="Permanent link">#</a></h4>
+<ul>
+<li>Lots of important and preparations for the pypi <code>sdist</code> and multi environment feature</li>
+<li>Lots of new contributors that help <code>pixi</code> improve!</li>
+</ul>
+<h4 id="added_15">Added<a class="headerlink" href="#added_15" title="Permanent link">#</a></h4>
+<ul>
+<li>Add new commands for <code>pixi project {version|channel|platform|description}</code> by @hadim in <a href="https://github.com/prefix-dev/pixi/pull/579">#579</a></li>
+<li>Add dependabot.yml by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/606">#606</a></li>
+</ul>
+<h4 id="changed_16">Changed<a class="headerlink" href="#changed_16" title="Permanent link">#</a></h4>
+<ul>
+<li><code>winget-releaser</code> gets correct identifier by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/561">#561</a></li>
+<li>Task run code by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/556">#556</a></li>
+<li>No ps1 in activation scripts by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/563">#563</a></li>
+<li>Changed some names for clarity by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/568">#568</a></li>
+<li>Change font and make it dark mode by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/576">#576</a></li>
+<li>Moved pypi installation into its own module by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/589">#589</a></li>
+<li>Move alpha to beta feature and toggle it off with env var by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/604">#604</a></li>
+<li>Improve UX activation scripts by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/560">#560</a></li>
+<li>Add sanity check by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/569">#569</a></li>
+<li>Refactor manifest by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/572">#572</a></li>
+<li>Improve search by @Johnwillliam in <a href="https://github.com/prefix-dev/pixi/pull/578">#578</a></li>
+<li>Split pypi and conda solve steps by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/601">#601</a></li>
+</ul>
+<h4 id="fixed_25">Fixed<a class="headerlink" href="#fixed_25" title="Permanent link">#</a></h4>
+<ul>
+<li>Save file after lockfile is correctly updated by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/555">#555</a></li>
+<li>Limit the number of concurrent solves by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/571">#571</a></li>
+<li>Use project virtual packages in add command by @msegado in <a href="https://github.com/prefix-dev/pixi/pull/609">#609</a></li>
+<li>Improved mapped dependency by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/574">#574</a></li>
+</ul>
+<h4 id="documentation_13">Documentation<a class="headerlink" href="#documentation_13" title="Permanent link">#</a></h4>
+<ul>
+<li>Change font and make it dark mode by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/576">#576</a></li>
+<li>typo: no ps1 in activation scripts by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/563">#563</a></li>
+<li>Document adding CUDA to <code>system-requirements</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/595">#595</a></li>
+<li>Multi env proposal documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/584">#584</a></li>
+<li>Fix multiple typos in configuration.md by @SeaOtocinclus in <a href="https://github.com/prefix-dev/pixi/pull/608">#608</a></li>
+<li>Add multiple machines from one project example by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/605">#605</a></li>
+</ul>
+<h4 id="new-contributors_16">New Contributors<a class="headerlink" href="#new-contributors_16" title="Permanent link">#</a></h4>
+<ul>
+<li>@hadim made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/579">#579</a></li>
+<li>@msegado made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/609">#609</a></li>
+<li>@Johnwillliam made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/578">#578</a></li>
+<li>@SeaOtocinclus made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/608">#608</a></li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.10.0...v0.11.0</p>
+<h3 id="0100-2023-12-8">[0.10.0] - 2023-12-8<a class="headerlink" href="#0100-2023-12-8" title="Permanent link">#</a></h3>
+<h4 id="highlights_19">Highlights<a class="headerlink" href="#highlights_19" title="Permanent link">#</a></h4>
+<ul>
+<li>Better <code>pypi-dependencies</code> support, now install even more of the pypi packages.</li>
+<li><code>pixi add --pypi</code> command to add a pypi package to your project.</li>
+</ul>
+<h4 id="added_16">Added<a class="headerlink" href="#added_16" title="Permanent link">#</a></h4>
+<ul>
+<li>Use range (<code>&gt;=1.2.3, &lt;1.3</code>) when adding requirement, instead of <code>1.2.3.*</code> by @baszalmstra in https://github.com/prefix-dev/pixi/pull/536</li>
+<li>Update <code>rip</code> to fix  by @tdejager in https://github.com/prefix-dev/pixi/pull/543<ul>
+<li>Better Bytecode compilation (<code>.pyc</code>) support by @baszalmstra</li>
+<li>Recognize <code>.data</code> directory <code>headers</code> by @baszalmstra</li>
+</ul>
+</li>
+<li>Also print arguments given to a pixi task by @ruben-arts in https://github.com/prefix-dev/pixi/pull/545</li>
+<li>Add <code>pixi add --pypi</code> command by @ruben-arts in https://github.com/prefix-dev/pixi/pull/539</li>
+</ul>
+<h4 id="fixed_26">Fixed<a class="headerlink" href="#fixed_26" title="Permanent link">#</a></h4>
+<ul>
+<li>space in global install path by @ruben-arts in https://github.com/prefix-dev/pixi/pull/513</li>
+<li>Glibc version/family parsing by @baszalmstra in https://github.com/prefix-dev/pixi/pull/535</li>
+<li>Use <code>build</code> and <code>host</code> specs while getting the best version by @ruben-arts in https://github.com/prefix-dev/pixi/pull/538</li>
+</ul>
+<h4 id="miscellaneous_1">Miscellaneous<a class="headerlink" href="#miscellaneous_1" title="Permanent link">#</a></h4>
+<ul>
+<li>docs: add update manual by @ruben-arts in https://github.com/prefix-dev/pixi/pull/521</li>
+<li>add lightgbm demo by @partrita in https://github.com/prefix-dev/pixi/pull/492</li>
+<li>Update documentation link by @williamjamir in https://github.com/prefix-dev/pixi/pull/525</li>
+<li>Update Community.md by @jiaxiyang in https://github.com/prefix-dev/pixi/pull/527</li>
+<li>Add <code>winget</code> releaser by @ruben-arts in https://github.com/prefix-dev/pixi/pull/547</li>
+<li>Custom <code>rerun-sdk</code> example, force driven graph of <code>pixi.lock</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/548</li>
+<li>Better document pypi part by @ruben-arts in https://github.com/prefix-dev/pixi/pull/546</li>
+</ul>
+<h4 id="new-contributors_17">New Contributors<a class="headerlink" href="#new-contributors_17" title="Permanent link">#</a></h4>
+<ul>
+<li>@partrita made their first contribution in https://github.com/prefix-dev/pixi/pull/492</li>
+<li>@williamjamir made their first contribution in https://github.com/prefix-dev/pixi/pull/525</li>
+<li>@jiaxiyang made their first contribution in https://github.com/prefix-dev/pixi/pull/527</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.9.1...v0.10.0</p>
+<h3 id="091-2023-11-29">[0.9.1] - 2023-11-29<a class="headerlink" href="#091-2023-11-29" title="Permanent link">#</a></h3>
+<h4 id="highlights_20">Highlights<a class="headerlink" href="#highlights_20" title="Permanent link">#</a></h4>
+<ul>
+<li>PyPI's <code>scripts</code> are now fixed. For example: https://github.com/prefix-dev/pixi/issues/516</li>
+</ul>
+<h4 id="fixed_27">Fixed<a class="headerlink" href="#fixed_27" title="Permanent link">#</a></h4>
+<ul>
+<li>Remove attr (unused) and update all dependencies by @wolfv in https://github.com/prefix-dev/pixi/pull/510</li>
+<li>Remove empty folders on python uninstall by @baszalmstra in https://github.com/prefix-dev/pixi/pull/512</li>
+<li>Bump <code>rip</code> to add scripts by @baszalmstra in https://github.com/prefix-dev/pixi/pull/517</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.9.0...v0.9.1</p>
+<h3 id="090-2023-11-28">[0.9.0] - 2023-11-28<a class="headerlink" href="#090-2023-11-28" title="Permanent link">#</a></h3>
+<h4 id="highlights_21">Highlights<a class="headerlink" href="#highlights_21" title="Permanent link">#</a></h4>
+<ul>
+<li>You can now run <code>pixi remove</code>, <code>pixi rm</code> to remove a package from the environment</li>
+<li>Fix <code>pip install -e</code> issue that was created by release <code>v0.8.0</code> : https://github.com/prefix-dev/pixi/issues/507</li>
+</ul>
+<h4 id="added_17">Added<a class="headerlink" href="#added_17" title="Permanent link">#</a></h4>
+<ul>
+<li><code>pixi remove</code> command by @Wackyator in https://github.com/prefix-dev/pixi/pull/483</li>
+</ul>
+<h4 id="fixed_28">Fixed<a class="headerlink" href="#fixed_28" title="Permanent link">#</a></h4>
+<ul>
+<li>Install entrypoints for <code>[pypi-dependencies]</code> @baszalmstra in https://github.com/prefix-dev/pixi/pull/508</li>
+<li>Only uninstall pixi installed packages by @baszalmstra in https://github.com/prefix-dev/pixi/pull/509</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.8.0...v0.9.0</p>
+<h3 id="080-2023-11-27">[0.8.0] - 2023-11-27<a class="headerlink" href="#080-2023-11-27" title="Permanent link">#</a></h3>
+<h4 id="highlights_22">Highlights<a class="headerlink" href="#highlights_22" title="Permanent link">#</a></h4>
+<ul>
+<li>🎉🐍<code>[pypi-dependencies]</code> ALPHA RELEASE🐍🎉, you can now add PyPI dependencies to your pixi project.</li>
+<li>UX of <code>pixi run</code> has been improved with better errors and showing what task is run.</li>
+</ul>
+<blockquote>
+<p>[!NOTE]
+<code>[pypi-dependencies]</code> support is still incomplete, missing functionality is listed here: https://github.com/orgs/prefix-dev/projects/6.
+Our intent is not to have 100% feature parity with <code>pip</code>, our goal is that you only need <code>pixi</code> for both conda and pypi packages alike.</p>
+</blockquote>
+<h4 id="added_18">Added<a class="headerlink" href="#added_18" title="Permanent link">#</a></h4>
+<ul>
+<li>Bump <code>rattler</code> @ruben-arts in https://github.com/prefix-dev/pixi/pull/496</li>
+<li>Implement lock-file satisfiability with <code>pypi-dependencies</code> by @baszalmstra in https://github.com/prefix-dev/pixi/pull/494</li>
+<li>List pixi tasks when <code>command not found</code> is returned by @ruben-arts in https://github.com/prefix-dev/pixi/pull/488</li>
+<li>Show which command is run as a pixi task by @ruben-arts in https://github.com/prefix-dev/pixi/pull/491 &amp;&amp; https://github.com/prefix-dev/pixi/pull/493</li>
+<li>Add progress info to conda install by @baszalmstra in https://github.com/prefix-dev/pixi/pull/470</li>
+<li>Install pypi dependencies (alpha) by @baszalmstra in https://github.com/prefix-dev/pixi/pull/452</li>
+</ul>
+<h4 id="fixed_29">Fixed<a class="headerlink" href="#fixed_29" title="Permanent link">#</a></h4>
+<ul>
+<li>Add install scripts to <code>pixi.sh</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/458 &amp;&amp; https://github.com/prefix-dev/pixi/pull/459 &amp;&amp; https://github.com/prefix-dev/pixi/pull/460</li>
+<li>Fix <code>RECORD not found</code> issue by @baszalmstra in https://github.com/prefix-dev/pixi/pull/495</li>
+<li>Actually add to the <code>.gitignore</code> and give better errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/490</li>
+<li>Support macOS for <code>pypi-dependencies</code> by @baszalmstra in https://github.com/prefix-dev/pixi/pull/478</li>
+<li>Custom <code>pypi-dependencies</code> type by @ruben-arts in https://github.com/prefix-dev/pixi/pull/471</li>
+<li><code>pypi-dependencies</code> parsing errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/479</li>
+<li>Progress issues by @baszalmstra in https://github.com/prefix-dev/pixi/pull/4</li>
+</ul>
+<h4 id="miscellaneous_2">Miscellaneous<a class="headerlink" href="#miscellaneous_2" title="Permanent link">#</a></h4>
+<ul>
+<li>Example: <code>ctypes</code> by @liquidcarbon in https://github.com/prefix-dev/pixi/pull/441</li>
+<li>Mention the AUR package by @orhun in https://github.com/prefix-dev/pixi/pull/464</li>
+<li>Update <code>rerun</code> example by @ruben-arts in https://github.com/prefix-dev/pixi/pull/489</li>
+<li>Document <code>pypi-dependencies</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/481</li>
+<li>Ignore docs paths on rust workflow by @ruben-arts in https://github.com/prefix-dev/pixi/pull/482</li>
+<li>Fix flaky tests, run serially by @baszalmstra in https://github.com/prefix-dev/pixi/pull/477</li>
+</ul>
+<h4 id="new-contributors_18">New Contributors<a class="headerlink" href="#new-contributors_18" title="Permanent link">#</a></h4>
+<ul>
+<li>@liquidcarbon made their first contribution in https://github.com/prefix-dev/pixi/pull/441</li>
+<li>@orhun made their first contribution in https://github.com/prefix-dev/pixi/pull/464</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.7.0...v0.8.0</p>
+<h3 id="070-2023-11-14">[0.7.0] - 2023-11-14<a class="headerlink" href="#070-2023-11-14" title="Permanent link">#</a></h3>
+<h4 id="highlights_23">Highlights<a class="headerlink" href="#highlights_23" title="Permanent link">#</a></h4>
+<ul>
+<li>Channel priority: <code>channels = ["conda-forge", "pytorch"]</code> All packages found in conda-forge will not be taken from pytorch.</li>
+<li>Channel specific dependencies: <code>pytorch = { version="*", channel="pytorch"}</code></li>
+<li>Autocompletion on <code>pixi run &lt;TABTAB&gt;</code></li>
+<li>Moved all pixi documentation into this repo, try it with <code>pixi run docs</code>!</li>
+<li>Lots of new contributors!</li>
+</ul>
+<h4 id="added_19">Added<a class="headerlink" href="#added_19" title="Permanent link">#</a></h4>
+<ul>
+<li>Bump rattler to its newest version by @ruben-arts in https://github.com/prefix-dev/pixi/pull/395
+    * Some notable changes:
+        * Add channel priority (If a package is found in the first listed channel it will not be looked for in the other channels).
+        * Fix JLAP using wrong hash.
+        * Lockfile forward compatibility error.</li>
+<li>Add nushell support by @wolfv in https://github.com/prefix-dev/pixi/pull/360</li>
+<li>Autocomplete tasks on <code>pixi run</code> for <code>bash</code> and <code>zsh</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/390</li>
+<li>Add prefix location file to avoid copy error by @ruben-arts in https://github.com/prefix-dev/pixi/pull/422</li>
+<li>Channel specific dependencies <code>python = { version = "*" channel="conda-forge" }</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/439</li>
+</ul>
+<h4 id="changed_17">Changed<a class="headerlink" href="#changed_17" title="Permanent link">#</a></h4>
+<ul>
+<li><code>project.version</code> as optional field in the <code>pixi.toml</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/400</li>
+</ul>
+<h4 id="fixed_30">Fixed<a class="headerlink" href="#fixed_30" title="Permanent link">#</a></h4>
+<ul>
+<li>Deny unknown fields in <code>pixi.toml</code> to help users find errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/396</li>
+<li><code>install.sh</code> to create dot file if not present by @humphd in https://github.com/prefix-dev/pixi/pull/408</li>
+<li>Ensure order of repodata fetches by @baszalmstra in https://github.com/prefix-dev/pixi/pull/405</li>
+<li>Strip Linux binaries by @baszalmstra in https://github.com/prefix-dev/pixi/pull/414</li>
+<li>Sort <code>task list</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/431</li>
+<li>Fix <code>global install</code> path on windows by @ruben-arts in https://github.com/prefix-dev/pixi/pull/449</li>
+<li>Let <code>PIXI_BIN_PATH</code> use backslashes by @Hofer-Julian in https://github.com/prefix-dev/pixi/pull/442</li>
+<li>Print more informative error if created file is empty by @traversaro in https://github.com/prefix-dev/pixi/pull/447</li>
+</ul>
+<h4 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">#</a></h4>
+<ul>
+<li>Move to <code>mkdocs</code> with all documentation by @ruben-arts in https://github.com/prefix-dev/pixi/pull/435</li>
+<li>Fix typing errors by @FarukhS52 in https://github.com/prefix-dev/pixi/pull/426</li>
+<li>Add social cards to the pages by @ruben-arts in https://github.com/prefix-dev/pixi/pull/445</li>
+<li>Enhance README.md: Added Table of Contents, Grammar Improvements by @adarsh-jha-dev in https://github.com/prefix-dev/pixi/pull/421</li>
+<li>Adding conda-auth to community examples by @travishathaway in https://github.com/prefix-dev/pixi/pull/433</li>
+<li>Minor grammar correction by @tylere in https://github.com/prefix-dev/pixi/pull/406</li>
+<li>Make capitalization of tab titles consistent by @tylere in https://github.com/prefix-dev/pixi/pull/407</li>
+</ul>
+<h4 id="new-contributors_19">New Contributors<a class="headerlink" href="#new-contributors_19" title="Permanent link">#</a></h4>
+<ul>
+<li>@tylere made their first contribution in https://github.com/prefix-dev/pixi/pull/406</li>
+<li>@humphd made their first contribution in https://github.com/prefix-dev/pixi/pull/408</li>
+<li>@adarsh-jha-dev made their first contribution in https://github.com/prefix-dev/pixi/pull/421</li>
+<li>@FarukhS52 made their first contribution in https://github.com/prefix-dev/pixi/pull/426</li>
+<li>@travishathaway made their first contribution in https://github.com/prefix-dev/pixi/pull/433</li>
+<li>@traversaro made their first contribution in https://github.com/prefix-dev/pixi/pull/447</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.6.0...v0.7.0</p>
+<h3 id="060-2023-10-17">[0.6.0] - 2023-10-17<a class="headerlink" href="#060-2023-10-17" title="Permanent link">#</a></h3>
+<h4 id="highlights_24">Highlights<a class="headerlink" href="#highlights_24" title="Permanent link">#</a></h4>
+<p>This release fixes some bugs and adds the <code>--cwd</code> option to the tasks.</p>
+<h4 id="fixed_31">Fixed<a class="headerlink" href="#fixed_31" title="Permanent link">#</a></h4>
+<ul>
+<li>Improve shell prompts by @ruben-arts in https://github.com/prefix-dev/pixi/pull/385 https://github.com/prefix-dev/pixi/pull/388</li>
+<li>Change <code>--frozen</code> logic to error when there is no lockfile by @ruben-arts in https://github.com/prefix-dev/pixi/pull/373</li>
+<li>Don't remove the '.11' from 'python3.11' binary file name by @ruben-arts in https://github.com/prefix-dev/pixi/pull/366</li>
+</ul>
+<h4 id="changed_18">Changed<a class="headerlink" href="#changed_18" title="Permanent link">#</a></h4>
+<ul>
+<li>Update <code>rerun</code> example to v0.9.1 by @ruben-arts in https://github.com/prefix-dev/pixi/pull/389</li>
+</ul>
+<h4 id="added_20">Added<a class="headerlink" href="#added_20" title="Permanent link">#</a></h4>
+<ul>
+<li>Add the current working directory (<code>--cwd</code>) in <code>pixi tasks</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/380</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.5.0...v0.6.0</p>
+<h3 id="050-2023-10-03">[0.5.0] - 2023-10-03<a class="headerlink" href="#050-2023-10-03" title="Permanent link">#</a></h3>
+<h4 id="highlights_25">Highlights<a class="headerlink" href="#highlights_25" title="Permanent link">#</a></h4>
+<p>We rebuilt <code>pixi shell</code>, fixing the fact that your <code>rc</code> file would overrule the environment activation.</p>
+<h4 id="fixed_32">Fixed<a class="headerlink" href="#fixed_32" title="Permanent link">#</a></h4>
+<ul>
+<li>Change how <code>shell</code> works and make activation more robust by @wolfv in https://github.com/prefix-dev/pixi/pull/316</li>
+<li>Documentation: use quotes in cli by @pavelzw in https://github.com/prefix-dev/pixi/pull/367</li>
+</ul>
+<h4 id="added_21">Added<a class="headerlink" href="#added_21" title="Permanent link">#</a></h4>
+<ul>
+<li>Create or append to the <code>.gitignore</code> and <code>.gitattributes</code> files by @ruben-arts in https://github.com/prefix-dev/pixi/pull/359</li>
+<li>Add <code>--locked</code> and <code>--frozen</code> to getting an up-to-date prefix by @ruben-arts in https://github.com/prefix-dev/pixi/pull/363</li>
+<li>Documentation: improvement/update by @ruben-arts in https://github.com/prefix-dev/pixi/pull/355</li>
+<li>Example: how to build a docker image using <code>pixi</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/353 &amp; https://github.com/prefix-dev/pixi/pull/365</li>
+<li>Update to the newest rattler by @baszalmstra in https://github.com/prefix-dev/pixi/pull/361</li>
+<li>Periodic <code>cargo upgrade --all --incompatible</code> by @wolfv in https://github.com/prefix-dev/pixi/pull/358</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.4.0...v0.5.0</p>
+<h3 id="040-2023-09-22">[0.4.0] - 2023-09-22<a class="headerlink" href="#040-2023-09-22" title="Permanent link">#</a></h3>
+<h4 id="highlights_26">Highlights<a class="headerlink" href="#highlights_26" title="Permanent link">#</a></h4>
+<p>This release adds the start of a new cli command <code>pixi project</code> which will allow users to interact with the project configuration from the command line.</p>
+<h4 id="fixed_33">Fixed<a class="headerlink" href="#fixed_33" title="Permanent link">#</a></h4>
+<ul>
+<li>Align with latest rattler version <code>0.9.0</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/350</li>
+</ul>
+<h4 id="added_22">Added<a class="headerlink" href="#added_22" title="Permanent link">#</a></h4>
+<ul>
+<li>Add codespell (config, workflow) to catch typos + catch and fix some of those by @yarikoptic in https://github.com/prefix-dev/pixi/pull/329</li>
+<li>remove atty and use stdlib by @wolfv in https://github.com/prefix-dev/pixi/pull/337</li>
+<li><code>xtsci-dist</code> to Community.md by @HaoZeke in https://github.com/prefix-dev/pixi/pull/339</li>
+<li><code>ribasim</code> to Community.md by @Hofer-Julian in https://github.com/prefix-dev/pixi/pull/340</li>
+<li><code>LFortran</code> to Community.md by @wolfv in https://github.com/prefix-dev/pixi/pull/341</li>
+<li>Give tip to resolve virtual package issue by @ruben-arts in https://github.com/prefix-dev/pixi/pull/348</li>
+<li><code>pixi project channel add</code> subcommand by @baszalmstra and @ruben-arts in https://github.com/prefix-dev/pixi/pull/347</li>
+</ul>
+<h4 id="new-contributors_20">New Contributors<a class="headerlink" href="#new-contributors_20" title="Permanent link">#</a></h4>
+<ul>
+<li>@yarikoptic made their first contribution in https://github.com/prefix-dev/pixi/pull/329</li>
+<li>@HaoZeke made their first contribution in https://github.com/prefix-dev/pixi/pull/339</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.3.0...v0.4.0</p>
+<h3 id="030-2023-09-11">[0.3.0] - 2023-09-11<a class="headerlink" href="#030-2023-09-11" title="Permanent link">#</a></h3>
+<h4 id="highlights_27">Highlights<a class="headerlink" href="#highlights_27" title="Permanent link">#</a></h4>
+<p>This releases fixes a lot of issues encountered by the community as well as some awesome community contributions like the addition of <code>pixi global list</code> and <code>pixi global remove</code>.</p>
+<h4 id="fixed_34">Fixed<a class="headerlink" href="#fixed_34" title="Permanent link">#</a></h4>
+<ul>
+<li>Properly detect Cuda on linux using our build binaries, by @baszalmstra (<a href="https://github.com/mamba-org/rattler/pull/290">#290</a>)</li>
+<li>Package names are now case-insensitive, by @baszalmstra (<a href="https://github.com/mamba-org/rattler/pull/285">#285</a>)</li>
+<li>Issue with starts-with and compatibility operator, by @tdejager (<a href="https://github.com/mamba-org/rattler/pull/296">#296</a>)</li>
+<li>Lock files are now consistently sorted, by @baszalmstra (<a href="https://github.com/mamba-org/rattler/pull/295">#295</a> &amp; <a href="https://github.com/prefix-dev/pixi/pull/307">#307</a>)</li>
+<li>Improved xonsh detection and powershell env-var escaping, by @wolfv (<a href="https://github.com/mamba-org/rattler/pull/307">#307</a>)</li>
+<li><code>system-requirements</code> are properly filtered by platform, by @ruben-arts (<a href="https://github.com/prefix-dev/pixi/pull/299">#299</a>)</li>
+<li>Powershell completion install script, by @chawyehsu (<a href="https://github.com/prefix-dev/pixi/pull/325">#325</a>)</li>
+<li>Simplified and improved shell quoting, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/313">#313</a>)</li>
+<li>Issue where platform specific subdirs were required, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/333">#333</a>)</li>
+<li><code>thread 'tokio-runtime-worker' has overflowed its stack</code> issue, by @baszalmstra (<a href="https://github.com/idubrov/json-patch/pull/28">#28</a>)</li>
+</ul>
+<h4 id="added_23">Added<a class="headerlink" href="#added_23" title="Permanent link">#</a></h4>
+<ul>
+<li>Certificates from the OS certificate store are now used, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/310">#310</a>)</li>
+<li><code>pixi global list</code> and <code>pixi global remove</code> commands, by @cjfuller (<a href="https://github.com/prefix-dev/pixi/pull/318">#318</a>)</li>
+</ul>
+<h4 id="changed_19">Changed<a class="headerlink" href="#changed_19" title="Permanent link">#</a></h4>
+<ul>
+<li><code>--manifest-path</code> must point to a <code>pixi.toml</code> file, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/324">#324</a>)</li>
+</ul>
+<h3 id="020-2023-08-22">[0.2.0] - 2023-08-22<a class="headerlink" href="#020-2023-08-22" title="Permanent link">#</a></h3>
+<h4 id="highlights_28">Highlights<a class="headerlink" href="#highlights_28" title="Permanent link">#</a></h4>
+<ul>
+<li>Added <code>pixi search</code> command to search for packages, by @Wackyator. (<a href="https://github.com/prefix-dev/pixi/pull/244">#244</a>)</li>
+<li>Added target specific tasks, eg. <code>[target.win-64.tasks]</code>, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/269">#269</a>)</li>
+<li>Flaky install caused by the download of packages, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/281">#281</a>)</li>
+</ul>
+<h4 id="fixed_35">Fixed<a class="headerlink" href="#fixed_35" title="Permanent link">#</a></h4>
+<ul>
+<li>Install instructions, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/258">#258</a>)</li>
+<li>Typo in getting started, by @RaulPL. (<a href="https://github.com/prefix-dev/pixi/pull/266">#266</a>)</li>
+<li>Don't execute alias tasks, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/274">#274</a>)</li>
+</ul>
+<h4 id="added_24">Added<a class="headerlink" href="#added_24" title="Permanent link">#</a></h4>
+<ul>
+<li>Rerun example, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/236">#236</a>)</li>
+<li>Reduction of pixi's binary size, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/256">#256</a>)</li>
+<li>Updated pixi banner, including webp file for faster loading, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/257">#257</a>)</li>
+<li>Set linguist attributes for <code>pixi.lock</code> automatically, by @spenserblack. (<a href="https://github.com/prefix-dev/pixi/pull/265">#265</a>)</li>
+<li>Contribution manual for pixi, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/268">#268</a>)</li>
+<li>GitHub issue templates, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/271">#271</a>)</li>
+<li>Links to prefix.dev in readme, by @tdejager. (<a href="https://github.com/prefix-dev/pixi/pull/279">#279</a>)</li>
+</ul>
+<h3 id="010-2023-08-11">[0.1.0] - 2023-08-11<a class="headerlink" href="#010-2023-08-11" title="Permanent link">#</a></h3>
+<p>As this is our first <a href="https://semver.org">Semantic Versioning</a> release, we'll change from the prototype to the developing phase, as semver describes.
+A 0.x release could be anything from a new major feature to a breaking change where the 0.0.x releases will be bugfixes or small improvements.</p>
+<h4 id="highlights_29">Highlights<a class="headerlink" href="#highlights_29" title="Permanent link">#</a></h4>
+<ul>
+<li>Update to the latest <a href="https://github.com/mamba-org/rattler/releases/tag/v0.7.0">rattler</a> version, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/249">#249</a>)</li>
+</ul>
+<h4 id="fixed_36">Fixed<a class="headerlink" href="#fixed_36" title="Permanent link">#</a></h4>
+<ul>
+<li>Only add shebang to activation scripts on <code>unix</code> platforms, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/250">#250</a>)</li>
+<li>Use official crates.io releases for all dependencies, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/252">#252</a>)</li>
+</ul>
+<h3 id="008-2023-08-01">[0.0.8] - 2023-08-01<a class="headerlink" href="#008-2023-08-01" title="Permanent link">#</a></h3>
+<h4 id="highlights_30">Highlights<a class="headerlink" href="#highlights_30" title="Permanent link">#</a></h4>
+<ul>
+<li>Much better error printing using <code>miette</code>, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/211">#211</a>)</li>
+<li>You can now use pixi on <code>aarch64-linux</code>, by @pavelzw.  (<a href="https://github.com/prefix-dev/pixi/pull/233">#233</a>)</li>
+<li>Use the Rust port of <code>libsolv</code> as the default solver, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/209">#209</a>)</li>
+</ul>
+<h4 id="added_25">Added<a class="headerlink" href="#added_25" title="Permanent link">#</a></h4>
+<ul>
+<li>Add mention to <code>condax</code> in the docs, by @maresb. (<a href="https://github.com/prefix-dev/pixi/pull/207">#207</a>)</li>
+<li>Add <code>brew</code> installation instructions, by @wolfv. (<a href="https://github.com/prefix-dev/pixi/pull/208">#208</a>)</li>
+<li>Add <code>activation.scripts</code> to the <code>pixi.toml</code> to configure environment activation, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/217">#217</a>)</li>
+<li>Add <code>pixi upload</code> command to upload packages to <code>prefix.dev</code>, by @wolfv. (<a href="https://github.com/prefix-dev/pixi/pull/127">#127</a>)</li>
+<li>Add more metadata fields to the <code>pixi.toml</code>, by @wolfv. (<a href="https://github.com/prefix-dev/pixi/pull/218">#218</a>)</li>
+<li>Add <code>pixi task list</code> to show all tasks in the project, by @tdejager. (<a href="https://github.com/prefix-dev/pixi/pull/228">#228</a>)</li>
+<li>Add <code>--color</code> to configure the colors in the output, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/243">#243</a>)</li>
+<li>Examples, <a href="https://github.com/prefix-dev/pixi/tree/main/examples/ros2-nav2">ROS2 Nav2</a>, <a href="https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab">JupyterLab</a> and <a href="https://github.com/prefix-dev/pixi/tree/main/examples/qgis">QGIS</a>, by @ruben-arts.</li>
+</ul>
+<h4 id="fixed_37">Fixed<a class="headerlink" href="#fixed_37" title="Permanent link">#</a></h4>
+<ul>
+<li>Add trailing newline to <code>pixi.toml</code> and <code>.gitignore</code>, by @pavelzw. (<a href="https://github.com/prefix-dev/pixi/pull/216">#216</a>)</li>
+<li>Deny unknown fields and rename license-file in <code>pixi.toml</code>, by @wolfv. (<a href="https://github.com/prefix-dev/pixi/pull/220">#220</a>)</li>
+<li>Overwrite <code>PS1</code> variable when going into a <code>pixi shell</code>, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/201">#201</a>)</li>
+</ul>
+<h4 id="changed_20">Changed<a class="headerlink" href="#changed_20" title="Permanent link">#</a></h4>
+<ul>
+<li>Install environment when adding a dependency using <code>pixi add</code>, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/213">#213</a>)</li>
+<li>Improve and speedup CI, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/241">#241</a>)</li>
+</ul>
+<h3 id="007-2023-07-11">[0.0.7] - 2023-07-11<a class="headerlink" href="#007-2023-07-11" title="Permanent link">#</a></h3>
+<h4 id="highlights_31">Highlights<a class="headerlink" href="#highlights_31" title="Permanent link">#</a></h4>
+<ul>
+<li>Transitioned the <code>run</code> subcommand to use the <code>deno_task_shell</code> for improved cross-platform functionality. More details in the <a href="https://deno.land/manual@v1.35.0/tools/task_runner#task-runner">Deno Task Runner documentation</a>.</li>
+<li>Added an <code>info</code> subcommand to retrieve system-specific information understood by <code>pixi</code>.</li>
+</ul>
+<h4 id="breaking-changes">BREAKING CHANGES<a class="headerlink" href="#breaking-changes" title="Permanent link">#</a></h4>
+<ul>
+<li><code>[commands]</code> in the <code>pixi.toml</code> is now called <code>[tasks]</code>. (<a href="https://github.com/prefix-dev/pixi/pull/177">#177</a>)</li>
+</ul>
+<h4 id="added_26">Added<a class="headerlink" href="#added_26" title="Permanent link">#</a></h4>
+<ul>
+<li>The <code>pixi info</code> command to get more system information by @wolfv in (<a href="https://github.com/prefix-dev/pixi/pull/158">#158</a>)</li>
+<li>Documentation on how to use the cli by @ruben-arts in (<a href="https://github.com/prefix-dev/pixi/pull/160">#160</a>)</li>
+<li>Use the <code>deno_task_shell</code> to execute commands in <code>pixi run</code> by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/173">#173</a>)</li>
+<li>Use new solver backend from rattler by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/178">#178</a>)</li>
+<li>The <code>pixi command</code> command to the cli by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/177">#177</a>)</li>
+<li>Documentation on how to use the <code>pixi auth</code> command by @wolfv in (<a href="https://github.com/prefix-dev/pixi/pull/183">#183</a>)</li>
+<li>Use the newest rattler 0.6.0 by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/185">#185</a>)</li>
+<li>Build with pixi section to the documentation by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/196">#196</a>)</li>
+</ul>
+<h4 id="fixed_38">Fixed<a class="headerlink" href="#fixed_38" title="Permanent link">#</a></h4>
+<ul>
+<li>Running tasks sequentially when using <code>depends_on</code> by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/161">#161</a>)</li>
+<li>Don't add <code>PATH</code> variable where it is already set by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/169">#169</a>)</li>
+<li>Fix README by @Hofer-Julian in (<a href="https://github.com/prefix-dev/pixi/pull/182">#182</a>)</li>
+<li>Fix Ctrl+C signal in <code>pixi run</code> by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/190">#190</a>)</li>
+<li>Add the correct license information to the lockfiles by @wolfv in (<a href="https://github.com/prefix-dev/pixi/pull/191">#191</a>)</li>
+</ul>
+<h3 id="006-2023-06-30">[0.0.6] - 2023-06-30<a class="headerlink" href="#006-2023-06-30" title="Permanent link">#</a></h3>
+<h4 id="highlights_32">Highlights<a class="headerlink" href="#highlights_32" title="Permanent link">#</a></h4>
+<p>Improving the reliability is important to us, so we added an integration testing framework, we can now test as close as possible to the CLI level using <code>cargo</code>.</p>
+<h4 id="added_27">Added<a class="headerlink" href="#added_27" title="Permanent link">#</a></h4>
+<ul>
+<li>An integration test harness, to test as close as possible to the user experience but in rust. (<a href="https://github.com/prefix-dev/pixi/pull/138">#138</a>, <a href="https://github.com/prefix-dev/pixi/pull/140">#140</a>, <a href="https://github.com/prefix-dev/pixi/pull/156">#156</a>)</li>
+<li>Add different levels of dependencies in preparation for <code>pixi build</code>, allowing <code>host-</code> and <code>build-</code> <code>dependencies</code> (<a href="https://github.com/prefix-dev/pixi/pull/149">#149</a>)</li>
+</ul>
+<h4 id="fixed_39">Fixed<a class="headerlink" href="#fixed_39" title="Permanent link">#</a></h4>
+<ul>
+<li>Use correct folder name on pixi init (<a href="https://github.com/prefix-dev/pixi/pull/144">#144</a>)</li>
+<li>Fix windows cli installer (<a href="https://github.com/prefix-dev/pixi/pull/152">#152</a>)</li>
+<li>Fix global install path variable (<a href="https://github.com/prefix-dev/pixi/pull/147">#147</a>)</li>
+<li>Fix macOS binary notarization (<a href="https://github.com/prefix-dev/pixi/pull/153">#153</a>)</li>
+</ul>
+<h3 id="005-2023-06-26">[0.0.5] - 2023-06-26<a class="headerlink" href="#005-2023-06-26" title="Permanent link">#</a></h3>
+<p>Fixing Windows installer build in CI. (<a href="https://github.com/prefix-dev/pixi/pull/145">#145</a>)</p>
+<h3 id="004-2023-06-26">[0.0.4] - 2023-06-26<a class="headerlink" href="#004-2023-06-26" title="Permanent link">#</a></h3>
+<h4 id="highlights_33">Highlights<a class="headerlink" href="#highlights_33" title="Permanent link">#</a></h4>
+<p>A new command, <code>auth</code> which can be used to authenticate the host of the package channels.
+A new command, <code>shell</code> which can be used to start a shell in the pixi environment of a project.
+A refactor of the <code>install</code> command which is changed to <code>global install</code> and the <code>install</code> command now installs a pixi project if you run it in the directory.
+Platform specific dependencies using <code>[target.linux-64.dependencies]</code> instead of <code>[dependencies]</code> in the <code>pixi.toml</code></p>
+<p>Lots and lots of fixes and improvements to make it easier for this user, where bumping to the new version of <a href="https://github.com/mamba-org/rattler/releases/tag/v0.4.0"><code>rattler</code></a>
+helped a lot.</p>
+<h4 id="added_28">Added<a class="headerlink" href="#added_28" title="Permanent link">#</a></h4>
+<ul>
+<li>Platform specific dependencies and helpful error reporting on <code>pixi.toml</code> issues(<a href="https://github.com/prefix-dev/pixi/pull/111">#111</a>)</li>
+<li>Windows installer, which is very useful for users that want to start using pixi on windows. (<a href="https://github.com/prefix-dev/pixi/pull/114">#114</a>)</li>
+<li><code>shell</code> command to use the pixi environment without <code>pixi run</code>. (<a href="https://github.com/prefix-dev/pixi/pull/116">#116</a>)</li>
+<li>Verbosity options using <code>-v, -vv, -vvv</code> (<a href="https://github.com/prefix-dev/pixi/pull/118">#118</a>)</li>
+<li><code>auth</code> command to be able to login or logout of a host like <code>repo.prefix.dev</code> if you're using private channels. (<a href="https://github.com/prefix-dev/pixi/pull/120">#120</a>)</li>
+<li>New examples: CPP sdl: <a href="https://github.com/prefix-dev/pixi/pull/121">#121</a>, Opencv camera calibration <a href="https://github.com/prefix-dev/pixi/pull/125">#125</a></li>
+<li>Apple binary signing and notarization. (<a href="https://github.com/prefix-dev/pixi/pull/137">#137</a>)</li>
+</ul>
+<h4 id="changed_21">Changed<a class="headerlink" href="#changed_21" title="Permanent link">#</a></h4>
+<ul>
+<li><code>pixi install</code> moved to <code>pixi global install</code> and <code>pixi install</code> became the installation of a project using the <code>pixi.toml</code> (<a href="https://github.com/prefix-dev/pixi/pull/124">#124</a>)</li>
+</ul>
+<h4 id="fixed_40">Fixed<a class="headerlink" href="#fixed_40" title="Permanent link">#</a></h4>
+<ul>
+<li><code>pixi run</code> uses default shell (<a href="https://github.com/prefix-dev/pixi/pull/119">#119</a>)</li>
+<li><code>pixi add</code> command is fixed. (<a href="https://github.com/prefix-dev/pixi/pull/132">#132</a>)</li>
+</ul>
+<ul>
+<li>Community issues fixed: <a href="https://github.com/prefix-dev/pixi/issues/70">#70</a>, <a href="https://github.com/prefix-dev/pixi/issues/72">#72</a>,  <a href="https://github.com/prefix-dev/pixi/issues/90">#90</a>, <a href="https://github.com/prefix-dev/pixi/issues/92">#92</a>, <a href="https://github.com/prefix-dev/pixi/issues/94">#94</a>, <a href="https://github.com/prefix-dev/pixi/issues/96">#96</a></li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var tab,labels=set.querySelector(".tabbed-labels");for(tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <!--
+  Copyright (c) 2016-2023 Martin Donath <martin.donath@squidfunk.com>
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to
+  deal in the Software without restriction, including without limitation the
+  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+  sell copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+  IN THE SOFTWARE.
+-->
+
+<!-- Footer -->
+<footer class="md-footer">
+    <!-- Link to previous and/or next page -->
+    
+      
+        
+        <nav
+          class="md-footer__inner md-grid"
+          aria-label="Footer"
+          
+        >
+
+          <!-- Link to previous page -->
+          
+            
+            <a
+              href="../switching_from/conda/"
+              class="md-footer__link md-footer__link--prev"
+              aria-label="Previous: Conda/Mamba"
+            >
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+              </div>
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                <div class="md-ellipsis">
+                  Conda/Mamba
+                </div>
+              </div>
+            </a>
+          
+
+          <!-- Link to next page -->
+          
+            
+            <a
+              href="../ide_integration/jupyterlab/"
+              class="md-footer__link md-footer__link--next"
+              aria-label="Next: JupyterLab"
+            >
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                <div class="md-ellipsis">
+                  JupyterLab
+                </div>
+              </div>
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
+              </div>
+            </a>
+          
+        </nav>
+      
+    
+
+    <!-- Further information -->
+    <div class="md-footer-meta md-typeset">
+      <div class="md-footer-meta__inner md-grid">
+        <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+
+        <!-- prefix logo -->
+        <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
+            <a href="https://prefix.dev" target="_blank">
+                <img src="../assets/logo_dark.svg" alt="">
+            </a>
+        </div>
+
+        <!-- Social links -->
+        
+          <div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://twitter.com/prefix_dev" target="_blank" rel="noopener" title="twitter.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M459.37 151.716c.325 4.548.325 9.097.325 13.645 0 138.72-105.583 298.558-298.558 298.558-59.452 0-114.68-17.219-161.137-47.106 8.447.974 16.568 1.299 25.34 1.299 49.055 0 94.213-16.568 130.274-44.832-46.132-.975-84.792-31.188-98.112-72.772 6.498.974 12.995 1.624 19.818 1.624 9.421 0 18.843-1.3 27.614-3.573-48.081-9.747-84.143-51.98-84.143-102.985v-1.299c13.969 7.797 30.214 12.67 47.431 13.319-28.264-18.843-46.781-51.005-46.781-87.391 0-19.492 5.197-37.36 14.294-52.954 51.655 63.675 129.3 105.258 216.365 109.807-1.624-7.797-2.599-15.918-2.599-24.04 0-57.828 46.782-104.934 104.934-104.934 30.213 0 57.502 12.67 76.67 33.137 23.715-4.548 46.456-13.32 66.599-25.34-7.798 24.366-24.366 44.833-46.132 57.827 21.117-2.273 41.584-8.122 60.426-16.243-14.292 20.791-32.161 39.308-52.628 54.253z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://www.linkedin.com/company/prefix-dev" target="_blank" rel="noopener" title="www.linkedin.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3zM135.4 416H69V202.2h66.5V416zm-33.2-243c-21.3 0-38.5-17.3-38.5-38.5S80.9 96 102.2 96c21.2 0 38.5 17.3 38.5 38.5 0 21.3-17.2 38.5-38.5 38.5zm282.1 243h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9V416z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/prefix-dev" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
+    </a>
+  
+</div>
+        
+      </div>
+    </div>
+  </footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.dd8806f2.min.js"></script>
+      
+    
+  </body>
+</html>
