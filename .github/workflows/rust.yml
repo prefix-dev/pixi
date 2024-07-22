@@ -393,13 +393,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
-
-
-
   downstream_tests:
     needs:
         - build
