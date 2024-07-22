@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.26.0] - 2024-07-19
+#### ✨ Highlights
+- Specify how pixi **pins your dependencies** with the `pinning-strategy` in the config. e.g. `semver` -> `>=1.2.3,<2` and `no-pin` -> `*`)  [#1516](https://github.com/prefix-dev/pixi/pull/1516)
+- Specify how pixi **solves multiple channels** with `channel-priority` in the manifest. [#1631](https://github.com/prefix-dev/pixi/pull/1631)
+#### Added
+
+- Add short options to config location flags by @ruben-arts in [#1586](https://github.com/prefix-dev/pixi/pull/1586)
+- Add a file guard to indicate if an environment is being installed by @baszalmstra in [#1593](https://github.com/prefix-dev/pixi/pull/1593)
+- Add `pinning-strategy` to the configuration by @ruben-arts in [#1516](https://github.com/prefix-dev/pixi/pull/1516)
+- Add `channel-priority` to the manifest and solve by @ruben-arts in [#1631](https://github.com/prefix-dev/pixi/pull/1631)
+- Add `nushell` completion by @Hofer-Julian in [#1599](https://github.com/prefix-dev/pixi/pull/1599)
+- Add `nushell` completions for `pixi run` by @Hofer-Julian in [#1627](https://github.com/prefix-dev/pixi/pull/1627)
+- Add completion for `pixi run --environment` for nushell by @Hofer-Julian in [#1636](https://github.com/prefix-dev/pixi/pull/1636)
+
+
+#### Changed
+
+- Upgrade uv 0.2.18 by @tdejager in [#1540](https://github.com/prefix-dev/pixi/pull/1540)
+- Refactor `pyproject.toml` parser by @nichmor in [#1592](https://github.com/prefix-dev/pixi/pull/1592)
+- Interactive warning for packages in `pixi global install` by @ruben-arts in [#1626](https://github.com/prefix-dev/pixi/pull/1626)
+
+#### Documentation
+
+- Add WASM example with JupyterLite by @wolfv in [#1623](https://github.com/prefix-dev/pixi/pull/1623)
+- Added LLM example by @ytjhai in [#1545](https://github.com/prefix-dev/pixi/pull/1545)
+- Add note to mark directory as excluded in pixi-pycharm by @pavelzw in [#1579](https://github.com/prefix-dev/pixi/pull/1579)
+- Add changelog to docs by @vigneshmanick in [#1574](https://github.com/prefix-dev/pixi/pull/1574)
+- Updated the values of the system requirements by @tdejager in [#1575](https://github.com/prefix-dev/pixi/pull/1575)
+- Tell cargo install which bin to install by @ruben-arts in [#1584](https://github.com/prefix-dev/pixi/pull/1584)
+- Update conflict docs for `cargo add` by @Hofer-Julian in [#1600](https://github.com/prefix-dev/pixi/pull/1600)
+- Revert "Update conflict docs for `cargo add` " by @Hofer-Julian in [#1605](https://github.com/prefix-dev/pixi/pull/1605)
+- Add reference documentation for the exec command by @baszalmstra in [#1587](https://github.com/prefix-dev/pixi/pull/1587)
+- Add transitioning docs for `poetry` and `conda` by @ruben-arts in [#1624](https://github.com/prefix-dev/pixi/pull/1624)
+- Add pixi-pack by @pavelzw in [#1629](https://github.com/prefix-dev/pixi/pull/1629)
+- Use '-' instead of '_' for package name by @olivier-lacroix in [#1628](https://github.com/prefix-dev/pixi/pull/1628)
+
+
+#### Fixed
+
+- Flaky task test by @tdejager in [#1581](https://github.com/prefix-dev/pixi/pull/1581)
+- Pass command line arguments verbatim by @baszalmstra in [#1582](https://github.com/prefix-dev/pixi/pull/1582)
+- Run clippy on all targets by @Hofer-Julian in [#1588](https://github.com/prefix-dev/pixi/pull/1588)
+- Pre-commit install pixi task by @Hofer-Julian in [#1590](https://github.com/prefix-dev/pixi/pull/1590)
+- Add `clap_complete_nushell` to dependencies by @Hofer-Julian in [#1625](https://github.com/prefix-dev/pixi/pull/1625)
+- Write to `stdout` for machine readable output by @Hofer-Julian in [#1639](https://github.com/prefix-dev/pixi/pull/1639)
+
+
+#### Refactor
+
+- Migrate to workspace by @baszalmstra in [#1597](https://github.com/prefix-dev/pixi/pull/1597)
+
+#### Removed
+
+- Remove double manifest warning by @tdejager in [#1580](https://github.com/prefix-dev/pixi/pull/1580)
+
+#### New Contributors
+* @ytjhai made their first contribution in [#1545](https://github.com/prefix-dev/pixi/pull/1545)
+
 ### [0.25.0] - 2024-07-05
 #### ✨ Highlights
 - `pixi exec` command, execute commands in temporary environments, useful for testing in short-lived sessions.
