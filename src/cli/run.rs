@@ -27,11 +27,10 @@ use tracing::Level;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true, arg_required_else_help = true)]
+#[clap(trailing_var_arg = true)]
 pub struct Args {
     /// The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.
-    #[arg(required = true)]
-    pub task: Vec<String>,
+    pub task: Option<Vec<String>>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
@@ -98,7 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, args.task)?;
+    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, determine_task(&args.task, &project)?)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -208,13 +207,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
+            explicit_environment.get_filtered_task_names()
         } else {
             project
                 .environments()
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
-                .flat_map(|env| env.get_filtered_tasks())
+                .flat_map(|env| env.get_filtered_task_names())
                 .collect()
         };
 
@@ -341,4 +340,47 @@ fn disambiguate_task_interactive<'p>(
         .interact_opt()
         .map_or(None, identity)
         .map(|idx| problem.environments[idx].clone())
+}
+
+/// Function to determine the task to run, spawn a dialog if no task is provided.
+fn determine_task(task: &Option<Vec<String>>, project: &Project) -> miette::Result<Vec<String>> {
+    if let Some(task) = task {
+        Ok(task.clone())
+    } else {
+        let theme = ColorfulTheme {
+            active_item_style: console::Style::new().for_stderr().magenta(),
+            ..ColorfulTheme::default()
+        };
+        let runnable_tasks: Vec<(TaskName, String)> = project
+            .environments()
+            .into_iter()
+            .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
+            .flat_map(|env| env.get_filtered_tasks())
+            .map(|(task_name, task)| (task_name, task.description().unwrap_or_else(|| "").to_string()))
+            .unique()
+            .sorted()
+            .collect_vec();
+
+        // Get longest task name for padding if there is any description
+        let width = if runnable_tasks.iter().any(|(_, desc)| !desc.is_empty()) {
+            runnable_tasks.iter().map(|(name, _)| name.fancy_display().to_string().len()).max().unwrap_or(0) + 2
+        } else {
+            0
+        };
+
+        // Format the items
+        let formatted_items = runnable_tasks.iter()
+            .map(|(name, desc)| format!("{:<width$}{}", name.fancy_display().to_string(), desc, width = width))
+            .collect::<Vec<String>>();
+
+        dialoguer::Select::with_theme(&theme)
+            .with_prompt("Please select a task to run:")
+            .items(&formatted_items)
+            .default(0)
+            .interact_opt()
+            .map(|idx_opt| match idx_opt {
+                Some(idx) => Ok(vec![runnable_tasks[idx].clone().0.to_string()]),
+                None => Err(miette::miette!("Task selection cancelled by user."))
+            }).into_diagnostic()?
+    }
 }

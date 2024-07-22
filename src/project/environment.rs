@@ -168,7 +168,7 @@ impl<'p> Environment<'p> {
 
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+    pub fn get_filtered_task_names(&self) -> HashSet<TaskName> {
         self.tasks(Some(self.best_platform()))
             .into_iter()
             .flat_map(|tasks| {
@@ -181,6 +181,24 @@ impl<'p> Environment<'p> {
                 })
             })
             .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    /// Return all tasks available for the given environment
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self) -> HashMap<TaskName, Task> {
+        self.tasks(Some(self.best_platform()))
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, value)| {
+                    if !key.as_str().starts_with('_') {
+                        Some((key, value))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(|(key, value)| (key.to_owned(), value.clone()))
             .collect()
     }
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
@@ -416,7 +434,7 @@ mod tests {
         )
         .unwrap();
 
-        let task = manifest.default_environment().get_filtered_tasks();
+        let task = manifest.default_environment().get_filtered_task_names();
 
         assert_eq!(task.len(), 1);
         assert!(task.contains(&"foo".into()));

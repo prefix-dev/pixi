@@ -3,6 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 use std::borrow::Cow;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
@@ -51,7 +52,12 @@ impl From<String> for TaskName {
 }
 impl From<TaskName> for String {
     fn from(task_name: TaskName) -> Self {
-        task_name.0 // Assuming TaskName is a tuple struct with the first element as String
+        task_name.0
+    }
+}
+impl fmt::Display for TaskName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -156,7 +162,7 @@ impl Task {
             Task::Plain(_) => None,
             Task::Custom(_) => None,
             Task::Execute(exe) => exe.description.as_deref(),
-            Task::Alias(_) => None,
+            Task::Alias(alias) => alias.description.as_deref(),
         }
     }
 

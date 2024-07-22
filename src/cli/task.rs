@@ -400,7 +400,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 .transpose()?;
             let available_tasks: HashSet<TaskName> =
                 if let Some(explicit_environment) = explicit_environment {
-                    explicit_environment.get_filtered_tasks()
+                    explicit_environment.get_filtered_task_names()
                 } else {
                     project
                         .environments()
@@ -408,7 +408,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         .filter(|env| {
                             verify_current_platform_has_required_virtual_packages(env).is_ok()
                         })
-                        .flat_map(|env| env.get_filtered_tasks())
+                        .flat_map(|env| env.get_filtered_task_names())
                         .collect()
                 };
 
