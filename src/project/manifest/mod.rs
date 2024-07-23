@@ -3042,7 +3042,7 @@ bar = "*"
 
         "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
-        let build = manifest.parsed.build.get(0).unwrap();
+        let build = manifest.parsed.build.first().unwrap();
         assert_eq!(build.name, Some("conda".to_string()));
         assert_eq!(
             build
@@ -3062,18 +3062,16 @@ bar = "*"
         );
         assert_eq!(
             build.task,
-            Task::Execute {
-                0: Execute {
-                    cmd: CmdArgs::Single("pixi-build-conda".to_string()),
-                    inputs: Some(vec!["*.py".to_string()]),
-                    outputs: None,
-                    depends_on: vec![],
-                    cwd: None,
-                    env: None,
-                    description: None,
-                    clean_env: false,
-                },
-            }
+            Task::Execute(Execute {
+                cmd: CmdArgs::Single("pixi-build-conda".to_string()),
+                inputs: Some(vec!["*.py".to_string()]),
+                outputs: None,
+                depends_on: vec![],
+                cwd: None,
+                env: None,
+                description: None,
+                clean_env: false,
+            })
         );
     }
 }
