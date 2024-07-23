@@ -91,7 +91,6 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = "2.5.0"
 uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
@@ -149,7 +148,6 @@ clap = { workspace = true, features = ["derive", "usage", "wrap_help", "std", "c
 clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
-concat-idents = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
@@ -183,7 +181,6 @@ pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 platform-tags = { workspace = true }
 pypi-types = { workspace = true }
-pyproject-toml = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
@@ -195,19 +192,16 @@ rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
-requirements-txt = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "macos-system-configuration"] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
-serde-untagged = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
 serde_yaml = { workspace = true }
 shlex = { workspace = true }
-spdx = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
@@ -220,7 +214,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true }
 uv-auth = { workspace = true }
-uv-build = { workspace = true }
 uv-cache = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
@@ -234,6 +227,8 @@ uv-toolchain = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
+
+pixi_manifest = { path = "crates/pixi_manifest" }
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true, features = [

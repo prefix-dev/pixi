@@ -1,3 +1,4 @@
+use crate::fancy_display::FancyDisplay;
 use crate::{project::has_features::HasFeatures, Project};
 use clap::Parser;
 

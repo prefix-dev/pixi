@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/document.rs
+assertion_line: 604
+expression: source.to_string()
+---
+[tool.pixi.environments]
+foo = []
+bar = ["not-default"]
+baz = { features = ["default"], solve-group = "group1" }
+foobar = { features = ["default"], solve-group = "group1", no-default-feature = true }
+barfoo = { features = ["default"], no-default-feature = true }

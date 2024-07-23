@@ -1,13 +1,14 @@
 /// Command to clean the parts of your system which are touched by pixi.
-use crate::{config, consts, EnvironmentName, Project};
+use crate::{config, consts, Project};
+use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
 
 use crate::progress::{global_multi_progress, long_running_progress_style};
 use clap::Parser;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]

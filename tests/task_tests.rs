@@ -1,8 +1,8 @@
 use crate::common::PixiControl;
 use pixi::cli::run::Args;
 use pixi::task::TaskName;
-use pixi::FeatureName;
-use pixi::{CmdArgs, Task};
+use pixi_manifest::task::CmdArgs;
+use pixi_manifest::{FeatureName, Task};
 use rattler_conda_types::Platform;
 use std::fs;
 use std::path::PathBuf;

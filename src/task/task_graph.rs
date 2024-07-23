@@ -8,6 +8,10 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_manifest::{
+    task::{CmdArgs, Custom},
+    Task, TaskName,
+};
 use thiserror::Error;
 
 use crate::{
@@ -20,7 +24,7 @@ use crate::{
     task::{
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
-        CmdArgs, Custom, Task, TaskDisambiguation, TaskName,
+        TaskDisambiguation,
     },
     Project,
 };
@@ -55,7 +59,7 @@ impl fmt::Display for TaskNode<'_> {
         write!(
             f,
             "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
-            self.name.clone().unwrap_or("CUSTOM COMMAND".into()).0,
+            self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
             self.run_environment.name(),
             self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
             self.format_additional_args(),
@@ -148,7 +152,7 @@ impl<'p> TaskGraph<'p> {
         };
 
         if let Some(name) = args.first() {
-            match search_envs.find_task(TaskName(name.clone()), FindTaskSource::CmdArgs) {
+            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs) {
                 Err(FindTaskError::MissingTask(_)) => {}
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err))
@@ -342,12 +346,12 @@ pub enum TaskGraphError {
 mod test {
     use std::path::Path;
 
-    use rattler_conda_types::Platform;
-
     use crate::{
         task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
-        EnvironmentName, Project,
+        Project,
     };
+    use pixi_manifest::EnvironmentName;
+    use rattler_conda_types::Platform;
 
     fn commands_in_order(
         project_str: &str,

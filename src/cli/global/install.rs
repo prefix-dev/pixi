@@ -29,9 +29,9 @@ use super::common::{
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the package(s) that is to be installed.
+    /// Specifies the packages that are to be installed.
     #[arg(num_args = 1..)]
-    package: Vec<String>,
+    packages: Vec<String>,
 
     /// Represents the channels from which the package will be installed.
     /// Multiple channels can be specified by using this field multiple times.
@@ -53,7 +53,7 @@ pub struct Args {
 
 impl HasSpecs for Args {
     fn packages(&self) -> Vec<&str> {
-        self.package.iter().map(AsRef::as_ref).collect()
+        self.packages.iter().map(AsRef::as_ref).collect()
     }
 }
 

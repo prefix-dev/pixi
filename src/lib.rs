@@ -21,17 +21,10 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod uv_reporter;
 
+mod fancy_display;
 pub mod pypi_mapping;
 mod repodata;
 
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
-pub use project::{
-    has_features::HasFeatures,
-    manifest::{EnvironmentName, FeatureName},
-    DependencyType, Project, SpecType,
-};
-pub use task::{
-    CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,
-    TaskDisambiguation, TaskExecutionError, TaskGraph, TaskGraphError,
-};
+pub use project::{has_features::HasFeatures, DependencyType, Project};

@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
+assertion_line: 621
+expression: as_pypi_req.to_string()
+---
+"*"

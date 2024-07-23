@@ -1,9 +1,11 @@
-use crate::project::manifest::EnvironmentName;
-use crate::task::TaskName;
+use std::fmt::{Display, Formatter};
+
+use crate::fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
-use std::fmt::{Display, Formatter};
 use thiserror::Error;
+
+use pixi_manifest::{EnvironmentName, TaskName};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("could not find the task '{0}'", task_name.fancy_display())]
@@ -20,11 +22,7 @@ pub struct AmbiguousTaskError {
 
 impl Display for AmbiguousTaskError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the task '{}' is ambiguous",
-            &self.task_name.fancy_display()
-        )
+        write!(f, "the task '{}' is ambiguous", &self.task_name)
     }
 }
 
@@ -35,7 +33,7 @@ impl Diagnostic for AmbiguousTaskError {
             self.environments.iter().map(|env| env.as_str()).format(", "),
             env!("CARGO_PKG_NAME"),
             self.environments.first().expect("there should be at least two environment"),
-            task_name=&self.task_name.fancy_display()
+            task_name=&self.task_name
         )))
     }
 }

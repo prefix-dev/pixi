@@ -6,25 +6,25 @@ use std::{
     path::PathBuf,
 };
 
-use ahash::HashMap;
-use clap::Parser;
-use indexmap::IndexMap;
-use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
-use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
-use serde::Serialize;
-use serde_json::Value;
-use tabwriter::TabWriter;
-
 use crate::{
     config::ConfigCli,
     consts,
     consts::{CondaEmoji, PypiEmoji},
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
-    EnvironmentName, HasFeatures, Project,
+    HasFeatures, Project,
 };
+use ahash::HashMap;
+use clap::Parser;
+use indexmap::IndexMap;
+use itertools::{Either, Itertools};
+use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use pixi_manifest::EnvironmentName;
+use rattler_conda_types::Platform;
+use rattler_lock::{LockFile, Package};
+use serde::Serialize;
+use serde_json::Value;
+use tabwriter::TabWriter;
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
