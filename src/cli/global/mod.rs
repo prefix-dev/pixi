@@ -1,21 +1,23 @@
 use clap::Parser;
 
+mod add;
 mod common;
 mod install;
 mod list;
 mod manifest;
 mod remove;
+mod sync;
 mod upgrade;
 mod upgrade_all;
 
 #[derive(Debug, Parser)]
 pub enum Command {
-    // BREAK: This should only have the `i` as an alias
-    #[clap(visible_alias = "i", alias = "a")]
+    #[clap(visible_alias = "i")]
     Install(install::Args),
-    // BREAK: This should only have the `rm` as an alias
-    #[clap(visible_alias = "rm", alias = "r")]
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
+    Add(add::Args),
+    Sync(sync::Args),
     #[clap(visible_alias = "ls")]
     List(list::Args),
     #[clap(visible_alias = "u")]
@@ -41,6 +43,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Install(args) => install::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,
+        Command::Add(args) => add::execute(args).await?,
+        Command::Sync(args) => sync::execute(args).await?,
         Command::List(args) => list::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
