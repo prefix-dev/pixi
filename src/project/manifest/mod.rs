@@ -774,6 +774,11 @@ impl Manifest {
     {
         self.parsed.solve_groups.find(name)
     }
+
+    /// Returns a build section by name.
+    pub fn build(&self, name: String) -> Option<&Build> {
+        self.parsed.build.iter().find(|b| b.name == name)
+    }
 }
 
 /// Converts an array of Platforms to a non-empty Vec of Option<Platform>

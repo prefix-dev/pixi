@@ -13,6 +13,7 @@ use super::util::IndicatifWriter;
 use crate::{progress, progress::global_multi_progress};
 
 pub mod add;
+pub mod build;
 pub mod clean;
 pub mod completion;
 pub mod config;
@@ -95,6 +96,7 @@ pub enum Command {
     Install(install::Args),
     Update(update::Args),
 
+    // Running commands
     #[clap(visible_alias = "r")]
     Run(run::Args),
     #[clap(visible_alias = "x")]
@@ -102,6 +104,10 @@ pub enum Command {
     #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
+
+    // Building
+    #[clap(visible_alias = "b")]
+    Build(build::Args),
 
     // Project modification commands
     Project(project::Args),
@@ -265,6 +271,7 @@ pub async fn execute() -> miette::Result<()> {
 /// Execute the actual command
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
+        Command::Build(cmd) => build::execute(cmd).await,
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
