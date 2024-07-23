@@ -97,7 +97,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, determine_task(&args.task, &project)?)?;
+    let task_graph = TaskGraph::from_cmd_args(
+        &project,
+        &search_environment,
+        determine_task(&args.task, &project)?,
+    )?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -356,21 +360,34 @@ fn determine_task(task: &Option<Vec<String>>, project: &Project) -> miette::Resu
             .into_iter()
             .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
             .flat_map(|env| env.get_filtered_tasks())
-            .map(|(task_name, task)| (task_name, task.description().unwrap_or_else(|| "").to_string()))
+            .map(|(task_name, task)| (task_name, task.description().unwrap_or("").to_string()))
             .unique()
             .sorted()
             .collect_vec();
 
-        // Get longest task name for padding if there is any description
+        // Get the longest task name for padding if there is any description
         let width = if runnable_tasks.iter().any(|(_, desc)| !desc.is_empty()) {
-            runnable_tasks.iter().map(|(name, _)| name.fancy_display().to_string().len()).max().unwrap_or(0) + 2
+            runnable_tasks
+                .iter()
+                .map(|(name, _)| name.fancy_display().to_string().len())
+                .max()
+                .unwrap_or(0)
+                + 2
         } else {
             0
         };
 
         // Format the items
-        let formatted_items = runnable_tasks.iter()
-            .map(|(name, desc)| format!("{:<width$}{}", name.fancy_display().to_string(), desc, width = width))
+        let formatted_items = runnable_tasks
+            .iter()
+            .map(|(name, desc)| {
+                format!(
+                    "{:<width$}{}",
+                    name.fancy_display().to_string(),
+                    desc,
+                    width = width
+                )
+            })
             .collect::<Vec<String>>();
 
         dialoguer::Select::with_theme(&theme)
@@ -380,7 +397,8 @@ fn determine_task(task: &Option<Vec<String>>, project: &Project) -> miette::Resu
             .interact_opt()
             .map(|idx_opt| match idx_opt {
                 Some(idx) => Ok(vec![runnable_tasks[idx].clone().0.to_string()]),
-                None => Err(miette::miette!("Task selection cancelled by user."))
-            }).into_diagnostic()?
+                None => Err(miette::miette!("Task selection cancelled by user.")),
+            })
+            .into_diagnostic()?
     }
 }
