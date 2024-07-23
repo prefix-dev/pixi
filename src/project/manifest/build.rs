@@ -10,7 +10,7 @@ use serde_with::serde_as;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Build {
     /// The name of the build tool, for selection of build
-    pub name: Option<String>,
+    pub name: String,
 
     /// The dependencies for the build tools which will be installed in the build environment.
     /// These need to be conda packages

@@ -485,7 +485,7 @@ class PyPIOptions(StrictBaseModel):
 # The Build section #
 #####################
 class Build(StrictBaseModel):
-    name: str | None = Field(..., description="The name of the build")
+    name: str = Field(..., description="The name of the build")
     dependencies: Dependencies = DependenciesField
     task: TaskInlineTable | NonEmptyStr = Field(None, description="The task of the build")
 
