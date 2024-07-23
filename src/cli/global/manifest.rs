@@ -1,6 +1,5 @@
 use std::{collections::HashMap, str::FromStr};
 
-use clap::Parser;
 use indexmap::IndexMap;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
 /// Serde structs to read global install manifest file
