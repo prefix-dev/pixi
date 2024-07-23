@@ -22,10 +22,9 @@ fn create_uv_url(
     // Create the url.
     let url = format!("git+{url}");
     // Add the tag or rev if it exists.
-    let url = rev.as_ref().map_or_else(
-        || url.clone(),
-        |tag_or_rev| format!("{url}@{}", tag_or_rev.to_string()),
-    );
+    let url = rev
+        .as_ref()
+        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{}", tag_or_rev));
 
     // Add the subdirectory if it exists.
     let url = subdir.as_ref().map_or_else(

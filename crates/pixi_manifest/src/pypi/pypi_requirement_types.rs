@@ -1,8 +1,8 @@
-use std::{borrow::Borrow, str::FromStr};
-
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{InvalidNameError, PackageName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{Display, Formatter, Write};
+use std::{borrow::Borrow, str::FromStr};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /// A package name for PyPI that also stores the source version of the name.
@@ -77,11 +77,11 @@ impl FromStr for VersionOrStar {
     }
 }
 
-impl ToString for VersionOrStar {
-    fn to_string(&self) -> String {
+impl Display for VersionOrStar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionOrStar::Version(v) => v.to_string(),
-            VersionOrStar::Star => "*".to_string(),
+            VersionOrStar::Version(v) => f.write_str(&format!("{}", v)),
+            VersionOrStar::Star => f.write_char('*'),
         }
     }
 }
@@ -164,11 +164,11 @@ impl FromStr for GitRev {
     }
 }
 
-impl ToString for GitRev {
-    fn to_string(&self) -> String {
+impl Display for GitRev {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            GitRev::Short(s) => s.clone(),
-            GitRev::Full(s) => s.clone(),
+            GitRev::Short(s) => f.write_str(s),
+            GitRev::Full(s) => f.write_str(s),
         }
     }
 }
