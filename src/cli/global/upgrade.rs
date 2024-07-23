@@ -17,7 +17,7 @@ use crate::progress::{global_multi_progress, long_running_progress_style};
 use super::common::{
     find_installed_package, get_client_and_sparse_repodata, load_package_records, BinEnvDir,
 };
-use super::install::globally_install_packages;
+use super::install::{globally_install_packages, BinarySelector};
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -156,6 +156,7 @@ pub(super) async fn upgrade_packages(
                 records,
                 client.clone(),
                 platform,
+                BinarySelector::All
             )
             .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));

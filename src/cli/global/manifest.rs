@@ -10,7 +10,7 @@ use crate::config::{home_path, Config};
 
 use super::{
     common::{get_client_and_sparse_repodata, load_package_records, BinEnvDir},
-    install::globally_install_packages,
+    install::{globally_install_packages, BinarySelector},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -40,6 +40,16 @@ impl GlobalEnv {
         }
         match_specs
     }
+
+    pub fn specific_binaries(&self) -> HashMap<PackageName, HashMap<String, String>> {
+        let mut binaries = HashMap::new();
+        for (name, dep) in &self.dependencies {
+            if let Some(expose_binaries) = &dep.expose_binaries {
+                binaries.insert(name.clone(), expose_binaries.clone());
+            }
+        }
+        binaries
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,6 +62,14 @@ impl GlobalManifest {
         GlobalManifest {
             envs: IndexMap::new(),
         }
+    }
+
+    pub fn store(&self) {
+        let manifest_path = home_path()
+            .expect("did not find home path")
+            .join("global_manifest.yaml");
+        println!("Storing global manifest to {:?}", manifest_path);
+        let manifest_file = std::fs::write(manifest_path, serde_yaml::to_string(&self).unwrap());
     }
 
     pub async fn setup_envs(&self) -> miette::Result<()> {
@@ -79,12 +97,13 @@ impl GlobalManifest {
                 .collect::<Vec<_>>();
             let env_dir = BinEnvDir::create(&PackageName::from_str(name).unwrap()).await?;
 
-            globally_install_packages(
+            let scripts = globally_install_packages(
                 env_dir,
                 &names,
                 records,
                 authenticated_client.clone(),
                 Platform::current(),
+                BinarySelector::Specific(env.specific_binaries()),
             )
             .await
             .unwrap();

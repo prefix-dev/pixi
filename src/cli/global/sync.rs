@@ -27,7 +27,6 @@ use super::common::{
 
 /// Syncs the global environments with the manifest
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,

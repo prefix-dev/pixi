@@ -10,7 +10,7 @@ use crate::config::home_path;
 use crate::prefix::Prefix;
 
 use super::common::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};
-use super::install::{find_and_map_executable_scripts, BinScriptMapping};
+use super::install::{find_and_map_executable_scripts, BinScriptMapping, BinarySelector};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -56,7 +56,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         let prefix_package = find_designated_package(&prefix, &package_name).await?;
 
         let binaries: Vec<_> =
-            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_prefix)
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_prefix, &BinarySelector::All)
                 .await?
                 .into_iter()
                 .map(

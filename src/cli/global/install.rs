@@ -132,6 +132,7 @@ pub struct BinScriptMapping<'a> {
 async fn map_executables_to_global_bin_scripts<'a>(
     package_executables: &[&'a Path],
     bin_dir: &BinDir,
+    binary_mapping: Option<&HashMap<String, String>>,
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
@@ -176,6 +177,14 @@ async fn map_executables_to_global_bin_scripts<'a>(
 
         let mut executable_script_path = bin_dir.join(file_name);
 
+        if let Some(binary_mapping) = binary_mapping {
+            if let Some(binary_name) = binary_mapping.get(file_name) {
+                executable_script_path = bin_dir.join(binary_name);
+            } else {
+                continue;
+            }
+        }
+
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         };
@@ -195,9 +204,22 @@ pub(super) async fn find_and_map_executable_scripts<'a>(
     prefix: &Prefix,
     prefix_package: &'a PrefixRecord,
     bin_dir: &BinDir,
+    select_binaries: &BinarySelector,
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
     let executables = find_executables(prefix, prefix_package);
-    map_executables_to_global_bin_scripts(&executables, bin_dir).await
+
+    match select_binaries {
+        BinarySelector::All => map_executables_to_global_bin_scripts(&executables, bin_dir, None).await,
+        BinarySelector::None => Ok(vec![]),
+        BinarySelector::Specific(map) => {
+            if let Some(binary_map) = map.get(&prefix_package.repodata_record.package_record.name) {
+                map_executables_to_global_bin_scripts(&executables, bin_dir, Some(binary_map)).await
+            } else {
+                Ok(vec![])
+            }
+        }
+    }
+
 }
 
 /// Create the executable scripts by modifying the activation script
@@ -316,6 +338,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             records,
             authenticated_client.clone(),
             args.platform,
+            BinarySelector::All,
         )
         .await?;
         let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
@@ -377,6 +400,12 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
     Ok(())
 }
 
+pub enum BinarySelector {
+    All,
+    None,
+    Specific(HashMap<PackageName, HashMap<String, String>>),
+}
+
 /// Install given package globally, with all its dependencies
 pub(super) async fn globally_install_packages(
     BinEnvDir(bin_prefix): BinEnvDir,
@@ -384,6 +413,7 @@ pub(super) async fn globally_install_packages(
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
+    select_binaries: BinarySelector,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let prefix = Prefix::new(bin_prefix);
@@ -429,7 +459,7 @@ pub(super) async fn globally_install_packages(
 
         let bin_dir = BinDir::create().await?;
         let script_mapping =
-            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir, &select_binaries).await?;
         create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
         scripts.extend(script_mapping.into_iter().map(
