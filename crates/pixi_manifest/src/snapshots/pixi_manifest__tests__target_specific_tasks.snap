@@ -1,0 +1,8 @@
+---
+source: crates/pixi_manifest/src/lib.rs
+assertion_line: 1557
+expression: "manifest.default_feature().targets.iter().flat_map(|(target, selector)|\n            {\n                let selector_name =\n                    selector.map_or_else(|| String::from(\"default\"),\n                        ToString::to_string);\n                target.tasks.iter().filter_map(move |(name, task)|\n                        {\n                            Some(format!(\"{}/{} = {}\", &selector_name, name.as_str(),\n                                    task.as_single_command()?))\n                        })\n            }).join(\"\\n\")"
+---
+default/test = test multi
+win-64/test = test win
+linux-64/test = test linux

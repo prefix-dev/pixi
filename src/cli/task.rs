@@ -1,19 +1,19 @@
-use crate::project::manifest::EnvironmentName;
-use crate::project::manifest::FeatureName;
+use crate::fancy_display::FancyDisplay;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
-use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use pixi_manifest::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
+use pixi_manifest::EnvironmentName;
+use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
-use toml_edit::{Array, Item, Table, Value};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -22,8 +22,7 @@ pub enum Operation {
     Add(AddArgs),
 
     /// Remove a command from the project
-    // BREAK: This should only have the `rm` alias
-    #[clap(visible_alias = "rm", alias = "r")]
+    #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 
     /// Alias another specific command
@@ -435,60 +434,4 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
     Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
-}
-
-impl From<Task> for Item {
-    fn from(value: Task) -> Self {
-        match value {
-            Task::Plain(str) => Item::Value(str.into()),
-            Task::Execute(process) => {
-                let mut table = Table::new().into_inline_table();
-                match process.cmd {
-                    CmdArgs::Single(cmd_str) => {
-                        table.insert("cmd", cmd_str.into());
-                    }
-                    CmdArgs::Multiple(cmd_strs) => {
-                        table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
-                    }
-                }
-                if !process.depends_on.is_empty() {
-                    table.insert(
-                        "depends-on",
-                        Value::Array(Array::from_iter(
-                            process
-                                .depends_on
-                                .into_iter()
-                                .map(String::from)
-                                .map(Value::from),
-                        )),
-                    );
-                }
-                if let Some(cwd) = process.cwd {
-                    table.insert("cwd", cwd.to_string_lossy().to_string().into());
-                }
-                if let Some(env) = process.env {
-                    table.insert("env", Value::InlineTable(env.into_iter().collect()));
-                }
-                if let Some(description) = process.description {
-                    table.insert("description", description.into());
-                }
-                Item::Value(Value::InlineTable(table))
-            }
-            Task::Alias(alias) => {
-                let mut table = Table::new().into_inline_table();
-                table.insert(
-                    "depends-on",
-                    Value::Array(Array::from_iter(
-                        alias
-                            .depends_on
-                            .into_iter()
-                            .map(String::from)
-                            .map(Value::from),
-                    )),
-                );
-                Item::Value(Value::InlineTable(table))
-            }
-            _ => Item::None,
-        }
-    }
 }

@@ -9,7 +9,15 @@ use std::{
     str::FromStr,
 };
 
+use self::builders::{HasDependencyConfig, RemoveBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+};
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::task::{
+    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+};
 use pixi::{
     cli::{
         add, init,
@@ -21,19 +29,13 @@ use pixi::{
     },
     consts,
     task::TaskName,
-    EnvironmentName, ExecutableTask, FeatureName, Project, RunOutput, SearchEnvironments,
-    TaskExecutionError, TaskGraph, TaskGraphError, UpdateLockFileOptions,
+    Project, UpdateLockFileOptions,
 };
+use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};
 use tempfile::TempDir;
 use thiserror::Error;
-
-use self::builders::{HasDependencyConfig, RemoveBuilder};
-use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
-};
 
 /// To control the pixi process
 pub struct PixiControl {

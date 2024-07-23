@@ -1,9 +1,9 @@
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
-use crate::task::TaskName;
-use crate::{Project, Task};
+use crate::Project;
 use miette::Diagnostic;
+use pixi_manifest::{Task, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
 

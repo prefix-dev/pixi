@@ -1,9 +1,16 @@
 use std::{fmt::Display, fs, path::PathBuf};
 
+use crate::fancy_display::FancyDisplay;
+use crate::progress::await_in_progress;
+use crate::project::has_features::HasFeatures;
+use crate::task::TaskName;
+use crate::util::default_channel_config;
+use crate::{config, consts, Project};
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
@@ -11,12 +18,6 @@ use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
-
-use crate::progress::await_in_progress;
-use crate::project::has_features::HasFeatures;
-use crate::task::TaskName;
-use crate::util::default_channel_config;
-use crate::{config, consts, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
 

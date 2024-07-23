@@ -11,14 +11,11 @@ use rattler_conda_types::{Arch, Platform};
 
 use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
-    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     SolveGroup,
 };
-use crate::{
-    consts,
-    project::has_features::HasFeatures,
-    task::{Task, TaskName},
-    Project,
+use crate::{consts, project::has_features::HasFeatures, Project};
+use pixi_manifest::{
+    self as manifest, EnvironmentName, Feature, FeatureName, SystemRequirements, Task, TaskName,
 };
 
 /// Describes a single environment from a project manifest. This is used to describe environments
@@ -86,8 +83,7 @@ impl<'p> Environment<'p> {
             .solve_group
             .map(|solve_group_idx| SolveGroup {
                 project: self.project,
-                solve_group: &self.project.manifest.parsed.solve_groups.solve_groups
-                    [solve_group_idx],
+                solve_group: &self.project.manifest.parsed.solve_groups[solve_group_idx],
             })
     }
 

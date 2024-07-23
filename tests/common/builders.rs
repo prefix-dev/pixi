@@ -33,8 +33,9 @@ use futures::FutureExt;
 use pixi::{
     cli::{add, add::DependencyConfig, init, install, project, remove, task, update},
     task::TaskName,
-    DependencyType, EnvironmentName, SpecType,
+    DependencyType,
 };
+use pixi_manifest::{EnvironmentName, SpecType};
 use rattler_conda_types::Platform;
 use url::Url;
 

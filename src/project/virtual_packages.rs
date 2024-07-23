@@ -1,11 +1,9 @@
-use super::{
-    has_features::HasFeatures,
-    manifest::{LibCSystemRequirement, SystemRequirements},
-};
+use super::has_features::HasFeatures;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{
     Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
@@ -201,8 +199,8 @@ pub fn verify_current_platform_has_required_virtual_packages(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::SystemRequirements;
     use insta::assert_debug_snapshot;
+    use pixi_manifest::SystemRequirements;
     use rattler_conda_types::Platform;
 
     // Regression test on the virtual packages so there is not accidental changes

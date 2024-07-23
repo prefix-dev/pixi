@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::fancy_display::FancyDisplay;
+use crate::lock_file::UpdateLockFileOptions;
+use crate::project::has_features::HasFeatures;
+use crate::Project;
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-
-use crate::lock_file::UpdateLockFileOptions;
-use crate::project::has_features::HasFeatures;
-use crate::Project;
 
 /// Show a tree of project dependencies
 #[derive(Debug, Parser)]

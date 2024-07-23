@@ -9,6 +9,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, SpecType};
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
@@ -19,12 +20,8 @@ use crate::{
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{
-        grouped_environment::GroupedEnvironment,
-        has_features::HasFeatures,
-        manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior},
-        DependencyType, Project, SpecType,
+        grouped_environment::GroupedEnvironment, has_features::HasFeatures, DependencyType, Project,
     },
-    FeatureName,
 };
 
 /// Adds dependencies to the project

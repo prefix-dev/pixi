@@ -11,6 +11,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 
 use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::verify_prefix_location_unchanged;
+use crate::fancy_display::FancyDisplay;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -19,9 +20,10 @@ use crate::project::virtual_packages::verify_current_platform_has_required_virtu
 use crate::project::Environment;
 use crate::task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
 use crate::{HasFeatures, Project};
+use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
 

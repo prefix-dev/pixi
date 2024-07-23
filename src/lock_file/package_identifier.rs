@@ -1,10 +1,12 @@
-use crate::{project::manifest::pypi::PyPiPackageName, pypi_mapping};
+use crate::pypi_mapping;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 use url::Url;
 
+use pixi_manifest::pypi::PyPiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
+
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package. That can be used for comparison in both
 #[derive(Debug)]

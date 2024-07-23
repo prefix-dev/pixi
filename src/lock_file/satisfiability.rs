@@ -1,7 +1,7 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
-use crate::project::manifest::pypi::pypi_requirement::AsPep508Error;
+use crate::utils::uv::{as_uv_req, AsPep508Error};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -491,10 +491,9 @@ pub fn verify_package_platform_satisfiability(
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
                 Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
-                    req.as_uv_req(name.as_normalized(), project_root)
-                        .map_err(|e| {
-                            PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
-                        })?,
+                    as_uv_req(req, name.as_source(), project_root).map_err(|e| {
+                        PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
+                    })?,
                     "<environment>".into(),
                 ))
             })

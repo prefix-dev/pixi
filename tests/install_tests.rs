@@ -13,8 +13,8 @@ use pixi::{
     config::{Config, DetachedEnvironments},
     consts,
     consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER},
-    FeatureName,
 };
+use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
