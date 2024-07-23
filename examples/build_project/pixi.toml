@@ -1,0 +1,18 @@
+[project]
+name = "build_project"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Ruben Arts <ruben.arts@hotmail.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+
+[dependencies]
+python = "3.11.*"
+
+[[build]]
+name = "conda"
+task = "python -c 'print(\"Hello, World!\")'"
+dependencies = { python = "3.11.*" }
+
