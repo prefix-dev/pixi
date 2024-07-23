@@ -34,12 +34,13 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    #[arg(long, conflicts_with_all = ["env_file", "pixi"])]
-    pub pyproject: bool,
+    // BREAK (0.27.0): Remove the `alias` attribute
+    #[arg(long, conflicts_with_all = ["env_file", "pixi_toml"], alias = "pyproject")]
+    pub pyproject_toml: bool,
 
     /// Create a pixi.toml, even if a pyproject.toml already exists
-    #[arg(long, conflicts_with_all = ["env_file", "pyproject"])]
-    pub pixi: bool,
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"])]
+    pub pixi_toml: bool,
 }
 
 /// The pixi.toml template
@@ -219,14 +220,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
-        let pyproject  = if !pixi_manifest_path.is_file() && (!args.pixi && !args.pyproject) && pyproject_manifest_path.is_file(){
+        let pyproject  = if !pixi_manifest_path.is_file() && (!args.pixi_toml && !args.pyproject_toml) && pyproject_manifest_path.is_file(){
             dialoguer::Confirm::new()
                 .with_prompt("\nA 'pyproject.toml' file already exists.\nDo you want to extend it with the [tool.pixi] configuration?")
                 .default(false)
                 .show_default(true)
                 .interact()
         } else {
-            Ok(args.pyproject)
+            Ok(args.pyproject_toml)
         }.into_diagnostic()?;
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
