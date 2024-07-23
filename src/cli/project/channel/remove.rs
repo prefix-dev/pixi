@@ -1,19 +1,20 @@
-use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-
-use crate::Project;
 use clap::Parser;
-use miette::IntoDiagnostic;
-use pixi_manifest::FeatureName;
-use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::Channel;
+use pixi_manifest::{FeatureName, PrioritizedChannel};
+use rattler_conda_types::NamedChannelOrUrl;
+
+use crate::{
+    environment::{get_up_to_date_prefix, LockFileUsage},
+    Project,
+};
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The channel name(s) or URL
     #[clap(required = true, num_args=1..)]
-    pub channel: Vec<String>,
+    pub channel: Vec<NamedChannelOrUrl>,
 
-    /// Don't update the environment, only remove the channel(s) from the lock-file.
+    /// Don't update the environment, only remove the channel(s) from the
+    /// lock-file.
     #[clap(long)]
     pub no_install: bool,
 
@@ -27,24 +28,9 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);
 
-    // Determine which channels to remove
-    let channels = args
-        .channel
-        .into_iter()
-        .map(|channel_str| {
-            Channel::from_str(&channel_str, project.config().channel_config())
-                .map(|channel| (channel_str, channel))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Remove the channels from the manifest
     project.manifest.remove_channels(
-        channels
-            .clone()
-            .into_iter()
-            .map(|(_name, channel)| channel)
-            .map(PrioritizedChannel::from_channel),
+        args.channel.iter().cloned().map(PrioritizedChannel::from),
         &feature_name,
     )?;
 
@@ -58,13 +44,22 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
-    for (name, channel) in channels {
-        eprintln!(
-            "{}Removed {} ({})",
-            console::style(console::Emoji("✔ ", "")).green(),
-            name,
-            channel.base_url()
-        );
+    for channel in args.channel {
+        match channel {
+            NamedChannelOrUrl::Name(ref name) => eprintln!(
+                "{}Removed {} ({})",
+                console::style(console::Emoji("✔ ", "")).green(),
+                name,
+                channel
+                    .clone()
+                    .into_base_url(project.config().channel_config())
+            ),
+            NamedChannelOrUrl::Url(url) => eprintln!(
+                "{}Removed {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                url
+            ),
+        }
     }
 
     Ok(())

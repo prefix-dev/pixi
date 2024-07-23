@@ -27,6 +27,7 @@ use std::{
     future::{Future, IntoFuture},
     path::{Path, PathBuf},
     pin::Pin,
+    str::FromStr,
 };
 
 use futures::FutureExt;
@@ -36,7 +37,7 @@ use pixi::{
     DependencyType,
 };
 use pixi_manifest::{EnvironmentName, SpecType};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 /// Strings from an iterator
@@ -289,7 +290,9 @@ pub struct ProjectChannelAddBuilder {
 impl ProjectChannelAddBuilder {
     /// Adds the specified channel
     pub fn with_channel(mut self, name: impl Into<String>) -> Self {
-        self.args.channel.push(name.into());
+        self.args
+            .channel
+            .push(NamedChannelOrUrl::from_str(&name.into()).unwrap());
         self
     }
 

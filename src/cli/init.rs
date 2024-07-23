@@ -184,12 +184,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect::<Result<Vec<Platform>, _>>()?;
         for spec in conda_deps {
             // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
+
             project.manifest.add_dependency(
                 &spec,
                 SpecType::Run,
                 &platforms,
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
+                &project.config().channel_config().clone(),
             )?;
         }
         for requirement in pypi_deps {

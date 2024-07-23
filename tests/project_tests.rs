@@ -3,8 +3,8 @@ mod common;
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
-use pixi::{util::default_channel_config, HasFeatures, Project};
-use rattler_conda_types::{Channel, Platform};
+use pixi::{HasFeatures, Project};
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
 
@@ -43,11 +43,8 @@ async fn add_channel() {
     let project = pixi.project().unwrap();
 
     // Our channel should be in the list of channels
-    let local_channel = Channel::from_str(
-        Url::from_directory_path(additional_channel_dir.path()).unwrap(),
-        &default_channel_config(),
-    )
-    .unwrap();
+    let local_channel =
+        NamedChannelOrUrl::Url(Url::from_directory_path(additional_channel_dir.path()).unwrap());
     assert!(project
         .default_environment()
         .channels()

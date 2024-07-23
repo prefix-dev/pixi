@@ -1,6 +1,9 @@
-use std::io::{self, Write};
-use std::sync::Arc;
-use std::{cmp::Ordering, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    io::{self, Write},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use clap::Parser;
 use indexmap::IndexMap;
@@ -9,15 +12,14 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
-
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::config::Config;
 use crate::util::default_channel_config;
-use crate::utils::reqwest::build_reqwest_clients;
-use crate::HasFeatures;
-use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
+use crate::{
+    config::Config, progress::await_in_progress, repodata::fetch_sparse_repodata,
+    utils::reqwest::build_reqwest_clients, HasFeatures, Project,
+};
 
 /// Search a conda package
 ///
@@ -118,16 +120,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         // if user doesn't pass channels and we are in a project
         (None, Some(p)) => {
-            let channels: Vec<_> = p
-                .default_environment()
-                .channels()
-                .into_iter()
-                .cloned()
+            let c = p.default_environment().channels().clone();
+            let channels: Vec<_> = c
+                .iter()
+                .map(|c| (*c).clone().into_channel(p.config().channel_config()))
                 .collect();
             eprintln!(
                 "Using channels from project ({}): {}",
                 p.name(),
-                channels.iter().map(|c| c.name()).join(", ")
+                c.into_iter().map(|c| c.as_str()).format(", ")
             );
             channels
         }
@@ -162,7 +163,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?,
     );
 
-    // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
+    // When package name filter contains * (wildcard), it will search and display a
+    // list of packages matching this filter
     if package_name_filter.contains('*') {
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
@@ -176,7 +178,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
     }
-    // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
+    // If package name filter doesn't contain * (wildcard), it will search and display specific
+    // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
         search_exact_package(package_name, repo_data, stdout).await?;

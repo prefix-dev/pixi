@@ -218,6 +218,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &args.platform,
                     &args.feature_name(),
                     DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    &project.config().channel_config().clone(),
                 )?;
                 if added {
                     if spec.version.is_none() {
@@ -487,6 +488,7 @@ fn update_conda_specs_from_lock_file(
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
+                &project.config().channel_config().clone(),
             )?;
         }
     }

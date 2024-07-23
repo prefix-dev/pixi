@@ -27,7 +27,7 @@ use once_cell::sync::OnceCell;
 use pixi_manifest::{
     pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ProjectManifest, SpecType,
 };
-use rattler_conda_types::{Channel, Version};
+use rattler_conda_types::{Channel, NamedChannelOrUrl, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -569,12 +569,18 @@ impl Project {
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
 
+                    let channel_config = config.channel_config();
                     let project_channels = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.canonical_name())
+                        .map(|pc| match pc.channel.clone() {
+                            NamedChannelOrUrl::Name(name) => name,
+                            NamedChannelOrUrl::Url(url) => {
+                                channel_config.canonical_name(&url).to_string()
+                            }
+                        })
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table
