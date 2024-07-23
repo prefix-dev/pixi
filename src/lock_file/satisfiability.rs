@@ -231,11 +231,13 @@ pub fn verify_environment_satisfiability(
     let channels = grouped_env
         .channels()
         .into_iter()
-        .map(|channel| channel.clone().into_base_url(config));
+        .map(|channel| channel.clone().into_channel(config).base_url().clone());
     let locked_channels = locked_environment.channels().iter().map(|c| {
         NamedChannelOrUrl::from_str(&c.url)
             .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
-            .into_base_url(config)
+            .into_channel(config)
+            .base_url()
+            .clone()
     });
     if !channels.eq(locked_channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);

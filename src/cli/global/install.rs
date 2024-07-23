@@ -12,7 +12,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{PackageName, Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
@@ -42,7 +42,7 @@ pub struct Args {
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(short, long)]
-    channel: Vec<String>,
+    channel: Vec<NamedChannelOrUrl>,
 
     #[clap(short, long, default_value_t = Platform::current())]
     platform: Platform,
@@ -280,7 +280,7 @@ pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<boo
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = config.compute_channels(&args.channel).into_diagnostic()?;
+    let channels = config.compute_channels(&args.channel);
 
     let package_names: Result<Vec<PackageName>, _> = args
         .packages()

@@ -1,6 +1,8 @@
+use std::{path::PathBuf, str::FromStr};
+
 use clap::Parser;
-use miette::IntoDiagnostic;
-use std::path::PathBuf;
+use miette::{IntoDiagnostic, WrapErr};
+use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     config::{self, Config},
@@ -262,11 +264,14 @@ fn alter_config(
             match key {
                 "default-channels" => {
                     let input = value.expect("value must be provided");
+                    let channel = NamedChannelOrUrl::from_str(&input)
+                        .into_diagnostic()
+                        .context("invalid channel name")?;
                     let mut new_channels = config.default_channels.clone();
                     if is_prepend {
-                        new_channels.insert(0, input);
+                        new_channels.insert(0, channel);
                     } else {
-                        new_channels.push(input);
+                        new_channels.push(channel);
                     }
                     config.default_channels = new_channels;
                 }

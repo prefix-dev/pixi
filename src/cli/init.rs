@@ -8,7 +8,7 @@ use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use pixi_manifest::pyproject::PyProjectToml;
 use pixi_manifest::{DependencyOverwriteBehavior, FeatureName, SpecType};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::{fs, path::PathBuf};
@@ -23,7 +23,7 @@ pub struct Args {
 
     /// Channels to use in the project.
     #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
-    pub channels: Option<Vec<String>>,
+    pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Platforms that the project supports.
     #[arg(short, long = "platform", id = "platform")]
@@ -346,7 +346,7 @@ fn render_project(
     name: String,
     version: &str,
     author: Option<&(String, String)>,
-    channels: Vec<String>,
+    channels: Vec<NamedChannelOrUrl>,
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,

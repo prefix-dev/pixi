@@ -461,7 +461,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::Manifest;
+    use crate::manifest::Manifest;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

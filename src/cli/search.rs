@@ -9,16 +9,15 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::util::default_channel_config;
 use crate::{
     config::Config, progress::await_in_progress, repodata::fetch_sparse_repodata,
-    utils::reqwest::build_reqwest_clients, HasFeatures, Project,
+    util::default_channel_config, utils::reqwest::build_reqwest_clients, HasFeatures, Project,
 };
 
 /// Search a conda package
@@ -34,7 +33,7 @@ pub struct Args {
     /// Channel to specifically search package, defaults to
     /// project channels or conda-forge
     #[clap(short, long)]
-    channel: Option<Vec<String>>,
+    channel: Option<Vec<NamedChannelOrUrl>>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
@@ -99,7 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
         (Some(c), Some(p)) => {
-            let channels = p.config().compute_channels(&c).into_diagnostic()?;
+            let channels = p.config().compute_channels(&c);
             eprintln!(
                 "Using channels from arguments ({}): {:?}",
                 p.name(),
@@ -110,8 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // No project -> use the global config
         (Some(c), None) => {
             let channels = Config::load_global()
-                .compute_channels(&c)
-                .into_diagnostic()?;
+                .compute_channels(&c);
             eprintln!(
                 "Using channels from arguments: {}",
                 channels.iter().map(|c| c.name()).join(", ")
@@ -135,8 +133,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // if user doesn't pass channels and we are not in project
         (None, None) => {
             let channels = Config::load_global()
-                .compute_channels(&[])
-                .into_diagnostic()?;
+                .compute_channels(&[]);
             eprintln!(
                 "Using channels from global config: {}",
                 channels.iter().map(|c| c.name()).join(", ")

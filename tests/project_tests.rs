@@ -45,6 +45,8 @@ async fn add_channel() {
     // Our channel should be in the list of channels
     let local_channel =
         NamedChannelOrUrl::Url(Url::from_directory_path(additional_channel_dir.path()).unwrap());
+    let str = std::fs::read_to_string(pixi.manifest_path()).unwrap();
+    dbg!(str);
     assert!(project
         .default_environment()
         .channels()

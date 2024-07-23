@@ -1,10 +1,9 @@
+use std::{io::BufRead, path::Path, str::FromStr, sync::Arc};
+
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{Channel, MatchSpec};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
-use std::str::FromStr;
-use std::{io::BufRead, path::Path, sync::Arc};
 
 use crate::config::Config;
 
@@ -69,7 +68,11 @@ impl CondaEnvFile {
     pub fn to_manifest(
         self: CondaEnvFile,
         config: &Config,
-    ) -> miette::Result<(Vec<MatchSpec>, Vec<pep508_rs::Requirement>, Vec<String>)> {
+    ) -> miette::Result<(
+        Vec<MatchSpec>,
+        Vec<pep508_rs::Requirement>,
+        Vec<NamedChannelOrUrl>,
+    )> {
         let channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, mut extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
@@ -125,18 +128,18 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
     Ok((conda_deps, pip_deps, picked_up_channels))
 }
 
-fn parse_channels(channels: Vec<String>) -> Vec<String> {
+fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
     let mut new_channels = vec![];
     for channel in channels {
-        if channel == "defaults" {
+        if channel.as_str() == "defaults" {
             // https://docs.anaconda.com/free/working-with-conda/reference/default-repositories/#active-default-channels
-            new_channels.push("main".to_string());
-            new_channels.push("r".to_string());
-            new_channels.push("msys2".to_string());
-        } else {
-            let channel = channel.trim();
+            new_channels.push(NamedChannelOrUrl::Name("main".to_string()));
+            new_channels.push(NamedChannelOrUrl::Name("r".to_string()));
+            new_channels.push(NamedChannelOrUrl::Name("msys2".to_string()));
+        } else if let NamedChannelOrUrl::Name(name) = channel {
+            let channel = name.trim();
             if !channel.is_empty() {
-                new_channels.push(channel.to_string());
+                new_channels.push(NamedChannelOrUrl::Name(channel.to_string()));
             }
         }
     }
@@ -145,13 +148,11 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, io::Write, path::Path, str::FromStr};
+
+    use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
+
     use super::*;
-    use rattler_conda_types::MatchSpec;
-    use rattler_conda_types::ParseStrictness::Strict;
-    use std::fs;
-    use std::io::Write;
-    use std::path::Path;
-    use std::str::FromStr;
 
     #[test]
     fn test_parse_conda_env_file() {

@@ -25,9 +25,9 @@ use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
 use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ProjectManifest, SpecType,
+    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
 };
-use rattler_conda_types::{Channel, NamedChannelOrUrl, Version};
+use rattler_conda_types::{Channel, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -130,8 +130,8 @@ impl Debug for Project {
     }
 }
 
-impl Borrow<ProjectManifest> for Project {
-    fn borrow(&self) -> &ProjectManifest {
+impl Borrow<ParsedManifest> for Project {
+    fn borrow(&self) -> &ParsedManifest {
         self.manifest.borrow()
     }
 }
@@ -569,18 +569,12 @@ impl Project {
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
 
-                    let channel_config = config.channel_config();
                     let project_channels = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| match pc.channel.clone() {
-                            NamedChannelOrUrl::Name(name) => name,
-                            NamedChannelOrUrl::Url(url) => {
-                                channel_config.canonical_name(&url).to_string()
-                            }
-                        })
+                        .map(|pc| pc.channel.to_string())
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table

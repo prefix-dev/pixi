@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use tokio::task::JoinSet;
 
 use crate::cli::has_specs::HasSpecs;
@@ -35,7 +35,7 @@ pub struct Args {
     /// By default, if no channel is provided, `conda-forge` is used, the channel
     /// the package was installed from will always be used.
     #[clap(short, long)]
-    channel: Vec<String>,
+    channel: Vec<NamedChannelOrUrl>,
 
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
@@ -57,10 +57,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
-    cli_channels: &[String],
+    cli_channels: &[NamedChannelOrUrl],
     platform: Platform,
 ) -> miette::Result<()> {
-    let channel_cli = config.compute_channels(cli_channels).into_diagnostic()?;
+    let channel_cli = config.compute_channels(cli_channels);
 
     // Get channels and version of globally installed packages in parallel
     let mut channels = HashMap::with_capacity(specs.len());

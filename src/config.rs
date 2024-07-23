@@ -1,26 +1,27 @@
+use std::{
+    cmp::PartialEq,
+    collections::{BTreeSet as Set, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    str::FromStr,
+};
+
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
-use rattler_conda_types::version_spec::{EqualityOperator, LogicalOperator, RangeOperator};
 use rattler_conda_types::{
-    Channel, ChannelConfig, ParseChannelError, Version, VersionBumpType, VersionSpec,
+    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
+    Channel, ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType,
+    VersionSpec,
 };
-use serde::de::IntoDeserializer;
-use serde::{Deserialize, Serialize};
-use std::cmp::PartialEq;
-use std::collections::{BTreeSet as Set, HashMap};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::str::FromStr;
-
+use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-use crate::consts;
-use crate::util::default_channel_config;
+use crate::{consts, util::default_channel_config};
 
-/// Determines the default author based on the default git author. Both the name and the email
-/// address of the author are returned.
+/// Determines the default author based on the default git author. Both the name
+/// and the email address of the author are returned.
 pub fn get_default_author() -> Option<(String, String)> {
     let rv = Command::new("git")
         .arg("config")
@@ -66,8 +67,10 @@ pub fn home_path() -> Option<PathBuf> {
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
 /// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
-/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists.
-/// - If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
+/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory
+///   exists.
+/// - If that is not set, the default cache directory of
+///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
         .map(PathBuf::from)
@@ -167,7 +170,8 @@ impl DetachedEnvironments {
         matches!(self, DetachedEnvironments::Boolean(false))
     }
 
-    // Get the path to the detached-environments directory. None means the default directory.
+    // Get the path to the detached-environments directory. None means the default
+    // directory.
     pub fn path(&self) -> miette::Result<Option<PathBuf>> {
         match self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
@@ -225,7 +229,8 @@ impl PyPIConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
-    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0" becomes ">=0.1.0, <0.2"
+    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
+    /// becomes ">=0.1.0, <0.2"
     #[default]
     Semver,
     /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
@@ -249,8 +254,8 @@ impl FromStr for PinningStrategy {
 }
 
 impl PinningStrategy {
-    /// Given a set of versions, determines the best version constraint to use that
-    /// captures all of them based on the strategy.
+    /// Given a set of versions, determines the best version constraint to use
+    /// that captures all of them based on the strategy.
     pub fn determine_version_constraint<'a>(
         self,
         versions: impl IntoIterator<Item = &'a Version> + Clone,
@@ -334,9 +339,10 @@ pub struct Config {
     #[serde(default)]
     #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub default_channels: Vec<String>,
+    pub default_channels: Vec<NamedChannelOrUrl>,
 
-    /// If set to true, pixi will set the PS1 environment variable to a custom value.
+    /// If set to true, pixi will set the PS1 environment variable to a custom
+    /// value.
     #[serde(default)]
     #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -358,7 +364,8 @@ pub struct Config {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
 
-    /// Dependency Pinning strategy used for dependency modification through automated logic like `pixi add`
+    /// Dependency Pinning strategy used for dependency modification through
+    /// automated logic like `pixi add`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinning_strategy: Option<PinningStrategy>,
 
@@ -380,10 +387,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 
-    /// The option to specify the directory where detached environments are stored.
-    /// When using 'true', it defaults to the cache directory.
+    /// The option to specify the directory where detached environments are
+    /// stored. When using 'true', it defaults to the cache directory.
     /// When using a path, it uses the specified path.
-    /// When using 'false', it disables detached environments, meaning it moves it back to the .pixi folder.
+    /// When using 'false', it disables detached environments, meaning it moves
+    /// it back to the .pixi folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
 }
@@ -563,7 +571,8 @@ impl Config {
         }
 
         // Load the default CLI config and layer it on top of the global config
-        // This will add any environment variables defined in the `clap` attributes to the config
+        // This will add any environment variables defined in the `clap` attributes to
+        // the config
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
         config.merge_config(default_cli.into())
@@ -647,12 +656,13 @@ impl Config {
         }
     }
 
-    /// Retrieve the value for the default_channels field (defaults to the ["conda-forge"]).
-    pub fn default_channels(&self) -> Vec<String> {
+    /// Retrieve the value for the default_channels field (defaults to the
+    /// ["conda-forge"]).
+    pub fn default_channels(&self) -> Vec<NamedChannelOrUrl> {
         if self.default_channels.is_empty() {
             consts::DEFAULT_CHANNELS
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| NamedChannelOrUrl::Name(s.to_string()))
                 .collect()
         } else {
             self.default_channels.clone()
@@ -686,10 +696,7 @@ impl Config {
         &self.pypi_config
     }
 
-    pub fn compute_channels(
-        &self,
-        cli_channels: &[String],
-    ) -> Result<Vec<Channel>, ParseChannelError> {
+    pub fn compute_channels(&self, cli_channels: &[NamedChannelOrUrl]) -> Vec<Channel> {
         let channels = if cli_channels.is_empty() {
             self.default_channels()
         } else {
@@ -697,9 +704,9 @@ impl Config {
         };
 
         channels
-            .iter()
-            .map(|c| Channel::from_str(c, &self.channel_config))
-            .collect::<Result<Vec<Channel>, _>>()
+            .into_iter()
+            .map(|c| c.into_channel(self.channel_config()))
+            .collect()
     }
 
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
@@ -890,8 +897,9 @@ pub fn config_path_global() -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rstest::rstest;
+
+    use super::*;
 
     #[test]
     fn test_config_parse() {
