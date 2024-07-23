@@ -301,10 +301,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
+        let records = load_package_records(&[package_matchspec], sparse_repodata.values())?;
 
-        let (prefix_package, scripts, _) = globally_install_package(
-            &package_name,
+        let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
+        let (prefix_package, scripts, _) = globally_install_packages(
+            target_bin_dir,
+            &[package_name],
             records,
             authenticated_client.clone(),
             args.platform,
@@ -370,14 +372,15 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
 }
 
 /// Install given package globally, with all its dependencies
-pub(super) async fn globally_install_package(
-    package_name: &PackageName,
+pub(super) async fn globally_install_packages(
+    bin_env_dir: BinEnvDir,
+    package_names: &[PackageName],
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
+    let BinEnvDir(bin_prefix) = bin_env_dir;
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
@@ -403,35 +406,37 @@ pub(super) async fn globally_install_package(
     .await
     .into_diagnostic()?;
 
+    let mut scripts = vec![];
     // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, package_name).await?;
+    for package_name in package_names {
+        let prefix_package = find_designated_package(&prefix, package_name).await?;
 
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
+        // Determine the shell to use for the invocation script
+        let shell: ShellEnum = if cfg!(windows) {
+            rattler_shell::shell::CmdExe.into()
+        } else {
+            rattler_shell::shell::Bash.into()
+        };
 
-    // Construct the reusable activation script for the shell and generate an invocation script
-    // for each executable added by the package to the environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
+        // Construct the reusable activation script for the shell and generate an invocation script
+        // for each executable added by the package to the environment.
+        let activation_script = create_activation_script(&prefix, shell.clone())?;
 
-    let bin_dir = BinDir::create().await?;
-    let script_mapping =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+        let bin_dir = BinDir::create().await?;
+        let script_mapping =
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
+        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
+        scripts.extend(script_mapping.into_iter().map(
             |BinScriptMapping {
                  global_binary_path: path,
                  ..
              }| path,
-        )
-        .collect();
+        ));
+    }
 
+    // TODO: return multiple prefix_packages
+    let prefix_package = find_designated_package(&prefix, package_names.first().unwrap()).await?;
     Ok((
         prefix_package,
         scripts,

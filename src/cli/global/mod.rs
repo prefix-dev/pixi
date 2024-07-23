@@ -3,6 +3,7 @@ use clap::Parser;
 mod common;
 mod install;
 mod list;
+mod manifest;
 mod remove;
 mod upgrade;
 mod upgrade_all;
@@ -21,6 +22,7 @@ pub enum Command {
     Upgrade(upgrade::Args),
     #[clap(visible_alias = "ua")]
     UpgradeAll(upgrade_all::Args),
+    Sync(manifest::SyncArgs),
 }
 
 /// Subcommand for global package management actions
@@ -42,6 +44,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::List(args) => list::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
+        Command::Sync(args) => manifest::sync(args).await?,
     };
     Ok(())
 }

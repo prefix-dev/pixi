@@ -14,8 +14,10 @@ use crate::cli::has_specs::HasSpecs;
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
 
-use super::common::{find_installed_package, get_client_and_sparse_repodata, load_package_records};
-use super::install::globally_install_package;
+use super::common::{
+    find_installed_package, get_client_and_sparse_repodata, load_package_records, BinEnvDir,
+};
+use super::install::globally_install_packages;
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -104,7 +106,7 @@ pub(super) async fn upgrade_packages(
                     None
                 }
             });
-            let records = load_package_records(package_matchspec.clone(), specific_repodata)?;
+            let records = load_package_records(&[package_matchspec.clone()], specific_repodata)?;
             Ok((package_name, package_matchspec, records))
         });
     }
@@ -146,7 +148,16 @@ pub(super) async fn upgrade_packages(
                 console::style("Updating").green(),
                 message
             ));
-            globally_install_package(&package_name, records, client.clone(), platform).await?;
+
+            let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
+            globally_install_packages(
+                target_bin_dir,
+                &[package_name],
+                records,
+                client.clone(),
+                platform,
+            )
+            .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
             upgraded = true;
         }

@@ -141,13 +141,18 @@ pub(super) fn channel_name_from_prefix(
 /// The package records (with dependencies records) for the given package
 /// MatchSpec
 pub fn load_package_records<'a>(
-    package_matchspec: MatchSpec,
+    package_matchspecs: &[MatchSpec],
     sparse_repodata: impl IntoIterator<Item = &'a SparseRepoData>,
 ) -> miette::Result<Vec<RepoDataRecord>> {
-    let package_name = package_name(&package_matchspec)?;
+    let package_names = package_matchspecs
+        .iter()
+        .map(package_name)
+        .collect::<Result<Vec<_>, _>>()?;
+
     let available_packages =
-        SparseRepoData::load_records_recursive(sparse_repodata, vec![package_name], None)
+        SparseRepoData::load_records_recursive(sparse_repodata, package_names, None)
             .into_diagnostic()?;
+
     let virtual_packages = rattler_virtual_packages::VirtualPackage::current()
         .into_diagnostic()?
         .iter()
@@ -158,7 +163,7 @@ pub fn load_package_records<'a>(
     // Solve for environment
     // Construct a solver task that we can start solving.
     let task = SolverTask {
-        specs: vec![package_matchspec],
+        specs: package_matchspecs.iter().cloned().collect(),
         virtual_packages,
         ..SolverTask::from_iter(&available_packages)
     };
