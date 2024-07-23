@@ -14,7 +14,7 @@ use super::{
 };
 
 #[derive(Serialize, Deserialize)]
-struct GlobalDependency {
+pub struct GlobalDependency {
     pub spec: Option<String>,
     pub expose_binaries: Option<HashMap<String, String>>,
 }
@@ -31,9 +31,11 @@ impl GlobalEnv {
         for (name, dep) in &self.dependencies {
             let spec = dep.spec.clone().unwrap_or("*".to_string());
             println!("Spec: {} {}", name.as_normalized(), spec);
-            let match_spec =
-                MatchSpec::from_str(&format!("{} {}", name.as_normalized(), spec), ParseStrictness::Lenient)
-                    .unwrap();
+            let match_spec = MatchSpec::from_str(
+                &format!("{} {}", name.as_normalized(), spec),
+                ParseStrictness::Lenient,
+            )
+            .unwrap();
             match_specs.push(match_spec);
         }
         match_specs
@@ -41,7 +43,7 @@ impl GlobalEnv {
 }
 
 #[derive(Serialize, Deserialize)]
-struct GlobalManifest {
+pub struct GlobalManifest {
     pub envs: IndexMap<String, GlobalEnv>,
 }
 
@@ -71,7 +73,10 @@ impl GlobalManifest {
             std::fs::create_dir_all(env_dir).unwrap();
             let specs = env.specs();
             let records = load_package_records(&specs, sparse_repodata.values())?;
-            let names = specs.iter().map(|s| s.name.clone().unwrap()).collect::<Vec<_>>();
+            let names = specs
+                .iter()
+                .map(|s| s.name.clone().unwrap())
+                .collect::<Vec<_>>();
             let env_dir = BinEnvDir::create(&PackageName::from_str(name).unwrap()).await?;
 
             globally_install_packages(
@@ -80,7 +85,9 @@ impl GlobalManifest {
                 records,
                 authenticated_client.clone(),
                 Platform::current(),
-            ).await.unwrap();
+            )
+            .await
+            .unwrap();
         }
         Ok(())
     }
@@ -94,15 +101,4 @@ pub fn read_global_manifest() -> GlobalManifest {
     let manifest_file = std::fs::read_to_string(manifest_path).unwrap();
     let manifest: GlobalManifest = serde_yaml::from_str(&manifest_file).unwrap();
     manifest
-}
-
-/// Sync the global environment with the manifest file
-#[derive(Parser, Debug)]
-pub struct SyncArgs {
-}
-
-pub async fn sync(_args: SyncArgs) -> miette::Result<()> {
-    let manifest = read_global_manifest();
-    manifest.setup_envs().await.unwrap();
-    Ok(())
 }

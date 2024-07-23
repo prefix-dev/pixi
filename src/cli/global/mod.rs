@@ -16,7 +16,9 @@ pub enum Command {
     Install(install::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
+    #[clap(visible_alias = "a")]
     Add(add::Args),
+    #[clap(visible_alias = "s")]
     Sync(sync::Args),
     #[clap(visible_alias = "ls")]
     List(list::Args),
@@ -24,7 +26,6 @@ pub enum Command {
     Upgrade(upgrade::Args),
     #[clap(visible_alias = "ua")]
     UpgradeAll(upgrade_all::Args),
-    Sync(manifest::SyncArgs),
 }
 
 /// Subcommand for global package management actions
@@ -48,7 +49,6 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::List(args) => list::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
-        Command::Sync(args) => manifest::sync(args).await?,
     };
     Ok(())
 }
