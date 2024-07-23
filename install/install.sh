@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.25.0
+# Version: v0.26.1
 
 __wrap__() {
 
@@ -112,14 +112,9 @@ update_shell() {
 
 case "$(basename "$SHELL")" in
     bash)
-        if [ -w ~/.bash_profile ]; then
-            BASH_FILE=~/.bash_profile
-        else
-            # Default to bashrc as that is used in non login shells instead of the profile.
-            BASH_FILE=~/.bashrc
-        fi
-        LINE="export PATH=\$PATH:${BIN_DIR}"
-        update_shell $BASH_FILE "$LINE"
+        # Default to bashrc as that is used in non login shells instead of the profile.
+        LINE="export PATH=${BIN_DIR}:\$PATH"
+        update_shell ~/.bashrc "$LINE"
         ;;
 
     fish)
@@ -128,12 +123,12 @@ case "$(basename "$SHELL")" in
         ;;
 
     zsh)
-        LINE="export PATH=\$PATH:${BIN_DIR}"
+        LINE="export PATH=${BIN_DIR}:\$PATH"
         update_shell ~/.zshrc "$LINE"
         ;;
 
     tcsh)
-        LINE="set path = ( \$path ${BIN_DIR} )"
+        LINE="set path = ( ${BIN_DIR} \$path )"
         update_shell ~/.tcshrc "$LINE"
         ;;
 

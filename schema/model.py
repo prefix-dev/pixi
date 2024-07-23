@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 import tomllib
 from typing import Annotated, Any, Optional, Literal
+from enum import Enum
 
 from pydantic import (
     AnyHttpUrl,
@@ -73,6 +74,13 @@ class ChannelInlineTable(StrictBaseModel):
 Channel = ChannelName | ChannelInlineTable
 
 
+class ChannelPriority(str, Enum):
+    """The priority of the channel."""
+
+    disabled = "disabled"
+    strict = "strict"
+
+
 class Project(StrictBaseModel):
     """The project's metadata information."""
 
@@ -91,6 +99,14 @@ class Project(StrictBaseModel):
     channels: list[Channel] = Field(
         None,
         description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
+    )
+    channel_priority: ChannelPriority | None = Field(
+        None,
+        alias="channel-priority",
+        examples=["strict", "disabled"],
+        description="The type of channel priority that is used in the solve."
+        "- 'strict': only take the package from the channel it exist in first."
+        "- 'disabled': group all dependencies together as if there is no channel difference.",
     )
     platforms: list[Platform] = Field(description="The platforms that the project supports")
     license: NonEmptyStr | None = Field(
@@ -381,6 +397,14 @@ class Feature(StrictBaseModel):
     channels: list[Channel] | None = Field(
         None,
         description="The `conda` channels that can be considered when solving environments containing this feature",
+    )
+    channel_priority: ChannelPriority | None = Field(
+        None,
+        alias="channel-priority",
+        examples=["strict", "disabled"],
+        description="The type of channel priority that is used in the solve."
+        "- 'strict': only take the package from the channel it exist in first."
+        "- 'disabled': group all dependencies together as if there is no channel difference.",
     )
     platforms: list[NonEmptyStr] | None = Field(
         None,

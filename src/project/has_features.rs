@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use indexmap::IndexSet;
 use rattler_conda_types::{Channel, Platform};
+use rattler_solve::ChannelPriority;
 
 use crate::{Project, SpecType};
 
@@ -9,6 +10,11 @@ use super::{
     manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements},
     CondaDependencies, PyPiDependencies,
 };
+
+/// ChannelPriorityCombination error, thrown when multiple channel priorities are set
+#[derive(Debug, thiserror::Error)]
+#[error("Multiple channel priorities are not allowed in a single environment")]
+pub struct ChannelPriorityCombinationError;
 
 /// A trait that implement various methods for collections that combine attributes of Features
 /// It is implemented by Environment, GroupedEnvironment and SolveGroup
@@ -45,6 +51,22 @@ pub trait HasFeatures<'p> {
             })
             .map(|prioritized_channel| &prioritized_channel.channel)
             .collect()
+    }
+
+    /// Returns the channel priority, error on multiple values, return None if no value is set.
+    ///
+    /// When using multiple channel priorities over different features we should error as the user should decide what they want.
+    fn channel_priority(&self) -> Result<Option<ChannelPriority>, ChannelPriorityCombinationError> {
+        let mut channel_priority = None;
+        for feature in self.features() {
+            if let Some(priority) = feature.channel_priority {
+                if channel_priority == Some(priority) {
+                    return Err(ChannelPriorityCombinationError);
+                }
+                channel_priority = Some(priority);
+            }
+        }
+        Ok(channel_priority)
     }
 
     /// Returns the platforms that this collection is compatible with.
