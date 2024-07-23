@@ -50,21 +50,25 @@ async fn remove_global_package(
 
     // Construct the paths to all the installed package executables, which are what we need to remove.
     // TODO -- figure out if we need to Binary Selector All works well here
-    let paths_to_remove: Vec<_> =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &BinDir::from_existing().await?, &BinarySelector::All)
-            .await?
-            .into_iter()
-            .map(
-                |BinScriptMapping {
-                     global_binary_path: path,
-                     ..
-                 }| path,
-            )
-            // Collecting to a HashSet first is a workaround for issue #317 and can be removed
-            // once that is fixed.
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
+    let paths_to_remove: Vec<_> = find_and_map_executable_scripts(
+        &prefix,
+        &prefix_package,
+        &BinDir::from_existing().await?,
+        &BinarySelector::All,
+    )
+    .await?
+    .into_iter()
+    .map(
+        |BinScriptMapping {
+             global_binary_path: path,
+             ..
+         }| path,
+    )
+    // Collecting to a HashSet first is a workaround for issue #317 and can be removed
+    // once that is fixed.
+    .collect::<HashSet<_>>()
+    .into_iter()
+    .collect();
 
     let dirs_to_remove: Vec<_> = vec![bin_prefix];
 

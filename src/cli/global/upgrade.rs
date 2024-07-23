@@ -156,7 +156,7 @@ pub(super) async fn upgrade_packages(
                 records,
                 client.clone(),
                 platform,
-                BinarySelector::All
+                BinarySelector::All,
             )
             .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));

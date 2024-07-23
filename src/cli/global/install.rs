@@ -209,7 +209,9 @@ pub(super) async fn find_and_map_executable_scripts<'a>(
     let executables = find_executables(prefix, prefix_package);
 
     match select_binaries {
-        BinarySelector::All => map_executables_to_global_bin_scripts(&executables, bin_dir, None).await,
+        BinarySelector::All => {
+            map_executables_to_global_bin_scripts(&executables, bin_dir, None).await
+        }
         BinarySelector::None => Ok(vec![]),
         BinarySelector::Specific(map) => {
             if let Some(binary_map) = map.get(&prefix_package.repodata_record.package_record.name) {
@@ -219,7 +221,6 @@ pub(super) async fn find_and_map_executable_scripts<'a>(
             }
         }
     }
-
 }
 
 /// Create the executable scripts by modifying the activation script
@@ -459,7 +460,8 @@ pub(super) async fn globally_install_packages(
 
         let bin_dir = BinDir::create().await?;
         let script_mapping =
-            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir, &select_binaries).await?;
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir, &select_binaries)
+                .await?;
         create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
         scripts.extend(script_mapping.into_iter().map(
