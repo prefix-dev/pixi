@@ -174,3 +174,13 @@ test = "bla"
 
 [tool.ruff]
 config = "ruff.yaml"
+
+[[build]]
+name = "build"
+dependencies = { "python" = ">=3.8" }
+task = { cmd = "python", inputs = ["setup.py", "build"] }
+
+[[build]]
+name = "conda"
+dependencies = { "pixi-build-conda" = ">=3.8" }
+task = "pixi-build-conda"
