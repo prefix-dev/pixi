@@ -1,7 +1,13 @@
 use clap::{ArgAction, Parser};
+use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
-use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
+use rattler_conda_types::version_spec::{EqualityOperator, LogicalOperator, RangeOperator};
+use rattler_conda_types::{
+    Channel, ChannelConfig, ParseChannelError, Version, VersionBumpType, VersionSpec,
+};
+use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
+use std::cmp::PartialEq;
 use std::collections::{BTreeSet as Set, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -215,6 +221,113 @@ impl PyPIConfig {
     }
 }
 
+/// The strategy for that will be used for pinning a version of a package.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum PinningStrategy {
+    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0" becomes ">=0.1.0, <0.2"
+    #[default]
+    Semver,
+    /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
+    Minor,
+    /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
+    Major,
+    /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
+    LatestUp,
+    /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
+    // Adding "Version" to the name for future extendability.
+    ExactVersion,
+    /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
+    // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
+    NoPin,
+}
+impl FromStr for PinningStrategy {
+    type Err = serde::de::value::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
+impl PinningStrategy {
+    /// Given a set of versions, determines the best version constraint to use that
+    /// captures all of them based on the strategy.
+    pub fn determine_version_constraint<'a>(
+        self,
+        versions: impl IntoIterator<Item = &'a Version> + Clone,
+    ) -> Option<VersionSpec> {
+        let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
+        let lower_bound = min_version.clone();
+
+        let constraint = match self {
+            Self::ExactVersion => VersionSpec::Group(
+                LogicalOperator::Or,
+                versions
+                    .into_iter()
+                    .dedup()
+                    .map(|v| VersionSpec::Exact(EqualityOperator::Equals, v.clone()))
+                    .collect(),
+            ),
+            Self::Major => {
+                let upper_bound = max_version
+                    .clone()
+                    .pop_segments(2)
+                    .unwrap_or(max_version.to_owned())
+                    .bump(VersionBumpType::Major)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            }
+            Self::Minor => {
+                let upper_bound = max_version
+                    .clone()
+                    .pop_segments(1)
+                    .unwrap_or(max_version.to_owned())
+                    .bump(VersionBumpType::Minor)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            }
+            Self::LatestUp => VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+            Self::NoPin => VersionSpec::Any,
+            Self::Semver => {
+                // Pin the first left most non-zero segment for the upperbound
+                let mut left_most_non_zero_offset = None;
+                for (index, segment) in max_version.segments().enumerate() {
+                    if !segment.is_zero() {
+                        left_most_non_zero_offset = Some(index);
+                        break;
+                    }
+                }
+                let upper_bound = max_version
+                    .with_segments(
+                        0..=left_most_non_zero_offset.unwrap_or(max_version.segment_count()),
+                    )
+                    .unwrap_or(max_version.clone())
+                    .bump(VersionBumpType::Last)
+                    .ok()?;
+                VersionSpec::Group(
+                    LogicalOperator::And,
+                    vec![
+                        VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+                        VersionSpec::Range(RangeOperator::Less, upper_bound),
+                    ],
+                )
+            }
+        };
+        Some(constraint)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -244,6 +357,10 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
+
+    /// Dependency Pinning strategy used for dependency modification through automated logic like `pixi add`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinning_strategy: Option<PinningStrategy>,
 
     #[serde(skip)]
     #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
@@ -284,6 +401,7 @@ impl Default for Config {
             repodata_config: None,
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
+            pinning_strategy: Default::default(),
         }
     }
 }
@@ -480,6 +598,27 @@ impl Config {
         config
     }
 
+    // Get all possible keys of the configuration
+    pub fn get_keys(&self) -> &[&str] {
+        &[
+            "default-channels",
+            "change-ps1",
+            "authentication-override-file",
+            "tls-no-verify",
+            "mirrors",
+            "detached-environments",
+            "pinning-strategy",
+            "repodata-config",
+            "repodata-config.disable-jlap",
+            "repodata-config.disable-bzip2",
+            "repodata-config.disable-zstd",
+            "pypi-config",
+            "pypi-config.index-url",
+            "pypi-config.extra-index-urls",
+            "pypi-config.keyring-provider",
+        ]
+    }
+
     /// Merge the given config into the current one.
     #[must_use]
     pub fn merge_config(mut self, other: Config) -> Self {
@@ -504,6 +643,7 @@ impl Config {
             repodata_config: other.repodata_config.or(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
+            pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
         }
     }
 
@@ -577,27 +717,13 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys = || {
-            let keys = [
-                "default-channels",
-                "change-ps1",
-                "authentication-override-file",
-                "tls-no-verify",
-                "mirrors",
-                "detached-environments",
-                "repodata-config",
-                "repodata-config.disable-jlap",
-                "repodata-config.disable-bzip2",
-                "repodata-config.disable-zstd",
-                "pypi-config",
-                "pypi-config.index-url",
-                "pypi-config.extra-index-urls",
-                "pypi-config.keyring-provider",
-            ];
-            format!("Supported keys:\n\n{}", keys.join("\n"))
-        };
-
-        let err = miette::miette!("Unknown key: {}\n{}", key, show_supported_keys());
+        let show_supported_keys =
+            || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
+        let err = miette::miette!(
+            "Unknown key: {}\n{}",
+            console::style(key).red(),
+            show_supported_keys()
+        );
 
         match key {
             "default-channels" => {
@@ -629,6 +755,12 @@ impl Config {
                     "false" => DetachedEnvironments::Boolean(false),
                     _ => DetachedEnvironments::Path(PathBuf::from(v)),
                 });
+            }
+            "pinning-strategy" => {
+                self.pinning_strategy = value
+                    .map(|v| PinningStrategy::from_str(v.as_str()))
+                    .transpose()
+                    .into_diagnostic()?
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -759,6 +891,7 @@ pub fn config_path_global() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn test_config_parse() {
@@ -766,6 +899,7 @@ mod tests {
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
 detached-environments = "{}"
+pinning-strategy = "no-pin"
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
@@ -788,6 +922,19 @@ UNUSED = "unused"
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
         );
+    }
+
+    #[rstest]
+    #[case("semver", PinningStrategy::Semver)]
+    #[case("major", PinningStrategy::Major)]
+    #[case("minor", PinningStrategy::Minor)]
+    #[case("exact-version", PinningStrategy::ExactVersion)]
+    #[case("latest-up", PinningStrategy::LatestUp)]
+    #[case("no-pin", PinningStrategy::NoPin)]
+    fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
+        let toml = format!("pinning-strategy = \"{}\"", input);
+        let (config, _) = Config::from_toml(&toml).unwrap();
+        assert_eq!(config.pinning_strategy, Some(expected));
     }
 
     #[test]
@@ -1041,5 +1188,81 @@ UNUSED = "unused"
         assert_eq!(config.change_ps1, None);
 
         config.set("unknown-key", None).unwrap_err();
+    }
+
+    #[rstest]
+    #[case("pinning-strategy", None, None)]
+    #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
+    #[case("pinning-strategy", Some("no-pin".to_string()), Some(PinningStrategy::NoPin))]
+    #[case("pinning-strategy", Some("exact-version".to_string()), Some(PinningStrategy::ExactVersion))]
+    #[case("pinning-strategy", Some("latest-up".to_string()), Some(PinningStrategy::LatestUp))]
+    #[case("pinning-strategy", Some("major".to_string()), Some(PinningStrategy::Major))]
+    #[case("pinning-strategy", Some("minor".to_string()), Some(PinningStrategy::Minor))]
+    fn test_set_pinning_strategy(
+        #[case] key: &str,
+        #[case] value: Option<String>,
+        #[case] expected: Option<PinningStrategy>,
+    ) {
+        let mut config = Config::default();
+        config.set(key, value).unwrap();
+        assert_eq!(config.pinning_strategy, expected);
+    }
+
+    #[test]
+    fn test_version_constraints() {
+        let versions = vec![
+            vec!["1.2.3"],
+            vec!["0.0.0"],
+            vec!["1!1"],
+            vec!["1!0.0.0"],
+            vec!["1.2.3a1"],
+            vec!["1.2.3a1", "1.2.3"],
+            vec!["1.2.3", "1.2.3a1", "1.2.3b1", "1.2.3rc1", "2", "10000"],
+            vec!["1.2.0", "1.3.0"],
+            vec!["0.2.0", "0.3.0"],
+            vec!["0.2.0", "1.3.0"],
+            vec!["1.2"],
+            vec!["1.2", "2"],
+            vec!["1.2", "1!2.0"],
+        ];
+
+        // We could use `strum` for this, but it requires another dependency
+        let strategies = vec![
+            PinningStrategy::Semver,
+            PinningStrategy::Major,
+            PinningStrategy::Minor,
+            PinningStrategy::ExactVersion,
+            PinningStrategy::LatestUp,
+            PinningStrategy::NoPin,
+        ];
+
+        let results = strategies
+            .into_iter()
+            .map(|strategy| {
+                let constraints: Vec<String> = versions
+                    .iter()
+                    .map(|v| {
+                        let constraint = strategy
+                            .determine_version_constraint(
+                                v.clone()
+                                    .into_iter()
+                                    .map(|v| v.parse().unwrap())
+                                    .collect::<Vec<Version>>()
+                                    .as_slice(),
+                            )
+                            .unwrap()
+                            .to_string();
+                        format!("{} from {}", constraint, v.join(", "))
+                    })
+                    .collect();
+                format!(
+                    "### Strategy: '{:?}'\n{}\n",
+                    strategy,
+                    constraints.join("\n")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(results);
     }
 }

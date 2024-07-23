@@ -8,6 +8,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
+use rattler_solve::ChannelPriority;
 use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::{serde_as, SerializeDisplay};
 
@@ -145,6 +146,11 @@ pub struct Feature {
     /// the default channels from the project should be used.
     pub channels: Option<IndexSet<PrioritizedChannel>>,
 
+    /// Channel priority for the solver, if not set the default is used.
+    /// This value is `None` and there are multiple features,
+    /// it will be seen as unset and overwritten by a set one.
+    pub channel_priority: Option<ChannelPriority>,
+
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
@@ -162,8 +168,10 @@ impl Feature {
             name,
             platforms: None,
             channels: None,
+            channel_priority: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
+
             targets: <Targets as Default>::default(),
         }
     }
@@ -309,6 +317,8 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
             #[serde(default)]
+            channel_priority: Option<ChannelPriority>,
+            #[serde(default)]
             system_requirements: SystemRequirements,
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
@@ -363,6 +373,7 @@ impl<'de> Deserialize<'de> for Feature {
                     .map(|channel| channel.into_prioritized_channel())
                     .collect()
             }),
+            channel_priority: inner.channel_priority,
             system_requirements: inner.system_requirements,
             pypi_options: inner.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),

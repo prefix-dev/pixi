@@ -147,6 +147,21 @@ detached-environments = "/opt/pixi/envs"
 
 ```
 
+### `pinning-strategy`
+The strategy to use for pinning dependencies when running `pixi add`.
+The default is `semver` but you can set the following:
+
+- `no-pin`: No pinning, resulting in an unconstraint dependency. `*`
+- `semver`: Pinning to the latest version that satisfies the semver constraint. Resulting in a pin to major for most versions and to minor for `v0` versions.
+- `exact-version`: Pinning to the exact version, `1.2.3` -> `==1.2.3`.
+- `major`: Pinning to the major version, `1.2.3` -> `>=1.2.3, <2`.
+- `minor`: Pinning to the minor version, `1.2.3` -> `>=1.2.3, <1.3`.
+- `latest-up`: Pinning to the latest version, `1.2.3` -> `>=1.2.3`.
+
+```toml title="config.toml"
+pinning-strategy = "no-pin"
+```
+
 ### `mirrors`
 Configuration for conda channel-mirrors, more info [below](#mirror-configuration).
 

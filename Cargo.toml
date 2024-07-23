@@ -54,15 +54,15 @@ percent-encoding = "2.3.1"
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pyproject-toml = "0.11.0"
-rattler = { version = "0.26.4", default-features = false }
-rattler_conda_types = { version = "0.25.2", default-features = false }
-rattler_digest = { version = "0.19.4", default-features = false }
-rattler_lock = { version = "0.22.12", default-features = false }
-rattler_networking = { version = "0.20.8", default-features = false }
-rattler_repodata_gateway = { version = "0.20.3", default-features = false }
-rattler_shell = { version = "0.20.6", default-features = false }
-rattler_solve = { version = "0.24.2", default-features = false }
-rattler_virtual_packages = { version = "0.19.3", default-features = false }
+rattler = { version = "0.27.0", default-features = false }
+rattler_conda_types = { version = "0.26.1", default-features = false }
+rattler_digest = { version = "0.19.5", default-features = false }
+rattler_lock = { version = "0.22.14", default-features = false }
+rattler_networking = { version = "0.20.10", default-features = false }
+rattler_repodata_gateway = { version = "0.21.1", default-features = false }
+rattler_shell = { version = "0.21.1", default-features = false }
+rattler_solve = { version = "0.25.1", default-features = false }
+rattler_virtual_packages = { version = "0.19.18", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 reqwest = { version = "0.12.4", default-features = false }
@@ -113,7 +113,7 @@ winapi = { version = "0.3.9", default-features = false }
 
 [package]
 name = "pixi"
-version = "0.25.0"
+version = "0.26.1"
 description = "A package management and workflow tool"
 edition.workspace = true
 authors.workspace = true
@@ -191,7 +191,7 @@ rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = ["sparse", "gateway"] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
-rattler_solve = { workspace = true, features = ["resolvo"] }
+rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }

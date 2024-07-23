@@ -28,6 +28,7 @@ train = "python train.py --cuda"
 test = "python test.py --cuda"
 
 [feature.cuda.dependencies]
+pytorch = { version = "*", channel = "pytorch" }
 pytorch-cuda = { version = "12.1.*", channel = "pytorch" }
 
 [feature.mlx]

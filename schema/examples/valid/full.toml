@@ -14,6 +14,7 @@ homepage = "https://project.com"
 repository = "https://github.com/author/project"
 documentation = "https://docs.project.com"
 conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge" }
+channel-priority = "strict"
 
 [dependencies]
 test = "*"
@@ -67,9 +68,11 @@ test = "*"
 test = "*"
 
 [feature.prod]
+channel-priority = "disabled"
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
 
 [feature.lint]
+channel-priority = "strict"
 dependencies = { flake8 = "3.7.9", black = "19.10b0" }
 
 [environments]

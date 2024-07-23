@@ -16,6 +16,7 @@ Config {
         false,
     ),
     mirrors: {},
+    pinning_strategy: None,
     loaded_from: [
         "path/config_1.toml",
         "path/config_2.toml",

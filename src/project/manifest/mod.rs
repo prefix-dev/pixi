@@ -1139,6 +1139,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             platforms: None,
             channels: None,
 
+            channel_priority: toml_manifest.project.channel_priority,
+
             system_requirements: toml_manifest.system_requirements,
 
             // Use the pypi-options from the manifest for
@@ -1215,6 +1217,7 @@ mod tests {
     use insta::{assert_snapshot, assert_yaml_snapshot};
     use miette::NarratableReportHandler;
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
+    use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
@@ -2946,5 +2949,61 @@ bar = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
+    }
+
+    #[test]
+    pub fn test_channel_priority_manifest() {
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+
+        [feature.strict]
+        channel-priority = "strict"
+
+        [feature.disabled]
+        channel-priority = "disabled"
+
+        [environments]
+        test-strict = ["strict"]
+        test-disabled = ["disabled"]
+        "#,
+        )
+        .unwrap();
+
+        assert!(manifest.default_feature().channel_priority.is_none());
+        assert!(
+            manifest
+                .feature("strict")
+                .unwrap()
+                .channel_priority
+                .unwrap()
+                == ChannelPriority::Strict
+        );
+        assert!(
+            manifest
+                .feature("disabled")
+                .unwrap()
+                .channel_priority
+                .unwrap()
+                == ChannelPriority::Disabled
+        );
+
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+        channel-priority = "disabled"
+        "#,
+        )
+        .unwrap();
+
+        assert!(manifest.default_feature().channel_priority.unwrap() == ChannelPriority::Disabled);
     }
 }

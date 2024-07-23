@@ -1,7 +1,7 @@
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 
 use crate::lock_file::LockedCondaPackages;
 
@@ -13,6 +13,7 @@ pub async fn resolve_conda(
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
     available_packages: Vec<RepoData>,
+    channel_priority: ChannelPriority,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
         // Construct a solver task that we can start solving.
@@ -20,6 +21,7 @@ pub async fn resolve_conda(
             specs,
             locked_packages,
             virtual_packages,
+            channel_priority,
             ..rattler_solve::SolverTask::from_iter(&available_packages)
         };
 

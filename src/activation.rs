@@ -161,16 +161,19 @@ pub async fn run_activation(
 
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
-        activator.run_activation(ActivationVariables {
-            // Get the current PATH variable
-            path: Default::default(),
+        activator.run_activation(
+            ActivationVariables {
+                // Get the current PATH variable
+                path: Default::default(),
 
-            // Start from an empty prefix
-            conda_prefix: None,
+                // Start from an empty prefix
+                conda_prefix: None,
 
-            // Prepending environment paths so they get found first.
-            path_modification_behavior,
-        })
+                // Prepending environment paths so they get found first.
+                path_modification_behavior,
+            },
+            None,
+        )
     })
     .await
     .into_diagnostic()?

@@ -180,7 +180,7 @@ pixi shell --environment cuda
 ➜ pixi run -e test any_command
 # Runs any_command in the `test` environment which doesn't require to be predefined as a task.
 ```
-### Abmigious Environment Selection
+### Ambiguous Environment Selection
 It's possible to define tasks in multiple environments, in this case the user should be prompted to select the environment.
 
 Here is a simple example of a task only manifest:
