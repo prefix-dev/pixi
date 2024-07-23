@@ -8,8 +8,6 @@ repository.workspace = true
 license.workspace = true
 readme.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 indexmap = { workspace = true }
 itertools = { workspace = true }
