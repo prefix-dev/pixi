@@ -20,7 +20,7 @@ pub struct GlobalDependency {
 }
 
 #[derive(Serialize, Deserialize)]
-struct GlobalEnv {
+pub struct GlobalEnv {
     pub dependencies: IndexMap<PackageName, GlobalDependency>,
 }
 
