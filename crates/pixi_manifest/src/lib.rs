@@ -91,8 +91,7 @@ impl ManifestKind {
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format
 /// and structure. The manifest data is represented as a [`ProjectManifest`]
-/// struct for easy manipulation. Owned by the [`crate::project::Project`]
-/// struct, which governs its usage.
+/// struct for easy manipulation.
 #[derive(Debug, Clone)]
 pub struct Manifest {
     /// The path to the manifest file
