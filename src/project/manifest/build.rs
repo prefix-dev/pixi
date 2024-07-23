@@ -34,7 +34,7 @@ mod tests {
             "#;
 
         let build: Build = toml_edit::de::from_str(toml).unwrap();
-        assert_eq!(build.name, Some("conda".to_string()));
+        assert_eq!(build.name, "conda".to_string());
         assert_eq!(build.dependencies.len(), 1);
         assert_eq!(
             build.task.as_single_command().unwrap(),

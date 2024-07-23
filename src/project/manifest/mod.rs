@@ -3043,7 +3043,7 @@ bar = "*"
         "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
         let build = manifest.parsed.build.first().unwrap();
-        assert_eq!(build.name, Some("conda".to_string()));
+        assert_eq!(build.name, "conda".to_string());
         assert_eq!(
             build
                 .dependencies
@@ -3053,7 +3053,7 @@ bar = "*"
         assert_eq!(build.task, Task::Plain("pixi-build-conda".to_string()));
 
         let build = manifest.parsed.build.get(1).unwrap();
-        assert_eq!(build.name, Some("conda2".to_string()));
+        assert_eq!(build.name, "conda2".to_string());
         assert_eq!(
             build
                 .dependencies
