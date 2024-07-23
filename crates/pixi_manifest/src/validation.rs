@@ -9,10 +9,10 @@ use std::{
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    Environment, Feature, FeatureName, ProjectManifest, SystemRequirements, TargetSelector,
+    Environment, Feature, FeatureName, ParsedManifest, SystemRequirements, TargetSelector,
 };
 
-impl ProjectManifest {
+impl ParsedManifest {
     /// Validate the project manifest.
     pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
