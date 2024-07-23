@@ -3,6 +3,8 @@ use lazy_static::lazy_static;
 use std::fmt::{Display, Formatter};
 use url::Url;
 
+pub use pixi_manifest::consts::*;
+
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
@@ -20,11 +22,9 @@ pub const CONDA_INSTALLER: &str = "conda";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 
-pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
-
 /// The default channels to use for a new project.
 pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
-pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
+
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
 lazy_static! {

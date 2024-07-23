@@ -1,23 +1,21 @@
 use crate::consts::PIXI_UV_INSTALLER;
+use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
 use crate::project::has_features::HasFeatures;
-use crate::project::manifest::pypi::pypi_options::PypiOptions;
 use crate::{
     consts, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
     progress,
-    project::{
-        grouped_environment::GroupedEnvironment,
-        manifest::{EnvironmentName, SystemRequirements},
-        Environment,
-    },
+    project::{grouped_environment::GroupedEnvironment, Environment},
     Project,
 };
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_manifest::pypi::pypi_options::PypiOptions;
+use pixi_manifest::{EnvironmentName, SystemRequirements};
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::{
     install::{PythonInfo, Transaction},

@@ -878,16 +878,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
-name = "concat-idents"
-version = "1.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f76990911f2267d837d9d0ad060aa63aaad170af40904b29461734c339030d4d"
-dependencies = [
- "quote",
- "syn 2.0.66",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3422,7 +3412,6 @@ dependencies = [
  "clap-verbosity-flag",
  "clap_complete",
  "clap_complete_nushell",
- "concat-idents",
  "console",
  "crossbeam-channel",
  "csv",
@@ -3456,9 +3445,9 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
+ "pixi_manifest",
  "platform-tags",
  "pypi-types",
- "pyproject-toml",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
@@ -3469,14 +3458,12 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
- "requirements-txt",
  "reqwest 0.12.4",
  "reqwest-middleware",
  "reqwest-retry",
  "rstest",
  "self-replace",
  "serde",
- "serde-untagged",
  "serde_ignored",
  "serde_json",
  "serde_with",
@@ -3484,7 +3471,6 @@ dependencies = [
  "serial_test",
  "shlex",
  "signal-hook",
- "spdx",
  "strsim",
  "tabwriter",
  "tar",
@@ -3497,7 +3483,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uv-auth",
- "uv-build",
  "uv-cache",
  "uv-client",
  "uv-configuration",
@@ -3512,6 +3497,37 @@ dependencies = [
  "winapi",
  "xxhash-rust",
  "zip 0.6.6",
+]
+
+[[package]]
+name = "pixi_manifest"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "indexmap 2.2.6",
+ "insta",
+ "itertools 0.12.1",
+ "miette 7.2.0",
+ "pep440_rs",
+ "pep508_rs",
+ "pyproject-toml",
+ "rattler_conda_types",
+ "rattler_lock",
+ "rattler_solve",
+ "rattler_virtual_packages",
+ "regex",
+ "rstest",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_with",
+ "spdx",
+ "strsim",
+ "tempfile",
+ "thiserror",
+ "toml_edit 0.22.13",
+ "tracing",
+ "url",
 ]
 
 [[package]]

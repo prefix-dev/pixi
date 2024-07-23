@@ -7,15 +7,16 @@ use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 
+use crate::fancy_display::FancyDisplay;
+use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
+use crate::project::has_features::HasFeatures;
+use crate::pypi_tags::{get_pypi_tags, is_python_record};
+use crate::utils::uv::pypi_options_to_index_locations;
+use crate::Project;
 use rattler_conda_types::Platform;
 use rattler_lock::{Package, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
-
-use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::has_features::HasFeatures;
-use crate::pypi_tags::{get_pypi_tags, is_python_record};
-use crate::Project;
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -142,7 +143,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let index_locations;
     let mut registry_index = if let Some(python_record) = python_record {
         uv_context = UvResolutionContext::from_project(&project)?;
-        index_locations = environment.pypi_options().to_index_locations();
+        index_locations = pypi_options_to_index_locations(&environment.pypi_options());
         tags = get_pypi_tags(
             platform,
             &environment.system_requirements(),

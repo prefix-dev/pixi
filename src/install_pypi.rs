@@ -12,19 +12,20 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
+use pixi_manifest::{
+    pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements,
+};
 use pypi_types::{
     HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
     ParsedUrlError, VerbatimParsedUrl,
 };
-
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, SetupPyStrategy};
-use uv_configuration::{IndexStrategy, PreviewMode};
+use uv_configuration::{ConfigSettings, IndexStrategy, PreviewMode, SetupPyStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
@@ -34,14 +35,12 @@ use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
+use crate::utils::uv::pypi_options_to_index_locations;
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    project::manifest::{
-        pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements,
-    },
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -597,7 +596,7 @@ pub async fn update_python_distributions(
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
     let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
 
-    let index_locations = pypi_options.to_index_locations();
+    let index_locations = pypi_options_to_index_locations(pypi_options);
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
             .client(uv_context.client.clone())
@@ -901,7 +900,8 @@ pub async fn update_python_distributions(
     Ok(())
 }
 
-/// Returns `true` if the source tree at the given path contains dynamic metadata.
+/// Returns `true` if the source tree at the given path contains dynamic
+/// metadata.
 #[allow(dead_code)]
 fn is_dynamic(path: &Path) -> bool {
     // return true;
@@ -909,7 +909,7 @@ fn is_dynamic(path: &Path) -> bool {
     let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
         return true;
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_str(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml_str(&contents) else {
         return true;
     };
     // // If `[project]` is not present, we assume it's dynamic.
@@ -925,9 +925,9 @@ fn is_dynamic(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use distribution_types::RemoteSource;
     use std::{path::PathBuf, str::FromStr};
 
+    use distribution_types::RemoteSource;
     use pep440_rs::Version;
     use rattler_lock::{PypiPackageData, UrlOrPath};
 

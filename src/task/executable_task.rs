@@ -18,12 +18,11 @@ use crate::{
     consts::TASK_STYLE,
     lock_file::LockFileDerivedData,
     project::Environment,
-    task::{
-        task_graph::{TaskGraph, TaskId},
-        Task, TaskName,
-    },
+    task::task_graph::{TaskGraph, TaskId},
     Project,
 };
+
+use pixi_manifest::{Task, TaskName};
 
 /// Runs task in project.
 #[derive(Default, Debug)]

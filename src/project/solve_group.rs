@@ -2,9 +2,9 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 
-use super::{
-    has_features::HasFeatures, manifest, manifest::SystemRequirements, Environment, Project,
-};
+use super::{has_features::HasFeatures, Environment, Project};
+use pixi_manifest as manifest;
+use pixi_manifest::SystemRequirements;
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -53,9 +53,7 @@ impl<'p> SolveGroup<'p> {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
-                self.project.manifest.parsed.environments.environments[*env_idx]
-                    .as_ref()
-                    .expect("environment has been removed"),
+                &self.project.manifest.parsed.environments[*env_idx],
             )
         })
     }
