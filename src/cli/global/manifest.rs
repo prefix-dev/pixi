@@ -1,11 +1,16 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::{HashMap, HashSet}, str::FromStr};
 
 use indexmap::IndexMap;
-use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, ParseStrictness, Platform};
+use rattler_repodata_gateway::sparse::SparseRepoData;
+use reqwest_middleware::ClientWithMiddleware;
 /// Serde structs to read global install manifest file
 use serde::{Deserialize, Serialize};
 
-use crate::config::{home_path, Config};
+use crate::{
+    config::{home_path, Config},
+    consts,
+};
 
 use super::{
     common::{get_client_and_sparse_repodata, load_package_records, BinEnvDir},
@@ -66,12 +71,47 @@ impl GlobalManifest {
     pub fn store(&self) {
         let manifest_path = home_path()
             .expect("did not find home path")
-            .join("global_manifest.yaml");
+            .join(consts::GLOBAL_MANIFEST_FILE);
         println!("Storing global manifest to {:?}", manifest_path);
         let manifest_file = std::fs::write(manifest_path, serde_yaml::to_string(&self).unwrap());
     }
 
-    pub async fn setup_envs(&self) -> miette::Result<()> {
+    pub async fn setup_env(
+        &self,
+        name: &str,
+        env: &GlobalEnv,
+        authenticated_client: &ClientWithMiddleware,
+        sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
+    ) -> miette::Result<()> {
+        let env_dir = home_path()
+            .expect("did not find home path")
+            .join(".pixi")
+            .join("envs")
+            .join(name);
+        std::fs::create_dir_all(env_dir).unwrap();
+        let specs = env.specs();
+        let records = load_package_records(&specs, sparse_repodata.values())?;
+        let names = specs
+            .iter()
+            .map(|s| s.name.clone().unwrap())
+            .collect::<Vec<_>>();
+        let env_dir = BinEnvDir::create(&PackageName::from_str(name).unwrap()).await?;
+
+        let scripts = globally_install_packages(
+            env_dir,
+            &names,
+            records,
+            authenticated_client.clone(),
+            Platform::current(),
+            BinarySelector::Specific(env.specific_binaries()),
+        )
+        .await
+        .unwrap();
+
+        Ok(())
+    }
+
+    pub async fn setup_envs(&self, envs: Option<HashSet<String>>) -> miette::Result<()> {
         // Figure out what channels we are using
         let config = Config::load_global();
         let channels = config
@@ -82,6 +122,12 @@ impl GlobalManifest {
             get_client_and_sparse_repodata(&channels, Platform::current(), &config).await?;
 
         for (name, env) in &self.envs {
+            if let Some(envs) = &envs {
+                if !envs.contains(name) {
+                    continue;
+                }
+            }
+
             let env_dir = home_path()
                 .expect("did not find home path")
                 .join(".pixi")
@@ -107,6 +153,7 @@ impl GlobalManifest {
             .await
             .unwrap();
         }
+
         Ok(())
     }
 }
@@ -114,7 +161,7 @@ impl GlobalManifest {
 pub fn read_global_manifest() -> GlobalManifest {
     let manifest_path = home_path()
         .expect("did not find home path")
-        .join("global_manifest.yaml");
+        .join(consts::GLOBAL_MANIFEST_FILE);
     println!("Reading global manifest from {:?}", manifest_path);
     let manifest_file = std::fs::read_to_string(manifest_path).unwrap();
     let manifest: GlobalManifest = serde_yaml::from_str(&manifest_file).unwrap();

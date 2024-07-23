@@ -17,6 +17,7 @@ pub const TASK_CACHE_DIR: &str = "task-cache-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_INSTALLER: &str = "conda";
+pub const GLOBAL_MANIFEST_FILE: &str = "global_manifest.yaml";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 

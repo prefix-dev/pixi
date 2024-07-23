@@ -333,7 +333,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let records = load_package_records(&[package_matchspec], sparse_repodata.values())?;
 
         let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
-        let (prefix_package, scripts, _) = globally_install_packages(
+        let (package_script, _) = globally_install_packages(
             target_bin_dir,
             &[package_name],
             records,
@@ -342,28 +342,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             BinarySelector::All,
         )
         .await?;
-        let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
-        let record = &prefix_package.repodata_record.package_record;
 
-        // Warn if no executables were created for the package
-        if scripts.is_empty() {
+        // TODO change warning here.
+        for (prefix_package, scripts) in package_script {
+            let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
+            let record = &prefix_package.repodata_record.package_record;
+
+            // Warn if no executables were created for the package
+            if scripts.is_empty() {
+                eprintln!(
+                    "{}No executable entrypoint found in package {}, are you sure it exists?",
+                    console::style(console::Emoji("⚠️", "")).yellow().bold(),
+                    console::style(record.name.as_source()).bold()
+                );
+            }
+
             eprintln!(
-                "{}No executable entrypoint found in package {}, are you sure it exists?",
-                console::style(console::Emoji("⚠️", "")).yellow().bold(),
-                console::style(record.name.as_source()).bold()
+                "{}Installed package {} {} {} from {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(record.name.as_source()).bold(),
+                console::style(record.version.version()).bold(),
+                console::style(record.build.as_str()).bold(),
+                channel_name,
             );
+
+            executables.extend(scripts);
         }
-
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(record.name.as_source()).bold(),
-            console::style(record.version.version()).bold(),
-            console::style(record.build.as_str()).bold(),
-            channel_name,
-        );
-
-        executables.extend(scripts);
     }
 
     if !executables.is_empty() {
@@ -415,7 +419,7 @@ pub(super) async fn globally_install_packages(
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
     select_binaries: BinarySelector,
-) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+) -> miette::Result<(Vec<(PrefixRecord, Vec<PathBuf>)>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let prefix = Prefix::new(bin_prefix);
 
@@ -442,7 +446,7 @@ pub(super) async fn globally_install_packages(
     .await
     .into_diagnostic()?;
 
-    let mut scripts = Vec::with_capacity(package_names.len());
+    let mut linked_packages = Vec::with_capacity(package_names.len());
     // Find the installed package in the environment
     for package_name in package_names {
         let prefix_package = find_designated_package(&prefix, package_name).await?;
@@ -464,19 +468,18 @@ pub(super) async fn globally_install_packages(
                 .await?;
         create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
-        scripts.extend(script_mapping.into_iter().map(
+        let scripts = script_mapping.into_iter().map(
             |BinScriptMapping {
                  global_binary_path: path,
                  ..
              }| path,
-        ));
+        ).collect::<Vec<_>>();
+
+        linked_packages.push((prefix_package, scripts));
     }
 
-    // TODO: return multiple prefix_packages
-    let prefix_package = find_designated_package(&prefix, package_names.first().unwrap()).await?;
     Ok((
-        prefix_package,
-        scripts,
+        linked_packages,
         result.transaction.operations.is_empty(),
     ))
 }
