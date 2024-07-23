@@ -46,7 +46,7 @@ async fn install_run_python() {
     // Check if python is installed and can be run
     let result = pixi
         .run(run::Args {
-            task: string_from_iter(["python", "--version"]),
+            task: Some(string_from_iter(["python", "--version"])),
             ..Default::default()
         })
         .await
@@ -216,7 +216,7 @@ async fn install_locked_with_config() {
 
     let result = pixi
         .run(Args {
-            task: vec!["which_python".to_string()],
+            task: Some(vec!["which_python".to_string()]),
             manifest_path: None,
             ..Default::default()
         })
@@ -264,7 +264,7 @@ async fn install_frozen() {
                 frozen: true,
                 ..Default::default()
             },
-            task: string_from_iter(["python", "--version"]),
+            task: Some(string_from_iter(["python", "--version"])),
             ..Default::default()
         })
         .await
