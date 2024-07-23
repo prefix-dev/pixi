@@ -1,4 +1,5 @@
 mod activation;
+mod build;
 pub(crate) mod channel;
 mod document;
 mod environment;
@@ -49,6 +50,7 @@ use toml_edit::DocumentMut;
 use url::{ParseError, Url};
 
 use self::error::TomlError;
+use crate::project::manifest::build::Build;
 use crate::{
     config::Config,
     consts,
@@ -896,6 +898,9 @@ pub struct ProjectManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The build sections of the project.
+    pub build: Vec<Build>,
 }
 
 impl ProjectManifest {
@@ -1104,6 +1109,10 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             pypi_options: Option<PypiOptions>,
 
+            /// build list
+            #[serde(default)]
+            build: Option<Vec<Build>>,
+
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
@@ -1201,11 +1210,14 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             }));
         }
 
+        let build = toml_manifest.build.unwrap_or_default();
+
         Ok(Self {
             project: toml_manifest.project,
             features,
             environments,
             solve_groups,
+            build,
         })
     }
 }
@@ -1222,7 +1234,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{project::manifest::channel::PrioritizedChannel, util::default_channel_config};
+    use crate::task::Execute;
+    use crate::{
+        project::manifest::channel::PrioritizedChannel, util::default_channel_config, CmdArgs,
+    };
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -3005,5 +3020,60 @@ bar = "*"
         .unwrap();
 
         assert!(manifest.default_feature().channel_priority.unwrap() == ChannelPriority::Disabled);
+    }
+
+    #[test]
+    fn test_parse_build() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [[build]]
+        name = "conda"
+        dependencies = { pixi-build-conda = "*" }
+        task = "pixi-build-conda"
+
+        [[build]]
+        name = "conda2"
+        dependencies = { pixi-build-conda = ">=1.2.3,<2" }
+        task = {cmd = "pixi-build-conda", inputs = ["*.py"]}
+
+        "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let build = manifest.parsed.build.get(0).unwrap();
+        assert_eq!(build.name, Some("conda".to_string()));
+        assert_eq!(
+            build
+                .dependencies
+                .get(&PackageName::from_str("pixi-build-conda").unwrap()),
+            Some(&NamelessMatchSpec::from_str("*", Strict).unwrap())
+        );
+        assert_eq!(build.task, Task::Plain("pixi-build-conda".to_string()));
+
+        let build = manifest.parsed.build.get(1).unwrap();
+        assert_eq!(build.name, Some("conda2".to_string()));
+        assert_eq!(
+            build
+                .dependencies
+                .get(&PackageName::from_str("pixi-build-conda").unwrap()),
+            Some(&NamelessMatchSpec::from_str(">=1.2.3,<2", Strict).unwrap())
+        );
+        assert_eq!(
+            build.task,
+            Task::Execute {
+                0: Execute {
+                    cmd: CmdArgs::Single("pixi-build-conda".to_string()),
+                    inputs: Some(vec!["*.py".to_string()]),
+                    outputs: None,
+                    depends_on: vec![],
+                    cwd: None,
+                    env: None,
+                    description: None,
+                    clean_env: false,
+                },
+            }
+        );
     }
 }

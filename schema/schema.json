@@ -20,6 +20,14 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
+    "build": {
+      "title": "Build",
+      "description": "The builds of the project",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Build"
+      }
+    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",
@@ -221,6 +229,50 @@
           "examples": [
             "activate.sh",
             "activate.bat"
+          ]
+        }
+      }
+    },
+    "Build": {
+      "title": "Build",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
+        },
+        "name": {
+          "title": "Name",
+          "description": "The name of the build",
+          "type": "string"
+        },
+        "task": {
+          "title": "Task",
+          "description": "The task of the build",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskInlineTable"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
           ]
         }
       }

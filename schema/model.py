@@ -481,11 +481,18 @@ class PyPIOptions(StrictBaseModel):
     )
 
 
+#####################
+# The Build section #
+#####################
+class Build(StrictBaseModel):
+    name: str | None = Field(..., description="The name of the build")
+    dependencies: Dependencies = DependenciesField
+    task: TaskInlineTable | NonEmptyStr = Field(None, description="The task of the build")
+
+
 #######################
 # The Manifest itself #
 #######################
-
-
 class BaseManifest(StrictBaseModel):
     """The configuration for a [`pixi`](https://pixi.sh) project."""
 
@@ -543,6 +550,7 @@ class BaseManifest(StrictBaseModel):
         alias="pypi-options",
         description="Options related to PyPI indexes, on the default feature",
     )
+    build: list[Build] | None = Field(None, description="The builds of the project")
 
 
 #########################
