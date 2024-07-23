@@ -21,10 +21,11 @@ pub struct Build {
     pub task: Task,
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
-#[test]
+    #[test]
     fn deserialize_build() {
         let toml = r#"
             name = "conda"
