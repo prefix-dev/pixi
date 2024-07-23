@@ -248,7 +248,12 @@ pub(super) async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
-pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<bool> {
+pub enum UserResponse {
+    Continue,
+    Cancel,
+}
+
+pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<UserResponse> {
     let dangerous_packages = HashMap::from([
         ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
         ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
@@ -268,12 +273,12 @@ pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<boo
                 .interact()
                 .into_diagnostic()?
             {
-                return Ok(false);
+                return Ok(UserResponse::Cancel);
             }
         }
     }
 
-    Ok(true)
+    Ok(UserResponse::Continue)
 }
 
 /// Install a global command
@@ -282,15 +287,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
-    let package_names: Result<Vec<PackageName>, _> = args
+    let package_names = args
         .packages()
         .iter()
         .map(|s| PackageName::from_str(s))
-        .collect();
-    let package_names = package_names.into_diagnostic()?;
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Warn user on dangerous package installations, interactive yes no prompt
-    if !prompt_user_to_continue(package_names)? {
+    if let UserResponse::Cancel = prompt_user_to_continue(package_names)? {
         return Ok(());
     }
 
@@ -299,9 +304,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
 
     // Install the package(s)
-    let mut executables = vec![];
-    for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(&[package_matchspec], sparse_repodata.values())?;
+    let specs = args.specs()?;
+    let mut executables = Vec::with_capacity(specs.len());
+    for (package_name, package_matchspec) in specs {
+        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
         let (prefix_package, scripts, _) = globally_install_packages(
@@ -373,14 +379,13 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
 
 /// Install given package globally, with all its dependencies
 pub(super) async fn globally_install_packages(
-    bin_env_dir: BinEnvDir,
+    BinEnvDir(bin_prefix): BinEnvDir,
     package_names: &[PackageName],
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = bin_env_dir;
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
@@ -406,7 +411,7 @@ pub(super) async fn globally_install_packages(
     .await
     .into_diagnostic()?;
 
-    let mut scripts = vec![];
+    let mut scripts = Vec::with_capacity(package_names.len());
     // Find the installed package in the environment
     for package_name in package_names {
         let prefix_package = find_designated_package(&prefix, package_name).await?;
