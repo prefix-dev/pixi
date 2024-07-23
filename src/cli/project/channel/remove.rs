@@ -1,10 +1,10 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 
-use crate::project::manifest::channel::PrioritizedChannel;
-use crate::project::manifest::FeatureName;
 use crate::Project;
 use clap::Parser;
 use miette::IntoDiagnostic;
+use pixi_manifest::FeatureName;
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::Channel;
 
 #[derive(Parser, Debug, Default)]

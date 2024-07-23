@@ -1,6 +1,6 @@
-use crate::project::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
 use miette::{Context, IntoDiagnostic};
+use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use platform_tags::Os;
 use platform_tags::Tags;
 use rattler_conda_types::{Arch, PackageRecord, Platform};

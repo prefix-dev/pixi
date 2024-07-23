@@ -1,13 +1,13 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::project::manifest::pyproject::PyProjectToml;
-use crate::project::manifest::DependencyOverwriteBehavior;
 use crate::utils::conda_environment_file::CondaEnvFile;
+use crate::Project;
 use crate::{config::get_default_author, consts};
-use crate::{FeatureName, Project};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use pixi_manifest::pyproject::PyProjectToml;
+use pixi_manifest::{DependencyOverwriteBehavior, FeatureName, SpecType};
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
@@ -165,7 +165,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
-        //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
+        //  - Implement it for `[pixi_manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
         let rv = render_project(
             &env,
@@ -186,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
             project.manifest.add_dependency(
                 &spec,
-                crate::SpecType::Run,
+                SpecType::Run,
                 &platforms,
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
@@ -217,7 +217,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
-            let pyproject = PyProjectToml::from_str(&file)?;
+            let pyproject = PyProjectToml::from_toml_str(&file)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
             if pyproject.is_pixi() {

@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/document.rs
+assertion_line: 626
+expression: source.to_string()
+---
+[tool.pixi.environments]
+bar = ["default"]

@@ -1,0 +1,46 @@
+[package]
+name = "pixi_manifest"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+readme.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indexmap = { workspace = true }
+itertools = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_with = { workspace = true }
+serde-untagged = { workspace = true }
+toml_edit = { workspace = true }
+url = { workspace = true }
+tracing = { workspace = true }
+spdx = { workspace = true }
+strsim = { workspace = true }
+regex = { workspace = true }
+
+# Python specific dependencies, may require patches!
+pyproject-toml = { workspace = true }
+pep440_rs = { workspace = true}
+pep508_rs = { workspace = true}
+
+# Rattler crates
+rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+rattler_solve = { workspace = true, features = ["serde"]}
+rattler_lock = { workspace = true}
+
+# TODO: Remove these dependencies
+miette = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+insta = { workspace = true, features = ["yaml"] }
+serde_json = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true}
