@@ -12,8 +12,8 @@ use serde_with::SerializeDisplay;
 use thiserror::Error;
 
 use crate::consts::DEFAULT_ENVIRONMENT_NAME;
+use crate::solve_group::SolveGroupIdx;
 use crate::utils::PixiSpanned;
-use crate::SolveGroupIdx;
 
 /// The name of an environment. This is either a string or default for the
 /// default environment.
@@ -254,3 +254,7 @@ mod tests {
         );
     }
 }
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(transparent)]
+pub struct EnvironmentIdx(pub(crate) usize);
