@@ -22,8 +22,7 @@ pub enum Operation {
     Add(AddArgs),
 
     /// Remove a command from the project
-    // BREAK: This should only have the `rm` alias
-    #[clap(visible_alias = "rm", alias = "r")]
+    #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 
     /// Alias another specific command
