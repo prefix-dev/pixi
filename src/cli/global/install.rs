@@ -307,7 +307,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let specs = args.specs()?;
     let mut executables = Vec::with_capacity(specs.len());
     for (package_name, package_matchspec) in specs {
-        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
+        let records = load_package_records(&[package_matchspec], sparse_repodata.values())?;
 
         let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
         let (prefix_package, scripts, _) = globally_install_packages(
