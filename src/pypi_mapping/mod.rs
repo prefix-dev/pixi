@@ -126,6 +126,26 @@ impl MappingSource {
     }
 }
 
+/// This enum represents the source of mapping
+/// it can be user-defined ( custom )
+/// or from prefix.dev ( prefix )
+#[derive(Debug, Clone)]
+pub enum PurlSource {
+    HashMapping,
+    CompressedMapping,
+    ProjectDefinedMapping,
+}
+
+impl PurlSource {
+    fn as_str(&self) -> &str {
+        match self {
+            PurlSource::HashMapping => "hash-mapping",
+            PurlSource::CompressedMapping => "compressed-mapping",
+            PurlSource::ProjectDefinedMapping => "project-defined-mapping",
+        }
+    }
+}
+
 pub async fn amend_pypi_purls(
     client: reqwest::Client,
     mapping_source: &MappingSource,

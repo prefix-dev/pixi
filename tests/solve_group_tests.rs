@@ -138,14 +138,20 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(!dep
-                    .as_conda()
-                    .unwrap()
-                    .package_record()
-                    .purls
-                    .as_ref()
-                    .unwrap()
-                    .is_empty());
+                assert!(
+                    dep.as_conda()
+                        .unwrap()
+                        .package_record()
+                        .purls
+                        .as_ref()
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .qualifiers()
+                        .get("source")
+                        .unwrap()
+                        == "hash-mapping"
+                );
             }
         });
 
@@ -302,7 +308,10 @@ async fn test_dont_record_not_present_package_as_purl() {
     // from conda-forge channel we will anyway record a purl for it
     // by assumption that it's a pypi package
     let foo_bar_package = Package::build("pixi-something-new-for-test", "2").finish();
-    let boltons_package = Package::build("boltons", "2").finish();
+    // We use one package that is not present by hash
+    // but `boltons` name is still present in compressed mapping
+    // so we will record a purl for it
+    let boltons_package = Package::build("boltons", "99999").finish();
 
     let mut repo_data_record = RepoDataRecord {
         package_record: foo_bar_package.package_record,
@@ -367,7 +376,7 @@ async fn test_dont_record_not_present_package_as_purl() {
     // so we test that we also record source=conda-forge-mapping qualifier
     assert_eq!(
         boltons_purl.qualifiers().get("source").unwrap(),
-        "conda-forge-mapping"
+        "compressed-mapping"
     );
 }
 

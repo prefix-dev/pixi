@@ -15,7 +15,8 @@ use tokio::sync::Semaphore;
 use url::Url;
 
 use super::{
-    build_pypi_purl_from_package_record, custom_pypi_mapping, is_conda_forge_record, Reporter,
+    build_pypi_purl_from_package_record, custom_pypi_mapping, is_conda_forge_record, PurlSource,
+    Reporter,
 };
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
@@ -200,7 +201,7 @@ pub fn amend_pypi_purls_for_record(
             if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
                 for pypi_name in pypi_names {
                     let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
-                        .with_qualifier("source", "hash-mapping")
+                        .with_qualifier("source", PurlSource::HashMapping.as_str())
                         .expect("valid qualifier");
                     let built_purl = purl.build().expect("valid pypi package url");
                     // Push the value into the vector
@@ -225,7 +226,7 @@ pub fn amend_pypi_purls_for_record(
             // we record the purl
             if let Some(mapped_name) = possible_mapped_name {
                 let purl = PackageUrl::builder(String::from("pypi"), mapped_name)
-                    .with_qualifier("source", "compressed-mapping")
+                    .with_qualifier("source", PurlSource::CompressedMapping.as_str())
                     .expect("valid qualifier");
                 let built_purl = purl.build().expect("valid pypi package url");
                 purls.push(built_purl);
