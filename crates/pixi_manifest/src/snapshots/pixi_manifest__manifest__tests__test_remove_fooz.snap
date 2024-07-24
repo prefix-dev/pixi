@@ -1,0 +1,15 @@
+---
+source: crates/pixi_manifest/src/manifest.rs
+expression: manifest.document.to_string()
+---
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [target.win-64.dependencies]
+            bar = "*"
+
+            [target.linux-64.build-dependencies]
+            baz = "*"
