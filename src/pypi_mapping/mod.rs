@@ -137,7 +137,7 @@ pub enum PurlSource {
 }
 
 impl PurlSource {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             PurlSource::HashMapping => "hash-mapping",
             PurlSource::CompressedMapping => "compressed-mapping",
