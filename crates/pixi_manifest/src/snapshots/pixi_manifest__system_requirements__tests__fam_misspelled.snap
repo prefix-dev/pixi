@@ -1,0 +1,10 @@
+---
+source: crates/pixi_manifest/src/system_requirements.rs
+assertion_line: 309
+expression: "\n        [system-requirements.libc]\n        version = \"2.12\"\n        fam = \"glibc\"\n        "
+---
+TOML parse error at line 2, column 9
+  |
+2 |         [system-requirements.libc]
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+unknown field `fam`, expected `family` or `version`

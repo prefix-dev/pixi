@@ -4,12 +4,11 @@ use indexmap::IndexSet;
 use rattler_conda_types::{Channel, Platform};
 use rattler_solve::ChannelPriority;
 
-use crate::{Project, SpecType};
+use crate::Project;
+use pixi_manifest::SpecType;
 
-use super::{
-    manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements},
-    CondaDependencies, PyPiDependencies,
-};
+use super::{CondaDependencies, PyPiDependencies};
+use pixi_manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements};
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities are set
 #[derive(Debug, thiserror::Error)]

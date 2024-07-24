@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/lib.rs
+assertion_line: 1615
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\").project.pypi_options.clone().unwrap()"
+---
+index-url: "https://pypi.org/simple"
+extra-index-urls:
+  - "https://pypi.org/simple2"
+find-links:
+  - path: "../foo"
+  - url: "https://example.com/bar"

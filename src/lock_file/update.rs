@@ -12,23 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use barrier_cell::BarrierCell;
-use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::IndexSet;
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
-use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-use parking_lot::Mutex;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
-use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use url::Url;
-use uv_normalize::ExtraName;
-
+use crate::fancy_display::FancyDisplay;
 use crate::{
     activation::CurrentEnvVarBehavior,
     config, consts,
@@ -51,8 +35,25 @@ use crate::{
     pypi_mapping::{self, Reporter},
     pypi_marker_env::determine_marker_environment,
     pypi_tags::is_python_record,
-    EnvironmentName, Project,
+    Project,
 };
+use barrier_cell::BarrierCell;
+use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use indexmap::IndexSet;
+use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use itertools::Itertools;
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use parking_lot::Mutex;
+use pixi_manifest::EnvironmentName;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
+use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use url::Url;
+use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.

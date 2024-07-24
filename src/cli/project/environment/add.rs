@@ -1,6 +1,6 @@
+use crate::Project;
 use clap::Parser;
-
-use crate::{EnvironmentName, Project};
+use pixi_manifest::EnvironmentName;
 
 #[derive(Parser, Debug)]
 pub struct Args {

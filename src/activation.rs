@@ -12,9 +12,10 @@ use rattler_shell::{
 };
 
 use crate::{
-    project::{has_features::HasFeatures, manifest::EnvironmentName, Environment},
+    project::{has_features::HasFeatures, Environment},
     Project,
 };
+use pixi_manifest::EnvironmentName;
 
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";

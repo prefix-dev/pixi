@@ -1,5 +1,6 @@
 use crate::config::ConfigCli;
 use crate::environment::get_up_to_date_prefix;
+use crate::fancy_display::FancyDisplay;
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;

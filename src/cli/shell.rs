@@ -11,16 +11,12 @@ use rattler_shell::{
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
 use crate::{
-    activation::CurrentEnvVarBehavior,
-    cli::LockFileUsageArgs,
-    config::ConfigCliPrompt,
+    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, config::ConfigCliPrompt,
     environment::get_up_to_date_prefix,
-    project::{
-        manifest::EnvironmentName,
-        virtual_packages::verify_current_platform_has_required_virtual_packages,
-    },
-    prompt, Project,
+    project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
+    Project,
 };
+use pixi_manifest::EnvironmentName;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]

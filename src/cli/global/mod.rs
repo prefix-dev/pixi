@@ -9,11 +9,9 @@ mod upgrade_all;
 
 #[derive(Debug, Parser)]
 pub enum Command {
-    // BREAK: This should only have the `i` as an alias
-    #[clap(visible_alias = "i", alias = "a")]
+    #[clap(visible_alias = "i")]
     Install(install::Args),
-    // BREAK: This should only have the `rm` as an alias
-    #[clap(visible_alias = "rm", alias = "r")]
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
     #[clap(visible_alias = "ls")]
     List(list::Args),

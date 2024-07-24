@@ -1,18 +1,15 @@
-use crate::project::manifest::Feature;
+use super::has_features::HasFeatures;
+use crate::fancy_display::FancyDisplay;
 use crate::{
     consts,
     prefix::Prefix,
-    project::{
-        manifest::SystemRequirements, virtual_packages::get_minimal_virtual_packages, Environment,
-        SolveGroup,
-    },
-    EnvironmentName, Project,
+    project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
+    Project,
 };
 use itertools::Either;
+use pixi_manifest::{EnvironmentName, Feature, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
-
-use super::has_features::HasFeatures;
 
 /// Either a solve group or an individual environment without a solve group.
 ///
