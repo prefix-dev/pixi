@@ -406,14 +406,14 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             sha256,
             url,
         } => {
+            // Keep track if we should add a * version
+            let mut version_required = true;
+
             let mut table = InlineTable::new();
-            table.insert(
-                "version",
-                version
-                    .as_ref()
-                    .map_or_else(|| String::from("*"), |v| v.to_string())
-                    .into(),
-            );
+            if let Some(version) = version {
+                table.insert("version", version.to_string().into());
+                version_required = false;
+            }
             if let Some(build) = build {
                 table.insert("build", build.to_string().into());
             }
@@ -422,6 +422,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             }
             if let Some(file_name) = file_name {
                 table.insert("file_name", file_name.to_string().into());
+                version_required = false;
             }
             if let Some(channel) = channel {
                 table.insert(
@@ -440,12 +441,19 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             }
             if let Some(md5) = md5 {
                 table.insert("md5", format!("{:x}", md5).into());
+                version_required = false;
             }
             if let Some(sha256) = sha256 {
                 table.insert("sha256", format!("{:x}", sha256).into());
+                version_required = false;
             }
             if let Some(url) = url {
                 table.insert("url", url.to_string().into());
+                version_required = false;
+            }
+            // If no version was specified, and we still need it, add a * version
+            if version_required {
+                table.insert("version", "*".into());
             }
             table.into()
         }
@@ -479,6 +487,9 @@ mod tests {
             "conda-forge::rattler[version=>3.0]",
             "rattler 1 *cuda",
             "rattler >=1 *cuda",
+            "https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2",
+            "/home/user/conda-bld/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2",
+            "C:\\Users\\user\\conda-bld\\linux-64\\foo-1.0-py27_0.tar.bz2",
         ];
 
         let mut table = toml_edit::DocumentMut::new();
