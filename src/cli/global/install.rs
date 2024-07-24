@@ -132,6 +132,7 @@ pub struct BinScriptMapping<'a> {
 async fn map_executables_to_global_bin_scripts<'a>(
     package_executables: &[&'a Path],
     bin_dir: &BinDir,
+    binary_mapping: Option<&HashMap<String, String>>,
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
@@ -176,6 +177,14 @@ async fn map_executables_to_global_bin_scripts<'a>(
 
         let mut executable_script_path = bin_dir.join(file_name);
 
+        if let Some(binary_mapping) = binary_mapping {
+            if let Some(binary_name) = binary_mapping.get(file_name) {
+                executable_script_path = bin_dir.join(binary_name);
+            } else {
+                continue;
+            }
+        }
+
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         };
@@ -195,9 +204,23 @@ pub(super) async fn find_and_map_executable_scripts<'a>(
     prefix: &Prefix,
     prefix_package: &'a PrefixRecord,
     bin_dir: &BinDir,
+    select_binaries: &BinarySelector,
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
     let executables = find_executables(prefix, prefix_package);
-    map_executables_to_global_bin_scripts(&executables, bin_dir).await
+
+    match select_binaries {
+        BinarySelector::All => {
+            map_executables_to_global_bin_scripts(&executables, bin_dir, None).await
+        }
+        BinarySelector::None => Ok(vec![]),
+        BinarySelector::Specific(map) => {
+            if let Some(binary_map) = map.get(&prefix_package.repodata_record.package_record.name) {
+                map_executables_to_global_bin_scripts(&executables, bin_dir, Some(binary_map)).await
+            } else {
+                Ok(vec![])
+            }
+        }
+    }
 }
 
 /// Create the executable scripts by modifying the activation script
@@ -248,7 +271,12 @@ pub(super) async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
-pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<bool> {
+pub enum UserResponse {
+    Continue,
+    Cancel,
+}
+
+pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<UserResponse> {
     let dangerous_packages = HashMap::from([
         ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
         ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
@@ -268,12 +296,12 @@ pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<boo
                 .interact()
                 .into_diagnostic()?
             {
-                return Ok(false);
+                return Ok(UserResponse::Cancel);
             }
         }
     }
 
-    Ok(true)
+    Ok(UserResponse::Continue)
 }
 
 /// Install a global command
@@ -282,15 +310,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
-    let package_names: Result<Vec<PackageName>, _> = args
+    let package_names = args
         .packages()
         .iter()
         .map(|s| PackageName::from_str(s))
-        .collect();
-    let package_names = package_names.into_diagnostic()?;
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Warn user on dangerous package installations, interactive yes no prompt
-    if !prompt_user_to_continue(package_names)? {
+    if let UserResponse::Cancel = prompt_user_to_continue(package_names)? {
         return Ok(());
     }
 
@@ -299,39 +327,47 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
 
     // Install the package(s)
-    let mut executables = vec![];
-    for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
+    let specs = args.specs()?;
+    let mut executables = Vec::with_capacity(specs.len());
+    for (package_name, package_matchspec) in specs {
+        let records = load_package_records(&[package_matchspec], sparse_repodata.values())?;
 
-        let (prefix_package, scripts, _) = globally_install_package(
-            &package_name,
+        let target_bin_dir = BinEnvDir::create(&package_name).await.unwrap();
+        let (package_script, _) = globally_install_packages(
+            target_bin_dir,
+            &[package_name],
             records,
             authenticated_client.clone(),
             args.platform,
+            BinarySelector::All,
         )
         .await?;
-        let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
-        let record = &prefix_package.repodata_record.package_record;
 
-        // Warn if no executables were created for the package
-        if scripts.is_empty() {
+        // TODO change warning here.
+        for (prefix_package, scripts) in package_script {
+            let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
+            let record = &prefix_package.repodata_record.package_record;
+
+            // Warn if no executables were created for the package
+            if scripts.is_empty() {
+                eprintln!(
+                    "{}No executable entrypoint found in package {}, are you sure it exists?",
+                    console::style(console::Emoji("⚠️", "")).yellow().bold(),
+                    console::style(record.name.as_source()).bold()
+                );
+            }
+
             eprintln!(
-                "{}No executable entrypoint found in package {}, are you sure it exists?",
-                console::style(console::Emoji("⚠️", "")).yellow().bold(),
-                console::style(record.name.as_source()).bold()
+                "{}Installed package {} {} {} from {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(record.name.as_source()).bold(),
+                console::style(record.version.version()).bold(),
+                console::style(record.build.as_str()).bold(),
+                channel_name,
             );
+
+            executables.extend(scripts);
         }
-
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(record.name.as_source()).bold(),
-            console::style(record.version.version()).bold(),
-            console::style(record.build.as_str()).bold(),
-            channel_name,
-        );
-
-        executables.extend(scripts);
     }
 
     if !executables.is_empty() {
@@ -369,15 +405,22 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
     Ok(())
 }
 
+pub enum BinarySelector {
+    All,
+    None,
+    Specific(HashMap<PackageName, HashMap<String, String>>),
+}
+
 /// Install given package globally, with all its dependencies
-pub(super) async fn globally_install_package(
-    package_name: &PackageName,
+pub(super) async fn globally_install_packages(
+    BinEnvDir(bin_prefix): BinEnvDir,
+    package_names: &[PackageName],
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
-) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    select_binaries: BinarySelector,
+) -> miette::Result<(Vec<(PrefixRecord, Vec<PathBuf>)>, bool)> {
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
@@ -403,38 +446,40 @@ pub(super) async fn globally_install_package(
     .await
     .into_diagnostic()?;
 
+    let mut linked_packages = Vec::with_capacity(package_names.len());
     // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, package_name).await?;
+    for package_name in package_names {
+        let prefix_package = find_designated_package(&prefix, package_name).await?;
 
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
+        // Determine the shell to use for the invocation script
+        let shell: ShellEnum = if cfg!(windows) {
+            rattler_shell::shell::CmdExe.into()
+        } else {
+            rattler_shell::shell::Bash.into()
+        };
 
-    // Construct the reusable activation script for the shell and generate an invocation script
-    // for each executable added by the package to the environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
+        // Construct the reusable activation script for the shell and generate an invocation script
+        // for each executable added by the package to the environment.
+        let activation_script = create_activation_script(&prefix, shell.clone())?;
 
-    let bin_dir = BinDir::create().await?;
-    let script_mapping =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+        let bin_dir = BinDir::create().await?;
+        let script_mapping =
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir, &select_binaries)
+                .await?;
+        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
+        let scripts = script_mapping.into_iter().map(
             |BinScriptMapping {
                  global_binary_path: path,
                  ..
              }| path,
-        )
-        .collect();
+        ).collect::<Vec<_>>();
+
+        linked_packages.push((prefix_package, scripts));
+    }
 
     Ok((
-        prefix_package,
-        scripts,
+        linked_packages,
         result.transaction.operations.is_empty(),
     ))
 }

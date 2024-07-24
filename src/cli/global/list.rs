@@ -10,7 +10,7 @@ use crate::config::home_path;
 use crate::prefix::Prefix;
 
 use super::common::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};
-use super::install::{find_and_map_executable_scripts, BinScriptMapping};
+use super::install::{find_and_map_executable_scripts, BinScriptMapping, BinarySelector};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -55,26 +55,30 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         // Find the installed package in the environment
         let prefix_package = find_designated_package(&prefix, &package_name).await?;
 
-        let binaries: Vec<_> =
-            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_prefix)
-                .await?
-                .into_iter()
-                .map(
-                    |BinScriptMapping {
-                         global_binary_path: path,
-                         ..
-                     }| {
-                        path.strip_prefix(&bin_prefix.0)
-                            .expect("script paths were constructed by joining onto BinDir")
-                            .to_string_lossy()
-                            .to_string()
-                    },
-                )
-                // Collecting to a HashSet first is a workaround for issue #317 and can be removed
-                // once that is fixed.
-                .collect::<HashSet<_>>()
-                .into_iter()
-                .collect();
+        let binaries: Vec<_> = find_and_map_executable_scripts(
+            &prefix,
+            &prefix_package,
+            &bin_prefix,
+            &BinarySelector::All,
+        )
+        .await?
+        .into_iter()
+        .map(
+            |BinScriptMapping {
+                 global_binary_path: path,
+                 ..
+             }| {
+                path.strip_prefix(&bin_prefix.0)
+                    .expect("script paths were constructed by joining onto BinDir")
+                    .to_string_lossy()
+                    .to_string()
+            },
+        )
+        // Collecting to a HashSet first is a workaround for issue #317 and can be removed
+        // once that is fixed.
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
 
         let version = prefix_package
             .repodata_record
