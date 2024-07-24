@@ -1,8 +1,7 @@
 ---
-source: src/project/manifest/mod.rs
+source: crates/pixi_manifest/src/manifest.rs
 expression: manifest.document.to_string()
 ---
-
 [project]
 name = "foo"
 channels = []
@@ -21,4 +20,3 @@ boef = ">=2.3"
 
 [feature.build.target.linux-64.build-dependencies]
 cmake = ">=2.3"
-            

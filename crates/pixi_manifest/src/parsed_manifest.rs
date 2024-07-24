@@ -340,7 +340,16 @@ mod tests {
     use crate::parsed_manifest::ParsedManifest;
     use crate::TargetSelector;
     use insta::{assert_snapshot, assert_yaml_snapshot};
+    use itertools::Itertools;
     use rattler_conda_types::{Channel, Platform};
+
+    const PROJECT_BOILERPLATE: &str = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = []
+        "#;
 
     #[test]
     fn test_target_specific() {

@@ -1,7 +1,6 @@
 ---
-source: crates/pixi_manifest/src/lib.rs
-assertion_line: 1355
-expression: "examples.into_iter().map(|example|\n                ProjectManifest::from_toml_str(&example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+source: crates/pixi_manifest/src/parsed_manifest.rs
+expression: "examples.into_iter().map(|example|\n                ParsedManifest::from_toml_str(&example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
 ---
 TOML parse error at line 8, column 2
   |

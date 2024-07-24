@@ -479,6 +479,7 @@ mod tests {
             "conda-forge::rattler[version=>3.0]",
             "rattler 1 *cuda",
             "rattler >=1 *cuda",
+            "https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2"
         ];
 
         let mut table = toml_edit::DocumentMut::new();
