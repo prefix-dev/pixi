@@ -65,7 +65,7 @@ impl InitBuilder {
         self.args
             .channels
             .get_or_insert_with(Default::default)
-            .push(channel.to_string());
+            .push(NamedChannelOrUrl::from_str(channel.to_string().as_str()).unwrap());
         self
     }
 
@@ -88,7 +88,7 @@ impl IntoFuture for InitBuilder {
             channels: if !self.no_fast_prefix {
                 self.args
                     .channels
-                    .or_else(|| Some(vec!["https://fast.prefix.dev/conda-forge".to_string()]))
+                    .or_else(|| Some(vec![NamedChannelOrUrl::from_str("https://fast.prefix.dev/conda-forge").unwrap()]))
             } else {
                 self.args.channels
             },

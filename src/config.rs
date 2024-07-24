@@ -913,7 +913,7 @@ UNUSED = "unused"
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
         let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
-        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -997,14 +997,14 @@ UNUSED = "unused"
     fn test_config_merge() {
         let mut config = Config::default();
         let other = Config {
-            default_channels: vec!["conda-forge".to_string()],
+            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             ..Default::default()
         };
         config = config.merge_config(other);
-        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -1012,7 +1012,7 @@ UNUSED = "unused"
         );
 
         let other2 = Config {
-            default_channels: vec!["channel".to_string()],
+            default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir2")),
             tls_no_verify: Some(false),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
@@ -1022,7 +1022,7 @@ UNUSED = "unused"
         };
 
         config = config.merge_config(other2);
-        assert_eq!(config.default_channels, vec!["channel"]);
+        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("channel").unwrap()]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -1068,7 +1068,7 @@ UNUSED = "unused"
             disable_zstd = true
         "#;
         let (config, _) = Config::from_toml(toml).unwrap();
-        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
             config.authentication_override_file,
@@ -1109,7 +1109,7 @@ UNUSED = "unused"
         config
             .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
             .unwrap();
-        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
 
         config
             .set("tls-no-verify", Some("true".to_string()))
