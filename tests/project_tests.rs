@@ -40,17 +40,15 @@ async fn add_channel() {
         .unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = pixi.project().unwrap();
+    let project = Project::load(&pixi.manifest_path()).unwrap();
 
     // Our channel should be in the list of channels
     let local_channel =
-        NamedChannelOrUrl::Url(Url::from_directory_path(additional_channel_dir.path()).unwrap());
-    let str = std::fs::read_to_string(pixi.manifest_path()).unwrap();
-    dbg!(str);
-    assert!(project
+        NamedChannelOrUrl::Url(Url::from_file_path(additional_channel_dir.as_ref()).unwrap());
+    let channels = project
         .default_environment()
-        .channels()
-        .contains(&local_channel));
+        .channels();
+    assert!(channels.contains(&local_channel));
 }
 
 #[tokio::test]

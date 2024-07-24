@@ -1,8 +1,8 @@
-use std::{io::BufRead, path::Path, str::FromStr, sync::Arc};
+use std::{io::BufRead, path::Path, str::FromStr};
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
 
 use crate::config::Config;
@@ -12,7 +12,7 @@ pub struct CondaEnvFile {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    channels: Vec<String>,
+    channels: Vec<NamedChannelOrUrl>,
     dependencies: Vec<CondaEnvDep>,
 }
 
@@ -26,7 +26,7 @@ pub enum CondaEnvDep {
 type ParsedDependencies = (
     Vec<MatchSpec>,
     Vec<pep508_rs::Requirement>,
-    Vec<Arc<Channel>>,
+    Vec<NamedChannelOrUrl>,
 );
 
 impl CondaEnvFile {
@@ -34,7 +34,7 @@ impl CondaEnvFile {
         self.name.as_deref()
     }
 
-    fn channels(&self) -> &Vec<String> {
+    fn channels(&self) -> &Vec<NamedChannelOrUrl> {
         &self.channels
     }
 
@@ -79,22 +79,10 @@ impl CondaEnvFile {
 
         extra_channels.extend(
             channels
-                .into_iter()
-                .map(|c| Arc::new(Channel::from_str(c, config.channel_config()).unwrap())),
         );
         let mut channels: Vec<_> = extra_channels
             .into_iter()
             .unique()
-            .map(|c| {
-                if c.base_url()
-                    .as_str()
-                    .starts_with(config.channel_config().channel_alias.as_str())
-                {
-                    c.name().to_string()
-                } else {
-                    c.base_url().to_string()
-                }
-            })
             .collect();
         if channels.is_empty() {
             channels = config.default_channels();
@@ -113,7 +101,8 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
             CondaEnvDep::Conda(d) => {
                 let match_spec = MatchSpec::from_str(&d, Lenient).into_diagnostic()?;
                 if let Some(channel) = match_spec.clone().channel {
-                    picked_up_channels.push(channel);
+                    // TODO: This is a bit hacky, we should probably have a better way to handle this.
+                    picked_up_channels.push(NamedChannelOrUrl::from_str(channel.name()).into_diagnostic()?);
                 }
                 conda_deps.push(match_spec);
             }
@@ -136,11 +125,8 @@ fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
             new_channels.push(NamedChannelOrUrl::Name("main".to_string()));
             new_channels.push(NamedChannelOrUrl::Name("r".to_string()));
             new_channels.push(NamedChannelOrUrl::Name("msys2".to_string()));
-        } else if let NamedChannelOrUrl::Name(name) = channel {
-            let channel = name.trim();
-            if !channel.is_empty() {
-                new_channels.push(NamedChannelOrUrl::Name(channel.to_string()));
-            }
+        } else {
+            new_channels.push(channel);
         }
     }
     new_channels
@@ -184,8 +170,8 @@ mod tests {
         assert_eq!(
             conda_env_file_data.channels(),
             &vec![
-                "conda-forge".to_string(),
-                "https://custom-server.com/channel".to_string()
+                NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap()
             ]
         );
 
@@ -195,9 +181,9 @@ mod tests {
         assert_eq!(
             channels,
             vec![
-                "pytorch".to_string(),
-                "conda-forge".to_string(),
-                "https://custom-server.com/channel/".to_string()
+                NamedChannelOrUrl::from_str("pytorch").unwrap(),
+                NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
             ]
         );
 
