@@ -134,10 +134,12 @@ jobs:
         uses: rui314/setup-mold@v1
 
       - name: "Cargo nextest"
-        run: |
-          # we don't have anymore vendored openssl so we need to use rustls
-          cargo nextest run --retries 2 --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --no-default-features --features rustls-tls --features slow_integration_tests
-
+        run: >-
+          cargo nextest run
+          --workspace
+          --retries 2
+          --no-default-features --features rustls-tls --features slow_integration_tests
+          --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow
 
   build:
     name: Build Binary | ${{ matrix.name }}

@@ -1,6 +1,5 @@
 ---
-source: crates/pixi_manifest/src/lib.rs
-assertion_line: 1743
+source: crates/pixi_manifest/src/manifest.rs
 expression: manifest.document.to_string()
 ---
 [project]
@@ -23,5 +22,5 @@ requests = "*"
 xpackage = "==1.2.3"
 ypackage = {version = ">=1.2.3"}
 
-[feature.test.target.linux-64.pypi-dependencies]
-feature_target_dep = "*"
+[feature.test.pypi-dependencies]
+feature_dep = "*"

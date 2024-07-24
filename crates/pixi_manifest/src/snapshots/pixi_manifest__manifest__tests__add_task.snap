@@ -1,8 +1,7 @@
 ---
-source: src/project/manifest/mod.rs
+source: crates/pixi_manifest/src/manifest.rs
 expression: manifest.document.to_string()
 ---
-
 [project]
 name = "foo"
 version = "0.1.0"
@@ -22,5 +21,3 @@ feature_test = "echo feature_test"
 
 [feature.test.target.linux-64.tasks]
 feature_test_target_linux = "echo feature_test_target_linux"
-
-        
