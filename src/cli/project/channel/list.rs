@@ -10,7 +10,7 @@ pub struct Args {
 }
 
 pub fn execute(project: Project, args: Args) -> miette::Result<()> {
-    let channel_config = project.config().channel_config();
+    let channel_config = project.channel_config();
     project
         .environments()
         .iter()
@@ -27,7 +27,7 @@ pub fn execute(project: Project, args: Args) -> miette::Result<()> {
                 println!(
                     "- {}",
                     if args.urls {
-                        channel.clone().into_base_url(channel_config).to_string()
+                        channel.clone().into_base_url(&channel_config).to_string()
                     } else {
                         channel.to_string()
                     }

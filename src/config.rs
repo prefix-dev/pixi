@@ -12,8 +12,7 @@ use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
-    Channel, ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType,
-    VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
@@ -375,7 +374,7 @@ pub struct Config {
 
     #[serde(skip, default = "default_channel_config")]
     #[serde(alias = "channel_config")] // BREAK: remove to stop supporting snake_case alias
-    pub channel_config: ChannelConfig,
+    channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
@@ -684,7 +683,14 @@ impl Config {
         self.authentication_override_file.as_ref()
     }
 
-    pub fn channel_config(&self) -> &ChannelConfig {
+    /// Returns the global channel configuration.
+    ///
+    /// This roots the channel configuration to the current directory. When
+    /// working with a project though the channel configuration should be rooted
+    /// in the project directory. Use
+    /// [`crate::Project::channel_config`] to get the project specific channel
+    /// configuration.
+    pub fn global_channel_config(&self) -> &ChannelConfig {
         &self.channel_config
     }
 
@@ -694,19 +700,6 @@ impl Config {
 
     pub fn pypi_config(&self) -> &PyPIConfig {
         &self.pypi_config
-    }
-
-    pub fn compute_channels(&self, cli_channels: &[NamedChannelOrUrl]) -> Vec<Channel> {
-        let channels = if cli_channels.is_empty() {
-            self.default_channels()
-        } else {
-            cli_channels.to_vec()
-        };
-
-        channels
-            .into_iter()
-            .map(|c| c.into_channel(self.channel_config()))
-            .collect()
     }
 
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
@@ -913,7 +906,10 @@ UNUSED = "unused"
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
         let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
-        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -1004,7 +1000,10 @@ UNUSED = "unused"
             ..Default::default()
         };
         config = config.merge_config(other);
-        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -1022,7 +1021,10 @@ UNUSED = "unused"
         };
 
         config = config.merge_config(other2);
-        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("channel").unwrap()]);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("channel").unwrap()]
+        );
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
             config.detached_environments().path().unwrap(),
@@ -1068,7 +1070,10 @@ UNUSED = "unused"
             disable_zstd = true
         "#;
         let (config, _) = Config::from_toml(toml).unwrap();
-        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
             config.authentication_override_file,
@@ -1109,7 +1114,10 @@ UNUSED = "unused"
         config
             .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
             .unwrap();
-        assert_eq!(config.default_channels, vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
 
         config
             .set("tls-no-verify", Some("true".to_string()))

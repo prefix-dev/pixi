@@ -44,15 +44,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
+    let channel_config = project.channel_config();
     for channel in args.channel {
         match channel {
             NamedChannelOrUrl::Name(ref name) => eprintln!(
                 "{}Removed {} ({})",
                 console::style(console::Emoji("✔ ", "")).green(),
                 name,
-                channel
-                    .clone()
-                    .into_base_url(project.config().channel_config())
+                channel.clone().into_base_url(&channel_config)
             ),
             NamedChannelOrUrl::Url(url) => eprintln!(
                 "{}Removed {}",

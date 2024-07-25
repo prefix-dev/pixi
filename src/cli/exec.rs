@@ -11,8 +11,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
-    Platform,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
@@ -127,7 +126,7 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from_args(args, config.channel_config()).name();
+    let environment_name = EnvironmentHash::from_args(args, config.global_channel_config()).name();
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
 
     let mut guard = PrefixGuard::new(prefix.root())
@@ -185,7 +184,7 @@ pub async fn create_exec_prefix(
     };
     let channels = channels
         .into_iter()
-        .map(|channel| channel.into_channel(config.channel_config()));
+        .map(|channel| channel.into_channel(config.global_channel_config()));
 
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {

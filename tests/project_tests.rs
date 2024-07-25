@@ -45,9 +45,7 @@ async fn add_channel() {
     // Our channel should be in the list of channels
     let local_channel =
         NamedChannelOrUrl::Url(Url::from_file_path(additional_channel_dir.as_ref()).unwrap());
-    let channels = project
-        .default_environment()
-        .channels();
+    let channels = project.default_environment().channels();
     assert!(channels.contains(&local_channel));
 }
 

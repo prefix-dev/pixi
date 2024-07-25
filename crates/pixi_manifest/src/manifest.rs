@@ -355,7 +355,7 @@ impl Manifest {
                         spec_type,
                         platform,
                         feature_name,
-                        channel_config
+                        channel_config,
                     )?;
                     any_added = true;
                 }
@@ -643,14 +643,14 @@ impl Manifest {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use indexmap::IndexMap;
-    use insta::{assert_snapshot};
+    use insta::assert_snapshot;
     use miette::NarratableReportHandler;
-    use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseStrictness};
     use rattler_conda_types::ParseStrictness::Strict;
+    use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness};
     use rattler_solve::ChannelPriority;
     use rstest::*;
+    use std::str::FromStr;
     use tempfile::tempdir;
 
     use super::*;
@@ -1352,17 +1352,14 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
-        let conda_forge = PrioritizedChannel::from(
-            NamedChannelOrUrl::Name(String::from("conda-forge")),
-        );
+        let conda_forge =
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
         manifest
             .add_channels([conda_forge.clone()], &FeatureName::Default)
             .unwrap();
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
-        let nvidia = PrioritizedChannel::from(
-            NamedChannelOrUrl::Name(String::from("nvidia")),
-        );
+        let nvidia = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("nvidia")));
         manifest
             .add_channels([nvidia.clone()], &cuda_feature)
             .unwrap();
@@ -1371,12 +1368,8 @@ platforms = ["linux-64", "win-64"]
         manifest
             .add_channels(
                 [
-                    PrioritizedChannel::from(
-                        NamedChannelOrUrl::Name(String::from("test")),
-                    ),
-                    PrioritizedChannel::from(
-                        NamedChannelOrUrl::Name(String::from("test2")),
-                    ),
+                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("test"))),
+                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("test2"))),
                 ],
                 &test_feature,
             )
@@ -1505,9 +1498,9 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest.parsed.project.channels,
-            vec![PrioritizedChannel::from(
-                NamedChannelOrUrl::Name(String::from("conda-forge"))
-            )]
+            vec![PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                String::from("conda-forge")
+            ))]
             .into_iter()
             .collect::<IndexSet<_>>()
         );
@@ -1858,7 +1851,7 @@ bar = "*"
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config()
+                &default_channel_config(),
             )
             .unwrap();
         assert_eq!(
@@ -1881,7 +1874,7 @@ bar = "*"
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config()
+                &default_channel_config(),
             )
             .unwrap();
 
@@ -1907,7 +1900,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config()
+                &default_channel_config(),
             )
             .unwrap();
 
@@ -1934,7 +1927,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config()
+                &default_channel_config(),
             )
             .unwrap();
 

@@ -227,15 +227,15 @@ pub fn verify_environment_satisfiability(
     // Check if the channels in the lock file match our current configuration. Note
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
-    let config = environment.project().config().channel_config();
+    let config = environment.project().channel_config();
     let channels = grouped_env
         .channels()
         .into_iter()
-        .map(|channel| channel.clone().into_channel(config).base_url().clone());
+        .map(|channel| channel.clone().into_channel(&config).base_url().clone());
     let locked_channels = locked_environment.channels().iter().map(|c| {
         NamedChannelOrUrl::from_str(&c.url)
             .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
-            .into_channel(config)
+            .into_channel(&config)
             .base_url()
             .clone()
     });

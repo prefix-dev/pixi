@@ -98,47 +98,65 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
         (Some(c), Some(p)) => {
-            let channels = p.config().compute_channels(&c);
+            let channels = if c.is_empty() {
+                p.config().default_channels()
+            } else {
+                c
+            };
             eprintln!(
                 "Using channels from arguments ({}): {:?}",
                 p.name(),
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
+            let channel_config = p.channel_config();
             channels
+                .into_iter()
+                .map(|c| c.into_channel(&channel_config))
+                .collect_vec()
         }
         // No project -> use the global config
         (Some(c), None) => {
-            let channels = Config::load_global()
-                .compute_channels(&c);
+            let config = Config::load_global();
+            let channels = if c.is_empty() {
+                config.default_channels()
+            } else {
+                c
+            };
             eprintln!(
                 "Using channels from arguments: {}",
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
             channels
+                .into_iter()
+                .map(|c| c.into_channel(config.global_channel_config()))
+                .collect_vec()
         }
         // if user doesn't pass channels and we are in a project
         (None, Some(p)) => {
-            let c = p.default_environment().channels().clone();
-            let channels: Vec<_> = c
-                .iter()
-                .map(|c| (*c).clone().into_channel(p.config().channel_config()))
-                .collect();
+            let c = p.default_environment().channels();
             eprintln!(
                 "Using channels from project ({}): {}",
                 p.name(),
-                c.into_iter().map(|c| c.as_str()).format(", ")
+                c.iter().format(", ")
             );
-            channels
+            let channel_config = p.channel_config();
+            c.into_iter()
+                .cloned()
+                .map(|c| c.into_channel(&channel_config))
+                .collect_vec()
         }
         // if user doesn't pass channels and we are not in project
         (None, None) => {
-            let channels = Config::load_global()
-                .compute_channels(&[]);
+            let config = Config::load_global();
+            let channels = config.default_channels();
             eprintln!(
                 "Using channels from global config: {}",
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
             channels
+                .into_iter()
+                .map(|c| c.into_channel(config.global_channel_config()))
+                .collect_vec()
         }
     };
 

@@ -77,13 +77,8 @@ impl CondaEnvFile {
         let (conda_deps, pip_deps, mut extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
 
-        extra_channels.extend(
-            channels
-        );
-        let mut channels: Vec<_> = extra_channels
-            .into_iter()
-            .unique()
-            .collect();
+        extra_channels.extend(channels);
+        let mut channels: Vec<_> = extra_channels.into_iter().unique().collect();
         if channels.is_empty() {
             channels = config.default_channels();
         }
@@ -102,7 +97,8 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 let match_spec = MatchSpec::from_str(&d, Lenient).into_diagnostic()?;
                 if let Some(channel) = match_spec.clone().channel {
                     // TODO: This is a bit hacky, we should probably have a better way to handle this.
-                    picked_up_channels.push(NamedChannelOrUrl::from_str(channel.name()).into_diagnostic()?);
+                    picked_up_channels
+                        .push(NamedChannelOrUrl::from_str(channel.name()).into_diagnostic()?);
                 }
                 conda_deps.push(match_spec);
             }

@@ -86,9 +86,12 @@ impl IntoFuture for InitBuilder {
     fn into_future(self) -> Self::IntoFuture {
         init::execute(init::Args {
             channels: if !self.no_fast_prefix {
-                self.args
-                    .channels
-                    .or_else(|| Some(vec![NamedChannelOrUrl::from_str("https://fast.prefix.dev/conda-forge").unwrap()]))
+                self.args.channels.or_else(|| {
+                    Some(vec![NamedChannelOrUrl::from_str(
+                        "https://fast.prefix.dev/conda-forge",
+                    )
+                    .unwrap()])
+                })
             } else {
                 self.args.channels
             },

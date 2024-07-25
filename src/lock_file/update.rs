@@ -1277,14 +1277,14 @@ impl<'p> UpdateContext<'p> {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
 
-            let channel_config = project.config().channel_config();
+            let channel_config = project.channel_config();
             builder.set_channels(
                 &environment_name,
                 grouped_env
                     .channels()
                     .into_iter()
                     .cloned()
-                    .map(|channel| channel.into_base_url(channel_config).to_string()),
+                    .map(|channel| channel.into_base_url(&channel_config).to_string()),
             );
 
             let mut has_pypi_records = false;
@@ -1448,7 +1448,7 @@ async fn spawn_solve_conda_environment_task(
     let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
 
     // Get the channel configuration
-    let channel_config = group.project().config().channel_config().clone();
+    let channel_config = group.project().channel_config();
 
     tokio::spawn(
         async move {
