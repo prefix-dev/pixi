@@ -18,22 +18,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use async_once_cell::OnceCell as AsyncCell;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
-pub use environment::Environment;
-use indexmap::Equivalent;
-use miette::{IntoDiagnostic, NamedSource};
-use once_cell::sync::OnceCell;
-use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
-};
-use rattler_conda_types::{Channel, Version};
-use rattler_repodata_gateway::Gateway;
-use reqwest_middleware::ClientWithMiddleware;
-pub use solve_group::SolveGroup;
-use url::{ParseError, Url};
-use xxhash_rust::xxh3::xxh3_64;
-
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     config::Config,
@@ -42,6 +26,22 @@ use crate::{
     pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
     utils::reqwest::build_reqwest_clients,
 };
+use async_once_cell::OnceCell as AsyncCell;
+pub use dependencies::{CondaDependencies, PyPiDependencies};
+pub use environment::Environment;
+use indexmap::Equivalent;
+use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
+use pixi_manifest::Manifest;
+use pixi_manifest::{
+    pyproject::PyProjectToml, EnvironmentName, Environments, ParsedManifest, SpecType,
+};
+use rattler_conda_types::{Channel, Version};
+use rattler_repodata_gateway::Gateway;
+use reqwest_middleware::ClientWithMiddleware;
+pub use solve_group::SolveGroup;
+use url::{ParseError, Url};
+use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 

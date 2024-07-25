@@ -1,29 +1,24 @@
-use std::{
-    borrow::Borrow,
-    collections::HashMap,
-    ffi::OsStr,
-    fmt::Display,
-    hash::Hash,
-    path::{Path, PathBuf},
-    str::FromStr,
+use crate::document::ManifestSource;
+use crate::error::{DependencyError, TomlError, UnknownFeature};
+use crate::pypi::PyPiPackageName;
+use crate::pyproject::PyProjectManifest;
+use crate::{
+    consts, to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
+    FeatureName, GetFeatureError, ParsedManifest, PrioritizedChannel, SolveGroup, SpecType, Target,
+    TargetSelector, Task, TaskName,
 };
-
 use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fmt::Display;
+use std::hash::Hash;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use toml_edit::DocumentMut;
-
-use crate::{
-    consts,
-    document::ManifestSource,
-    error::{DependencyError, TomlError, UnknownFeature},
-    pypi::PyPiPackageName,
-    pyproject::PyProjectManifest,
-    to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, ParsedManifest, PrioritizedChannel, SolveGroup, SpecType, Target,
-    TargetSelector, Task, TaskName,
-};
 
 #[derive(Debug, Clone)]
 pub enum ManifestKind {
@@ -360,7 +355,7 @@ impl Manifest {
                         spec_type,
                         platform,
                         feature_name,
-                        channel_config,
+                        channel_config
                     )?;
                     any_added = true;
                 }
@@ -488,7 +483,7 @@ impl Manifest {
         // Then to the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
         for channel in new.iter() {
-            channels.push(channel.channel.to_string());
+            channels.push(channel.channel.to_string())
         }
 
         Ok(())
@@ -513,7 +508,7 @@ impl Manifest {
                 current
                     .iter()
                     .position(|x| x.channel == c.channel)
-                    .ok_or_else(|| miette::miette!("channel {} does not exist", &c.channel))
+                    .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.as_str()))
                     .map(|_| c)
             })
             .collect::<Result<_, _>>()?;
@@ -585,7 +580,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to the default feature.
-    pub(crate) fn default_feature_mut(&mut self) -> &mut Feature {
+    pub fn default_feature_mut(&mut self) -> &mut Feature {
         self.parsed.default_feature_mut()
     }
 
@@ -652,15 +647,15 @@ mod tests {
     use indexmap::IndexMap;
     use insta::{assert_snapshot};
     use miette::NarratableReportHandler;
-    use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness};
+    use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseStrictness};
     use rattler_conda_types::ParseStrictness::Strict;
     use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{channel::PrioritizedChannel, manifest::Manifest};
-    use crate::utils::default_channel_config;
+    use crate::manifest::Manifest;
+    use crate::{channel::PrioritizedChannel, utils::default_channel_config};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1357,15 +1352,17 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
-        let conda_forge =
-            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
+        let conda_forge = PrioritizedChannel::from(
+            NamedChannelOrUrl::Name(String::from("conda-forge")),
+        );
         manifest
             .add_channels([conda_forge.clone()], &FeatureName::Default)
             .unwrap();
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
-        let nvidia =
-            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("nvidia")));
+        let nvidia = PrioritizedChannel::from(
+            NamedChannelOrUrl::Name(String::from("nvidia")),
+        );
         manifest
             .add_channels([nvidia.clone()], &cuda_feature)
             .unwrap();
@@ -1374,10 +1371,12 @@ platforms = ["linux-64", "win-64"]
         manifest
             .add_channels(
                 [
-                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("test"))),
-                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from(
-                        "test2",
-                    ))),
+                    PrioritizedChannel::from(
+                        NamedChannelOrUrl::Name(String::from("test")),
+                    ),
+                    PrioritizedChannel::from(
+                        NamedChannelOrUrl::Name(String::from("test2")),
+                    ),
                 ],
                 &test_feature,
             )
@@ -1859,7 +1858,7 @@ bar = "*"
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &default_channel_config()
             )
             .unwrap();
         assert_eq!(
@@ -1882,7 +1881,7 @@ bar = "*"
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &default_channel_config()
             )
             .unwrap();
 
@@ -1908,7 +1907,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &default_channel_config()
             )
             .unwrap();
 
@@ -1935,7 +1934,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &default_channel_config()
             )
             .unwrap();
 
