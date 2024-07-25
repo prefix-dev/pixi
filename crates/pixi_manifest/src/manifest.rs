@@ -644,13 +644,14 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use indexmap::IndexMap;
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
     use rattler_conda_types::ParseStrictness::Strict;
     use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness};
     use rattler_solve::ChannelPriority;
     use rstest::*;
-    use std::str::FromStr;
     use tempfile::tempdir;
 
     use super::*;

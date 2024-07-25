@@ -348,7 +348,7 @@ mod tests {
         name = "foo"
         version = "0.1.0"
         channels = []
-        platforms = ["linux-64", "win-64", "osx-64"]
+        platforms = []
         "#;
 
     #[test]

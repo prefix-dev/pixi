@@ -1,9 +1,0 @@
----
-source: src/project/manifest/system_requirements.rs
-expression: "\n        [system-requirements.libc]\n        version = \"2.12\"\n        fam = \"glibc\"\n        "
----
-TOML parse error at line 2, column 9
-  |
-2 |         [system-requirements.libc]
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
-unknown field `fam`, expected `family` or `version`
