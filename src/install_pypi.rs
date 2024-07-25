@@ -12,15 +12,13 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use pixi_manifest::{
-    pypi::pypi_options::PypiOptions, pyproject::PyProjectToml, SystemRequirements,
-};
+use pixi_manifest::{pyproject::PyProjectToml, SystemRequirements};
 use pypi_types::{
     HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
     ParsedUrlError, VerbatimParsedUrl,
 };
 use rattler_conda_types::{Platform, RepoDataRecord};
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
+use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
@@ -35,7 +33,7 @@ use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
-use crate::utils::uv::pypi_options_to_index_locations;
+use crate::utils::uv::locked_indexes_to_index_locations;
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
     consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
@@ -583,7 +581,7 @@ pub async fn update_python_distributions(
     python_interpreter_path: &Path,
     system_requirements: &SystemRequirements,
     uv_context: &UvResolutionContext,
-    pypi_options: &PypiOptions,
+    pypi_indexes: Option<&PypiIndexes>,
     environment_variables: &HashMap<String, String>,
     platform: Platform,
 ) -> miette::Result<()> {
@@ -596,7 +594,10 @@ pub async fn update_python_distributions(
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
     let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
 
-    let index_locations = pypi_options_to_index_locations(pypi_options);
+    let index_locations = pypi_indexes
+        .map(locked_indexes_to_index_locations)
+        .unwrap_or_default();
+
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
             .client(uv_context.client.clone())
