@@ -585,7 +585,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to the default feature.
-    fn default_feature_mut(&mut self) -> &mut Feature {
+    pub(crate) fn default_feature_mut(&mut self) -> &mut Feature {
         self.parsed.default_feature_mut()
     }
 
@@ -649,16 +649,18 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
-
-    use insta::{assert_snapshot, assert_yaml_snapshot};
+    use indexmap::IndexMap;
+    use insta::{assert_snapshot};
     use miette::NarratableReportHandler;
-    use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
+    use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness};
+    use rattler_conda_types::ParseStrictness::Strict;
     use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{channel::PrioritizedChannel, manifest::Manifest, utils::default_channel_config};
+    use crate::{channel::PrioritizedChannel, manifest::Manifest};
+    use crate::utils::default_channel_config;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -667,10 +669,6 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
-
-    fn channel_config() -> ChannelConfig {
-        default_channel_config()
-    }
 
     #[test]
     fn test_from_path() {
@@ -1359,17 +1357,15 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
-        let conda_forge = PrioritizedChannel::from_channel(
-            Channel::from_str("conda-forge", &channel_config()).unwrap(),
-        );
+        let conda_forge =
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
         manifest
             .add_channels([conda_forge.clone()], &FeatureName::Default)
             .unwrap();
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
-        let nvidia = PrioritizedChannel::from_channel(
-            Channel::from_str("nvidia", &channel_config()).unwrap(),
-        );
+        let nvidia =
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("nvidia")));
         manifest
             .add_channels([nvidia.clone()], &cuda_feature)
             .unwrap();
@@ -1378,12 +1374,10 @@ platforms = ["linux-64", "win-64"]
         manifest
             .add_channels(
                 [
-                    PrioritizedChannel::from_channel(
-                        Channel::from_str("test", &channel_config()).unwrap(),
-                    ),
-                    PrioritizedChannel::from_channel(
-                        Channel::from_str("test2", &channel_config()).unwrap(),
-                    ),
+                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("test"))),
+                    PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from(
+                        "test2",
+                    ))),
                 ],
                 &test_feature,
             )
@@ -1392,7 +1386,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
+                channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
             }]
             .into_iter()
@@ -1407,7 +1401,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
+                channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
             }]
             .into_iter()
@@ -1424,7 +1418,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
+                channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
             }]
             .into_iter()
@@ -1444,7 +1438,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
+                channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
             }]
             .into_iter()
@@ -1462,11 +1456,11 @@ platforms = ["linux-64", "win-64"]
                 .unwrap(),
             vec![
                 PrioritizedChannel {
-                    channel: Channel::from_str("test", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("test")),
                     priority: None,
                 },
                 PrioritizedChannel {
-                    channel: Channel::from_str("test2", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("test2")),
                     priority: None,
                 },
             ]
@@ -1476,7 +1470,7 @@ platforms = ["linux-64", "win-64"]
 
         // Test custom channel urls
         let custom_channel = PrioritizedChannel {
-            channel: Channel::from_str("https://custom.com/channel", &channel_config()).unwrap(),
+            channel: NamedChannelOrUrl::Url("https://custom.com/channel".parse().unwrap()),
             priority: None,
         };
         manifest
@@ -1512,8 +1506,8 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest.parsed.project.channels,
-            vec![PrioritizedChannel::from_channel(
-                Channel::from_str("conda-forge", &channel_config()).unwrap()
+            vec![PrioritizedChannel::from(
+                NamedChannelOrUrl::Name(String::from("conda-forge"))
             )]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -1522,7 +1516,7 @@ platforms = ["linux-64", "win-64"]
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
                 }],
                 &FeatureName::Default,
@@ -1534,7 +1528,7 @@ platforms = ["linux-64", "win-64"]
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("test_channel", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("test_channel")),
                     priority: None,
                 }],
                 &FeatureName::Named("test".to_string()),
@@ -1553,7 +1547,7 @@ platforms = ["linux-64", "win-64"]
         assert!(manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
                 }],
                 &FeatureName::Default,
@@ -1735,11 +1729,11 @@ platforms = ["linux-64", "win-64"]
                 .collect::<Vec<_>>(),
             vec![
                 &PrioritizedChannel {
-                    channel: Channel::from_str("pytorch", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("pytorch")),
                     priority: None,
                 },
                 &PrioritizedChannel {
-                    channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
+                    channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                     priority: Some(-1),
                 },
             ]
@@ -1865,6 +1859,7 @@ bar = "*"
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
+                &default_channel_config(),
             )
             .unwrap();
         assert_eq!(
@@ -1887,6 +1882,7 @@ bar = "*"
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &default_channel_config(),
             )
             .unwrap();
 
@@ -1912,6 +1908,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &default_channel_config(),
             )
             .unwrap();
 
@@ -1938,6 +1935,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &default_channel_config(),
             )
             .unwrap();
 
