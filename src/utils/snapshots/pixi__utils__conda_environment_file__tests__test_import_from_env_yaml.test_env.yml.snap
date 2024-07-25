@@ -370,10 +370,18 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         [],
     ),
     [
-        "main",
-        "r",
-        "msys2",
-        "conda-forge",
+        Name(
+            "main",
+        ),
+        Name(
+            "r",
+        ),
+        Name(
+            "msys2",
+        ),
+        Name(
+            "conda-forge",
+        ),
     ],
     Some(
         "test_env",

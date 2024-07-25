@@ -12,31 +12,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::fancy_display::FancyDisplay;
-use crate::{
-    activation::CurrentEnvVarBehavior,
-    config, consts,
-    environment::{
-        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
-        PerGroup, PerGroupAndPlatform, PythonStatus,
-    },
-    load_lock_file,
-    lock_file::{
-        self, update, OutdatedEnvironments, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
-        UvResolutionContext,
-    },
-    prefix::Prefix,
-    progress::global_multi_progress,
-    project::{
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        has_features::HasFeatures,
-        Environment,
-    },
-    pypi_mapping::{self, Reporter},
-    pypi_marker_env::determine_marker_environment,
-    pypi_tags::is_python_record,
-    Project,
-};
 use barrier_cell::BarrierCell;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::IndexSet;
@@ -54,6 +29,32 @@ use tokio::sync::Semaphore;
 use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
+
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    config, consts,
+    environment::{
+        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
+        PerGroup, PerGroupAndPlatform, PythonStatus,
+    },
+    fancy_display::FancyDisplay,
+    load_lock_file,
+    lock_file::{
+        self, update, OutdatedEnvironments, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
+        UvResolutionContext,
+    },
+    prefix::Prefix,
+    progress::global_multi_progress,
+    project::{
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        has_features::HasFeatures,
+        Environment,
+    },
+    pypi_mapping::{self, Reporter},
+    pypi_marker_env::determine_marker_environment,
+    pypi_tags::is_python_record,
+    Project,
+};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -886,7 +887,8 @@ impl<'p> UpdateContext<'p> {
             // Determine the source of the solve information
             let source = GroupedEnvironment::from(environment.clone());
 
-            // Determine the channel priority, if no channel priority is set we use the default.
+            // Determine the channel priority, if no channel priority is set we use the
+            // default.
             let channel_priority = source
                 .channel_priority()
                 .into_diagnostic()?
@@ -1283,12 +1285,14 @@ impl<'p> UpdateContext<'p> {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
 
+            let channel_config = project.channel_config();
             builder.set_channels(
                 &environment_name,
                 grouped_env
                     .channels()
                     .into_iter()
-                    .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string())),
+                    .cloned()
+                    .map(|channel| channel.into_base_url(&channel_config).to_string()),
             );
 
             let mut has_pypi_records = false;
@@ -1451,6 +1455,9 @@ async fn spawn_solve_conda_environment_task(
     // Whether we should use custom mapping location
     let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
 
+    // Get the channel configuration
+    let channel_config = group.project().channel_config();
+
     tokio::spawn(
         async move {
             let _permit = concurrency_semaphore
@@ -1480,7 +1487,9 @@ async fn spawn_solve_conda_environment_task(
             let fetch_repodata_start = Instant::now();
             let available_packages = repodata_gateway
                 .query(
-                    channels,
+                    channels
+                        .into_iter()
+                        .map(|c| c.into_channel(&channel_config)),
                     [platform, Platform::NoArch],
                     dependencies.clone().into_match_specs(),
                 )
