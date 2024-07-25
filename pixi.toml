@@ -18,6 +18,8 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 bump = "tbump --only-patch $RELEASE_VERSION"
 pypi-proxy = "python ./tests/pypi_proxy.py"
+run-all-examples = "python ./tests/run_all_examples.py"
+run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
 
 [feature.dev.dependencies]
 # Needed for the citation
