@@ -51,6 +51,30 @@ pub fn pypi_options_to_index_locations(options: &PypiOptions) -> IndexLocations 
     IndexLocations::new(index, extra_indexes, flat_indexes, false)
 }
 
+/// Convert locked indexes to IndexLocations
+pub fn locked_indexes_to_index_locations(indexes: &rattler_lock::PypiIndexes) -> IndexLocations {
+    let index = indexes
+        .indexes
+        .first()
+        .cloned()
+        .map(VerbatimUrl::from_url)
+        .map(IndexUrl::from);
+    let extra_indexes = indexes
+        .indexes
+        .iter()
+        .skip(1)
+        .cloned()
+        .map(VerbatimUrl::from_url)
+        .map(IndexUrl::from)
+        .collect::<Vec<_>>();
+    let flat_indexes = indexes
+        .find_links
+        .iter()
+        .map(to_flat_index_location)
+        .collect::<Vec<_>>();
+    IndexLocations::new(index, extra_indexes, flat_indexes, false)
+}
+
 pub fn to_git_reference(rev: &GitRev) -> GitReference {
     match rev {
         GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),

@@ -47,7 +47,7 @@ use parking_lot::Mutex;
 use pixi_manifest::EnvironmentName;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
-use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use tokio::sync::Semaphore;
@@ -168,7 +168,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            &environment.pypi_options(),
+            self.pypi_indexes(environment).as_ref(),
             env_variables,
             self.project.root(),
             environment.best_platform(),
@@ -193,6 +193,14 @@ impl<'p> LockFileDerivedData<'p> {
             .environment(environment.name().as_str())
             .expect("the lock-file should be up-to-date so it should also include the environment");
         locked_env.pypi_packages_for_platform(platform)
+    }
+
+    fn pypi_indexes(&self, environment: &Environment<'p>) -> Option<PypiIndexes> {
+        let locked_env = self
+            .lock_file
+            .environment(environment.name().as_str())
+            .expect("the lock-file should be up-to-date so it should also include the environment");
+        locked_env.pypi_indexes().cloned()
     }
 
     fn repodata_records(
