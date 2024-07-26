@@ -30,11 +30,15 @@ tbump = ">=6.9.0,<6.10"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
 ruff = ">=0.4.8,<0.5"
+taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
+
 [feature.lint.tasks]
 lint = { depends-on = ["pre-commit-run"] }
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all"
+toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
+toml-lint = "taplo lint --verbose **/pixi.toml"
 
 [feature.build.dependencies]
 # Needed for building
@@ -67,8 +71,6 @@ mike-serve = "mike serve"
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema" }
-toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
-toml-lint = "taplo lint --verbose **/pixi.toml"
 
 [feature.schema.dependencies]
 jsonschema = "*"
@@ -76,7 +78,6 @@ pydantic = ">=2.6.3,<2.7"
 pytest = ">=8.0.2,<8.1"
 python = ">=3.11"
 pyyaml = ">=6.0.1,<6.1"
-taplo = ">=0.9.1,<0.10"
 
 [environments]
 default = { features = [

@@ -49,7 +49,7 @@ repos:
       # TOML format
       - id: taplo
         name: taplo
-        entry: pixi run -e schema toml-format
+        entry: pixi run -e lint toml-format
         language: system
         types: [file, toml]
         exclude: "schema/examples/invalid"
