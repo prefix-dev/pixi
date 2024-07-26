@@ -254,6 +254,7 @@ pixi_manifest = { path = "crates/pixi_manifest" }
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
 nix = { workspace = true, features = ["fs", "signal", "term", "poll"] }
+pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
 
 # Remove this after updating to uv >= 0.1.40
