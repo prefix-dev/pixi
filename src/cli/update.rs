@@ -3,9 +3,9 @@ use std::{
     cmp::Ordering,
     collections::HashSet,
     io::{stdout, Write},
-    path::PathBuf,
 };
 
+use crate::cli::cli_config::ProjectConfig;
 use crate::{
     config::ConfigCli,
     consts,
@@ -32,9 +32,8 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
@@ -125,8 +124,8 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(config);
 
     let specs = UpdateSpecs::from(args.specs);
 

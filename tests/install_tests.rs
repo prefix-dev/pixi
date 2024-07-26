@@ -8,6 +8,7 @@ use std::{
 };
 
 use common::{LockFileExt, PixiControl};
+use pixi::cli::cli_config::ProjectConfig;
 use pixi::{
     cli::{run, run::Args, LockFileUsageArgs},
     config::{Config, DetachedEnvironments},
@@ -21,7 +22,7 @@ use tempfile::TempDir;
 use uv_toolchain::PythonEnvironment;
 
 use crate::common::{
-    builders::{string_from_iter, HasDependencyConfig},
+    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
 };
 
@@ -217,7 +218,9 @@ async fn install_locked_with_config() {
     let result = pixi
         .run(Args {
             task: vec!["which_python".to_string()],
-            manifest_path: None,
+            project_config: ProjectConfig {
+                manifest_path: None,
+            },
             ..Default::default()
         })
         .await

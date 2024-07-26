@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
-    builders::HasDependencyConfig,
+    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };

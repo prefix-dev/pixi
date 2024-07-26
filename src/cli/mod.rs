@@ -14,6 +14,7 @@ use crate::{progress, progress::global_multi_progress};
 
 pub mod add;
 pub mod clean;
+pub mod cli_config;
 pub mod completion;
 pub mod config;
 mod exec;

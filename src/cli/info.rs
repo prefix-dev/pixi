@@ -19,6 +19,8 @@ use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
+use crate::cli::cli_config::ProjectConfig;
+
 static WIDTH: usize = 18;
 
 /// Information about the system, project and environments for the current machine.
@@ -32,9 +34,8 @@ pub struct Args {
     #[arg(long)]
     json: bool,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 }
 
 #[derive(Serialize)]
@@ -289,7 +290,7 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());
@@ -397,12 +398,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     }
 }

@@ -1,6 +1,8 @@
-use std::io::{self, Write};
-use std::sync::Arc;
-use std::{cmp::Ordering, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    io::{self, Write},
+    sync::Arc,
+};
 
 use clap::Parser;
 use indexmap::IndexMap;
@@ -13,11 +15,11 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::config::Config;
-use crate::util::default_channel_config;
-use crate::utils::reqwest::build_reqwest_clients;
-use crate::HasFeatures;
-use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
+use crate::cli::cli_config::ProjectConfig;
+use crate::{
+    config::Config, progress::await_in_progress, repodata::fetch_sparse_repodata,
+    util::default_channel_config, utils::reqwest::build_reqwest_clients, HasFeatures, Project,
+};
 
 /// Search a conda package
 ///
@@ -34,9 +36,8 @@ pub struct Args {
     #[clap(short, long)]
     channel: Option<Vec<String>>,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// The platform to search for, defaults to current platform
     #[arg(short, long, default_value_t = Platform::current())]
@@ -92,7 +93,7 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
@@ -182,7 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         search_exact_package(package_name, repo_data, stdout).await?;
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

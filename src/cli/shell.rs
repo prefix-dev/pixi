@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{collections::HashMap, io::Write};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -8,6 +8,7 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
+use crate::cli::cli_config::ProjectConfig;
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
 use crate::{
@@ -21,9 +22,8 @@ use pixi_manifest::EnvironmentName;
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    project_config: ProjectConfig,
 
     #[clap(flatten)]
     lock_file_usage: LockFileUsageArgs,
@@ -203,8 +203,8 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;

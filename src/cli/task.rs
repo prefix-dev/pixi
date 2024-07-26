@@ -1,3 +1,4 @@
+use crate::cli::cli_config::ProjectConfig;
 use crate::fancy_display::FancyDisplay;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
@@ -211,9 +212,8 @@ pub struct Args {
     #[clap(subcommand)]
     pub operation: Operation,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 }
 
 fn print_heading(value: &str) {
@@ -287,7 +287,7 @@ fn get_tasks_per_env(
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
             let name = &args.name;
@@ -432,6 +432,6 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }

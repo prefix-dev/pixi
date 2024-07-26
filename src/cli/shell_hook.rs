@@ -1,4 +1,4 @@
-use std::{collections::HashMap, default::Default, path::PathBuf};
+use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -9,6 +9,7 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
+use crate::cli::cli_config::ProjectConfig;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
@@ -29,9 +30,8 @@ pub struct Args {
     #[arg(short, long)]
     shell: Option<ShellEnum>,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     #[clap(flatten)]
     lock_file_usage: LockFileUsageArgs,
@@ -102,8 +102,8 @@ async fn generate_environment_json(environment: &Environment<'_>) -> miette::Res
 
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;

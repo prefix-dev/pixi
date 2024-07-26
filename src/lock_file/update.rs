@@ -832,7 +832,7 @@ impl<'p> UpdateContext<'p> {
             project,
             lock_file: LockFile::default(),
             outdated_environments: None,
-            no_install: false,
+            no_install: true,
             package_cache: None,
             max_concurrent_solves: None,
         }

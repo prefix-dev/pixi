@@ -1,11 +1,11 @@
 use clap::Parser;
 
-use crate::config::ConfigCli;
 use crate::environment::get_up_to_date_prefix;
 use crate::DependencyType;
 use crate::Project;
 
-use super::add::DependencyConfig;
+use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
+
 use super::has_specs::HasSpecs;
 
 /// Removes dependencies from the project
@@ -18,35 +18,43 @@ use super::has_specs::HasSpecs;
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
+    #[clap(flatten)]
     pub dependency_config: DependencyConfig,
 
     #[clap(flatten)]
-    pub config: ConfigCli,
+    pub prefix_update_config: PrefixUpdateConfig,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (args, config) = (args.dependency_config, args.config);
-    let mut project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
-    let dependency_type = args.dependency_type();
+    let (dependency_config, prefix_update_config, project_config) = (
+        args.dependency_config,
+        args.prefix_update_config,
+        args.project_config,
+    );
+
+    let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
+        .with_cli_config(prefix_update_config.config.clone());
+    let dependency_type = dependency_config.dependency_type();
 
     match dependency_type {
         DependencyType::PypiDependency => {
-            for name in args.pypi_deps(&project)?.keys() {
+            for name in dependency_config.pypi_deps(&project)?.keys() {
                 project.manifest.remove_pypi_dependency(
                     name,
-                    &args.platform,
-                    &args.feature_name(),
+                    &dependency_config.platform,
+                    &dependency_config.feature_name(),
                 )?;
             }
         }
         DependencyType::CondaDependency(spec_type) => {
-            for name in args.specs()?.keys() {
+            for name in dependency_config.specs()?.keys() {
                 project.manifest.remove_dependency(
                     name,
                     spec_type,
-                    &args.platform,
-                    &args.feature_name(),
+                    &dependency_config.platform,
+                    &dependency_config.feature_name(),
                 )?;
             }
         }
@@ -58,13 +66,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // updating prefix after removing from toml
     get_up_to_date_prefix(
         &project.default_environment(),
-        args.lock_file_usage(),
-        args.no_install,
+        prefix_update_config.lock_file_usage(),
+        prefix_update_config.no_install(),
     )
     .await?;
 
-    args.display_success("Removed", Default::default());
+    dependency_config.display_success("Removed", Default::default());
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }
