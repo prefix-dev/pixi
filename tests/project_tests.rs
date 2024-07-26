@@ -3,8 +3,8 @@ mod common;
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
-use pixi::{util::default_channel_config, HasFeatures, Project};
-use rattler_conda_types::{Channel, Platform};
+use pixi::{HasFeatures, Project};
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
 
@@ -40,18 +40,13 @@ async fn add_channel() {
         .unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = pixi.project().unwrap();
+    let project = Project::load(&pixi.manifest_path()).unwrap();
 
     // Our channel should be in the list of channels
-    let local_channel = Channel::from_str(
-        Url::from_directory_path(additional_channel_dir.path()).unwrap(),
-        &default_channel_config(),
-    )
-    .unwrap();
-    assert!(project
-        .default_environment()
-        .channels()
-        .contains(&local_channel));
+    let local_channel =
+        NamedChannelOrUrl::Url(Url::from_file_path(additional_channel_dir.as_ref()).unwrap());
+    let channels = project.default_environment().channels();
+    assert!(channels.contains(&local_channel));
 }
 
 #[tokio::test]

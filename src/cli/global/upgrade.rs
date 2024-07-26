@@ -1,21 +1,22 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use clap::Parser;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use tokio::task::JoinSet;
 
-use crate::cli::has_specs::HasSpecs;
-use crate::config::Config;
-use crate::progress::{global_multi_progress, long_running_progress_style};
-
-use super::common::{find_installed_package, get_client_and_sparse_repodata, load_package_records};
-use super::install::globally_install_package;
+use super::{
+    common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
+    install::globally_install_package,
+};
+use crate::{
+    cli::has_specs::HasSpecs,
+    config::Config,
+    progress::{global_multi_progress, long_running_progress_style},
+};
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -30,12 +31,13 @@ pub struct Args {
     ///
     /// When specifying a channel, it is common that the selected channel also
     /// depends on the `conda-forge` channel.
-    /// For example: `pixi global upgrade --channel conda-forge --channel bioconda`.
+    /// For example: `pixi global upgrade --channel conda-forge --channel
+    /// bioconda`.
     ///
-    /// By default, if no channel is provided, `conda-forge` is used, the channel
-    /// the package was installed from will always be used.
+    /// By default, if no channel is provided, `conda-forge` is used, the
+    /// channel the package was installed from will always be used.
     #[clap(short, long)]
-    channel: Vec<String>,
+    channel: Vec<NamedChannelOrUrl>,
 
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
@@ -57,17 +59,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
-    cli_channels: &[String],
+    cli_channels: &[NamedChannelOrUrl],
     platform: Platform,
 ) -> miette::Result<()> {
-    let channel_cli = config.compute_channels(cli_channels).into_diagnostic()?;
+    let default_channels = config.default_channels();
+    let channel_cli = if cli_channels.is_empty() {
+        default_channels.as_slice()
+    } else {
+        cli_channels
+    }
+    .iter()
+    .cloned()
+    .map(|c| c.into_channel(config.global_channel_config()))
+    .collect_vec();
 
     // Get channels and version of globally installed packages in parallel
     let mut channels = HashMap::with_capacity(specs.len());
     let mut versions = HashMap::with_capacity(specs.len());
     let mut set: JoinSet<Result<_, Report>> = JoinSet::new();
     for package_name in specs.keys().cloned() {
-        let channel_config = config.channel_config().clone();
+        let channel_config = config.global_channel_config().clone();
         set.spawn(async move {
             let p = find_installed_package(&package_name).await?;
             let channel =

@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/manifest.rs
+assertion_line: 1830
 expression: manifest.document.to_string()
 ---
 [project]

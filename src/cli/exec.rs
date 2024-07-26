@@ -10,8 +10,10 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform};
-use rattler_repodata_gateway::{ChannelConfig, Gateway};
+use rattler_conda_types::{
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
+};
+use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
@@ -38,7 +40,7 @@ pub struct Args {
 
     /// The channel to install the packages from.
     #[clap(long = "channel", short = 'c')]
-    pub channels: Vec<String>,
+    pub channels: Vec<NamedChannelOrUrl>,
 
     /// If specified a new environment is always created even if one already
     /// exists.
@@ -56,21 +58,28 @@ pub struct EnvironmentHash {
     pub channels: Vec<String>,
 }
 
-impl<'a> From<&'a Args> for EnvironmentHash {
-    fn from(value: &'a Args) -> Self {
+impl EnvironmentHash {
+    pub fn from_args(args: &Args, channel_config: &ChannelConfig) -> Self {
         Self {
-            command: value
+            command: args
                 .command
                 .first()
                 .cloned()
                 .expect("missing required command"),
-            specs: value.specs.clone(),
-            channels: value.channels.clone(),
+            specs: args.specs.clone(),
+            channels: args
+                .channels
+                .iter()
+                .map(|c| {
+                    c.clone()
+                        .into_channel(channel_config)
+                        .base_url()
+                        .to_string()
+                })
+                .collect(),
         }
     }
-}
 
-impl EnvironmentHash {
     /// Returns the name of the environment.
     pub fn name(&self) -> String {
         let mut hasher = DefaultHasher::new();
@@ -117,7 +126,7 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from(args).name();
+    let environment_name = EnvironmentHash::from_args(args, config.global_channel_config()).name();
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
 
     let mut guard = PrefixGuard::new(prefix.root())
@@ -149,7 +158,7 @@ pub async fn create_exec_prefix(
     let gateway = Gateway::builder()
         .with_cache_dir(cache_dir.join("repodata"))
         .with_client(client.clone())
-        .with_channel_config(ChannelConfig::from(config))
+        .with_channel_config(rattler_repodata_gateway::ChannelConfig::from(config))
         .finish();
 
     // Determine the specs to use for the environment
@@ -174,10 +183,8 @@ pub async fn create_exec_prefix(
         args.channels.clone()
     };
     let channels = channels
-        .iter()
-        .map(|channel| Channel::from_str(channel, config.channel_config()))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+        .into_iter()
+        .map(|channel| channel.into_channel(config.global_channel_config()));
 
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {

@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/parsed_manifest.rs
+assertion_line: 623
 expression: manifest.project.pypi_options.clone().unwrap()
 ---
 index-url: ~

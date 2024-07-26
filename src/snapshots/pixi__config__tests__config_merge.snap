@@ -4,9 +4,15 @@ expression: debug
 ---
 Config {
     default_channels: [
-        "conda-forge",
-        "bioconda",
-        "defaults",
+        Name(
+            "conda-forge",
+        ),
+        Name(
+            "bioconda",
+        ),
+        Name(
+            "defaults",
+        ),
     ],
     change_ps1: Some(
         true,

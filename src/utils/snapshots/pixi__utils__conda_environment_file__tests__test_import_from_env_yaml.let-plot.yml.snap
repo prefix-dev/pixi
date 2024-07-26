@@ -233,10 +233,18 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         [],
     ),
     [
-        "conda-forge",
-        "main",
-        "r",
-        "msys2",
+        Name(
+            "conda-forge",
+        ),
+        Name(
+            "main",
+        ),
+        Name(
+            "r",
+        ),
+        Name(
+            "msys2",
+        ),
     ],
     Some(
         "lets-plot-python-module",
