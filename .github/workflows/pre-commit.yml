@@ -13,7 +13,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.1
         with:
-          environments: lint schema
+          environments: lint
       - name: pre-commit
         run: pixi run pre-commit-run --color=always --show-diff-on-failure
         env:
