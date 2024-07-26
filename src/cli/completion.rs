@@ -129,7 +129,7 @@ $2::task"#;
 
 fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
-    let addition = "complete -c pixi -f -n \"__fish_seen_subcommand_from run\" -a (pixi task list --machine-readable)";
+    let addition = "complete -c pixi -f -n \"__fish_seen_subcommand_from run\" -a \"(string split ' ' (pixi task list --machine-readable  2> /dev/null))\"";
     format!("{}{}\n", script, addition).into()
 }
 
