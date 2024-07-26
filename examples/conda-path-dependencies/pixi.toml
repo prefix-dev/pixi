@@ -1,0 +1,35 @@
+[project]
+name = "conda-path-dependencies"
+description = "Test project to demonstrate conda path dependencies"
+channels = []
+platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+[feature.path-map.dependencies]
+# Define an url through a spec field
+dummy_package = { url = "/home/rarts/dev/pixi/examples/conda-path-dependencies/dummy_package/output/noarch/dummy_package-0.0.0-h4616a5c_0.conda" }
+
+[feature.path-string.dependencies]
+# Define an url as a string
+dummy_package = "/home/rarts/dev/pixi/examples/conda-path-dependencies/dummy_package/output/noarch/dummy_package-0.0.0-h4616a5c_0.conda"
+
+[feature.url-map.dependencies]
+# Define an url through a spec field, mutex packages are used for simplicity of the example
+_r-mutex = { url = "https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2"}
+
+[feature.url-string.dependencies]
+# Define an url as a string, mutex packages are used for simplicity of the example
+_r-mutex = "https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2"
+
+[feature.build]
+channels = ["https://fast.prefix.dev/conda-forge"]
+dependencies = { rattler-build = "*" }
+tasks = {build = "rattler-build build --recipe dummy_package/recipe.yaml --output-dir dummy_package/output"}
+
+[environments]
+path-map = {features = ["path-map"], no-default-feature = true}
+path-string = {features = ["path-string"], no-default-feature = true}
+url-map = {features = ["url-map"], no-default-feature = true}
+url-string = {features = ["url-string"], no-default-feature = true}
+
+# Build environment for the dummy package build, there is a bootstrap problem here with the rest of the enviroments using the dummy package.
+build = {features = ["build"], no-default-feature = true}
