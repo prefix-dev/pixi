@@ -1,25 +1,25 @@
 [project]
-name = "pixi"
-description = "Package management made easy!"
 authors = [
-    "Wolf Vollprecht <wolf@prefix.dev>",
-    "Bas Zalmstra <bas@prefix.dev>",
-    "Tim de Jager <tim@prefix.dev>",
-    "Ruben Arts <ruben@prefix.dev>",
+  "Wolf Vollprecht <wolf@prefix.dev>",
+  "Bas Zalmstra <bas@prefix.dev>",
+  "Tim de Jager <tim@prefix.dev>",
+  "Ruben Arts <ruben@prefix.dev>",
 ]
+description = "Package management made easy!"
+name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
 channels = ["https://fast.prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
 build = "cargo build --release"
-install = "cargo install --path . --locked"
-test = "cargo test"
-test-all = "cargo test --all-features"
 bump = "tbump --only-patch $RELEASE_VERSION"
+install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 run-all-examples = "python ./tests/run_all_examples.py"
 run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
+test = "cargo test"
+test-all = "cargo test --all-features"
 
 [feature.dev.dependencies]
 # Needed for the citation
@@ -30,56 +30,68 @@ tbump = ">=6.9.0,<6.10"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
 ruff = ">=0.4.8,<0.5"
+taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
+
 [feature.lint.tasks]
+lint = { depends-on = ["pre-commit-run"] }
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all"
-lint = { depends-on = ["pre-commit-run"] }
+toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
+toml-lint = "taplo lint --verbose **/pixi.toml"
 
 [feature.build.dependencies]
 # Needed for building
-rust = "~=1.77.0"
+git = "2.42.0.*"
 openssl = "3.*"
 pkg-config = "0.29.*"
-git = "2.42.0.*"
+rust = "~=1.77.0"
 [feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
 make = ">=4.3,<5"
 
 [feature.docs.dependencies]
+cairosvg = "2.7.1.*"
+git-cliff = ">=2.2.1,<2.4"
+mdx_truly_sane_lists = ">=1.3,<2"
+mike = "2.0.0.*"
 mkdocs = "1.5.3.*"
 mkdocs-material = ">=9.5.16"
-mdx_truly_sane_lists = ">=1.3,<2"
-pillow = ">=9.4.0"
-cairosvg = "2.7.1.*"
-mike = "2.0.0.*"
 mkdocs-redirects = ">=1.2.1,<2"
-git-cliff = ">=2.2.1,<2.4"
+pillow = ">=9.4.0"
 
 [feature.docs.tasks]
 build-docs = "mkdocs build --strict"
-docs = "mkdocs serve"
-deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
-deploy-dev = "mike deploy --push dev devel"
-mike-serve = "mike serve"
 bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
+deploy-dev = "mike deploy --push dev devel"
+deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
+docs = "mkdocs serve"
+mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema" }
-toml-lint = "taplo lint --verbose **/pixi.toml"
-toml-format = "taplo fmt **/pixi.toml"
 
 [feature.schema.dependencies]
-python = ">=3.11"
-pytest = ">=8.0.2,<8.1"
 jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
+pytest = ">=8.0.2,<8.1"
+python = ">=3.11"
 pyyaml = ">=6.0.1,<6.1"
-taplo = ">=0.9.1,<0.10"
 
 [environments]
-default = { features = ["build", "dev", "docs", "schema"], solve-group = "default" }
-docs = { features = ["docs"], no-default-feature = true, solve-group = "default" }
-schema = { features = ["schema"], no-default-feature = true , solve-group = "default" }
-lint = { features = ["lint"], no-default-feature = true, solve-group = "default" }
+default = { features = [
+  "build",
+  "dev",
+  "docs",
+  "schema",
+], solve-group = "default" }
+docs = { features = [
+  "docs",
+], no-default-feature = true, solve-group = "default" }
+lint = { features = [
+  "lint",
+], no-default-feature = true, solve-group = "default" }
+schema = { features = [
+  "schema",
+], no-default-feature = true, solve-group = "default" }

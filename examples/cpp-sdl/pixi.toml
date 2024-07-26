@@ -1,8 +1,8 @@
 [project]
-name = "sdl_example"
-description = "Showcases how to create a simple C++ executable with Pixi"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
+description = "Showcases how to create a simple C++ executable with Pixi"
+name = "sdl_example"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks.start]
@@ -16,8 +16,8 @@ sdl2 = "2.26.5.*"
 [feature.build.dependencies]
 cmake = "3.26.4.*"
 cxx-compiler = "1.5.2.*"
-ninja = "1.11.1.*"
 make = ">=4.3,<5"
+ninja = "1.11.1.*"
 
 [feature.build.tasks.configure]
 # Configures CMake

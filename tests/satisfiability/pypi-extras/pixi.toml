@@ -5,13 +5,13 @@
 # this, the "pinject" package should be part of the solution.
 
 [project]
-name = "pypi-extras"
 channels = ["conda-forge"]
+name = "pypi-extras"
 platforms = ["win-64"]
 
 [dependencies]
 python = "*"
 
 [pypi-dependencies]
-use-with-extras = { path = "use-with-extras" }
 has-extras = { path = "has-extras" }
+use-with-extras = { path = "use-with-extras" }

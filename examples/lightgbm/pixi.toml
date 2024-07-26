@@ -1,8 +1,8 @@
 [project]
-name = "lightgbm"
-description = "LightGBM demo for machine learning project"
 authors = ["fkt <deepthought@postech.ac.kr>"]
 channels = ["conda-forge"]
+description = "LightGBM demo for machine learning project"
+name = "lightgbm"
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tasks]

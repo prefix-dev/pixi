@@ -1,12 +1,12 @@
 [package]
-name = "pixi_manifest"
-version = "0.1.0"
-edition.workspace = true
 authors.workspace = true
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 license.workspace = true
+name = "pixi_manifest"
 readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
 
 [dependencies]
 indexmap = { workspace = true }

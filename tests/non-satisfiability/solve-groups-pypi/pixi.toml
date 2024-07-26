@@ -1,6 +1,6 @@
 [project]
-name = "bug_test"
 channels = ["conda-forge"]
+name = "bug_test"
 platforms = ["win-64"]
 
 [dependencies]
