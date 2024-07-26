@@ -237,8 +237,7 @@ nix = { workspace = true, features = [
     "term",
     "poll",
 ] }
-libc = { workspace = true, default-features = false }
-signal-hook = { workspace = true }
+pixi_pty = { path = "crates/pixi_pty" }
 
 # Remove this after updating to uv >= 0.1.40
 [target.'cfg(windows)'.dependencies]

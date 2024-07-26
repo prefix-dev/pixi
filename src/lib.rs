@@ -12,8 +12,6 @@ mod progress;
 mod project;
 mod prompt;
 pub mod task;
-#[cfg(unix)]
-pub mod unix;
 pub mod util;
 pub mod utils;
 
