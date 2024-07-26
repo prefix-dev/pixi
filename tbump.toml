@@ -36,28 +36,28 @@ search = "Bump version: {current_version} → "
 src = "CITATION.cff"
 
 [[file]]
-src = "Cargo.toml"
 search = '^version = "{current_version}"'
+src = "Cargo.toml"
 
 [[file]]
-src = "docs/advanced/github_actions.md"
 search = "pixi-version: v{current_version}"
+src = "docs/advanced/github_actions.md"
 
 [[file]]
-src = "schema/schema.json"
 search = "/pixi.sh/v{current_version}/"
+src = "schema/schema.json"
 
 [[file]]
+search = "Version: v{current_version}"
 src = "install/install.sh"
-search = "Version: v{current_version}"
 
 [[file]]
+search = "Version: v{current_version}"
 src = "install/install.ps1"
-search = "Version: v{current_version}"
 
 [[file]]
-src = "src/cli/mod.rs"
 search = "version {current_version}"
+src = "src/cli/mod.rs"
 
 [[field]]
 # the name of the field

@@ -1,17 +1,17 @@
 [project]
-name = "flask-hello-world-pyproject"
-version = "0.1.0"
+dependencies = ["flask==2.*"]
 description = "Example how to get started with flask in a pixi environment."
+name = "flask-hello-world-pyproject"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["flask==2.*"]
+version = "0.1.0"
 
 [project.optional-dependencies]
 test = ["pytest"]
 
 [build-system]
-requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools", "wheel"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]

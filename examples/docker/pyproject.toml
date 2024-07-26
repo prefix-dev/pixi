@@ -1,21 +1,21 @@
 [build-system]
-requires = ["flit_core>=3.2,<4"]
 build-backend = "flit_core.buildapi"
+requires = ["flit_core>=3.2,<4"]
 
 [project]
-name = "docker-project"
-description = "A python project that gets installed in a docker container."
-version = "0.1.0"
 authors = [{ name = "prefix.dev", email = "noreply@prefix.dev" }]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
 ]
+description = "A python project that gets installed in a docker container."
+name = "docker-project"
 requires-python = ">=3.12"
+version = "0.1.0"
 
 [tool.pixi.project]
-name = "docker-project"
 channels = ["conda-forge"]
+name = "docker-project"
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
 # Dependencies used in the docker container

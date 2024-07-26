@@ -1,7 +1,7 @@
 [project]
-name = "pypi-custom-registry"
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
+name = "pypi-custom-registry"
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 
 # Define a default here, this is not needed
@@ -10,7 +10,7 @@ platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 index-url = "https://pypi.org/simple"
 
 [tasks]
-start = {depends-on = ["test"]}
+start = { depends-on = ["test"] }
 test = "python -c 'import importlib.metadata; print(importlib.metadata.version(\"flask\"))'"
 
 [dependencies]
@@ -28,4 +28,4 @@ python = "3.12"
 flask = "==3.0.3"
 
 [environments]
-alternative = {features = ["alternative"], no-default-feature = true }
+alternative = { features = ["alternative"], no-default-feature = true }
