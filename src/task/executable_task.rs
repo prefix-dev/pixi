@@ -15,12 +15,12 @@ use tokio::task::JoinHandle;
 
 use super::task_hash::{InputHashesError, TaskCache, TaskHash};
 use crate::{
-    consts::TASK_STYLE,
     lock_file::LockFileDerivedData,
     project::Environment,
     task::task_graph::{TaskGraph, TaskId},
     Project,
 };
+use pixi_consts::consts;
 
 use pixi_manifest::{Task, TaskName};
 
@@ -311,7 +311,7 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
         write!(
             f,
             "{}",
-            TASK_STYLE
+            consts::TASK_STYLE
                 .apply_to(command.as_deref().unwrap_or("<alias>"))
                 .bold()
         )?;
@@ -319,7 +319,7 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
             write!(
                 f,
                 " {}",
-                TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
+                consts::TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
             )?;
         }
         Ok(())

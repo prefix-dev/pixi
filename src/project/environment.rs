@@ -16,7 +16,8 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{consts, project::has_features::HasFeatures, Project};
+use crate::{project::has_features::HasFeatures, Project};
+use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -26,7 +27,7 @@ use crate::{consts, project::has_features::HasFeatures, Project};
 /// while this struct provides methods to easily interact with an environment
 /// without having to deal with the structure of the project model.
 ///
-/// This type does not provide manipulation methods. To modify the data model
+/// This type does not provide manipulation methods. To modify the data mode
 /// you should directly interact with the manifest instead.
 ///
 /// The lifetime `'p` refers to the lifetime of the project that this

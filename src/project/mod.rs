@@ -36,12 +36,12 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    config::Config,
-    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     project::grouped_environment::GroupedEnvironment,
     pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
     utils::reqwest::build_reqwest_clients,
 };
+use pixi_config::Config;
+use pixi_consts::consts;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -197,8 +197,8 @@ impl Project {
             Some(file) => file,
             None => miette::bail!(
                 "could not find {} or {} which is configured to use pixi",
-                PROJECT_MANIFEST,
-                PYPROJECT_MANIFEST
+                consts::PROJECT_MANIFEST,
+                consts::PYPROJECT_MANIFEST
             ),
         };
 
@@ -639,14 +639,14 @@ impl Project {
 pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
-        [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
+        [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
             .iter()
             .find_map(|manifest| {
                 let path = dir.join(manifest);
                 if path.is_file() {
                     match *manifest {
-                        PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST
+                        consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
+                        consts::PYPROJECT_MANIFEST
                             if PyProjectToml::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {

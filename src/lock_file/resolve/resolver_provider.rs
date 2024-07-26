@@ -9,6 +9,7 @@ use distribution_types::{
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
+use pixi_consts::consts;
 use rattler_conda_types::RepoDataRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_resolver::{
@@ -17,10 +18,7 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::{
-    consts::DEFAULT_PYPI_INDEX_URL,
-    lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier},
-};
+use crate::lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier};
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
@@ -63,7 +61,9 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                     .parse()
                     .expect("could not convert to pypi version"),
                 file: Box::new(file),
-                index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
+                index: IndexUrl::Pypi(VerbatimUrl::from_url(
+                    consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                )),
                 wheels: vec![],
             };
 

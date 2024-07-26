@@ -27,10 +27,10 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
-    consts,
     task::TaskName,
     Project, UpdateLockFileOptions,
 };
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};

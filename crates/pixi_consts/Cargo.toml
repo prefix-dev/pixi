@@ -1,0 +1,17 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_consts"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+console = { workspace = true }
+lazy_static = { workspace = true }
+pixi_manifest = { workspace = true }
+url = { workspace = true }

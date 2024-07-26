@@ -36,12 +36,12 @@ use uv_types::HashStrategy;
 use crate::utils::uv::locked_indexes_to_index_locations;
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
-    consts::{DEFAULT_PYPI_INDEX_URL, PIXI_UV_INSTALLER, PROJECT_MANIFEST},
     lock_file::UvResolutionContext,
     prefix::Prefix,
     pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
+use pixi_consts::consts;
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -209,7 +209,7 @@ fn convert_to_dist(
                         // out but it would require adding the indexes to
                         // the lock file
                         index: IndexUrl::Pypi(VerbatimUrl::from_url(
-                            DEFAULT_PYPI_INDEX_URL.clone(),
+                            consts::DEFAULT_PYPI_INDEX_URL.clone(),
                         )),
                     }],
                     best_wheel_index: 0,
@@ -221,7 +221,9 @@ fn convert_to_dist(
                     version: pkg.version.clone(),
                     file: Box::new(file),
                     // This should be fine because currently it is only used for caching
-                    index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
+                    index: IndexUrl::Pypi(VerbatimUrl::from_url(
+                        consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                    )),
                     // I don't think this really matters for the install
                     wheels: vec![],
                 }))
@@ -489,7 +491,7 @@ fn whats_the_plan<'a>(
             // Empty string if no installer or any other error
             .map_or(String::new(), |f| f.unwrap_or_default());
 
-        if required_map_copy.contains_key(&dist.name()) && installer != PIXI_UV_INSTALLER {
+        if required_map_copy.contains_key(&dist.name()) && installer != consts::PIXI_UV_INSTALLER {
             // We are managing the package but something else has installed a version
             // let's re-install to make sure that we have the **correct** version
             reinstalls.push(dist.clone());
@@ -497,7 +499,7 @@ fn whats_the_plan<'a>(
         }
 
         if let Some(pkg) = pkg {
-            if installer == PIXI_UV_INSTALLER {
+            if installer == consts::PIXI_UV_INSTALLER {
                 // Check if we need to reinstall
                 match need_reinstall(dist, pkg, python_version)? {
                     ValidateInstall::Keep => {
@@ -529,7 +531,7 @@ fn whats_the_plan<'a>(
             } else {
                 remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
             }
-        } else if installer != PIXI_UV_INSTALLER {
+        } else if installer != consts::PIXI_UV_INSTALLER {
             // Ignore packages that we are not managed by us
             continue;
         } else {
@@ -586,7 +588,7 @@ pub async fn update_python_distributions(
     platform: Platform,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
-
+    use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the current environment markers.
     let python_record = conda_package
         .iter()
@@ -882,7 +884,7 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
-            .with_installer_name(Some(PIXI_UV_INSTALLER.to_string()))
+            .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
             .install(&wheels)
             .unwrap();

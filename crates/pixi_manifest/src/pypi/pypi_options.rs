@@ -126,7 +126,7 @@ impl From<PypiOptions> for rattler_lock::PypiIndexes {
     fn from(value: PypiOptions) -> Self {
         let primary_index = value
             .index_url
-            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.parse().unwrap());
+            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.clone());
         Self {
             indexes: iter::once(primary_index)
                 .chain(value.extra_index_urls.into_iter().flatten())

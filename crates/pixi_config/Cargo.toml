@@ -1,0 +1,31 @@
+[package]
+authors.workspace = true
+description = "Contains the global configuration for use in a pixi project"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_config"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+clap = { workspace = true, features = ["std", "derive", "env"] }
+console = { workspace = true }
+dirs = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+pixi_consts = { workspace = true }
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
+serde = { workspace = true }
+serde_ignored = { workspace = true }
+serde_json = { workspace = true }
+toml_edit = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml"] }
+rstest = { workspace = true }
