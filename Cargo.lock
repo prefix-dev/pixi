@@ -3436,7 +3436,6 @@ dependencies = [
  "is_executable",
  "itertools 0.12.1",
  "lazy_static",
- "libc",
  "miette 7.2.0",
  "minijinja",
  "nix 0.28.0",
@@ -3446,6 +3445,7 @@ dependencies = [
  "pep508_rs",
  "percent-encoding",
  "pixi_manifest",
+ "pixi_pty",
  "platform-tags",
  "pypi-types",
  "rattler",
@@ -3470,7 +3470,6 @@ dependencies = [
  "serde_yaml",
  "serial_test",
  "shlex",
- "signal-hook",
  "strsim",
  "tabwriter",
  "tar",
@@ -3528,6 +3527,15 @@ dependencies = [
  "toml_edit 0.22.13",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_pty"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "nix 0.28.0",
+ "signal-hook",
 ]
 
 [[package]]
