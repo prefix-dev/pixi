@@ -1675,10 +1675,12 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setuptools &gt;= 40.8.0&quot;</span><span class="p">]</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta:__legacy__&quot;</span>
 </span></code></pre></div>
-<p>Including a <code>[build-system]</code> section is <strong>highly recommended</strong>. If you are not sure of the <a href="https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend">build-backend</a> you want to use, including the <code>[build-system]</code> section below in your <code>pyproject.toml</code> is a good starting point</p>
+<p>Including a <code>[build-system]</code> section is <strong>highly recommended</strong>. If you are not sure of the <a href="https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend">build-backend</a> you want to use, including the <code>[build-system]</code> section below in your <code>pyproject.toml</code> is a good starting point.
+<code>pixi init --pyproject</code> defaults to <code>hatchling</code>.
+The advantages of <code>hatchling</code> over <code>setuptools</code> are outlined on its <a href="https://hatch.pypa.io/latest/why/#build-backend">website</a>.</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[build-system]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setuptools&quot;</span><span class="p">]</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta&quot;</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 
 
