@@ -1,10 +1,10 @@
-use crate::config::Config;
-use crate::{config, progress};
+use crate::progress;
 use futures::{stream, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_config::{self, Config};
 use rattler_conda_types::{Channel, Platform};
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -61,7 +61,7 @@ pub async fn fetch_sparse_repodata_targets(
     top_level_progress.set_message("fetching package metadata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
-    let repodata_cache_path = config::get_cache_dir()?.join("repodata");
+    let repodata_cache_path = pixi_config::get_cache_dir()?.join("repodata");
     let multi_progress = progress::global_multi_progress();
     let mut progress_bars = Vec::new();
 

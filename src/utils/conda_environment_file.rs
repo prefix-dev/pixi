@@ -5,7 +5,7 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
 
-use crate::config::Config;
+use pixi_config::Config;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CondaEnvFile {

@@ -1,5 +1,5 @@
 ---
-source: src/config.rs
+source: crates/pixi_config/src/lib.rs
 expression: debug
 ---
 Config {

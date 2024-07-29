@@ -4,8 +4,8 @@ use crate::common::builders::HasDependencyConfig;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
-use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use pixi::{DependencyType, HasFeatures};
+use pixi_consts::consts;
 use pixi_manifest::SpecType;
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
@@ -49,14 +49,30 @@ async fn add_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==3"));
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==2"));
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==3"
+    ));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==2"
+    ));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
 
     // remove the package, using matchspec
     pixi.remove("rattler==1").await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
 }
 
 /// Test that we get the union of all packages in the lockfile for the run, build and host
@@ -120,13 +136,21 @@ async fn add_functionality_union() {
 
     // Lock file should contain all packages as well
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
     assert!(lock.contains_match_spec(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
         "libcomputer==1.2"
     ));
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "libidk==3.1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "libidk==3.1"
+    ));
 }
 
 /// Test adding a package for a specific OS
@@ -163,7 +187,11 @@ async fn add_functionality_os() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::LinuxS390X, "rattler==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::LinuxS390X,
+        "rattler==1"
+    ));
 }
 
 /// Test the `pixi add --pypi` functionality
@@ -213,14 +241,18 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pipx"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "pipx"
+    ));
     assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Osx64,
         pep508_rs::Requirement::from_str("boltons").unwrap()
     ));
     assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
         pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
     ));
@@ -249,8 +281,16 @@ async fn add_pypi_functionality() {
 
     let lock = pixi.lock_file().await.unwrap();
     // assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "requests"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "isort"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "pytest"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "isort"
+    ));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "pytest"
+    ));
 }
 
 /// Test the sdist support for pypi packages

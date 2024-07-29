@@ -110,6 +110,10 @@ winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "0.6.6", default-features = false }
 
+pixi_config = { path = "crates/pixi_config" }
+pixi_consts = { path = "crates/pixi_consts" }
+pixi_manifest = { path = "crates/pixi_manifest" }
+
 [package]
 authors.workspace = true
 description = "A package management and workflow tool"
@@ -208,6 +212,9 @@ rattler_repodata_gateway = { workspace = true, features = [
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_manifest = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
@@ -249,7 +256,6 @@ uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
-pixi_manifest = { path = "crates/pixi_manifest" }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

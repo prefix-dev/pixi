@@ -6,8 +6,8 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
-use crate::config::home_path;
 use crate::prefix::Prefix;
+use pixi_config::home_path;
 
 use super::common::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};
 use super::install::{find_and_map_executable_scripts, BinScriptMapping};

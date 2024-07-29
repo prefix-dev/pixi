@@ -12,12 +12,12 @@ use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 use crate::{
-    config::{get_default_author, Config},
-    consts,
     environment::{get_up_to_date_prefix, LockFileUsage},
     utils::conda_environment_file::CondaEnvFile,
     Project,
 };
+use pixi_config::{get_default_author, Config};
+use pixi_consts::consts;
 
 /// Creates a new project
 #[derive(Parser, Debug)]

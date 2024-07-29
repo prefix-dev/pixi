@@ -26,7 +26,7 @@ pub struct PtySession {
 
 /// ```
 /// use std::process::Command;
-/// use pixi::unix::PtySession;
+/// use pixi_pty::unix::PtySession;
 ///
 /// let process = PtySession::new(Command::new("bash")).unwrap();
 /// ```

@@ -8,7 +8,8 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
 
-use crate::{config::get_cache_dir, pypi_mapping::custom_pypi_mapping::fetch_mapping_from_url};
+use crate::pypi_mapping::custom_pypi_mapping::fetch_mapping_from_url;
+use pixi_config::get_cache_dir;
 
 pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
