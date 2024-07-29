@@ -3540,6 +3540,7 @@ name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "dunce",
  "indexmap 2.2.6",
  "insta",
  "itertools 0.12.1",
