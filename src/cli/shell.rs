@@ -9,8 +9,6 @@ use rattler_shell::{
 };
 
 use crate::cli::cli_config::ProjectConfig;
-#[cfg(target_family = "unix")]
-use crate::unix::PtySession;
 use crate::{
     activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, config::ConfigCliPrompt,
     environment::get_up_to_date_prefix,

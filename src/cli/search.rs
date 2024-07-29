@@ -1,6 +1,6 @@
+use std::cmp::Ordering;
 use std::io::{self, Write};
 use std::sync::Arc;
-use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
 use indexmap::IndexMap;
@@ -12,6 +12,7 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::cli::cli_config::ProjectConfig;
 use crate::{
     config::Config, progress::await_in_progress, repodata::fetch_sparse_repodata,
     util::default_channel_config, utils::reqwest::build_reqwest_clients, HasFeatures, Project,
