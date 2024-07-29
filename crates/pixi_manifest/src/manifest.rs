@@ -581,7 +581,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to the default feature.
-    fn default_feature_mut(&mut self) -> &mut Feature {
+    pub(crate) fn default_feature_mut(&mut self) -> &mut Feature {
         self.parsed.default_feature_mut()
     }
 
@@ -644,10 +644,12 @@ impl Manifest {
 
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
     use std::str::FromStr;
 
-    use insta::{assert_snapshot, assert_yaml_snapshot};
+    use insta::assert_snapshot;
     use miette::NarratableReportHandler;
+    use rattler_conda_types::ParseStrictness::Strict;
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rattler_solve::ChannelPriority;
     use rstest::*;

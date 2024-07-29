@@ -1,5 +1,5 @@
 ---
-source: src/project/manifest/mod.rs
+source: crates/pixi_manifest/src/parsed_manifest.rs
 expression: manifest.project.pypi_options.clone().unwrap()
 ---
 index-url: ~
