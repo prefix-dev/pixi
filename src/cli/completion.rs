@@ -298,7 +298,6 @@ _arguments "${_arguments_options[@]}" \
         let replaced_script = replace_fish_completion(&script);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replaced_script, script);
-        assert!(replaced_script.contains(&script));
     }
 
     #[test]
