@@ -9,6 +9,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+dunce = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 pep440_rs = { workspace = true }

@@ -40,7 +40,7 @@ async fn add_channel() {
         .unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = Project::load(&pixi.manifest_path()).unwrap();
+    let project = Project::from_path(&pixi.manifest_path()).unwrap();
 
     // Our channel should be in the list of channels
     let local_channel =
