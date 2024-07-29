@@ -1040,7 +1040,7 @@ mod tests {
             return;
         }
 
-        let project = Project::load(&manifest_path).unwrap();
+        let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
             Ok(()) => {}
@@ -1050,7 +1050,7 @@ mod tests {
 
     #[rstest]
     fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
-        let project = Project::load(&manifest_path).unwrap();
+        let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
             Ok(()) => {}
@@ -1063,7 +1063,7 @@ mod tests {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::load(path).unwrap();
+            let project = Project::from_path(path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
             let err = verify_lockfile_satisfiability(&project, &lock_file)
                 .expect_err("expected failing satisfiability");
