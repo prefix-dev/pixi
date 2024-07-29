@@ -287,7 +287,7 @@ impl TaskAliasBuilder {
 
 pub struct ProjectChannelAddBuilder {
     pub manifest_path: Option<PathBuf>,
-    pub args: project::channel::add::Args,
+    pub args: project::channel::AddRemoveArgs,
 }
 
 impl ProjectChannelAddBuilder {
