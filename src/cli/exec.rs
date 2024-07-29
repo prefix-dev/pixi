@@ -18,6 +18,7 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
+use crate::utils::config::from_pixi_config;
 use crate::{
     prefix::Prefix,
     progress::{await_in_progress, global_multi_progress, wrap_in_progress},
@@ -158,7 +159,7 @@ pub async fn create_exec_prefix(
     let gateway = Gateway::builder()
         .with_cache_dir(cache_dir.join("repodata"))
         .with_client(client.clone())
-        .with_channel_config(rattler_repodata_gateway::ChannelConfig::from(config))
+        .with_channel_config(from_pixi_config(config))
         .finish();
 
     // Determine the specs to use for the environment

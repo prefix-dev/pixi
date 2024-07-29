@@ -1,6 +1,7 @@
 use crate::project::Project;
 
-use rattler_repodata_gateway::{ChannelConfig, Gateway};
+use crate::utils::config::from_pixi_config;
+use rattler_repodata_gateway::Gateway;
 use std::path::PathBuf;
 
 impl Project {
@@ -17,7 +18,7 @@ impl Project {
             Gateway::builder()
                 .with_client(self.authenticated_client().clone())
                 .with_cache_dir(cache_dir.join("repodata"))
-                .with_channel_config(ChannelConfig::from(&self.config))
+                .with_channel_config(from_pixi_config(&self.config))
                 .finish()
         })
     }

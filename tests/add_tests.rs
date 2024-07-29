@@ -281,8 +281,16 @@ async fn add_pypi_functionality() {
 
     let lock = pixi.lock_file().await.unwrap();
     // assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "requests"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "isort"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "pytest"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "isort"
+    ));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "pytest"
+    ));
 }
 
 /// Test the sdist support for pypi packages
