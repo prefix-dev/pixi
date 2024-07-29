@@ -129,8 +129,13 @@ $2::task"#;
 
 fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
-    let addition = "complete -c pixi -f -n \"__fish_seen_subcommand_from run\" -a \"(string split ' ' (pixi task list --machine-readable  2> /dev/null))\"";
-    format!("{}{}\n", script, addition).into()
+    let addition = "complete -c pixi -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' (pixi task list --machine-readable  2> /dev/null))\"";
+    let new_script = format!("{}{}\n", script, addition);
+    let pattern = r#"-n "__fish_seen_subcommand_from run""#;
+    let replacement = r#"-n "__fish_seen_subcommand_from run; or __fish_seen_subcommand_from r""#;
+    let re = Regex::new(pattern).unwrap();
+    let result = re.replace_all(&new_script, replacement);
+    Cow::Owned(result.into_owned())
 }
 
 /// Replace the parts of the nushell completion script that need different functionality.
