@@ -27,7 +27,7 @@ use pixi_consts::consts;
 /// while this struct provides methods to easily interact with an environment
 /// without having to deal with the structure of the project model.
 ///
-/// This type does not provide manipulation methods. To modify the data mode
+/// This type does not provide manipulation methods. To modify the data model
 /// you should directly interact with the manifest instead.
 ///
 /// The lifetime `'p` refers to the lifetime of the project that this
