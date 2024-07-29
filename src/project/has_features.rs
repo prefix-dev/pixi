@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
-use rattler_conda_types::{Channel, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use rattler_solve::ChannelPriority;
 
 use crate::Project;
@@ -29,7 +29,7 @@ pub trait HasFeatures<'p> {
     ///
     /// If a feature does not specify any channel the default channels from the project metadata are
     /// used instead.
-    fn channels(&self) -> IndexSet<&'p Channel> {
+    fn channels(&self) -> IndexSet<&'p NamedChannelOrUrl> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels: IndexSet<_> = self

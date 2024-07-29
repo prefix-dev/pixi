@@ -12,7 +12,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::fancy_display::FancyDisplay;
+use barrier_cell::BarrierCell;
+use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use indexmap::IndexSet;
+use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use itertools::Itertools;
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use parking_lot::Mutex;
+use pixi_manifest::EnvironmentName;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use url::Url;
+use uv_normalize::ExtraName;
+
 use crate::{
     activation::CurrentEnvVarBehavior,
     config, consts,
@@ -20,6 +37,7 @@ use crate::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
+    fancy_display::FancyDisplay,
     load_lock_file,
     lock_file::{
         self, update, OutdatedEnvironments, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
@@ -37,23 +55,6 @@ use crate::{
     pypi_tags::is_python_record,
     Project,
 };
-use barrier_cell::BarrierCell;
-use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::IndexSet;
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
-use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-use parking_lot::Mutex;
-use pixi_manifest::EnvironmentName;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
-use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use url::Url;
-use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -168,7 +169,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            &environment.pypi_options(),
+            self.pypi_indexes(environment).as_ref(),
             env_variables,
             self.project.root(),
             environment.best_platform(),
@@ -193,6 +194,14 @@ impl<'p> LockFileDerivedData<'p> {
             .environment(environment.name().as_str())
             .expect("the lock-file should be up-to-date so it should also include the environment");
         locked_env.pypi_packages_for_platform(platform)
+    }
+
+    fn pypi_indexes(&self, environment: &Environment<'p>) -> Option<PypiIndexes> {
+        let locked_env = self
+            .lock_file
+            .environment(environment.name().as_str())
+            .expect("the lock-file should be up-to-date so it should also include the environment");
+        locked_env.pypi_indexes().cloned()
     }
 
     fn repodata_records(
@@ -878,7 +887,8 @@ impl<'p> UpdateContext<'p> {
             // Determine the source of the solve information
             let source = GroupedEnvironment::from(environment.clone());
 
-            // Determine the channel priority, if no channel priority is set we use the default.
+            // Determine the channel priority, if no channel priority is set we use the
+            // default.
             let channel_priority = source
                 .channel_priority()
                 .into_diagnostic()?
@@ -1275,12 +1285,14 @@ impl<'p> UpdateContext<'p> {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
 
+            let channel_config = project.channel_config();
             builder.set_channels(
                 &environment_name,
                 grouped_env
                     .channels()
                     .into_iter()
-                    .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string())),
+                    .cloned()
+                    .map(|channel| channel.into_base_url(&channel_config).to_string()),
             );
 
             let mut has_pypi_records = false;
@@ -1443,6 +1455,9 @@ async fn spawn_solve_conda_environment_task(
     // Whether we should use custom mapping location
     let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
 
+    // Get the channel configuration
+    let channel_config = group.project().channel_config();
+
     tokio::spawn(
         async move {
             let _permit = concurrency_semaphore
@@ -1472,7 +1487,9 @@ async fn spawn_solve_conda_environment_task(
             let fetch_repodata_start = Instant::now();
             let available_packages = repodata_gateway
                 .query(
-                    channels,
+                    channels
+                        .into_iter()
+                        .map(|c| c.into_channel(&channel_config)),
                     [platform, Platform::NoArch],
                     dependencies.clone().into_match_specs(),
                 )

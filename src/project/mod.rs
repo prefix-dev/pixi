@@ -18,6 +18,22 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use async_once_cell::OnceCell as AsyncCell;
+pub use dependencies::{CondaDependencies, PyPiDependencies};
+pub use environment::Environment;
+use indexmap::Equivalent;
+use miette::{IntoDiagnostic, NamedSource};
+use once_cell::sync::OnceCell;
+use pixi_manifest::{
+    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+};
+use rattler_conda_types::{ChannelConfig, Version};
+use rattler_repodata_gateway::Gateway;
+use reqwest_middleware::ClientWithMiddleware;
+pub use solve_group::SolveGroup;
+use url::{ParseError, Url};
+use xxhash_rust::xxh3::xxh3_64;
+
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     config::Config,
@@ -26,22 +42,6 @@ use crate::{
     pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
     utils::reqwest::build_reqwest_clients,
 };
-use async_once_cell::OnceCell as AsyncCell;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
-pub use environment::Environment;
-use indexmap::Equivalent;
-use miette::{IntoDiagnostic, NamedSource};
-use once_cell::sync::OnceCell;
-use pixi_manifest::Manifest;
-use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, ParsedManifest, SpecType,
-};
-use rattler_conda_types::{Channel, Version};
-use rattler_repodata_gateway::Gateway;
-use reqwest_middleware::ClientWithMiddleware;
-pub use solve_group::SolveGroup;
-use url::{ParseError, Url};
-use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -545,6 +545,15 @@ impl Project {
         &self.config
     }
 
+    /// Construct a [`ChannelConfig`] that is specific to this project. This
+    /// ensures that the root directory is set correctly.
+    pub fn channel_config(&self) -> ChannelConfig {
+        ChannelConfig {
+            root_dir: self.root.clone(),
+            ..self.config.global_channel_config().clone()
+        }
+    }
+
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
@@ -555,7 +564,7 @@ impl Project {
     pub fn pypi_name_mapping_source(&self) -> &MappingSource {
         fn build_pypi_name_mapping_source(
             manifest: &Manifest,
-            config: &Config,
+            channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
             match manifest.parsed.project.conda_pypi_map.clone() {
                 Some(url) => {
@@ -563,18 +572,22 @@ impl Project {
                     let channels = url
                         .keys()
                         .map(|channel_str| {
-                            Channel::from_str(channel_str, config.channel_config())
-                                .map(|channel| (channel_str, channel.canonical_name()))
+                            (
+                                channel_str,
+                                channel_str
+                                    .clone()
+                                    .into_channel(channel_config)
+                                    .canonical_name(),
+                            )
                         })
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
+                        .collect::<Vec<_>>();
 
                     let project_channels = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.canonical_name())
+                        .map(|pc| pc.channel.to_string())
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table
@@ -590,7 +603,7 @@ impl Project {
                     let mapping = channels
                         .iter()
                         .map(|(channel_str, channel)| {
-                            let mapping_location = url.get(*channel_str).unwrap();
+                            let mapping_location = url.get(channel_str).unwrap();
 
                             let url_or_path = match Url::parse(mapping_location) {
                                 Ok(url) => MappingLocation::Url(url),
@@ -614,8 +627,7 @@ impl Project {
         }
 
         self.mapping_source.get_or_init(|| {
-            let config = self.config();
-            build_pypi_name_mapping_source(&self.manifest, config)
+            build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
                 .expect("mapping source should be ok")
         })
     }

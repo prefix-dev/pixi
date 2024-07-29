@@ -18,6 +18,8 @@ use crate::{
     Project,
 };
 use pixi_manifest::EnvironmentName;
+#[cfg(target_family = "unix")]
+use pixi_pty::unix::PtySession;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]

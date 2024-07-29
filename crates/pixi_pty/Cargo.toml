@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_pty"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+nix = { workspace = true, features = ["fs", "signal", "term", "poll"] }
+signal-hook = { workspace = true }

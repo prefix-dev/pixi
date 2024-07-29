@@ -1,8 +1,12 @@
-use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-use crate::project::grouped_environment::GroupedEnvironment;
-use crate::project::has_features::HasFeatures;
-use crate::utils::uv::{as_uv_req, AsPep508Error};
-use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    ops::Sub,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -10,25 +14,24 @@ use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
-use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, ParseMatchSpecError, Platform, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseMatchSpecError,
+    ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
     ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
-};
-use std::fmt::Display;
-use std::ops::Sub;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
 };
 use thiserror::Error;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
+
+use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::{
+    project::{grouped_environment::GroupedEnvironment, has_features::HasFeatures, Environment},
+    pypi_marker_env::determine_marker_environment,
+    utils::uv::{as_uv_req, AsPep508Error},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -139,8 +142,8 @@ pub enum PlatformUnsat {
 }
 
 impl PlatformUnsat {
-    /// Returns true if this is a problem with pypi packages only. This means the conda packages
-    /// are still considered valid.
+    /// Returns true if this is a problem with pypi packages only. This means
+    /// the conda packages are still considered valid.
     pub fn is_pypi_only(&self) -> bool {
         matches!(
             self,
@@ -209,27 +212,34 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
     }
 }
 
-/// Verifies that all the requirements of the specified `environment` can be satisfied with the
-/// packages present in the lock-file.
+/// Verifies that all the requirements of the specified `environment` can be
+/// satisfied with the packages present in the lock-file.
 ///
-/// This function returns a [`EnvironmentUnsat`] error if a verification issue occurred. The
-/// [`EnvironmentUnsat`] error should contain enough information for the user and developer to
-/// figure out what went wrong.
+/// This function returns a [`EnvironmentUnsat`] error if a verification issue
+/// occurred. The [`EnvironmentUnsat`] error should contain enough information
+/// for the user and developer to figure out what went wrong.
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
-    // Check if the channels in the lock file match our current configuration. Note that the order
-    // matters here. If channels are added in a different order, the solver might return a different
-    // result.
+    // Check if the channels in the lock file match our current configuration. Note
+    // that the order matters here. If channels are added in a different order,
+    // the solver might return a different result.
+    let config = environment.project().channel_config();
     let channels = grouped_env
         .channels()
         .into_iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
-        .collect_vec();
-    if !locked_environment.channels().eq(&channels) {
+        .map(|channel| channel.clone().into_channel(&config).base_url().clone());
+    let locked_channels = locked_environment.channels().iter().map(|c| {
+        NamedChannelOrUrl::from_str(&c.url)
+            .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
+            .into_channel(&config)
+            .base_url()
+            .clone()
+    });
+    if !channels.eq(locked_channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
@@ -264,16 +274,17 @@ pub fn verify_environment_satisfiability(
     Ok(())
 }
 
-/// Verifies that the package requirements of the specified `environment` can be satisfied with the
-/// packages present in the lock-file.
+/// Verifies that the package requirements of the specified `environment` can be
+/// satisfied with the packages present in the lock-file.
 ///
-/// Both Conda and pypi packages are verified by this function. First all the conda package are
-/// verified and then all the pypi packages are verified. This is done so that if we can check if
-/// we only need to update the pypi dependencies or also the conda dependencies.
+/// Both Conda and pypi packages are verified by this function. First all the
+/// conda package are verified and then all the pypi packages are verified. This
+/// is done so that if we can check if we only need to update the pypi
+/// dependencies or also the conda dependencies.
 ///
-/// This function returns a [`PlatformUnsat`] error if a verification issue occurred. The
-/// [`PlatformUnsat`] error should contain enough information for the user and developer to figure
-/// out what went wrong.
+/// This function returns a [`PlatformUnsat`] error if a verification issue
+/// occurred. The [`PlatformUnsat`] error should contain enough information for
+/// the user and developer to figure out what went wrong.
 pub fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
@@ -313,8 +324,8 @@ pub fn verify_platform_satisfiability(
         }
     }
 
-    // Create a lookup table from package name to package record. Returns an error if we find a
-    // duplicate entry for a record
+    // Create a lookup table from package name to package record. Returns an error
+    // if we find a duplicate entry for a record
     let repodata_records_by_name = match RepoDataRecordsByName::from_unique_iter(conda_packages) {
         Ok(conda_packages) => conda_packages,
         Err(duplicate) => {
@@ -324,8 +335,8 @@ pub fn verify_platform_satisfiability(
         }
     };
 
-    // Create a lookup table from package name to package record. Returns an error if we find a
-    // duplicate entry for a record
+    // Create a lookup table from package name to package record. Returns an error
+    // if we find a duplicate entry for a record
     let pypi_records_by_name = match PypiRecordsByName::from_unique_iter(pypi_packages) {
         Ok(conda_packages) => conda_packages,
         Err(duplicate) => return Err(PlatformUnsat::DuplicateEntry(duplicate.0.name.to_string())),
@@ -346,7 +357,8 @@ enum Dependency {
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
-/// This also does an additional check for git urls when using direct url references
+/// This also does an additional check for git urls when using direct url
+/// references
 pub fn pypi_satifisfies_editable(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
@@ -365,7 +377,8 @@ pub fn pypi_satifisfies_editable(
             )
         }
         RequirementSource::Directory { lock_path, .. } => match &locked_data.url_or_path {
-            // If we have an url requirement locked, but the editable is requested, this does not satifsfy
+            // If we have an url requirement locked, but the editable is requested, this does not
+            // satifsfy
             UrlOrPath::Url(_) => false,
             UrlOrPath::Path(path) => {
                 if path != lock_path {
@@ -383,7 +396,8 @@ fn seems_like_commit_sha(s: &str) -> bool {
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
-/// This also does an additional check for git urls when using direct url references
+/// This also does an additional check for git urls when using direct url
+/// references
 pub fn pypi_satifisfies_requirement(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
@@ -394,7 +408,8 @@ pub fn pypi_satifisfies_requirement(
 
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
-            // In the old way we always satisfy based on version so let's keep it similar here
+            // In the old way we always satisfy based on version so let's keep it similar
+            // here
             specifier.contains(&locked_data.version)
         }
         RequirementSource::Url { url: spec_url, .. } => {
@@ -514,9 +529,10 @@ pub fn verify_package_platform_satisfiability(
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
-    // Find the python interpreter from the list of conda packages. Note that this refers to the
-    // locked python interpreter, it might not match the specs from the environment. That is ok
-    // because we will find that out when we check all the records.
+    // Find the python interpreter from the list of conda packages. Note that this
+    // refers to the locked python interpreter, it might not match the specs
+    // from the environment. That is ok because we will find that out when we
+    // check all the records.
     let python_interpreter_record = locked_conda_packages.python_interpreter_record();
 
     // Determine the marker environment from the python interpreter package.
@@ -525,8 +541,9 @@ pub fn verify_package_platform_satisfiability(
         .transpose()
         .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()));
 
-    // We cannot determine the marker environment, for example if installing `wasm32` dependencies.
-    // However, it also doesn't really matter if we don't have any pypi requirements.
+    // We cannot determine the marker environment, for example if installing
+    // `wasm32` dependencies. However, it also doesn't really matter if we don't
+    // have any pypi requirements.
     let marker_environment = match marker_environment {
         Err(err) => {
             if !pypi_requirements.is_empty() {
@@ -552,8 +569,9 @@ pub fn verify_package_platform_satisfiability(
         })
         .collect::<HashSet<_>>();
 
-    // Iterate over all packages. First iterate over all conda matchspecs and then over all pypi
-    // requirements. We want to ensure we always check the conda packages first.
+    // Iterate over all packages. First iterate over all conda matchspecs and then
+    // over all pypi requirements. We want to ensure we always check the conda
+    // packages first.
     let mut conda_queue = conda_specs;
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
@@ -593,7 +611,8 @@ pub fn verify_package_platform_satisfiability(
                                 FoundPackage::Conda(idx)
                             }
                             Some(_) => {
-                                // The record does not match the spec, the lock-file is inconsistent.
+                                // The record does not match the spec, the lock-file is
+                                // inconsistent.
                                 return Err(PlatformUnsat::UnsatisfiableMatchSpec(
                                     spec,
                                     source.into_owned(),
@@ -603,17 +622,20 @@ pub fn verify_package_platform_satisfiability(
                                 // Check if there is a virtual package by that name
                                 if let Some(vpkg) = virtual_packages.get(name.as_normalized()) {
                                     if vpkg.matches(&spec) {
-                                        // The matchspec matches a virtual package. No need to propagate the dependencies.
+                                        // The matchspec matches a virtual package. No need to
+                                        // propagate the dependencies.
                                         continue;
                                     } else {
-                                        // The record does not match the spec, the lock-file is inconsistent.
+                                        // The record does not match the spec, the lock-file is
+                                        // inconsistent.
                                         return Err(PlatformUnsat::UnsatisfiableMatchSpec(
                                             spec,
                                             source.into_owned(),
                                         ));
                                     }
                                 } else {
-                                    // The record does not match the spec, the lock-file is inconsistent.
+                                    // The record does not match the spec, the lock-file is
+                                    // inconsistent.
                                     return Err(PlatformUnsat::UnsatisfiableMatchSpec(
                                         spec,
                                         source.into_owned(),
@@ -696,7 +718,8 @@ pub fn verify_package_platform_satisfiability(
         match found_package {
             FoundPackage::Conda(idx) => {
                 if !conda_packages_visited.insert(idx) {
-                    // We already visited this package, so we can skip adding its dependencies to the queue
+                    // We already visited this package, so we can skip adding its dependencies to
+                    // the queue
                     continue;
                 }
 
@@ -719,8 +742,8 @@ pub fn verify_package_platform_satisfiability(
                 };
 
                 if pypi_packages_visited.insert(idx) {
-                    // If this is path based package we need to check if the source tree hash still matches.
-                    // and if it is a directory
+                    // If this is path based package we need to check if the source tree hash still
+                    // matches. and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
                         if path.is_dir() {
                             let path =
@@ -809,7 +832,8 @@ pub fn verify_package_platform_satisfiability(
         ));
     }
 
-    // Check if all packages that should be editable are actually editable and vice versa.
+    // Check if all packages that should be editable are actually editable and vice
+    // versa.
     let locked_editable_packages = locked_pypi_environment
         .records
         .iter()
@@ -952,14 +976,19 @@ impl Display for EditablePackagesMismatch {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::Project;
+    use std::{
+        ffi::OsStr,
+        path::{Component, PathBuf},
+        str::FromStr,
+    };
+
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use std::ffi::OsStr;
-    use std::{path::Component, path::PathBuf, str::FromStr};
+
+    use super::*;
+    use crate::Project;
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -1001,7 +1030,8 @@ mod tests {
         #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
-        // Until we can figure out how to handle unix file paths with pep508_rs url parsing correctly
+        // Until we can figure out how to handle unix file paths with pep508_rs url
+        // parsing correctly
         if manifest_path
             .components()
             .contains(&Component::Normal(OsStr::new("absolute-paths")))
@@ -1082,8 +1112,8 @@ mod tests {
         assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
 
-    // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
-    // this should work an all supported platforms
+    // Currently this test is missing from `good_satisfiability`, so we test the
+    // specific windows case here this should work an all supported platforms
     #[test]
     fn test_windows_absolute_path_handling() {
         // Mock locked data

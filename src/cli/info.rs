@@ -1,11 +1,5 @@
 use std::{fmt::Display, fs, path::PathBuf};
 
-use crate::fancy_display::FancyDisplay;
-use crate::progress::await_in_progress;
-use crate::project::has_features::HasFeatures;
-use crate::task::TaskName;
-use crate::util::default_channel_config;
-use crate::{config, consts, Project};
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
@@ -15,15 +9,20 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 
+use crate::{
+    config, consts, fancy_display::FancyDisplay, progress::await_in_progress,
+    project::has_features::HasFeatures, task::TaskName, Project,
+};
+
 static WIDTH: usize = 18;
 
-/// Information about the system, project and environments for the current machine.
+/// Information about the system, project and environments for the current
+/// machine.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Show cache and environment size
@@ -347,15 +346,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
                         platforms: env.platforms().into_iter().collect(),
-                        channels: env
-                            .channels()
-                            .into_iter()
-                            .map(|c| {
-                                default_channel_config()
-                                    .canonical_name(c.base_url())
-                                    .to_string()
-                            })
-                            .collect(),
+                        channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,
                     }

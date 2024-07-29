@@ -1,18 +1,18 @@
 [project]
-name = "ros2-nav2"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge", "robostack-staging"]
+name = "ros2-nav2"
 platforms = ["linux-64", "osx-arm64", "osx-64"]
 
 [activation.env]
 TURTLEBOT3_MODEL = "waffle"
 
 [tasks.start]
-env = {GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$PIXI_PROJECT_ROOT/.pixi/envs/default/share/turtlebot3_gazebo/models"}
 cmd = "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
+env = { GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$PIXI_PROJECT_ROOT/.pixi/envs/default/share/turtlebot3_gazebo/models" }
 
 [dependencies]
+python = "3.10.*"
 ros-humble-desktop = "*"
 ros-humble-nav2-bringup = "*"
 ros-humble-turtlebot3-gazebo = "2.2.5.*"
-python = "3.10.*"

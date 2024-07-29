@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/parsed_manifest.rs
+assertion_line: 572
 expression: "toml_edit::de::from_str::<ParsedManifest>(&contents).expect(\"parsing should succeed!\").default_feature().targets.default().pypi_dependencies.clone().into_iter().flat_map(|d|\n                d.into_iter()).map(|(name, spec)|\n            format!(\"{} = {}\", name.as_source(),\n                toml_edit::Value::from(spec))).join(\"\\n\")"
 ---
 foo = ">=3.12"

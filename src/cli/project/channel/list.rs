@@ -1,6 +1,6 @@
-use crate::fancy_display::FancyDisplay;
-use crate::{project::has_features::HasFeatures, Project};
 use clap::Parser;
+
+use crate::{fancy_display::FancyDisplay, project::has_features::HasFeatures, Project};
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -10,6 +10,7 @@ pub struct Args {
 }
 
 pub fn execute(project: Project, args: Args) -> miette::Result<()> {
+    let channel_config = project.channel_config();
     project
         .environments()
         .iter()
@@ -26,9 +27,9 @@ pub fn execute(project: Project, args: Args) -> miette::Result<()> {
                 println!(
                     "- {}",
                     if args.urls {
-                        channel.base_url().as_str()
+                        channel.clone().into_base_url(&channel_config).to_string()
                     } else {
-                        channel.name()
+                        channel.to_string()
                     }
                 );
             })

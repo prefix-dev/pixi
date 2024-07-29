@@ -46,9 +46,38 @@ pub fn pypi_options_to_index_locations(options: &PypiOptions) -> IndexLocations 
         })
         .unwrap_or_default();
 
-    // We keep the `no_index` to false for now, because I've not seen a use case for it yet
-    // we could change this later if needed
-    IndexLocations::new(index, extra_indexes, flat_indexes, false)
+    // we don't have support for an explicit `no_index` field in the `PypiOptions`
+    // so we only set it if you want to use flat indexes only
+    let no_index = index.is_none() && !flat_indexes.is_empty();
+    IndexLocations::new(index, extra_indexes, flat_indexes, no_index)
+}
+
+/// Convert locked indexes to IndexLocations
+pub fn locked_indexes_to_index_locations(indexes: &rattler_lock::PypiIndexes) -> IndexLocations {
+    let index = indexes
+        .indexes
+        .first()
+        .cloned()
+        .map(VerbatimUrl::from_url)
+        .map(IndexUrl::from);
+    let extra_indexes = indexes
+        .indexes
+        .iter()
+        .skip(1)
+        .cloned()
+        .map(VerbatimUrl::from_url)
+        .map(IndexUrl::from)
+        .collect::<Vec<_>>();
+    let flat_indexes = indexes
+        .find_links
+        .iter()
+        .map(to_flat_index_location)
+        .collect::<Vec<_>>();
+
+    // we don't have support for an explicit `no_index` field in the `PypiIndexes`
+    // so we only set it if you want to use flat indexes only
+    let no_index = index.is_none() && !flat_indexes.is_empty();
+    IndexLocations::new(index, extra_indexes, flat_indexes, no_index)
 }
 
 pub fn to_git_reference(rev: &GitRev) -> GitReference {

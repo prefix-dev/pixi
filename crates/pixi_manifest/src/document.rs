@@ -1,12 +1,11 @@
 use std::{fmt, str::FromStr};
 
 use pep508_rs::VerbatimUrl;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
+use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName, Platform};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
 use super::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
-use crate::consts::PYPROJECT_PIXI_PREFIX;
-use crate::{utils::default_channel_config, FeatureName, SpecType, Task};
+use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest
 #[derive(Debug, Clone)]
@@ -231,12 +230,13 @@ impl ManifestSource {
         spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        channel_config: &ChannelConfig,
     ) -> Result<(), TomlError> {
         let dependency_table =
             self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
         dependency_table.insert(
             name.as_normalized(),
-            Item::Value(nameless_match_spec_to_toml(spec)),
+            Item::Value(nameless_match_spec_to_toml(spec, channel_config)),
         );
         Ok(())
     }
@@ -373,7 +373,7 @@ impl ManifestSource {
 /// Given a nameless matchspec convert it into a TOML value. If the spec only
 /// contains a version a string is returned, otherwise an entire table is
 /// constructed.
-fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
+fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec, channel_config: &ChannelConfig) -> Value {
     match spec {
         NamelessMatchSpec {
             version,
@@ -426,7 +426,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             if let Some(channel) = channel {
                 table.insert(
                     "channel",
-                    default_channel_config()
+                    channel_config
                         .canonical_name(channel.base_url())
                         .as_str()
                         .into(),
@@ -454,7 +454,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use insta::assert_snapshot;
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
@@ -482,12 +482,16 @@ mod tests {
         ];
 
         let mut table = toml_edit::DocumentMut::new();
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
         for example in examples {
             let spec = MatchSpec::from_str(example, Strict)
                 .unwrap()
                 .into_nameless()
                 .1;
-            table.insert(example, Item::Value(nameless_match_spec_to_toml(&spec)));
+            table.insert(
+                example,
+                Item::Value(nameless_match_spec_to_toml(&spec, &channel_config)),
+            );
         }
         assert_snapshot!(table);
     }

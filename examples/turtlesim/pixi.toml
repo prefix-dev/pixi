@@ -1,8 +1,8 @@
 [project]
-name = "turtlesim"
-description = "ultra fast turtlesim installation on multiple platforms"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge", "robostack-staging"]
+description = "ultra fast turtlesim installation on multiple platforms"
+name = "turtlesim"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]

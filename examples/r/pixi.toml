@@ -1,6 +1,6 @@
 [project]
-name = "r"
 channels = ["conda-forge"]
+name = "r"
 platforms = ["linux-64", "osx-64", "osx-arm64"]
 
 [tasks]

@@ -28,6 +28,7 @@ use std::{
     future::{Future, IntoFuture},
     path::{Path, PathBuf},
     pin::Pin,
+    str::FromStr,
 };
 
 use futures::FutureExt;
@@ -37,7 +38,7 @@ use pixi::{
     DependencyType,
 };
 use pixi_manifest::{EnvironmentName, SpecType};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 /// Strings from an iterator
@@ -65,7 +66,7 @@ impl InitBuilder {
         self.args
             .channels
             .get_or_insert_with(Default::default)
-            .push(channel.to_string());
+            .push(NamedChannelOrUrl::from_str(channel.to_string().as_str()).unwrap());
         self
     }
 
@@ -86,9 +87,12 @@ impl IntoFuture for InitBuilder {
     fn into_future(self) -> Self::IntoFuture {
         init::execute(init::Args {
             channels: if !self.no_fast_prefix {
-                self.args
-                    .channels
-                    .or_else(|| Some(vec!["https://fast.prefix.dev/conda-forge".to_string()]))
+                self.args.channels.or_else(|| {
+                    Some(vec![NamedChannelOrUrl::from_str(
+                        "https://fast.prefix.dev/conda-forge",
+                    )
+                    .unwrap()])
+                })
             } else {
                 self.args.channels
             },
@@ -307,7 +311,9 @@ pub struct ProjectChannelAddBuilder {
 impl ProjectChannelAddBuilder {
     /// Adds the specified channel
     pub fn with_channel(mut self, name: impl Into<String>) -> Self {
-        self.args.channel.push(name.into());
+        self.args
+            .channel
+            .push(NamedChannelOrUrl::from_str(&name.into()).unwrap());
         self
     }
 

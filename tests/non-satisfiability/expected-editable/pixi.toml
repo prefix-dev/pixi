@@ -1,6 +1,6 @@
 [project]
-name = "expected-editable"
 channels = ["conda-forge"]
+name = "expected-editable"
 platforms = ["win-64"]
 
 [dependencies]

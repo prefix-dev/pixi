@@ -1,7 +1,7 @@
 [project]
-name = "pypi"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
+name = "pypi"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [activation]
@@ -15,21 +15,21 @@ start = { depends-on = ["test"] }
 test = "python pycosat_example.py"
 
 [dependencies]
-python = "~=3.11.0"
-numpy = "1.26.*"
 libclang = "~=16.0.6"
+numpy = "1.26.*"
+python = "~=3.11.0"
 scipy = "~=1.11.4"
 
 [pypi-dependencies]
+black = { version = "~=24.0", extras = ["jupyter"] }
+flask = "*"
 pyboy = "==1.6.6"
 tensorflow = "==2.14.0"
-flask = "*"
-black = { version = "~=24.0", extras = ["jupyter"] }
 # sdists:
-pyliblzfse = "*"
-pycosat = "*"
 env_test_package = "==0.0.3"
 plot-antenna = "==1.8"
+pycosat = "*"
+pyliblzfse = "*"
 
 [system-requirements]
 # Tensorflow on macOS arm64 requires macOS 12.0 or higher

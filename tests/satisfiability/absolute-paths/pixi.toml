@@ -1,8 +1,8 @@
 [project]
-name = "absolute-paths"
-version = "0.1.0"
 channels = ["conda-forge"]
+name = "absolute-paths"
 platforms = ["osx-arm64"]
+version = "0.1.0"
 
 [dependencies]
 python = "3.12"

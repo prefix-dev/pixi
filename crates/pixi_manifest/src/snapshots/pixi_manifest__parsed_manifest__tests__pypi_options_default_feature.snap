@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/parsed_manifest.rs
+assertion_line: 600
 expression: "toml_edit::de::from_str::<ParsedManifest>(&contents).expect(\"parsing should succeed!\").project.pypi_options.clone().unwrap()"
 ---
 index-url: "https://pypi.org/simple"

@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/parsed_manifest.rs
+assertion_line: 498
 expression: "examples.into_iter().map(|example|\n                ParsedManifest::from_toml_str(&format!(\"{PROJECT_BOILERPLATE}\\n{example}\")).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
 ---
 TOML parse error at line 8, column 9

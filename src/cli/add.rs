@@ -111,6 +111,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
             let specs = dependency_config.specs()?;
+            let channel_config = project.channel_config();
             for (name, spec) in specs {
                 let added = project.manifest.add_dependency(
                     &spec,
@@ -118,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
                     DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    &channel_config,
                 )?;
                 if added {
                     if spec.version.is_none() {
@@ -365,7 +367,7 @@ fn update_conda_specs_from_lock_file(
         .collect_vec();
 
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
-
+    let channel_config = project.channel_config();
     for (name, (spec_type, _)) in conda_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             conda_records.iter().filter_map(|record| {
@@ -392,6 +394,7 @@ fn update_conda_specs_from_lock_file(
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )?;
         }
     }
