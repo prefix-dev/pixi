@@ -694,9 +694,7 @@ impl Config {
     ///
     /// This roots the channel configuration to the current directory. When
     /// working with a project though the channel configuration should be rooted
-    /// in the project directory. Use
-    /// [`crate::Project::channel_config`] to get the project specific channel
-    /// configuration.
+    /// in the project directory.
     pub fn global_channel_config(&self) -> &ChannelConfig {
         &self.channel_config
     }
