@@ -397,7 +397,7 @@ fn update_pypi_specs_from_lock_file(
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
 
     // Determine the versions of the packages in the lock-file
-    for (name, _) in pypi_specs_to_add_constraints_for {
+    for (name, req) in pypi_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             pypi_records
                 .iter()
@@ -419,10 +419,10 @@ fn update_pypi_specs_from_lock_file(
             project.manifest.add_pypi_dependency(
                 &Requirement {
                     name: name.as_normalized().clone(),
-                    extras: vec![],
+                    extras: req.extras,
                     version_or_url: Some(VersionSpecifier(version_spec)),
-                    marker: None,
-                    origin: None,
+                    marker: req.marker,
+                    origin: req.origin,
                 },
                 platforms,
                 feature_name,

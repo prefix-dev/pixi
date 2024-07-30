@@ -4,13 +4,15 @@ use crate::common::builders::HasDependencyConfig;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
-use pixi::{DependencyType, HasFeatures};
+use pixi::{DependencyType, HasFeatures, Project};
 use pixi_consts::consts;
+use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::SpecType;
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
 use std::str::FromStr;
 use tempfile::TempDir;
+use uv_normalize::ExtraName;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -240,6 +242,19 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
+    // Read project from file and check if the dev extras are added.
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("pytest").unwrap() {
+                assert_eq!(spec.extras(), &[ExtraName::from_str("dev").unwrap()]);
+            }
+        });
+
+    // Test all the added packages are in the lock file
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
