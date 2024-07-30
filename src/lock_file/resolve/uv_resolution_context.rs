@@ -5,10 +5,9 @@ use uv_cache::Cache;
 use uv_configuration::{BuildOptions, Concurrency};
 use uv_types::{HashStrategy, InFlight};
 
-use crate::{
-    config::{self, get_cache_dir},
-    consts, Project,
-};
+use crate::Project;
+use pixi_config::{self, get_cache_dir};
+use pixi_consts::consts;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -34,11 +33,11 @@ impl UvResolutionContext {
         let cache = Cache::from_path(uv_cache);
 
         let keyring_provider = match project.config().pypi_config().use_keyring() {
-            config::KeyringProvider::Subprocess => {
+            pixi_config::KeyringProvider::Subprocess => {
                 tracing::info!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
             }
-            config::KeyringProvider::Disabled => {
+            pixi_config::KeyringProvider::Disabled => {
                 tracing::info!("uv keyring provider is disabled");
                 uv_configuration::KeyringProviderType::Disabled
             }

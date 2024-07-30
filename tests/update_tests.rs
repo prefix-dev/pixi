@@ -1,6 +1,6 @@
 mod common;
 
-use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
+use pixi_consts::consts;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
@@ -38,8 +38,16 @@ async fn test_update() {
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==1"));
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "bar ==1"
+    ));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
 
     // Add version 2 and 3 of `bar`. Version 3 should never be selected.
     package_database.add_package(Package::build("bar", "2").finish());
@@ -58,11 +66,19 @@ async fn test_update() {
     // spec and has been updated.
     let lock = pixi.lock_file().await.unwrap();
     assert!(
-        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==2"),
+        lock.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "foo ==2"
+        ),
         "expected `foo` to be on version 2 because we updated the lock-file"
     );
     assert!(
-        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==2"),
+        lock.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "bar ==2"
+        ),
         "expected `bar` to be on version 2 because we updated the lock-file"
     );
 }
@@ -96,8 +112,16 @@ async fn test_update_single_package() {
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==1"));
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "bar ==1"
+    ));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
 
     // Add version 2 and 3 of `bar`. Version 3 should never be selected.
     package_database.add_package(Package::build("bar", "2").finish());
@@ -112,11 +136,19 @@ async fn test_update_single_package() {
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(
-        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==2"),
+        lock.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "foo ==2"
+        ),
         "expected `foo` to be on version 2 because we updated it"
     );
     assert!(
-        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==1"),
+        lock.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "bar ==1"
+        ),
         "expected `bar` to be on version 1 because only foo should be updated"
     );
 }

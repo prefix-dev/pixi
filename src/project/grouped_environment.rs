@@ -1,12 +1,12 @@
 use super::has_features::HasFeatures;
 use crate::fancy_display::FancyDisplay;
 use crate::{
-    consts,
     prefix::Prefix,
     project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
     Project,
 };
 use itertools::Either;
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, Feature, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;

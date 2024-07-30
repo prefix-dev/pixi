@@ -12,12 +12,12 @@ use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 use crate::{
-    config::{get_default_author, Config},
-    consts,
     environment::{get_up_to_date_prefix, LockFileUsage},
     utils::conda_environment_file::CondaEnvFile,
     Project,
 };
+use pixi_config::{get_default_author, Config};
+use pixi_consts::consts;
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -47,14 +47,14 @@ pub struct Args {
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
 const PROJECT_TEMPLATE: &str = r#"[project]
-name = "{{ name }}"
-version = "{{ version }}"
-description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = {{ channels }}
+description = "Add a short description here"
+name = "{{ name }}"
 platforms = {{ platforms }}
+version = "{{ version }}"
 
 {%- if index_url or extra_indexes %}
 
@@ -96,18 +96,18 @@ default = { solve-group = "default" }
 ///
 /// This is used to create a pyproject.toml from scratch
 const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
-name = "{{ name }}"
-version = "{{ version }}"
-description = "Add a short description here"
 {%- if author %}
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
-requires-python = ">= 3.11"
 dependencies = []
+description = "Add a short description here"
+name = "{{ name }}"
+requires-python = ">= 3.11"
+version = "{{ version }}"
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = {{ channels }}

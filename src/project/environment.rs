@@ -16,7 +16,8 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{consts, project::has_features::HasFeatures, Project};
+use crate::{project::has_features::HasFeatures, Project};
+use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.

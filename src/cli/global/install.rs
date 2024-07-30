@@ -25,11 +25,10 @@ use super::common::{
 };
 use crate::{
     cli::has_specs::HasSpecs,
-    config,
-    config::{Config, ConfigCli},
     prefix::Prefix,
     progress::{await_in_progress, global_multi_progress},
 };
+use pixi_config::{self, Config, ConfigCli};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -404,7 +403,7 @@ pub(super) async fn globally_install_package(
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
-    let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
+    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
 
     let result = await_in_progress("creating virtual environment", |pb| {
         Installer::new()

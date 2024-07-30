@@ -7,9 +7,6 @@ use std::{
 };
 
 use crate::{
-    config::ConfigCli,
-    consts,
-    consts::{CondaEmoji, PypiEmoji},
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
     HasFeatures, Project,
@@ -19,6 +16,8 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use pixi_config::ConfigCli;
+use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
@@ -538,8 +537,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("+").green(),
                     match p {
-                        Package::Conda(_) => CondaEmoji.to_string(),
-                        Package::Pypi(_) => PypiEmoji.to_string(),
+                        Package::Conda(_) => consts::CondaEmoji.to_string(),
+                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -551,8 +550,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("-").red(),
                     match p {
-                        Package::Conda(_) => CondaEmoji.to_string(),
-                        Package::Pypi(_) => PypiEmoji.to_string(),
+                        Package::Conda(_) => consts::CondaEmoji.to_string(),
+                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -576,7 +575,7 @@ impl LockFileDiff {
                         format!(
                             "{} {} {}\t{} {}\t->\t{} {}",
                             console::style("~").yellow(),
-                            CondaEmoji,
+                            consts::CondaEmoji,
                             name,
                             choose_style(&previous.version.as_str(), &current.version.as_str()),
                             choose_style(previous.build.as_str(), current.build.as_str()),
@@ -591,7 +590,7 @@ impl LockFileDiff {
                         format!(
                             "{} {} {}\t{}\t->\t{}",
                             console::style("~").yellow(),
-                            PypiEmoji,
+                            consts::PypiEmoji,
                             name,
                             choose_style(
                                 &previous.version.to_string(),
