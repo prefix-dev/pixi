@@ -1,5 +1,6 @@
 [package]
 authors.workspace = true
+description = "This crate contains an interpretation of PyPI Environment Markers and Wheel Tags for use in pixi"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true

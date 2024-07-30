@@ -1,5 +1,6 @@
 [package]
 authors.workspace = true
+description = "This crate defines the default system requirements"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
