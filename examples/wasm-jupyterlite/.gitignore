@@ -2,3 +2,4 @@
 .pixi
 *.egg-info
 _output
+*.doit.db
