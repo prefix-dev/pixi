@@ -1,5 +1,0 @@
----
-source: src/project/manifest/pypi/pypi_requirement.rs
-expression: as_pypi_req.to_string()
----
-{ version = "*", extras = ["test", "extrastuff"] }

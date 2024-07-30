@@ -14,9 +14,10 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::{
-    config::Config, progress::await_in_progress, repodata::fetch_sparse_repodata,
-    util::default_channel_config, utils::reqwest::build_reqwest_clients, HasFeatures, Project,
+    progress::await_in_progress, repodata::fetch_sparse_repodata, util::default_channel_config,
+    utils::reqwest::build_reqwest_clients, HasFeatures, Project,
 };
+use pixi_config::Config;
 
 /// Search a conda package
 ///

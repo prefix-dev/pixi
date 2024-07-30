@@ -2,6 +2,7 @@ use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCliPrompt;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
@@ -13,7 +14,6 @@ use crate::cli::cli_config::ProjectConfig;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
-    config::ConfigCliPrompt,
     environment::get_up_to_date_prefix,
     project::Environment,
     HasFeatures, Project,

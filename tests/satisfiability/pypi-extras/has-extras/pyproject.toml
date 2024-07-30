@@ -4,8 +4,8 @@ name = "has-extras"
 version = "0.1.0"
 
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools"]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]

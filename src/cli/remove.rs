@@ -3,6 +3,7 @@ use clap::Parser;
 use crate::environment::get_up_to_date_prefix;
 use crate::DependencyType;
 use crate::Project;
+use pixi_config::ConfigCli;
 
 use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
 

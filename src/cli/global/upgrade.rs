@@ -14,9 +14,9 @@ use super::{
 };
 use crate::{
     cli::has_specs::HasSpecs,
-    config::Config,
     progress::{global_multi_progress, long_running_progress_style},
 };
+use pixi_config::Config;
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]

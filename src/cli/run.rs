@@ -3,11 +3,11 @@ use std::collections::HashSet;
 use std::convert::identity;
 use std::{collections::HashMap, string::String};
 
-use crate::config::ConfigCli;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi_config::ConfigCli;
 
 use crate::activation::CurrentEnvVarBehavior;
 use crate::cli::cli_config::ProjectConfig;

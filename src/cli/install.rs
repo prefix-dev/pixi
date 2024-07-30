@@ -1,10 +1,10 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::config::ConfigCli;
 use crate::environment::get_up_to_date_prefix;
 use crate::fancy_display::FancyDisplay;
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
+use pixi_config::ConfigCli;
 
 /// Install all dependencies
 #[derive(Parser, Debug)]

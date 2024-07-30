@@ -22,6 +22,7 @@ use crate::{
         grouped_environment::GroupedEnvironment, has_features::HasFeatures, DependencyType, Project,
     },
 };
+use pixi_config::ConfigCli;
 
 /// Adds dependencies to the project
 ///

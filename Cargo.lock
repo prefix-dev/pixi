@@ -3445,6 +3445,8 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
+ "pixi_config",
+ "pixi_consts",
  "pixi_manifest",
  "pixi_pty",
  "platform-tags",
@@ -3501,6 +3503,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_config"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console",
+ "dirs",
+ "insta",
+ "itertools 0.12.1",
+ "miette 7.2.0",
+ "pixi_consts",
+ "rattler",
+ "rattler_conda_types",
+ "rstest",
+ "serde",
+ "serde_ignored",
+ "serde_json",
+ "toml_edit 0.22.13",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "pixi_consts"
+version = "0.1.0"
+dependencies = [
+ "console",
+ "lazy_static",
+ "pixi_manifest",
+ "url",
+]
+
+[[package]]
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
@@ -3509,6 +3543,7 @@ dependencies = [
  "indexmap 2.2.6",
  "insta",
  "itertools 0.12.1",
+ "lazy_static",
  "miette 7.2.0",
  "pep440_rs",
  "pep508_rs",

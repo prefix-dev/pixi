@@ -1,4 +1,3 @@
-use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::HashMap;
@@ -268,6 +267,7 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
         .iter()

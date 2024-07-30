@@ -19,6 +19,7 @@ use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
+use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
@@ -32,7 +33,6 @@ use uv_normalize::ExtraName;
 
 use crate::{
     activation::CurrentEnvVarBehavior,
-    config, consts,
     environment::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
@@ -515,7 +515,7 @@ pub async fn ensure_up_to_date_lock_file(
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
-    let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
+    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -648,7 +648,7 @@ impl<'p> UpdateContextBuilder<'p> {
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
-            None => PackageCache::new(config::get_cache_dir()?.join("pkgs")),
+            None => PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs")),
         };
         let lock_file = self.lock_file;
         let outdated = self.outdated_environments.unwrap_or_else(|| {

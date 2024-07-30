@@ -10,6 +10,7 @@ use std::{
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
+use pixi_consts::consts;
 use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
@@ -17,7 +18,12 @@ use rattler_conda_types::{
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-use crate::{consts, util::default_channel_config};
+/// TODO: maybe remove this duplicate from `src/util.rs` at some point
+pub fn default_channel_config() -> ChannelConfig {
+    ChannelConfig::default_with_root_dir(
+        std::env::current_dir().expect("Could not retrieve the current directory"),
+    )
+}
 
 /// Determines the default author based on the default git author. Both the name
 /// and the email address of the author are returned.
@@ -63,6 +69,7 @@ pub fn home_path() -> Option<PathBuf> {
     }
 }
 
+// TODO(tim): I think we should move this to another crate, dont know if global config is really correct
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
 /// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
@@ -687,9 +694,7 @@ impl Config {
     ///
     /// This roots the channel configuration to the current directory. When
     /// working with a project though the channel configuration should be rooted
-    /// in the project directory. Use
-    /// [`crate::Project::channel_config`] to get the project specific channel
-    /// configuration.
+    /// in the project directory.
     pub fn global_channel_config(&self) -> &ChannelConfig {
         &self.channel_config
     }

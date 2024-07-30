@@ -4,6 +4,8 @@ use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config;
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
@@ -15,8 +17,8 @@ use tokio::task::spawn_blocking;
 use crate::cli::cli_config::ProjectConfig;
 
 use crate::{
-    config, consts, fancy_display::FancyDisplay, progress::await_in_progress,
-    project::has_features::HasFeatures, task::TaskName, Project,
+    fancy_display::FancyDisplay, progress::await_in_progress, project::has_features::HasFeatures,
+    task::TaskName, Project,
 };
 
 static WIDTH: usize = 18;
@@ -293,7 +295,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());
-        let cache_dir = config::get_cache_dir()?;
+        let cache_dir = pixi_config::get_cache_dir()?;
         await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
                 let env_size = env_dir.and_then(|env| dir_size(env).ok());
@@ -364,7 +366,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let config = project
         .map(|p| p.config().clone())
-        .unwrap_or_else(config::Config::load_global);
+        .unwrap_or_else(pixi_config::Config::load_global);
 
     let auth_file = config
         .authentication_override_file()
@@ -379,7 +381,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
-        cache_dir: Some(config::get_cache_dir()?),
+        cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,
         project_info,

@@ -1,5 +1,7 @@
+use crate::Project;
 /// Command to clean the parts of your system which are touched by pixi.
-use crate::{config, consts, Project};
+use pixi_config;
+use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -107,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Clean the pixi cache folders.
 async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
-    let cache_dir = config::get_cache_dir()?;
+    let cache_dir = pixi_config::get_cache_dir()?;
     let mut dirs = vec![];
 
     if args.pypi {
