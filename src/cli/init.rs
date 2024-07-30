@@ -106,8 +106,8 @@ requires-python = ">= 3.11"
 version = "{{ version }}"
 
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools"]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = {{ channels }}
