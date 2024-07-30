@@ -312,7 +312,7 @@ mod tests {
     use itertools::Itertools;
 
     use super::*;
-    use crate::project::CondaDependencies;
+    use pixi_manifest::CondaDependencies;
 
     #[test]
     fn test_default_channels() {
