@@ -3447,10 +3447,12 @@ dependencies = [
  "percent-encoding",
  "pixi_config",
  "pixi_consts",
+ "pixi_default_sys",
  "pixi_manifest",
  "pixi_pty",
  "platform-tags",
  "pypi-types",
+ "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
@@ -3532,6 +3534,13 @@ dependencies = [
  "lazy_static",
  "pixi_manifest",
  "url",
+]
+
+[[package]]
+name = "pixi_default_sys"
+version = "0.1.0"
+dependencies = [
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -3776,6 +3785,18 @@ dependencies = [
  "url",
  "uv-git",
  "uv-normalize",
+]
+
+[[package]]
+name = "pypi_modifiers"
+version = "0.1.0"
+dependencies = [
+ "miette 7.2.0",
+ "pep508_rs",
+ "pixi_default_sys",
+ "pixi_manifest",
+ "platform-tags",
+ "rattler_conda_types",
 ]
 
 [[package]]

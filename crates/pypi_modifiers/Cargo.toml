@@ -1,0 +1,19 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pypi_modifiers"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+miette = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_default_sys = { workspace = true }
+pixi_manifest = { workspace = true }
+platform-tags = { workspace = true }
+rattler_conda_types = { workspace = true }
