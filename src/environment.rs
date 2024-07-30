@@ -1,10 +1,9 @@
-use crate::consts::PIXI_UV_INSTALLER;
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
 use crate::project::has_features::HasFeatures;
 use crate::{
-    consts, install_pypi,
+    install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
     progress,
@@ -14,6 +13,7 @@ use crate::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_consts::consts;
 
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
@@ -397,7 +397,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 
                 // Only remove if have actually installed it
                 // by checking the installer
-                if installer.unwrap_or_default() == PIXI_UV_INSTALLER {
+                if installer.unwrap_or_default() == consts::PIXI_UV_INSTALLER {
                     installed.push(installed_dist);
                 }
             }

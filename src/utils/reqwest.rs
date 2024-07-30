@@ -11,7 +11,7 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use std::collections::HashMap;
 
-use crate::config::Config;
+use pixi_config::Config;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.

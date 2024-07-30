@@ -12,6 +12,7 @@ version = "0.1.0"
 dunce = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+lazy_static = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 regex = { workspace = true }

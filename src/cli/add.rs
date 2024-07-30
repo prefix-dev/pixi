@@ -15,7 +15,6 @@ use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
 use crate::{
-    config::ConfigCli,
     environment::{verify_prefix_location_unchanged, LockFileUsage},
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
@@ -23,6 +22,7 @@ use crate::{
         grouped_environment::GroupedEnvironment, has_features::HasFeatures, DependencyType, Project,
     },
 };
+use pixi_config::ConfigCli;
 
 /// Adds dependencies to the project
 ///
