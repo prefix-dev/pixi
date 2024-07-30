@@ -7,8 +7,8 @@ use rattler_solve::ChannelPriority;
 use crate::Project;
 use pixi_manifest::SpecType;
 
-use super::{CondaDependencies, PyPiDependencies};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements};
+use pixi_manifest::{CondaDependencies, PyPiDependencies};
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities are set
 #[derive(Debug, thiserror::Error)]
