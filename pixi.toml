@@ -96,5 +96,3 @@ schema = { features = [
   "schema",
 ], no-default-feature = true, solve-group = "default" }
 
-[dependencies]
-boltons = ">=24.0.0,<25"

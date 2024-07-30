@@ -55,6 +55,9 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: ProjectConfig,
 
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
+
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
