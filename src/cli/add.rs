@@ -416,7 +416,7 @@ fn update_pypi_specs_from_lock_file(
             version_constraint.and_then(|spec| VersionSpecifiers::from_str(&spec.to_string()).ok());
         if let Some(version_spec) = version_spec {
             implicit_constraints.insert(name.as_source().to_string(), version_spec.to_string());
-            let req = Requirement{
+            let req = Requirement {
                 version_or_url: Some(VersionSpecifier(version_spec)),
                 ..req
             };

@@ -79,15 +79,15 @@ async fn add_functionality() {
 
 /// Test adding a package with a specific channel
 #[tokio::test]
-async fn add_with_channel(){
+async fn add_with_channel() {
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init()
-        .no_fast_prefix_overwrite(true)
+    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
+
+    pixi.add("conda-forge::py_rattler")
+        .without_lockfile_update()
         .await
         .unwrap();
-
-    pixi.add("conda-forge::py_rattler").without_lockfile_update().await.unwrap();
 
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
