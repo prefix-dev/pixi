@@ -128,18 +128,6 @@ pixi install --environment lint
 pixi install -e lint
 ```
 
-To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
-This process will regenerate the lock file based on the dependencies defined in your manifest file:
-
-```sh
-rm pixi.lock && pixi install
-```
-
-This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
-
-In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
-This command will allow you to update the lock file directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
-
 ## `update`
 
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.

@@ -1,8 +1,12 @@
+use std::{
+    borrow::Borrow,
+    fmt::{Display, Formatter, Write},
+    str::FromStr,
+};
+
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{InvalidNameError, PackageName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Display, Formatter, Write};
-use std::{borrow::Borrow, str::FromStr};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /// A package name for PyPI that also stores the source version of the name.
@@ -99,7 +103,7 @@ impl From<VersionOrStar> for VersionSpecifiers {
     fn from(value: VersionOrStar) -> Self {
         match value {
             VersionOrStar::Version(v) => v,
-            VersionOrStar::Star => VersionSpecifiers::empty(),
+            VersionOrStar::Star => VersionSpecifiers::from_iter(vec![]),
         }
     }
 }
@@ -188,8 +192,9 @@ impl<'de> Deserialize<'de> for GitRev {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn test_git_rev_from_str_valid_short() {

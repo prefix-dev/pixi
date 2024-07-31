@@ -1,6 +1,7 @@
 mod activation;
 pub(crate) mod channel;
 pub mod consts;
+mod dependencies;
 mod document;
 mod environment;
 mod environments;
@@ -19,6 +20,7 @@ mod target;
 pub mod task;
 mod utils;
 mod validation;
+pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
 pub use manifest::{Manifest, ManifestKind};
 

@@ -1,6 +1,5 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
-use pep508_rs::VerbatimUrl;
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName, Platform};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
@@ -188,11 +187,12 @@ impl ManifestSource {
         };
         if let Some(array) = array {
             array.retain(|x| {
-                let name = PyPiPackageName::from_normalized(
-                    pep508_rs::Requirement::<VerbatimUrl>::from_str(x.as_str().unwrap_or(""))
-                        .expect("should be a valid pep508 dependency")
-                        .name,
-                );
+                let req: pep508_rs::Requirement = x
+                    .as_str()
+                    .unwrap_or("")
+                    .parse()
+                    .expect("should be a valid pep508 dependency");
+                let name = PyPiPackageName::from_normalized(req.name);
                 name != *dep
             });
         }
