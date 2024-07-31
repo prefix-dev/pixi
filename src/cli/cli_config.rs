@@ -1,9 +1,9 @@
 use crate::cli::has_specs::HasSpecs;
-use pixi_config::ConfigCli;
 use crate::environment::LockFileUsage;
 use crate::DependencyType;
 use clap::Parser;
 use itertools::Itertools;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use rattler_conda_types::Platform;
 use std::collections::HashMap;
