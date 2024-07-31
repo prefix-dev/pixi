@@ -95,4 +95,3 @@ lint = { features = [
 schema = { features = [
   "schema",
 ], no-default-feature = true, solve-group = "default" }
-
