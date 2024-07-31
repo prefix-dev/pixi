@@ -30,15 +30,15 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 
 # make sure that we have the WASM environment installed before building the app
 [feature.host.tasks]
-setup-wasm = { cmd = "pixi install -e wasm", inputs = ["pixi.lock"] }
 build-dist = { cmd = "jupyter lite build --output-dir dist --XeusAddon.prefix=.pixi/envs/wasm" }
+setup-wasm = { cmd = "pixi install -e wasm", inputs = ["pixi.lock"] }
 
 # build the jupyterlite app
 [feature.host.tasks.build]
 cmd = "jupyter lite build --XeusAddon.prefix=.pixi/envs/wasm"
 depends-on = ["setup-wasm"]
-outputs = ["_output"]
 inputs = ["pixi.lock", "files/"]
+outputs = ["_output"]
 
 # serve the jupyterlite app with a "simple server"
 [feature.host.tasks.start]
