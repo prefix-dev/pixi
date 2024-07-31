@@ -1,5 +1,5 @@
 use crate::cli::has_specs::HasSpecs;
-use crate::config::ConfigCli;
+use pixi_config::ConfigCli;
 use crate::environment::LockFileUsage;
 use crate::DependencyType;
 use clap::Parser;
