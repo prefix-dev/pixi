@@ -77,6 +77,29 @@ async fn add_functionality() {
     ));
 }
 
+/// Test adding a package with a specific channel
+#[tokio::test]
+async fn add_with_channel(){
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init()
+        .no_fast_prefix_overwrite(true)
+        .await
+        .unwrap();
+
+    pixi.add("conda-forge::py_rattler").without_lockfile_update().await.unwrap();
+
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let mut specs = project
+        .default_environment()
+        .dependencies(Some(SpecType::Run), Some(Platform::current()))
+        .into_specs();
+
+    let (name, spec) = specs.next().unwrap();
+    assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
+    assert_eq!(spec.channel.unwrap().name(), "conda-forge");
+}
+
 /// Test that we get the union of all packages in the lockfile for the run, build and host
 #[tokio::test]
 async fn add_functionality_union() {
