@@ -20,7 +20,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_consts::consts;
-use pixi_manifest::EnvironmentName;
+use pixi_manifest::{EnvironmentName, HasFeaturesIter};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler::package_cache::PackageCache;
@@ -33,6 +33,7 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::project::HasProjectRef;
 use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
@@ -49,12 +50,12 @@ use crate::{
     progress::global_multi_progress,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        has_features::HasFeatures,
         Environment,
     },
     pypi_mapping::{self, Reporter},
     Project,
 };
+use pixi_manifest::FeaturesExt;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.

@@ -8,7 +8,8 @@ use std::{
 
 use itertools::Either;
 use pixi_manifest::{
-    self as manifest, EnvironmentName, Feature, FeatureName, SystemRequirements, Task, TaskName,
+    self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
+    HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -16,7 +17,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{project::has_features::HasFeatures, Project};
+use crate::{project::HasProjectRef, Project};
 use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
@@ -92,7 +93,7 @@ impl<'p> Environment<'p> {
     /// Returns the manifest definition of this environment. See the
     /// documentation of [`Environment`] for an overview of the difference
     /// between [`manifest::Environment`] and [`Environment`].
-    pub fn manifest(&self) -> &'p manifest::Environment {
+    pub fn environment_manifest(&self) -> &'p manifest::Environment {
         self.environment
     }
 
@@ -273,12 +274,24 @@ impl<'p> Environment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for Environment<'p> {
+impl<'p> HasProjectRef<'p> for Environment<'p> {
+    fn project(&self) -> &'p Project {
+        self.project
+    }
+}
+
+impl<'p> HasManifestRef<'p> for Environment<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+}
+
+impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+        let manifest = self.manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
-            self.project
-                .manifest
+            manifest
                 .parsed
                 .features
                 .get(&FeatureName::Named(feature_name.clone()))
@@ -288,13 +301,8 @@ impl<'p> HasFeatures<'p> for Environment<'p> {
         if self.environment.no_default_feature {
             Either::Right(environment_features)
         } else {
-            Either::Left(environment_features.chain([self.project.manifest.default_feature()]))
+            Either::Left(environment_features.chain([self.manifest().default_feature()]))
         }
-    }
-
-    /// Returns the project this environment belongs to.
-    fn project(&self) -> &'p Project {
-        self.project
     }
 }
 

@@ -21,4 +21,4 @@ mod repodata;
 
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
-pub use project::{has_features::HasFeatures, DependencyType, Project};
+pub use project::{DependencyType, Project};

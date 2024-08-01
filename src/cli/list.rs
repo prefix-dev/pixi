@@ -9,9 +9,9 @@ use itertools::Itertools;
 
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::has_features::HasFeatures;
 use crate::utils::uv::pypi_options_to_index_locations;
 use crate::Project;
+use pixi_manifest::FeaturesExt;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{Package, UrlOrPath};
@@ -142,19 +142,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let uv_context;
     let index_locations;
     let mut registry_index = if let Some(python_record) = python_record {
-        uv_context = UvResolutionContext::from_project(&project)?;
-        index_locations = pypi_options_to_index_locations(&environment.pypi_options());
-        tags = get_pypi_tags(
-            platform,
-            &environment.system_requirements(),
-            python_record.package_record(),
-        )?;
-        Some(RegistryWheelIndex::new(
-            &uv_context.cache,
-            &tags,
-            &index_locations,
-            &uv_types::HashStrategy::None,
-        ))
+        if environment.has_pypi_dependencies() {
+            uv_context = UvResolutionContext::from_project(&project)?;
+            index_locations = pypi_options_to_index_locations(&environment.pypi_options());
+            tags = get_pypi_tags(
+                platform,
+                &environment.system_requirements(),
+                python_record.package_record(),
+            )?;
+            Some(RegistryWheelIndex::new(
+                &uv_context.cache,
+                &tags,
+                &index_locations,
+                &uv_types::HashStrategy::None,
+            ))
+        } else {
+            None
+        }
     } else {
         None
     };

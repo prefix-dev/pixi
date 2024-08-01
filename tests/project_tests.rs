@@ -3,7 +3,8 @@ mod common;
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
-use pixi::{HasFeatures, Project};
+use pixi::Project;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;

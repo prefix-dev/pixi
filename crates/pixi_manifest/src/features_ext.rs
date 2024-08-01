@@ -4,11 +4,11 @@ use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use rattler_solve::ChannelPriority;
 
-use crate::Project;
-use pixi_manifest::SpecType;
+use crate::{HasManifestRef, SpecType};
 
-use pixi_manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements};
-use pixi_manifest::{CondaDependencies, PyPiDependencies};
+use crate::has_features_iter::HasFeaturesIter;
+use crate::{pypi::pypi_options::PypiOptions, SystemRequirements};
+use crate::{CondaDependencies, PyPiDependencies};
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities are set
 #[derive(Debug, thiserror::Error)]
@@ -16,27 +16,30 @@ use pixi_manifest::{CondaDependencies, PyPiDependencies};
 pub struct ChannelPriorityCombinationError;
 
 /// A trait that implement various methods for collections that combine attributes of Features
-/// It is implemented by Environment, GroupedEnvironment and SolveGroup
-pub trait HasFeatures<'p> {
-    fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p;
-    fn project(&self) -> &'p Project;
-
+/// It is implemented by Environment, GroupedEnvironment and SolveGroup.
+/// Remove some of the boilerplate of combining features and its derived data from multiple sources.
+///
+/// The name of the lifetime parameter is named `'source` that the borrow comes from the source of the data
+/// for most implementations this will be the pixi project.
+///
+/// There is blanket implementation available for all types that implement [`HasManifestRef`] and [`HasFeaturesIter`]
+pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'source> {
     /// Returns the channels associated with this collection.
     ///
-    /// Users can specify custom channels on a per feature basis. This method collects and
+    /// Users can specify custom channels on a per-feature basis. This method collects and
     /// deduplicates all the channels from all the features in the order they are defined in the
     /// manifest.
     ///
     /// If a feature does not specify any channel the default channels from the project metadata are
     /// used instead.
-    fn channels(&self) -> IndexSet<&'p NamedChannelOrUrl> {
+    fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels: IndexSet<_> = self
             .features()
             .flat_map(|feature| match &feature.channels {
                 Some(channels) => channels,
-                None => &self.project().manifest.parsed.project.channels,
+                None => &self.manifest().parsed.project.channels,
             })
             .collect();
 
@@ -81,7 +84,7 @@ pub trait HasFeatures<'p> {
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
-                    None => &self.project().manifest.parsed.project.platforms.value,
+                    None => &self.manifest().parsed.project.platforms.value,
                 }
                 .iter()
                 .copied()
@@ -143,7 +146,7 @@ pub trait HasFeatures<'p> {
     /// The pypi options of all features are combined. They will be combined in the order
     /// that they are defined in the manifest.
     /// The index-url is a special case and can only be defined once. This should have been
-    /// verified before-hand.
+    /// verified beforehand.
     fn pypi_options(&self) -> PypiOptions {
         // Collect all the pypi-options from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
@@ -151,7 +154,7 @@ pub trait HasFeatures<'p> {
             .features()
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
-                    self.project().manifest.parsed.project.pypi_options.as_ref()
+                    self.manifest().parsed.project.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }
@@ -166,4 +169,9 @@ pub trait HasFeatures<'p> {
                     .expect("merging of pypi-options should already have been checked")
             })
     }
+}
+
+impl<'source, FeatureCollection> FeaturesExt<'source> for FeatureCollection where
+    FeatureCollection: HasManifestRef<'source> + HasFeaturesIter<'source>
+{
 }

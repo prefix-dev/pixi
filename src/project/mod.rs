@@ -1,7 +1,7 @@
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
-pub mod has_features;
+mod has_project_ref;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -40,6 +40,8 @@ use crate::{
 };
 use pixi_config::Config;
 use pixi_consts::consts;
+
+pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -724,8 +726,8 @@ mod tests {
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
-    use self::has_features::HasFeatures;
     use super::*;
+    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

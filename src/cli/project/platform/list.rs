@@ -1,5 +1,6 @@
 use crate::fancy_display::FancyDisplay;
-use crate::{project::has_features::HasFeatures, Project};
+use crate::Project;
+use pixi_manifest::FeaturesExt;
 
 pub async fn execute(project: Project) -> miette::Result<()> {
     project
