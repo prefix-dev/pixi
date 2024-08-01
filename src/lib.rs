@@ -10,7 +10,6 @@ mod progress;
 mod project;
 mod prompt;
 pub mod task;
-pub mod util;
 pub mod utils;
 
 mod uv_reporter;
