@@ -4,12 +4,12 @@ PIXI_VERSION = "0.26.1"
 
 
 def verify_cli_command(
-        command: str,
-        expected_exit_code: int | None = None,
-        stdout_contains: str | None = None,
-        stdout_excludes: str | None = None,
-        stderr_contains: str | None = None,
-        stderr_excludes: str | None = None,
+    command: str,
+    expected_exit_code: int | None = None,
+    stdout_contains: str | None = None,
+    stdout_excludes: str | None = None,
+    stderr_contains: str | None = None,
+    stderr_excludes: str | None = None,
 ):
     process = subprocess.Popen(
         command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -78,9 +78,15 @@ def test_project_commands(tmp_path):
     verify_cli_command(
         f"pixi project --manifest-path {manifest_path} version get", 0, stdout_contains="1.2.3"
     )
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} version major", 0, stderr_contains="2.2.3")
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} version minor", 0, stderr_contains="2.3.3")
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} version patch", 0, stderr_contains="2.3.4")
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} version major", 0, stderr_contains="2.2.3"
+    )
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} version minor", 0, stderr_contains="2.3.3"
+    )
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} version patch", 0, stderr_contains="2.3.4"
+    )
 
 
 def test_global_install():
@@ -99,3 +105,11 @@ def test_global_install():
     # Remove
     verify_cli_command("pixi global remove rattler-build", 0)
     verify_cli_command("pixi global remove rattler-build", 1)
+
+
+def test_search():
+    verify_cli_command(
+        "pixi search rattler-build -c conda-forge", 0, stdout_contains="rattler-build"
+    )
+    # TODO: fix this, not working because of the repodata gateway
+    # verify_cli_command('pixi search rattler-build -c https://fast.prefix.dev/conda-forge', 0, stdout_contains="rattler-build")
