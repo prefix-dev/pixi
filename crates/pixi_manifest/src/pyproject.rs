@@ -98,7 +98,9 @@ impl From<PyProjectManifest> for ParsedManifest {
             });
         }
 
-        // TODO: Add license, license-file, readme, homepage, repository, documentation,
+        // TODO:  would be nice to add license, license-file, readme, homepage, repository, documentation,
+        // regarding the above, the types are a bit different than we expect, so the conversion is not straightforward
+        // we could change these types or we can convert. Let's decide when we make it.
         // etc.
 
         // Add python as dependency based on the project.requires_python property (if
