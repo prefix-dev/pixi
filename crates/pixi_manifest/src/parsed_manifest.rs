@@ -58,11 +58,6 @@ impl ParsedManifest {
         Ok(manifest)
     }
 
-    /// Set the project name.
-    pub(crate) fn set_project_name(&mut self, name: String) {
-        self.project.name = Some(name);
-    }
-
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root

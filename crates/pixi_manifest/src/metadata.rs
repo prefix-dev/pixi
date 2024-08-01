@@ -26,8 +26,7 @@ pub struct ProjectMetadata {
     pub description: Option<String>,
 
     /// Optional authors
-    #[serde(default)]
-    pub authors: Vec<String>,
+    pub authors: Option<Vec<String>>,
 
     /// The channels used by the project
     #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
