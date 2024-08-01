@@ -27,7 +27,7 @@ use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-
+use crate::project::HasProjectRef;
 use crate::{
     project::{grouped_environment::GroupedEnvironment, has_features::HasFeatures, Environment},
     utils::uv::{as_uv_req, AsPep508Error},

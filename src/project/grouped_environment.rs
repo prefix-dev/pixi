@@ -1,5 +1,6 @@
 use super::has_features::HasFeatures;
 use crate::fancy_display::FancyDisplay;
+use crate::project::HasProjectRef;
 use crate::{
     prefix::Prefix,
     project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
@@ -7,7 +8,7 @@ use crate::{
 };
 use itertools::Either;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, Feature, SystemRequirements};
+use pixi_manifest::{EnvironmentName, Feature, Manifest, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
 
@@ -109,20 +110,25 @@ impl<'p> GroupedEnvironment<'p> {
     }
 }
 
+impl<'p> HasProjectRef<'p> for GroupedEnvironment<'p> {
+    fn project(&self) -> &'p Project {
+        match self {
+            GroupedEnvironment::Group(group) => group.project(),
+            GroupedEnvironment::Environment(env) => env.project(),
+        }
+    }
+}
+
 impl<'p> HasFeatures<'p> for GroupedEnvironment<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+
     /// Returns the features of the group
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.features()),
             GroupedEnvironment::Environment(env) => Either::Right(env.features()),
-        }
-    }
-
-    /// Returns the project to which the group belongs.
-    fn project(&self) -> &'p Project {
-        match self {
-            GroupedEnvironment::Group(group) => group.project(),
-            GroupedEnvironment::Environment(env) => env.project(),
         }
     }
 }

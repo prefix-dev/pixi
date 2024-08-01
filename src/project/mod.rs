@@ -2,6 +2,7 @@ mod environment;
 pub mod errors;
 pub mod grouped_environment;
 pub mod has_features;
+mod project_ref;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -40,6 +41,8 @@ use crate::{
 };
 use pixi_config::Config;
 use pixi_consts::consts;
+
+pub use project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 

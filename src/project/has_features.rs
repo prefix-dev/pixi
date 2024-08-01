@@ -4,7 +4,6 @@ use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use rattler_solve::ChannelPriority;
 
-use crate::Project;
 use pixi_manifest::SpecType;
 
 use pixi_manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements};
@@ -18,8 +17,10 @@ pub struct ChannelPriorityCombinationError;
 /// A trait that implement various methods for collections that combine attributes of Features
 /// It is implemented by Environment, GroupedEnvironment and SolveGroup
 pub trait HasFeatures<'p> {
+    /// Returns access to the original manifest
+    fn manifest(&self) -> &'p pixi_manifest::Manifest;
+
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p;
-    fn project(&self) -> &'p Project;
 
     /// Returns the channels associated with this collection.
     ///
@@ -36,7 +37,7 @@ pub trait HasFeatures<'p> {
             .features()
             .flat_map(|feature| match &feature.channels {
                 Some(channels) => channels,
-                None => &self.project().manifest.parsed.project.channels,
+                None => &self.manifest().parsed.project.channels,
             })
             .collect();
 
@@ -81,7 +82,7 @@ pub trait HasFeatures<'p> {
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
-                    None => &self.project().manifest.parsed.project.platforms.value,
+                    None => &self.manifest().parsed.project.platforms.value,
                 }
                 .iter()
                 .copied()
@@ -151,7 +152,7 @@ pub trait HasFeatures<'p> {
             .features()
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
-                    self.project().manifest.parsed.project.pypi_options.as_ref()
+                    self.manifest().parsed.project.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }
