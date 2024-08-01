@@ -11,6 +11,9 @@ name = "pixi"
 channels = ["https://fast.prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
+[dependencies]
+python = ">=3.12.3,<4"
+
 [tasks]
 build = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
@@ -20,6 +23,10 @@ run-all-examples = "python ./tests/run_all_examples.py"
 run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
 test = "cargo test"
 test-all = "cargo test --all-features"
+test-integration = "pytest -s tests/integration"
+
+[feature.pytest.dependencies]
+pytest = ">=8.0.2,<9"
 
 [feature.dev.dependencies]
 # Needed for the citation
@@ -75,8 +82,6 @@ test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema
 [feature.schema.dependencies]
 jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
-pytest = ">=8.0.2,<8.1"
-python = ">=3.11"
 pyyaml = ">=6.0.1,<6.1"
 
 [environments]
@@ -85,6 +90,7 @@ default = { features = [
   "dev",
   "docs",
   "schema",
+  "pytest",
 ], solve-group = "default" }
 docs = { features = [
   "docs",
