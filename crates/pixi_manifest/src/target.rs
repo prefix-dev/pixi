@@ -227,7 +227,7 @@ impl Target {
     ) {
         // TODO: add proper error handling for this
         let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())
-            .expect("could not convert pep508 requirm");
+            .expect("could not convert pep508 requirement");
         if let Some(editable) = editable {
             pypi_requirement.set_editable(editable);
         }
