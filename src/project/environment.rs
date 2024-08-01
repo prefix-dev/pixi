@@ -8,8 +8,8 @@ use std::{
 
 use itertools::Either;
 use pixi_manifest::{
-    self as manifest, EnvironmentName, Feature, FeatureName, HasManifestRef, Manifest,
-    SystemRequirements, Task, TaskName,
+    self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
+    HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -17,7 +17,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{project::has_features::HasFeatures, project::HasProjectRef, Project};
+use crate::{project::HasProjectRef, Project};
 use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
@@ -286,7 +286,7 @@ impl<'p> HasManifestRef<'p> for Environment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for Environment<'p> {
+impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let manifest = self.manifest();

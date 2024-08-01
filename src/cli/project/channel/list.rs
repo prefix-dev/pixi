@@ -1,6 +1,7 @@
 use clap::Parser;
 
-use crate::{fancy_display::FancyDisplay, project::has_features::HasFeatures, Project};
+use crate::{fancy_display::FancyDisplay, Project};
+use pixi_manifest::FeaturesExt;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {

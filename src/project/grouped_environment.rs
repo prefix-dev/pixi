@@ -1,4 +1,3 @@
-use super::has_features::HasFeatures;
 use crate::fancy_display::FancyDisplay;
 use crate::project::HasProjectRef;
 use crate::{
@@ -8,7 +7,9 @@ use crate::{
 };
 use itertools::Either;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, Feature, HasManifestRef, Manifest, SystemRequirements};
+use pixi_manifest::{
+    EnvironmentName, Feature, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements,
+};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
 
@@ -125,7 +126,7 @@ impl<'p> HasManifestRef<'p> for GroupedEnvironment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for GroupedEnvironment<'p> {
+impl<'p> HasFeaturesIter<'p> for GroupedEnvironment<'p> {
     /// Returns the features of the group
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
