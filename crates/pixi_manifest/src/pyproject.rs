@@ -67,9 +67,41 @@ impl From<PyProjectManifest> for ParsedManifest {
             .as_ref()
             .expect("the [project] table should exist");
 
-        // Get tool.pixi.project.name from project.name
-        // TODO: could copy across / convert some other optional fields if relevant
-        manifest.set_project_name(pyproject.name.clone());
+        // Overwrite the project name and version with the ones from the [project] table
+        // of the pyproject.toml if they are not set.
+        if manifest.project.name.is_none() {
+            manifest.project.name = Some(pyproject.name.clone());
+        }
+
+        if manifest.project.version.is_none() {
+            manifest.project.version = pyproject
+                .version
+                .clone()
+                .and_then(|version| version.to_string().parse().ok())
+        }
+
+        if manifest.project.description.is_none() {
+            manifest.project.description = pyproject.description.clone();
+        }
+
+        if manifest.project.authors.is_none() {
+            manifest.project.authors = pyproject.authors.as_ref().map(|authors| {
+                authors
+                    .iter()
+                    .filter_map(|contact| match (&contact.name, &contact.email) {
+                        (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
+                        (Some(name), None) => Some(name.clone()),
+                        (None, Some(email)) => Some(email.clone()),
+                        (None, None) => None,
+                    })
+                    .collect()
+            });
+        }
+
+        // TODO:  would be nice to add license, license-file, readme, homepage, repository, documentation,
+        // regarding the above, the types are a bit different than we expect, so the conversion is not straightforward
+        // we could change these types or we can convert. Let's decide when we make it.
+        // etc.
 
         // Add python as dependency based on the project.requires_python property (if
         // any)
@@ -238,20 +270,24 @@ impl PyProjectToml {
 mod tests {
     use std::{path::Path, str::FromStr};
 
-    use crate::manifest::Manifest;
-    use crate::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName};
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
+    use crate::{
+        manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
+    };
+
     const PYPROJECT_FULL: &str = r#"
         [project]
         name = "project"
-
-        [tool.pixi.project]
         version = "0.1.0"
         description = "A project"
-        authors = ["Author <author@bla.com>"]
+        authors = [
+            { name = "Author", email = "author@bla.com" }
+        ]
+
+        [tool.pixi.project]
         channels = ["stable"]
         platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         license = "MIT"
