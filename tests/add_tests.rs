@@ -232,8 +232,8 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package to a target
-    pixi.add("pytest[all]")
+    // Add a pypi package to a target with extras
+    pixi.add("pytest[dev]==8.3.2")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
         .with_install(true)
@@ -254,16 +254,22 @@ async fn add_pypi_functionality() {
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
-        pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
+        pep508_rs::Requirement::from_str("pytest").unwrap(),
+    ));
+    // Test that the dev extras are added, mock is a test dependency of `pytest==8.3.2`
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        pep508_rs::Requirement::from_str("mock").unwrap(),
     ));
 
     // Add a pypi package with a git url
-    // pixi.add("requests @ git+https://github.com/psf/requests.git")
-    //     .set_type(DependencyType::PypiDependency)
-    //     .set_platforms(&[Platform::Linux64])
-    //     .with_install(true)
-    //     .await
-    //     .unwrap();
+    pixi.add("requests @ git+https://github.com/psf/requests.git")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .with_install(true)
+        .await
+        .unwrap();
 
     pixi.add("isort @ git+https://github.com/PyCQA/isort@c655831799765e9593989ee12faba13b6ca391a5")
         .set_type(DependencyType::PypiDependency)
@@ -280,7 +286,11 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    // assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "requests"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "requests"
+    ));
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
