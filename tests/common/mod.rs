@@ -27,10 +27,10 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
-    consts,
     task::TaskName,
     Project, UpdateLockFileOptions,
 };
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};
@@ -266,7 +266,7 @@ impl PixiControl {
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::channel::add::Args {
+            args: project::channel::AddRemoveArgs {
                 channel: vec![],
                 no_install: true,
                 feature: None,

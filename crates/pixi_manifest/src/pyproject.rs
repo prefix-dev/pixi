@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    Feature, ProjectManifest, SpecType,
+    Feature, ParsedManifest, SpecType,
 };
 use crate::FeatureName;
 
@@ -21,7 +21,7 @@ pub struct PyProjectManifest {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
-    pub pixi: Option<ProjectManifest>,
+    pub pixi: Option<ParsedManifest>,
     #[allow(dead_code)]
     pub poetry: Option<ToolPoetry>,
 }
@@ -57,7 +57,7 @@ impl PyProjectManifest {
     }
 }
 
-impl From<PyProjectManifest> for ProjectManifest {
+impl From<PyProjectManifest> for ParsedManifest {
     fn from(item: PyProjectManifest) -> Self {
         // Start by loading the data nested under "tool.pixi" as manifest,
         // and create a reference to the 'pyproject.toml' project table
@@ -69,7 +69,7 @@ impl From<PyProjectManifest> for ProjectManifest {
 
         // Get tool.pixi.project.name from project.name
         // TODO: could copy across / convert some other optional fields if relevant
-        manifest.project.name = Some(pyproject.name.clone());
+        manifest.set_project_name(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if
         // any)
@@ -238,7 +238,8 @@ impl PyProjectToml {
 mod tests {
     use std::{path::Path, str::FromStr};
 
-    use crate::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, Manifest};
+    use crate::manifest::Manifest;
+    use crate::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName};
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};

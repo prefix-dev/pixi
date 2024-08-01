@@ -23,16 +23,16 @@
 # Use `pixi install --pypi-keyring-provider subprocess` or configure in global configuration
 
 [project]
-name = "python-library-gcp-keyring"
-version = "0.1.0"
-description = "Add a short description here"
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
-requires-python = ">= 3.11"
 dependencies = ["rich"]
+description = "Add a short description here"
+name = "python-library-gcp-keyring"
+requires-python = ">= 3.11"
+version = "0.1.0"
 
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -71,7 +71,7 @@ test = { features = ["test"], solve-group = "default" }
 build = { cmd = "hatch build", inputs = ["say_hi/*"], outputs = ["dist/*"] }
 # Upload to custom GCP registry using twine
 publish = { cmd = "twine upload --skip-existing --repository-url https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/ dist/*", depends-on = [
-    "build",
+  "build",
 ] }
 
 # Test the library

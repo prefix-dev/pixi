@@ -1,7 +1,0 @@
----
-source: crates/pixi_manifest/src/lib.rs
-assertion_line: 1587
-expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\").default_feature().targets.default().pypi_dependencies.clone().into_iter().flat_map(|d|\n                d.into_iter()).map(|(name, spec)|\n            format!(\"{} = {}\", name.as_source(),\n                toml_edit::Value::from(spec))).join(\"\\n\")"
----
-foo = ">=3.12"
-bar = { version = ">=3.12", extras = ["baz"] }

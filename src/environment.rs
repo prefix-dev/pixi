@@ -1,10 +1,9 @@
-use crate::consts::PIXI_UV_INSTALLER;
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
 use crate::project::has_features::HasFeatures;
 use crate::{
-    consts, install_pypi,
+    install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
     progress,
@@ -14,7 +13,8 @@ use crate::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use miette::{IntoDiagnostic, WrapErr};
-use pixi_manifest::pypi::pypi_options::PypiOptions;
+use pixi_consts::consts;
+
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::{
@@ -22,7 +22,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::convert::identity;
@@ -294,7 +294,7 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: &UvResolutionContext,
-    pypi_options: &PypiOptions,
+    pypi_indexes: Option<&PypiIndexes>,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
     platform: Platform,
@@ -356,7 +356,7 @@ pub async fn update_prefix_pypi(
                 &python_info.path,
                 system_requirements,
                 uv_context,
-                pypi_options,
+                pypi_indexes,
                 environment_variables,
                 platform,
             )
@@ -397,7 +397,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 
                 // Only remove if have actually installed it
                 // by checking the installer
-                if installer.unwrap_or_default() == PIXI_UV_INSTALLER {
+                if installer.unwrap_or_default() == consts::PIXI_UV_INSTALLER {
                     installed.push(installed_dist);
                 }
             }

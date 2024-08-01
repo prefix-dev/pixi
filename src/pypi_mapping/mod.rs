@@ -8,7 +8,8 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
 
-use crate::{config::get_cache_dir, pypi_mapping::custom_pypi_mapping::fetch_mapping_from_url};
+use crate::pypi_mapping::custom_pypi_mapping::fetch_mapping_from_url;
+use pixi_config::get_cache_dir;
 
 pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
@@ -122,6 +123,26 @@ impl MappingSource {
         match self {
             MappingSource::Custom(mapping) => Some(mapping.clone()),
             _ => None,
+        }
+    }
+}
+
+/// This enum represents the source of mapping
+/// it can be user-defined ( custom )
+/// or from prefix.dev ( prefix )
+#[derive(Debug, Clone)]
+pub enum PurlSource {
+    HashMapping,
+    CompressedMapping,
+    ProjectDefinedMapping,
+}
+
+impl PurlSource {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PurlSource::HashMapping => "hash-mapping",
+            PurlSource::CompressedMapping => "compressed-mapping",
+            PurlSource::ProjectDefinedMapping => "project-defined-mapping",
         }
     }
 }

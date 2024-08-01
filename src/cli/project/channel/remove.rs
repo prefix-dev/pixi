@@ -1,52 +1,15 @@
-use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::{
+    environment::{get_up_to_date_prefix, LockFileUsage},
+    Project,
+};
 
-use crate::Project;
-use clap::Parser;
-use miette::IntoDiagnostic;
-use pixi_manifest::FeatureName;
-use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::Channel;
+use super::AddRemoveArgs;
 
-#[derive(Parser, Debug, Default)]
-pub struct Args {
-    /// The channel name(s) or URL
-    #[clap(required = true, num_args=1..)]
-    pub channel: Vec<String>,
-
-    /// Don't update the environment, only remove the channel(s) from the lock-file.
-    #[clap(long)]
-    pub no_install: bool,
-
-    /// The name of the feature to remove the channel from.
-    #[clap(long, short)]
-    pub feature: Option<String>,
-}
-
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    let feature_name = args
-        .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
-
-    // Determine which channels to remove
-    let channels = args
-        .channel
-        .into_iter()
-        .map(|channel_str| {
-            Channel::from_str(&channel_str, project.config().channel_config())
-                .map(|channel| (channel_str, channel))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
+pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Result<()> {
     // Remove the channels from the manifest
-    project.manifest.remove_channels(
-        channels
-            .clone()
-            .into_iter()
-            .map(|(_name, channel)| channel)
-            .map(PrioritizedChannel::from_channel),
-        &feature_name,
-    )?;
+    project
+        .manifest
+        .remove_channels(args.prioritized_channels(), &args.feature_name())?;
 
     // Try to update the lock-file without the removed channels
     get_up_to_date_prefix(
@@ -58,14 +21,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
-    for (name, channel) in channels {
-        eprintln!(
-            "{}Removed {} ({})",
-            console::style(console::Emoji("✔ ", "")).green(),
-            name,
-            channel.base_url()
-        );
-    }
+    args.report("Removed", &project.channel_config());
 
     Ok(())
 }

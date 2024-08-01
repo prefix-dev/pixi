@@ -1,6 +1,6 @@
 use console::StyledObject;
 
-use crate::consts;
+use pixi_consts::consts;
 
 pub trait FancyDisplay {
     fn fancy_display(&self) -> StyledObject<&str>;

@@ -8,15 +8,15 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-#[cfg(target_family = "unix")]
-use crate::unix::PtySession;
 use crate::{
-    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, config::ConfigCliPrompt,
-    environment::get_up_to_date_prefix,
+    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, environment::get_up_to_date_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project,
 };
+use pixi_config::ConfigCliPrompt;
 use pixi_manifest::EnvironmentName;
+#[cfg(target_family = "unix")]
+use pixi_pty::unix::PtySession;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]

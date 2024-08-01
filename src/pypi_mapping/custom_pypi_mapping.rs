@@ -10,7 +10,7 @@ use url::Url;
 
 use super::{
     build_pypi_purl_from_package_record, is_conda_forge_record, prefix_pypi_name_mapping,
-    CustomMapping, Reporter,
+    CustomMapping, PurlSource, Reporter,
 };
 
 pub async fn fetch_mapping_from_url<T>(
@@ -120,7 +120,7 @@ fn amend_pypi_purls_for_record(
             // we have a pypi name for it so we record a purl
             if let Some(name) = mapped_name {
                 let purl = PackageUrl::builder(String::from("pypi"), name.to_string())
-                    .with_qualifier("source", "project-defined-mapping")
+                    .with_qualifier("source", PurlSource::ProjectDefinedMapping.as_str())
                     .expect("valid qualifier");
 
                 purls.push(purl.build().expect("valid pypi package url"));

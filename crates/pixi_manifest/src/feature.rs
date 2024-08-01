@@ -14,7 +14,9 @@ use serde_with::{serde_as, SerializeDisplay};
 
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
-    consts, deserialize_opt_package_map, deserialize_package_map,
+    consts,
+    parsed_manifest::deserialize_opt_package_map,
+    parsed_manifest::deserialize_package_map,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
@@ -374,7 +376,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::Manifest;
+    use crate::manifest::Manifest;
 
     #[test]
     fn test_dependencies_borrowed() {
