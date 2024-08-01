@@ -11,6 +11,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 
+use crate::project::HasProjectRef;
 use crate::{
     project::{has_features::HasFeatures, Environment},
     Project,

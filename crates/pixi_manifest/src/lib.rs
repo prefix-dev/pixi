@@ -7,6 +7,7 @@ mod environment;
 mod environments;
 mod error;
 mod feature;
+mod has_manifest_ref;
 mod manifest;
 mod metadata;
 mod nameless_matchspec;
@@ -20,6 +21,7 @@ mod target;
 pub mod task;
 mod utils;
 mod validation;
+
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
 pub use manifest::{Manifest, ManifestKind};
@@ -41,6 +43,8 @@ pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+
+pub use has_manifest_ref::HasManifestRef;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]

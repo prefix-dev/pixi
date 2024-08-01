@@ -2,9 +2,9 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 
-use super::{has_features::HasFeatures, Environment, Project};
+use super::{has_features::HasFeatures, Environment, HasProjectRef, Project};
 use pixi_manifest as manifest;
-use pixi_manifest::SystemRequirements;
+use pixi_manifest::{HasManifestRef, Manifest, SystemRequirements};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -68,6 +68,12 @@ impl<'p> SolveGroup<'p> {
     }
 }
 
+impl<'p> HasManifestRef<'p> for SolveGroup<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+}
+
 impl<'p> HasFeatures<'p> for SolveGroup<'p> {
     /// Returns all features that are part of the solve group.
     ///
@@ -77,8 +83,9 @@ impl<'p> HasFeatures<'p> for SolveGroup<'p> {
             .flat_map(|env: Environment<'p>| env.features().collect_vec().into_iter())
             .unique_by(|feat| &feat.name)
     }
+}
 
-    /// Returns the project to which the group belongs.
+impl<'p> HasProjectRef<'p> for SolveGroup<'p> {
     fn project(&self) -> &'p Project {
         self.project
     }

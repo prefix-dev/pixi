@@ -33,6 +33,7 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::project::HasProjectRef;
 use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
