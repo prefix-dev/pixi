@@ -177,6 +177,11 @@ impl DependencyConfig {
                 console::style(self.platform.iter().join(", ")).bold()
             )
         }
+
+        // Print something if we've modified for a feature
+        if let Some(feature) = &self.feature {
+            eprintln!("{operation} in feature: {}", console::style(feature).bold())
+        }
     }
 }
 
