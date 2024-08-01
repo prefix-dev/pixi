@@ -7,6 +7,7 @@ use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
@@ -14,10 +15,7 @@ use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
 
-use crate::{
-    fancy_display::FancyDisplay, progress::await_in_progress, project::has_features::HasFeatures,
-    task::TaskName, Project,
-};
+use crate::{fancy_display::FancyDisplay, progress::await_in_progress, task::TaskName, Project};
 
 static WIDTH: usize = 18;
 

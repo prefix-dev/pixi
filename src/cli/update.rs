@@ -9,7 +9,7 @@ use std::{
 use crate::{
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
-    HasFeatures, Project,
+    Project,
 };
 use ahash::HashMap;
 use clap::Parser;
@@ -19,6 +19,7 @@ use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 use serde::Serialize;

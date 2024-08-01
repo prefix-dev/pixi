@@ -7,10 +7,18 @@ use std::{
     str::FromStr,
 };
 
+use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::HasProjectRef;
+use crate::{
+    project::{grouped_environment::GroupedEnvironment, Environment},
+    utils::uv::{as_uv_req, AsPep508Error},
+};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pixi_manifest::FeaturesExt;
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
@@ -25,14 +33,6 @@ use thiserror::Error;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
-
-use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-use crate::project::HasProjectRef;
-use crate::{
-    project::{grouped_environment::GroupedEnvironment, has_features::HasFeatures, Environment},
-    utils::uv::{as_uv_req, AsPep508Error},
-};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {

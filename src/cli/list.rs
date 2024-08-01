@@ -9,9 +9,9 @@ use itertools::Itertools;
 
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::has_features::HasFeatures;
 use crate::utils::uv::pypi_options_to_index_locations;
 use crate::Project;
+use pixi_manifest::FeaturesExt;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{Package, UrlOrPath};

@@ -1,10 +1,10 @@
-use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockFileBuilder, Package};
-
 use crate::{
     project::{grouped_environment::GroupedEnvironment, Environment},
-    HasFeatures, Project,
+    Project,
 };
+use pixi_manifest::FeaturesExt;
+use rattler_conda_types::Platform;
+use rattler_lock::{LockFile, LockFileBuilder, Package};
 
 /// Constructs a new lock-file where some of the packages have been removed
 pub fn filter_lock_file<'p, F: FnMut(&Environment<'p>, Platform, &Package) -> bool>(

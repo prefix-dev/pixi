@@ -18,11 +18,10 @@ use crate::{
     environment::{verify_prefix_location_unchanged, LockFileUsage},
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
-    project::{
-        grouped_environment::GroupedEnvironment, has_features::HasFeatures, DependencyType, Project,
-    },
+    project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
 use pixi_config::ConfigCli;
+use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 
 /// Adds dependencies to the project
 ///
