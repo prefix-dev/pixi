@@ -6,28 +6,50 @@ PIXI_VERSION = "0.26.1"
 def verify_cli_command(
     command: str,
     expected_exit_code: int | None = None,
-    stdout_contains: str | None = None,
-    stdout_excludes: str | None = None,
-    stderr_contains: str | None = None,
-    stderr_excludes: str | None = None,
+    stdout_contains: str | list | None = None,
+    stdout_excludes: str | list | None = None,
+    stderr_contains: str | list | None = None,
+    stderr_excludes: str | list | None = None,
 ):
     process = subprocess.Popen(
         command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     stdout, stderr = process.communicate()
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {process.returncode}")
+
     if expected_exit_code is not None:
         assert int(process.returncode) == int(
             expected_exit_code
         ), f"Return code was {process.returncode}, stderr: {stderr}"
-    if stdout_contains is not None:
-        assert stdout_contains in stdout.strip(), f"Unexpected stdout: {stdout.strip()}"
-    if stdout_excludes is not None:
-        assert stdout_excludes not in stdout.strip(), f"Unexpected stdout: {stdout.strip()}"
-    if stderr_contains is not None:
-        assert stderr_contains in stderr.strip(), f"Unexpected stderr: {stderr.strip()}"
-    if stderr_excludes is not None:
-        assert stderr_excludes not in stderr.strip(), f"Unexpected stderr: {stderr.strip()}"
+
+    if expected_exit_code is not None:
+        assert (
+            process.returncode == expected_exit_code
+        ), f"Return code was {process.returncode}, expected {expected_exit_code}, stderr: {stderr}"
+
+    if stdout_contains:
+        if isinstance(stdout_contains, str):
+            stdout_contains = [stdout_contains]
+        for substring in stdout_contains:
+            assert substring in stdout, f"'{substring}' not found in stdout: {stdout}"
+
+    if stdout_excludes:
+        if isinstance(stdout_excludes, str):
+            stdout_excludes = [stdout_excludes]
+        for substring in stdout_excludes:
+            assert substring not in stdout, f"'{substring}' unexpectedly found in stdout: {stdout}"
+
+    if stderr_contains:
+        if isinstance(stderr_contains, str):
+            stderr_contains = [stderr_contains]
+        for substring in stderr_contains:
+            assert substring in stderr, f"'{substring}' not found in stderr: {stderr}"
+
+    if stderr_excludes:
+        if isinstance(stderr_excludes, str):
+            stderr_excludes = [stderr_excludes]
+        for substring in stderr_excludes:
+            assert substring not in stderr, f"'{substring}' unexpectedly found in stderr: {stderr}"
 
 
 def test_pixi():
@@ -113,3 +135,29 @@ def test_search():
     )
     # TODO: fix this, not working because of the repodata gateway
     # verify_cli_command('pixi search rattler-build -c https://fast.prefix.dev/conda-forge', 0, stdout_contains="rattler-build")
+
+
+def test_simple_project_setup(tmp_path):
+    manifest_path = tmp_path / "pixi.toml"
+    # Create a new project
+    verify_cli_command(f"pixi init {tmp_path}", 0)
+
+    # Add package
+    verify_cli_command(
+        f"pixi add --manifest-path {manifest_path}  _r-mutex", 0, stderr_contains="Added"
+    )
+    verify_cli_command(
+        f"pixi add --manifest-path {manifest_path} --feature test _r-mutex==1.0.1",
+        0,
+        stderr_contains=["test", "==1.0.1"],
+    )
+    verify_cli_command(
+        f"pixi add --manifest-path {manifest_path} --platform linux-64 conda-forge::_r-mutex",
+        0,
+        stderr_contains=["linux-64", "conda-forge"],
+    )
+    verify_cli_command(
+        f"pixi add --manifest-path {manifest_path} -f test -p osx-arm64 _r-mutex",
+        0,
+        stderr_contains=["osx-arm64", "test"],
+    )
