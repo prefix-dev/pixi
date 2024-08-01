@@ -38,7 +38,6 @@ impl From<TaskName> for String {
         task_name.0 // Assuming TaskName is a tuple struct with the first element as String
     }
 }
-
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
@@ -140,7 +139,7 @@ impl Task {
             Task::Plain(_) => None,
             Task::Custom(_) => None,
             Task::Execute(exe) => exe.description.as_deref(),
-            Task::Alias(_) => None,
+            Task::Alias(alias) => alias.description.as_deref(),
         }
     }
 

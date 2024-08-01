@@ -323,8 +323,13 @@ impl PixiControl {
                 .map(|e| e.best_platform())
                 .or(Some(Platform::current())),
         );
-        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
-            .map_err(RunError::TaskGraphError)?;
+        let task_graph = TaskGraph::from_cmd_args(
+            &project,
+            &search_env,
+            args.task
+                .expect("expected a task, as tests don't run the dialog"),
+        )
+        .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
         let mut task_env = None;

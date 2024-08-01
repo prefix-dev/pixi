@@ -110,7 +110,7 @@ async fn test_alias() {
 
     let result = pixi
         .run(Args {
-            task: vec!["helloworld".to_string()],
+            task: Some(vec!["helloworld".to_string()]),
             manifest_path: None,
             ..Default::default()
         })
@@ -184,7 +184,7 @@ async fn test_cwd() {
 
     let result = pixi
         .run(Args {
-            task: vec!["pwd-test".to_string()],
+            task: Some(vec!["pwd-test".to_string()]),
             manifest_path: None,
             ..Default::default()
         })
@@ -204,7 +204,7 @@ async fn test_cwd() {
 
     assert!(pixi
         .run(Args {
-            task: vec!["unknown-cwd".to_string()],
+            task: Some(vec!["unknown-cwd".to_string()]),
             manifest_path: None,
             ..Default::default()
         })
@@ -229,7 +229,7 @@ async fn test_task_with_env() {
 
     let result = pixi
         .run(Args {
-            task: vec!["env-test".to_string()],
+            task: Some(vec!["env-test".to_string()]),
             manifest_path: None,
             ..Default::default()
         })
@@ -253,7 +253,7 @@ async fn test_clean_env() {
         .unwrap();
 
     let run = pixi.run(Args {
-        task: vec!["env-test".to_string()],
+        task: Some(vec!["env-test".to_string()]),
         manifest_path: None,
         clean_env: true,
         ..Default::default()
@@ -270,7 +270,7 @@ async fn test_clean_env() {
 
     let result = pixi
         .run(Args {
-            task: vec!["env-test".to_string()],
+            task: Some(vec!["env-test".to_string()]),
             manifest_path: None,
             clean_env: false,
             ..Default::default()
