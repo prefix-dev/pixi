@@ -18,7 +18,7 @@ use crate::{
     progress::await_in_progress, repodata::fetch_sparse_repodata,
     utils::reqwest::build_reqwest_clients, Project,
 };
-use pixi_config::Config;
+use pixi_config::{default_channel_config, Config};
 use pixi_manifest::FeaturesExt;
 
 /// Search a conda package

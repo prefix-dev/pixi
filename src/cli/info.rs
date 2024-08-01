@@ -17,10 +17,7 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 
-use crate::{
-    fancy_display::FancyDisplay, progress::await_in_progress, project::has_features::HasFeatures,
-    task::TaskName, Project,
-};
+use crate::{fancy_display::FancyDisplay, progress::await_in_progress, task::TaskName, Project};
 
 static WIDTH: usize = 18;
 
