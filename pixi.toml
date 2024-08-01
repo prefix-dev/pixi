@@ -100,4 +100,5 @@ lint = { features = [
 ], no-default-feature = true, solve-group = "default" }
 schema = { features = [
   "schema",
+  "pytest",
 ], no-default-feature = true, solve-group = "default" }
