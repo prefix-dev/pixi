@@ -18,12 +18,12 @@ use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
+use crate::project::{Environment, HasProjectRef};
 use crate::task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
-use crate::{HasFeatures, Project};
+use crate::Project;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;

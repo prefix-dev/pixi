@@ -50,8 +50,8 @@ minijinja = "1.0.20"
 nix = { version = "0.28.0", default-features = false }
 once_cell = "1.19.0"
 parking_lot = "0.12.2"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pep440_rs = "0.6.0"
+pep508_rs = "0.6.0"
 percent-encoding = "2.3.1"
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
@@ -112,7 +112,9 @@ zip = { version = "0.6.6", default-features = false }
 
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
+pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_manifest = { path = "crates/pixi_manifest" }
+pypi_modifiers = { path = "crates/pypi_modifiers" }
 
 [package]
 authors.workspace = true
@@ -214,7 +216,9 @@ rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [

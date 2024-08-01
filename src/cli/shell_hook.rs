@@ -11,12 +11,13 @@ use serde::Serialize;
 use serde_json;
 
 use crate::cli::cli_config::ProjectConfig;
+use crate::project::HasProjectRef;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
     environment::get_up_to_date_prefix,
     project::Environment,
-    HasFeatures, Project,
+    Project,
 };
 
 /// Print the pixi environment activation script.

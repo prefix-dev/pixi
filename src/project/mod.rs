@@ -1,8 +1,8 @@
-mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
 pub mod has_features;
+mod has_project_ref;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -19,7 +19,6 @@ use std::{
 };
 
 use async_once_cell::OnceCell as AsyncCell;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
@@ -42,6 +41,8 @@ use crate::{
 };
 use pixi_config::Config;
 use pixi_consts::consts;
+
+pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -778,7 +779,7 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: CondaDependencies) -> String {
+    fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")

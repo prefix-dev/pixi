@@ -8,8 +8,8 @@ use crate::lock_file::LockedPypiPackages;
 use crate::lock_file::{
     package_identifier, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
 };
-use crate::pypi_marker_env::determine_marker_environment;
-use crate::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 use distribution_types::{
     BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
