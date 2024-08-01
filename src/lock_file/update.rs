@@ -21,6 +21,8 @@ use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::pypi_tags::is_python_record;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
@@ -51,8 +53,6 @@ use crate::{
         Environment,
     },
     pypi_mapping::{self, Reporter},
-    pypi_marker_env::determine_marker_environment,
-    pypi_tags::is_python_record,
     Project,
 };
 

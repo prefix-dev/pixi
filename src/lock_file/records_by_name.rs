@@ -1,5 +1,5 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
-use crate::pypi_tags::is_python_record;
+use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
