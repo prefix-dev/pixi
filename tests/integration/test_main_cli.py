@@ -4,10 +4,12 @@ PIXI_VERSION = "0.26.1"
 
 
 def verify_cli_command(
-    command: str,
-    expected_exit_code: int | None = None,
-    stdout_contains: str | None = None,
-    stderr_contains: str | None = None,
+        command: str,
+        expected_exit_code: int | None = None,
+        stdout_contains: str | None = None,
+        stdout_excludes: str | None = None,
+        stderr_contains: str | None = None,
+        stderr_excludes: str | None = None,
 ):
     process = subprocess.Popen(
         command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -20,8 +22,12 @@ def verify_cli_command(
         ), f"Return code was {process.returncode}, stderr: {stderr}"
     if stdout_contains is not None:
         assert stdout_contains in stdout.strip(), f"Unexpected stdout: {stdout.strip()}"
+    if stdout_excludes is not None:
+        assert stdout_excludes not in stdout.strip(), f"Unexpected stdout: {stdout.strip()}"
     if stderr_contains is not None:
         assert stderr_contains in stderr.strip(), f"Unexpected stderr: {stderr.strip()}"
+    if stderr_excludes is not None:
+        assert stderr_excludes not in stderr.strip(), f"Unexpected stderr: {stderr.strip()}"
 
 
 def test_pixi():
@@ -46,6 +52,35 @@ def test_project_commands(tmp_path):
     verify_cli_command(
         f"pixi project --manifest-path {manifest_path} description get", 0, stdout_contains="blabla"
     )
+
+    # Environment commands
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} environment add test", 0)
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} environment list", 0, stdout_contains="test"
+    )
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} environment remove test", 0)
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} environment list", 0, stdout_excludes="test"
+    )
+
+    # Platform commands
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} platform add linux-64", 0)
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} platform list", 0, stdout_contains="linux-64"
+    )
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} platform remove linux-64", 0)
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} platform list", 0, stdout_excludes="linux-64"
+    )
+
+    # Version commands
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} version set 1.2.3", 0)
+    verify_cli_command(
+        f"pixi project --manifest-path {manifest_path} version get", 0, stdout_contains="1.2.3"
+    )
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} version major", 0, stderr_contains="2.2.3")
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} version minor", 0, stderr_contains="2.3.3")
+    verify_cli_command(f"pixi project --manifest-path {manifest_path} version patch", 0, stderr_contains="2.3.4")
 
 
 def test_global_install():
