@@ -27,11 +27,12 @@ use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+
 use crate::{
     project::{grouped_environment::GroupedEnvironment, has_features::HasFeatures, Environment},
-    pypi_marker_env::determine_marker_environment,
     utils::uv::{as_uv_req, AsPep508Error},
 };
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {

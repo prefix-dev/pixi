@@ -13,8 +13,6 @@ pub mod task;
 pub mod util;
 pub mod utils;
 
-mod pypi_marker_env;
-mod pypi_tags;
 mod uv_reporter;
 
 mod fancy_display;
