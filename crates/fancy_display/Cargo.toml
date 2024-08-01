@@ -1,9 +1,10 @@
 [package]
 authors.workspace = true
+description = "Easy conversion into a styled-object"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_consts"
+name = "fancy_display"
 readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
@@ -11,5 +12,3 @@ version = "0.1.0"
 
 [dependencies]
 console = { workspace = true }
-lazy_static = { workspace = true }
-url = { workspace = true }

@@ -15,7 +15,8 @@ use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
 
-use crate::{fancy_display::FancyDisplay, progress::await_in_progress, task::TaskName, Project};
+use crate::{progress::await_in_progress, task::TaskName, Project};
+use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 18;
 

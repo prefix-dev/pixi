@@ -1,6 +1,5 @@
 mod activation;
 pub(crate) mod channel;
-pub mod consts;
 mod dependencies;
 mod document;
 mod environment;
@@ -78,5 +77,33 @@ fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
     match platforms.is_empty() {
         true => vec![None],
         false => platforms.iter().map(|p| Some(*p)).collect_vec(),
+    }
+}
+
+use console::StyledObject;
+use fancy_display::FancyDisplay;
+use pixi_consts::consts;
+
+impl FancyDisplay for EnvironmentName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for &EnvironmentName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for TaskName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::TASK_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for FeatureName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::FEATURE_STYLE.apply_to(self.as_str())
     }
 }
