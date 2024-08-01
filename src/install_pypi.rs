@@ -38,10 +38,10 @@ use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    pypi_tags::{get_pypi_tags, is_python_record},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 use pixi_consts::consts;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 

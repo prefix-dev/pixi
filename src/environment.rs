@@ -15,6 +15,7 @@ use distribution_types::{InstalledDist, Name};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 
+use crate::project::HasProjectRef;
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::{

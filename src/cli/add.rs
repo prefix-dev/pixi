@@ -10,7 +10,7 @@ use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, SpecType};
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
@@ -397,7 +397,7 @@ fn update_pypi_specs_from_lock_file(
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
 
     // Determine the versions of the packages in the lock-file
-    for (name, _) in pypi_specs_to_add_constraints_for {
+    for (name, req) in pypi_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             pypi_records
                 .iter()
@@ -416,14 +416,12 @@ fn update_pypi_specs_from_lock_file(
             version_constraint.and_then(|spec| VersionSpecifiers::from_str(&spec.to_string()).ok());
         if let Some(version_spec) = version_spec {
             implicit_constraints.insert(name.as_source().to_string(), version_spec.to_string());
+            let req = Requirement {
+                version_or_url: Some(VersionSpecifier(version_spec)),
+                ..req
+            };
             project.manifest.add_pypi_dependency(
-                &Requirement {
-                    name: name.as_normalized().clone(),
-                    extras: vec![],
-                    version_or_url: Some(VersionSpecifier(version_spec)),
-                    marker: None,
-                    origin: None,
-                },
+                &req,
                 platforms,
                 feature_name,
                 Some(editable),
@@ -463,7 +461,7 @@ fn update_conda_specs_from_lock_file(
 
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
     let channel_config = project.channel_config();
-    for (name, (spec_type, _)) in conda_specs_to_add_constraints_for {
+    for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             conda_records.iter().filter_map(|record| {
                 if record.package_record.name == name {
@@ -477,14 +475,12 @@ fn update_conda_specs_from_lock_file(
         if let Some(version_constraint) = version_constraint {
             implicit_constraints
                 .insert(name.as_source().to_string(), version_constraint.to_string());
+            let spec = MatchSpec {
+                version: Some(version_constraint),
+                ..spec
+            };
             project.manifest.add_dependency(
-                &MatchSpec::from_nameless(
-                    NamelessMatchSpec {
-                        version: Some(version_constraint),
-                        ..NamelessMatchSpec::default()
-                    },
-                    Some(name),
-                ),
+                &spec,
                 spec_type,
                 platforms,
                 feature_name,
