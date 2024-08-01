@@ -8,8 +8,8 @@ use std::{
 
 use itertools::Either;
 use pixi_manifest::{
-    self as manifest, EnvironmentName, Feature, FeatureName, Manifest, SystemRequirements, Task,
-    TaskName,
+    self as manifest, EnvironmentName, Feature, FeatureName, HasManifestRef, Manifest,
+    SystemRequirements, Task, TaskName,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -280,11 +280,13 @@ impl<'p> HasProjectRef<'p> for Environment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for Environment<'p> {
+impl<'p> HasManifestRef<'p> for Environment<'p> {
     fn manifest(&self) -> &'p Manifest {
         &self.project().manifest
     }
+}
 
+impl<'p> HasFeatures<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let manifest = self.manifest();

@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use super::{has_features::HasFeatures, Environment, HasProjectRef, Project};
 use pixi_manifest as manifest;
-use pixi_manifest::{Manifest, SystemRequirements};
+use pixi_manifest::{HasManifestRef, Manifest, SystemRequirements};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -68,11 +68,13 @@ impl<'p> SolveGroup<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for SolveGroup<'p> {
+impl<'p> HasManifestRef<'p> for SolveGroup<'p> {
     fn manifest(&self) -> &'p Manifest {
         &self.project().manifest
     }
+}
 
+impl<'p> HasFeatures<'p> for SolveGroup<'p> {
     /// Returns all features that are part of the solve group.
     ///
     /// All features of all environments are combined and deduplicated.

@@ -4,7 +4,7 @@ use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use rattler_solve::ChannelPriority;
 
-use pixi_manifest::SpecType;
+use pixi_manifest::{HasManifestRef, SpecType};
 
 use pixi_manifest::{pypi::pypi_options::PypiOptions, Feature, SystemRequirements};
 use pixi_manifest::{CondaDependencies, PyPiDependencies};
@@ -16,10 +16,7 @@ pub struct ChannelPriorityCombinationError;
 
 /// A trait that implement various methods for collections that combine attributes of Features
 /// It is implemented by Environment, GroupedEnvironment and SolveGroup
-pub trait HasFeatures<'p> {
-    /// Returns access to the original manifest
-    fn manifest(&self) -> &'p pixi_manifest::Manifest;
-
+pub trait HasFeatures<'p>: HasManifestRef<'p> {
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p;
 
     /// Returns the channels associated with this collection.
