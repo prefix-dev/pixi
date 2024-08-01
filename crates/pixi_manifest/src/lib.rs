@@ -7,6 +7,8 @@ mod environment;
 mod environments;
 mod error;
 mod feature;
+mod features_ext;
+mod has_features_iter;
 mod has_manifest_ref;
 mod manifest;
 mod metadata;
@@ -44,6 +46,8 @@ pub use target::{Target, TargetSelector, Targets};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 
+pub use features_ext::FeaturesExt;
+pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
 
 /// Errors that can occur when getting a feature.

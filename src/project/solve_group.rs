@@ -2,9 +2,9 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 
-use super::{has_features::HasFeatures, Environment, HasProjectRef, Project};
+use super::{Environment, HasProjectRef, Project};
 use pixi_manifest as manifest;
-use pixi_manifest::{HasManifestRef, Manifest, SystemRequirements};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -74,7 +74,7 @@ impl<'p> HasManifestRef<'p> for SolveGroup<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for SolveGroup<'p> {
+impl<'p> HasFeaturesIter<'p> for SolveGroup<'p> {
     /// Returns all features that are part of the solve group.
     ///
     /// All features of all environments are combined and deduplicated.
@@ -98,7 +98,8 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::PackageName;
 
-    use crate::{project::has_features::HasFeatures, Project};
+    use crate::Project;
+    use pixi_manifest::FeaturesExt;
 
     #[test]
     fn test_solve_group() {

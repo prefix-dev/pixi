@@ -1,7 +1,6 @@
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
-use crate::project::has_features::HasFeatures;
 use crate::{
     install_pypi,
     lock_file::UpdateLockFileOptions,
@@ -16,7 +15,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 
 use crate::project::HasProjectRef;
-use pixi_manifest::{EnvironmentName, SystemRequirements};
+use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::{
     install::{PythonInfo, Transaction},
