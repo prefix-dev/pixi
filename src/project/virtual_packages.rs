@@ -3,7 +3,7 @@ use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_default_sys::{default_glibc_version, default_linux_version, default_mac_os_version};
+use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{

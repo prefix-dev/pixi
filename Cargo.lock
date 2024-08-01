@@ -3447,7 +3447,7 @@ dependencies = [
  "percent-encoding",
  "pixi_config",
  "pixi_consts",
- "pixi_default_sys",
+ "pixi_default_versions",
  "pixi_manifest",
  "pixi_pty",
  "platform-tags",
@@ -3537,7 +3537,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pixi_default_sys"
+name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
@@ -3793,7 +3793,7 @@ version = "0.1.0"
 dependencies = [
  "miette 7.2.0",
  "pep508_rs",
- "pixi_default_sys",
+ "pixi_default_versions",
  "pixi_manifest",
  "platform-tags",
  "rattler_conda_types",

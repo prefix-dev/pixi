@@ -12,7 +12,7 @@ version = "0.1.0"
 [dependencies]
 miette = { workspace = true }
 pep508_rs = { workspace = true }
-pixi_default_sys = { workspace = true }
+pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 platform-tags = { workspace = true }
 rattler_conda_types = { workspace = true }
