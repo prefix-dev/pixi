@@ -9,7 +9,7 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use super::util::IndicatifWriter;
+use crate::utils::indicatif::IndicatifWriter;
 use crate::{progress, progress::global_multi_progress};
 
 pub mod add;

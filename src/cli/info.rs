@@ -7,6 +7,7 @@ use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;

@@ -10,7 +10,6 @@ mod progress;
 mod project;
 mod prompt;
 pub mod task;
-pub mod util;
 pub mod utils;
 
 mod uv_reporter;
@@ -21,4 +20,4 @@ mod repodata;
 
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
-pub use project::{has_features::HasFeatures, DependencyType, Project};
+pub use project::{DependencyType, Project};

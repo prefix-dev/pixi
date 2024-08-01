@@ -2,7 +2,7 @@ mod common;
 
 use std::str::FromStr;
 
-use pixi::HasFeatures;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Version};
 
 use crate::common::PixiControl;

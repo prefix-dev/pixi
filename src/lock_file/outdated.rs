@@ -1,10 +1,10 @@
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::satisfiability::EnvironmentUnsat;
-use crate::project::has_features::HasFeatures;
 use crate::{project::Environment, project::SolveGroup, Project};
 use itertools::Itertools;
 use pixi_consts::consts;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 use std::collections::{HashMap, HashSet};

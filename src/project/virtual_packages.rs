@@ -1,4 +1,3 @@
-use super::has_features::HasFeatures;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;
@@ -11,6 +10,8 @@ use rattler_virtual_packages::{
 };
 use std::collections::HashMap;
 use thiserror::Error;
+
+use pixi_manifest::FeaturesExt;
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.

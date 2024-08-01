@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UpdateLockFileOptions;
-use crate::project::has_features::HasFeatures;
 use crate::Project;
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 
 /// Show a tree of project dependencies
