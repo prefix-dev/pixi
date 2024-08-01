@@ -161,3 +161,23 @@ def test_simple_project_setup(tmp_path):
         0,
         stderr_contains=["osx-arm64", "test"],
     )
+
+    # Remove package
+    verify_cli_command(
+        f"pixi remove --manifest-path {manifest_path} _r-mutex", 0, stderr_contains="Removed"
+    )
+    verify_cli_command(
+        f"pixi remove --manifest-path {manifest_path} --feature test _r-mutex",
+        0,
+        stderr_contains=["test", "Removed"],
+    )
+    verify_cli_command(
+        f"pixi remove --manifest-path {manifest_path} --platform linux-64 conda-forge::_r-mutex",
+        0,
+        stderr_contains=["linux-64", "conda-forge", "Removed"],
+    )
+    verify_cli_command(
+        f"pixi remove --manifest-path {manifest_path} -f test -p osx-arm64 _r-mutex",
+        0,
+        stderr_contains=["osx-arm64", "test", "Removed"],
+    )

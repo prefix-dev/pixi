@@ -180,7 +180,7 @@ impl DependencyConfig {
 
         // Print something if we've modified for a feature
         if let Some(feature) = &self.feature {
-            eprintln!("{operation} in feature: {}", console::style(feature).bold())
+            eprintln!("{operation} these only for feature(s): {}", console::style(feature).bold())
         }
     }
 }
