@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use pixi::pypi_mapping::{self, PurlSource};
+use pypi_mapping::{self, PurlSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
