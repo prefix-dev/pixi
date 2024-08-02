@@ -1,0 +1,29 @@
+[package]
+authors.workspace = true
+description = "This crates maps PyPI packages to their corresponding Conda packages, using the parselmouth prefix project"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pypi_mapping"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+async-once-cell = { workspace = true }
+futures = { workspace = true }
+http-cache-reqwest = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+pep440_rs = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_config = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }

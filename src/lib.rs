@@ -13,7 +13,6 @@ pub mod utils;
 
 mod uv_reporter;
 
-pub mod pypi_mapping;
 mod repodata;
 
 pub use lock_file::load_lock_file;
