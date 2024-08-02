@@ -94,7 +94,7 @@ pixi add --feature featurex numpy
 ```
 
 !!! tip
-    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](reference/pixi_configuration#pinning-strategy).
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
     ```
     pixi config set pinning-strategy no-pin --global
     ```
