@@ -216,7 +216,7 @@ rattler_repodata_gateway = { workspace = true, features = [
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
-pixi_config = { workspace = true }
+pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
