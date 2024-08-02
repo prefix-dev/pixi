@@ -1,4 +1,4 @@
-use pixi_config::Config;
+use crate::Config;
 use rattler_repodata_gateway::{ChannelConfig, SourceConfig};
 
 /// Converts a [`Config`] into a rattler [`ChannelConfig`]

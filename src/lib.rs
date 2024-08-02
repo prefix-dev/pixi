@@ -6,7 +6,6 @@ mod install_pypi;
 mod install_wheel;
 mod lock_file;
 mod prefix;
-mod progress;
 mod project;
 mod prompt;
 pub mod task;
@@ -14,7 +13,6 @@ pub mod utils;
 
 mod uv_reporter;
 
-pub mod pypi_mapping;
 mod repodata;
 
 pub use lock_file::load_lock_file;

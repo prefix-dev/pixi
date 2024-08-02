@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use once_cell::sync::Lazy;
 use std::borrow::Cow;

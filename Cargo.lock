@@ -3457,9 +3457,11 @@ dependencies = [
  "pixi_consts",
  "pixi_default_versions",
  "pixi_manifest",
+ "pixi_progress",
  "pixi_pty",
  "platform-tags",
  "pypi-types",
+ "pypi_mapping",
  "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
@@ -3525,6 +3527,7 @@ dependencies = [
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
+ "rattler_repodata_gateway",
  "rstest",
  "serde",
  "serde_ignored",
@@ -3584,6 +3587,16 @@ dependencies = [
  "toml_edit 0.22.13",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_progress"
+version = "0.1.0"
+dependencies = [
+ "console",
+ "indicatif",
+ "once_cell",
+ "tokio",
 ]
 
 [[package]]
@@ -3795,6 +3808,29 @@ dependencies = [
  "url",
  "uv-git",
  "uv-normalize",
+]
+
+[[package]]
+name = "pypi_mapping"
+version = "0.1.0"
+dependencies = [
+ "async-once-cell",
+ "futures",
+ "http-cache-reqwest",
+ "itertools 0.12.1",
+ "miette 7.2.0",
+ "pep440_rs",
+ "pep508_rs",
+ "pixi_config",
+ "rattler_conda_types",
+ "rattler_digest",
+ "reqwest 0.12.4",
+ "reqwest-middleware",
+ "reqwest-retry",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]
