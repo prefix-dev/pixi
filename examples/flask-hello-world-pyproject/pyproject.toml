@@ -10,8 +10,8 @@ version = "0.1.0"
 test = ["pytest"]
 
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools", "wheel"]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
