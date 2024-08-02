@@ -51,11 +51,11 @@ use crate::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         Environment,
     },
-    pypi_mapping::{self, Reporter},
     Project,
 };
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
+use pypi_mapping::{self, Reporter};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.

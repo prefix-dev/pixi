@@ -35,11 +35,11 @@ use xxhash_rust::xxh3::xxh3_64;
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     project::grouped_environment::GroupedEnvironment,
-    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
     utils::reqwest::build_reqwest_clients,
 };
 use pixi_config::Config;
 use pixi_consts::consts;
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 
 pub use has_project_ref::HasProjectRef;
 
