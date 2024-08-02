@@ -25,12 +25,9 @@ use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
     load_package_records, BinDir, BinEnvDir,
 };
-use crate::{
-    cli::has_specs::HasSpecs,
-    prefix::Prefix,
-    progress::{await_in_progress, global_multi_progress},
-};
+use crate::{cli::has_specs::HasSpecs, prefix::Prefix};
 use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
