@@ -64,12 +64,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        prefix_update_config.lock_file_usage(),
-        prefix_update_config.no_install(),
-    )
-    .await?;
+    if !prefix_update_config.no_lockfile_update {
+        get_up_to_date_prefix(
+            &project.default_environment(),
+            prefix_update_config.lock_file_usage(),
+            prefix_update_config.no_install,
+        )
+        .await?;
+    }
 
     dependency_config.display_success("Removed", Default::default());
 
