@@ -18,13 +18,11 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{
-    prefix::Prefix,
-    utils::{reqwest::build_reqwest_clients, PrefixGuard},
-};
+use crate::prefix::Prefix;
 use pixi_config::gateway::from_pixi_config;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug, Default)]

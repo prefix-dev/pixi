@@ -15,11 +15,12 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::utils::default_channel_config;
-use crate::{repodata::fetch_sparse_repodata, utils::reqwest::build_reqwest_clients, Project};
+use crate::{repodata::fetch_sparse_repodata, Project};
 use pixi_config::Config;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
+use pixi_utils::default_channel_config;
+use pixi_utils::reqwest::build_reqwest_clients;
 
 /// Search a conda package
 ///

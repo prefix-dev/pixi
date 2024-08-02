@@ -19,7 +19,7 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+pub fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -38,7 +38,7 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
     Ok(AuthenticationMiddleware::default())
 }
 
-fn mirror_middleware(config: &Config) -> MirrorMiddleware {
+pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
     tracing::info!("Using mirrors: {:?}", config.mirror_map());
 
@@ -70,11 +70,11 @@ fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-fn oci_middleware() -> OciMiddleware {
+pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
-pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
+pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
     static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
     // If we do not have a config, we will just load the global default.

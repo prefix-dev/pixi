@@ -11,7 +11,7 @@ use url::Url;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
 
-use crate::utils::uv::to_git_reference;
+use super::to_git_reference;
 
 /// Create a url that uv can use to install a version
 fn create_uv_url(

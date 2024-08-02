@@ -38,9 +38,9 @@ use uv_configuration::{
 };
 use uv_git::GitResolver;
 
-use crate::utils::uv::{as_uv_req, pypi_options_to_index_locations};
 use pixi_manifest::pypi::pypi_options::PypiOptions;
 use pixi_manifest::{PyPiRequirement, SystemRequirements};
+use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;

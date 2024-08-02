@@ -33,7 +33,6 @@ use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
-use crate::utils::uv::locked_indexes_to_index_locations;
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
     lock_file::UvResolutionContext,
@@ -41,6 +40,7 @@ use crate::{
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 use pixi_consts::consts;
+use pixi_uv_conversions::locked_indexes_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
