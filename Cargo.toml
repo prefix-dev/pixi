@@ -110,6 +110,7 @@ winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "0.6.6", default-features = false }
 
+fancy_display = { path = "crates/fancy_display" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
@@ -171,6 +172,7 @@ dirs = { workspace = true }
 distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
+fancy_display = { workspace = true }
 fd-lock = { workspace = true }
 flate2 = { workspace = true }
 fs_extra = { workspace = true }

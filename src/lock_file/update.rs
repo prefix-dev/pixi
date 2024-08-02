@@ -40,7 +40,6 @@ use crate::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
-    fancy_display::FancyDisplay,
     load_lock_file,
     lock_file::{
         self, update, OutdatedEnvironments, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
@@ -55,6 +54,7 @@ use crate::{
     pypi_mapping::{self, Reporter},
     Project,
 };
+use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
 impl Project {

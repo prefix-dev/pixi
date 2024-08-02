@@ -1,7 +1,7 @@
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
-use crate::fancy_display::FancyDisplay;
 use crate::lock_file::satisfiability::EnvironmentUnsat;
 use crate::{project::Environment, project::SolveGroup, Project};
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;

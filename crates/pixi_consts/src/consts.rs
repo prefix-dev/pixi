@@ -3,7 +3,9 @@ use lazy_static::lazy_static;
 use std::fmt::{Display, Formatter};
 use url::Url;
 
-pub use pixi_manifest::consts::*;
+pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
+pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
+pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";

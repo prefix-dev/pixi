@@ -1,10 +1,10 @@
-use crate::fancy_display::FancyDisplay;
 use crate::project::HasProjectRef;
 use crate::{
     prefix::Prefix,
     project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
     Project,
 };
+use fancy_display::FancyDisplay;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
