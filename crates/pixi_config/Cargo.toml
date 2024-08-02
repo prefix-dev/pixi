@@ -9,6 +9,9 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
+[features]
+gateway-conversion = ["dep:rattler_repodata_gateway"]
+
 [dependencies]
 clap = { workspace = true, features = ["std", "derive", "env"] }
 console = { workspace = true }
@@ -18,6 +21,7 @@ miette = { workspace = true }
 pixi_consts = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_repodata_gateway = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }

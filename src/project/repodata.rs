@@ -1,6 +1,6 @@
 use crate::project::Project;
 
-use crate::utils::config::from_pixi_config;
+use pixi_config::gateway::from_pixi_config;
 use rattler_repodata_gateway::Gateway;
 use std::path::PathBuf;
 
