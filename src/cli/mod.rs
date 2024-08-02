@@ -10,7 +10,8 @@ use tracing_subscriber::{
 };
 
 use crate::utils::indicatif::IndicatifWriter;
-use crate::{progress, progress::global_multi_progress};
+use pixi_progress;
+use pixi_progress::global_multi_progress;
 
 pub mod add;
 pub mod clean;
@@ -239,7 +240,7 @@ pub async fn execute() -> miette::Result<()> {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
         .with_target(pixi_level >= LevelFilter::INFO)
-        .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
+        .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();
 
     cfg_if::cfg_if! {

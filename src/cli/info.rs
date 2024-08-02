@@ -8,6 +8,7 @@ use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
+use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
@@ -17,7 +18,7 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 
-use crate::{progress::await_in_progress, task::TaskName, Project};
+use crate::{task::TaskName, Project};
 use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 18;

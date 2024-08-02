@@ -7,10 +7,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::cli::cli_config::ProjectConfig;
-use crate::progress::{global_multi_progress, long_running_progress_style};
 use clap::Parser;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
+use pixi_progress::{global_multi_progress, long_running_progress_style};
 use std::str::FromStr;
 
 #[derive(Parser, Debug)]

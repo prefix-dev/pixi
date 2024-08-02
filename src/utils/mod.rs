@@ -1,5 +1,4 @@
 pub mod conda_environment_file;
-pub(crate) mod config;
 mod defaults;
 pub mod indicatif;
 mod prefix_guard;
