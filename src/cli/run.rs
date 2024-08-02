@@ -12,7 +12,6 @@ use pixi_config::ConfigCli;
 use crate::activation::CurrentEnvVarBehavior;
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::verify_prefix_location_unchanged;
-use crate::fancy_display::FancyDisplay;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -24,6 +23,7 @@ use crate::task::{
     SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
 use crate::Project;
+use fancy_display::FancyDisplay;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;

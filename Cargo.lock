@@ -1403,6 +1403,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy_display"
+version = "0.1.0"
+dependencies = [
+ "console",
+]
+
+[[package]]
 name = "fastrand"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3421,6 +3428,7 @@ dependencies = [
  "distribution-filename",
  "distribution-types",
  "dunce",
+ "fancy_display",
  "fd-lock",
  "flate2",
  "fs_extra",
@@ -3532,7 +3540,6 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
- "pixi_manifest",
  "url",
 ]
 
@@ -3548,7 +3555,9 @@ name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "console",
  "dunce",
+ "fancy_display",
  "indexmap 2.2.6",
  "insta",
  "itertools 0.12.1",
@@ -3556,6 +3565,7 @@ dependencies = [
  "miette 7.2.0",
  "pep440_rs",
  "pep508_rs",
+ "pixi_consts",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",

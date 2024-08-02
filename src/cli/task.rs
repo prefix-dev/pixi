@@ -1,9 +1,9 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::fancy_display::FancyDisplay;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::Project;
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_manifest::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};

@@ -1,8 +1,8 @@
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::get_up_to_date_prefix;
-use crate::fancy_display::FancyDisplay;
 use crate::Project;
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 
