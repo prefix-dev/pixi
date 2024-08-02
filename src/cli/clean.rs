@@ -6,6 +6,7 @@ use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::cli::cli_config::ProjectConfig;
 use clap::Parser;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
@@ -24,11 +25,11 @@ pub enum Command {
 /// Use the `cache` subcommand to clean the cache.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
     #[command(subcommand)]
     command: Option<Command>,
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
 
     /// The environment directory to remove.
     #[arg(long, short, conflicts_with = "command")]
@@ -59,7 +60,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::Cache(args)) => clean_cache(args).await?,
         None => {
-            let project = Project::load_or_else_discover(args.manifest_path.as_deref())?; // Extract the passed in environment name.
+            let project =
+                Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
 
             let explicit_environment = args
                 .environment
@@ -99,7 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 remove_folder_with_progress(project.task_cache_folder(), false).await?;
             }
 
-            Project::warn_on_discovered_from_env(args.manifest_path.as_deref())
+            Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
         }
     }
     Ok(())

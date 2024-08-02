@@ -23,6 +23,7 @@
 //! }
 //! ```
 
+use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use std::{
     future::{Future, IntoFuture},
     path::{Path, PathBuf},
@@ -32,7 +33,7 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
-    cli::{add, add::DependencyConfig, init, install, project, remove, task, update},
+    cli::{add, cli_config::DependencyConfig, init, install, project, remove, task, update},
     task::TaskName,
     DependencyType,
 };
@@ -100,23 +101,39 @@ impl IntoFuture for InitBuilder {
         .boxed_local()
     }
 }
+/// A trait used by AddBuilder and RemoveBuilder to set their inner
+/// DependencyConfig
+pub trait HasPrefixUpdateConfig: Sized {
+    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig;
+    /// Set whether to also install the environment. By default, the environment
+    /// is NOT installed to reduce test times.
+    fn with_install(mut self, install: bool) -> Self {
+        self.prefix_update_config().no_install = !install;
+        self
+    }
+
+    /// Skip updating lockfile, this will only check if it can add a
+    /// dependencies. If it can add it will only add it to the manifest.
+    /// Install will be skipped by default.
+    fn without_lockfile_update(mut self) -> Self {
+        self.prefix_update_config().no_lockfile_update = true;
+        self
+    }
+}
 
 /// A trait used by AddBuilder and RemoveBuilder to set their inner
 /// DependencyConfig
 pub trait HasDependencyConfig: Sized {
     fn dependency_config(&mut self) -> &mut DependencyConfig;
 
-    fn dependency_config_with_specs(specs: Vec<&str>, manifest_path: PathBuf) -> DependencyConfig {
+    fn dependency_config_with_specs(specs: Vec<&str>) -> DependencyConfig {
         DependencyConfig {
             specs: specs.iter().map(|s| s.to_string()).collect(),
-            manifest_path: Some(manifest_path),
             host: false,
             build: false,
             pypi: false,
             platform: Default::default(),
             feature: None,
-            no_install: true,
-            no_lockfile_update: false,
         }
     }
 
@@ -151,21 +168,6 @@ pub trait HasDependencyConfig: Sized {
         self
     }
 
-    /// Set whether to also install the environment. By default, the environment
-    /// is NOT installed to reduce test times.
-    fn with_install(mut self, install: bool) -> Self {
-        self.dependency_config().no_install = !install;
-        self
-    }
-
-    /// Skip updating lockfile, this will only check if it can add a
-    /// dependencies. If it can add it will only add it to the manifest.
-    /// Install will be skipped by default.
-    fn without_lockfile_update(mut self) -> Self {
-        self.dependency_config().no_lockfile_update = true;
-        self
-    }
-
     fn set_platforms(mut self, platforms: &[Platform]) -> Self {
         self.dependency_config().platform.extend(platforms.iter());
         self
@@ -196,6 +198,12 @@ impl HasDependencyConfig for AddBuilder {
     }
 }
 
+impl HasPrefixUpdateConfig for AddBuilder {
+    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
+        &mut self.args.prefix_update_config
+    }
+}
+
 impl IntoFuture for AddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
@@ -214,6 +222,12 @@ pub struct RemoveBuilder {
 impl HasDependencyConfig for RemoveBuilder {
     fn dependency_config(&mut self) -> &mut DependencyConfig {
         &mut self.args.dependency_config
+    }
+}
+
+impl HasPrefixUpdateConfig for RemoveBuilder {
+    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
+        &mut self.args.prefix_update_config
     }
 }
 
@@ -259,7 +273,9 @@ impl TaskAddBuilder {
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+            },
         })
     }
 }
@@ -280,7 +296,9 @@ impl TaskAliasBuilder {
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+            },
         })
     }
 }
