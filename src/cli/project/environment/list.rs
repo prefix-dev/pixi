@@ -1,5 +1,5 @@
-use crate::fancy_display::FancyDisplay;
 use crate::Project;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 
 pub async fn execute(project: Project) -> miette::Result<()> {

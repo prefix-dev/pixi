@@ -10,12 +10,10 @@ mod progress;
 mod project;
 mod prompt;
 pub mod task;
-pub mod util;
 pub mod utils;
 
 mod uv_reporter;
 
-mod fancy_display;
 pub mod pypi_mapping;
 mod repodata;
 

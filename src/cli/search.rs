@@ -15,8 +15,9 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::utils::default_channel_config;
 use crate::{
-    progress::await_in_progress, repodata::fetch_sparse_repodata, util::default_channel_config,
+    progress::await_in_progress, repodata::fetch_sparse_repodata,
     utils::reqwest::build_reqwest_clients, Project,
 };
 use pixi_config::Config;
