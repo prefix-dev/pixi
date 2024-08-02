@@ -251,7 +251,7 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
 - run: | # (1)!
     import ruamel.yaml
     # ...
-  shell: pixi exec --spec python --spec ruamel.yaml -- python {0}
+  shell: pixi exec --spec python=3.11.* --spec ruamel.yaml -- python {0}
 ```
 
 1. everything here will be run inside of the temporary pixi environment
