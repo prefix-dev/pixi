@@ -54,8 +54,8 @@ use crate::{
 };
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
-use pypi_mapping::{self, Reporter};
 use pixi_progress::global_multi_progress;
+use pypi_mapping::{self, Reporter};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
