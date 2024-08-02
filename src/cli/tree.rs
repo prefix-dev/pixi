@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
 use clap::Parser;
 use console::Color;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;

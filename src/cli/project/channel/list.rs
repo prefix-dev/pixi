@@ -1,6 +1,7 @@
 use clap::Parser;
 
-use crate::{fancy_display::FancyDisplay, Project};
+use crate::Project;
+use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
 #[derive(Parser, Debug, Default)]

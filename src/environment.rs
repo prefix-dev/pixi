@@ -1,4 +1,3 @@
-use crate::fancy_display::FancyDisplay;
 use crate::lock_file::UvResolutionContext;
 use crate::progress::{await_in_progress, global_multi_progress};
 use crate::{
@@ -11,6 +10,7 @@ use crate::{
 };
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
+use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 

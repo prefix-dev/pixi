@@ -14,7 +14,6 @@ pub mod utils;
 
 mod uv_reporter;
 
-mod fancy_display;
 pub mod pypi_mapping;
 mod repodata;
 
