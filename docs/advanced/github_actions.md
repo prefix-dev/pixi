@@ -235,6 +235,29 @@ If you want to use PowerShell, you need to specify `-Command` as well.
     There are some custom shells provided by GitHub that have slightly different behavior, see [`jobs.<job_id>.steps[*].shell`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell) in the documentation.
     See the [official documentation](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#custom-shell) and [ADR 0277](https://github.com/actions/runner/blob/main/docs/adrs/0277-run-action-shell-options.md) for more information about how the `shell:` input works in GitHub Actions.
 
+#### One-off shell wrapper using `pixi exec`
+
+With `pixi exec`, you can also run a one-off command inside a temporary pixi environment.
+
+```yaml
+- run: | # (1)!
+    zstd --version
+  shell: pixi exec --spec zstd -- bash -e {0}
+```
+
+1. everything here will be run inside of the temporary pixi environment
+
+```yaml
+- run: | # (1)!
+    import ruamel.yaml
+    # ...
+  shell: pixi exec --spec python=3.11.* --spec ruamel.yaml -- python {0}
+```
+
+1. everything here will be run inside of the temporary pixi environment
+
+See [here](../reference/cli.md#exec) for more information about `pixi exec`.
+
 ### Environment activation
 
 Instead of using a custom shell wrapper, you can also make all pixi-installed binaries available to subsequent steps by "activating" the installed environment in the currently running job.

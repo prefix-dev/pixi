@@ -1,10 +1,8 @@
 use crate::lock_file::UvResolutionContext;
-use crate::progress::{await_in_progress, global_multi_progress};
 use crate::{
     install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
-    progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
     Project,
 };
@@ -13,6 +11,7 @@ use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
+use pixi_progress::{await_in_progress, global_multi_progress};
 
 use crate::project::HasProjectRef;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
@@ -342,7 +341,7 @@ pub async fn update_prefix_pypi(
     };
 
     // Install and/or remove python packages
-    progress::await_in_progress(
+    await_in_progress(
         format!(
             "updating pypi packages in '{}'",
             environment_name.fancy_display()
@@ -481,7 +480,7 @@ pub async fn update_prefix_conda(
     progress_bar_prefix: &str,
 ) -> miette::Result<PythonStatus> {
     // Execute the operations that are returned by the solver.
-    let result = progress::await_in_progress(
+    let result = await_in_progress(
         format!("{progress_bar_prefix}{progress_bar_message}",),
         |pb| async {
             Installer::new()

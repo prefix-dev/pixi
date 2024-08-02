@@ -8,12 +8,12 @@ use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_config::ConfigCli;
+use pixi_progress::await_in_progress;
 
 use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
-use crate::progress::await_in_progress;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::{Environment, HasProjectRef};

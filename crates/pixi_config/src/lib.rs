@@ -18,6 +18,9 @@ use rattler_conda_types::{
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
+#[cfg(feature = "rattler_repodata_gateway")]
+pub mod gateway;
+
 /// TODO: maybe remove this duplicate from `src/util.rs` at some point
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(

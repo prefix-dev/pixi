@@ -3457,6 +3457,7 @@ dependencies = [
  "pixi_consts",
  "pixi_default_versions",
  "pixi_manifest",
+ "pixi_progress",
  "pixi_pty",
  "platform-tags",
  "pypi-types",
@@ -3526,6 +3527,7 @@ dependencies = [
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
+ "rattler_repodata_gateway",
  "rstest",
  "serde",
  "serde_ignored",
@@ -3585,6 +3587,16 @@ dependencies = [
  "toml_edit 0.22.13",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_progress"
+version = "0.1.0"
+dependencies = [
+ "console",
+ "indicatif",
+ "once_cell",
+ "tokio",
 ]
 
 [[package]]
