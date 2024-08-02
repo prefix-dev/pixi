@@ -9,9 +9,6 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
-[features]
-gateway-conversion = ["dep:rattler_repodata_gateway"]
-
 [dependencies]
 clap = { workspace = true, features = ["std", "derive", "env"] }
 console = { workspace = true }

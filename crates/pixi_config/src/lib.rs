@@ -18,7 +18,7 @@ use rattler_conda_types::{
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-#[cfg(feature = "gateway-conversion")]
+#[cfg(feature = "rattler_repodata_gateway")]
 pub mod gateway;
 
 /// TODO: maybe remove this duplicate from `src/util.rs` at some point
