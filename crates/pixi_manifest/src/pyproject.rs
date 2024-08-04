@@ -45,28 +45,6 @@ impl std::ops::Deref for PyProjectManifest {
 }
 
 impl PyProjectManifest {
-    /// Parses a toml string into a PyProjectManifest,
-    /// throwing an error if the `[tool.pixi]` table
-    /// and project name are undefined
-    pub fn from_pixi_pyproject_toml_str(source: &str) -> Result<Self, TomlError> {
-        let manifest = Self::from_toml_str(source)?;
-
-        // Make sure the `[tool.pixi]` table exist
-        if !manifest.is_pixi() {
-            return Err(TomlError::NoPixiTable);
-        }
-
-        // Make sure a 'name' is defined
-        if manifest.name().is_none() {
-            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["tool"]["pixi"]
-                ["project"]
-                .span();
-            return Err(TomlError::NoProjectName(span));
-        }
-
-        Ok(manifest)
-    }
-
     /// Parses a toml string into a PyProjectManifest
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
         toml_edit::de::from_str(source).map_err(TomlError::from)
@@ -76,6 +54,24 @@ impl PyProjectManifest {
     pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
         let source = fs::read_to_string(path).into_diagnostic()?;
         Self::from_toml_str(&source).into_diagnostic()
+    }
+
+    /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
+    /// and project name is defined
+    pub fn ensure_pixi(self, source: &str) -> Result<Self, TomlError> {
+        // Make sure the `[tool.pixi]` table exist
+        if !self.is_pixi() {
+            return Err(TomlError::NoPixiTable);
+        }
+
+        // Make sure a 'name' is defined
+        if self.name().is_none() {
+            let document = source.parse::<DocumentMut>().map_err(TomlError::from)?;
+            let span = document["tool"]["pixi"]["project"].span();
+            return Err(TomlError::NoProjectName(span));
+        }
+
+        Ok(self)
     }
 
     fn tool(&self) -> Option<&Tool> {

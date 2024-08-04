@@ -30,9 +30,9 @@ pub enum RequirementConversionError {
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum TomlError {
-    #[error("{0}")]
+    #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("Missing table `[tool.pixi.project]`")]
+    #[error("Missing table `[tool.pixi]`")]
     NoPixiTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
@@ -68,12 +68,10 @@ impl TomlError {
             _ => None,
         }
     }
-    fn message(&self) -> &str {
+    fn message(&self) -> String {
         match self {
-            TomlError::Error(e) => e.message(),
-            TomlError::NoPixiTable => "Missing table `[tool.pixi.project]`",
-            TomlError::NoProjectName(_) => "Missing field `name`",
-            _ => "",
+            TomlError::Error(e) => e.message().to_owned(),
+            _ => self.to_string(),
         }
     }
 

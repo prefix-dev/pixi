@@ -92,7 +92,9 @@ impl Manifest {
         let (parsed, file_name) = match manifest_kind {
             ManifestKind::Pixi => (ParsedManifest::from_toml_str(&contents), "pixi.toml"),
             ManifestKind::Pyproject => (
-                PyProjectManifest::from_pixi_pyproject_toml_str(&contents).map(|x| x.into()),
+                PyProjectManifest::from_toml_str(&contents)
+                    .and_then(|m| m.ensure_pixi(&contents))
+                    .map(|x| x.into()),
                 "pyproject.toml",
             ),
         };
