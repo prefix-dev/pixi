@@ -33,7 +33,7 @@ pub enum TomlError {
     #[error("{0}")]
     Error(#[from] toml_edit::TomlError),
     #[error("Missing table `[tool.pixi.project]`")]
-    NoPixiProjectTable,
+    NoPixiTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
@@ -63,7 +63,7 @@ impl TomlError {
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             TomlError::Error(e) => e.span(),
-            TomlError::NoPixiProjectTable => Some(0..1),
+            TomlError::NoPixiTable => Some(0..1),
             TomlError::NoProjectName(span) => span.clone(),
             _ => None,
         }
@@ -71,7 +71,7 @@ impl TomlError {
     fn message(&self) -> &str {
         match self {
             TomlError::Error(e) => e.message(),
-            TomlError::NoPixiProjectTable => "Missing table `[tool.pixi.project]`",
+            TomlError::NoPixiTable => "Missing table `[tool.pixi.project]`",
             TomlError::NoProjectName(_) => "Missing field `name`",
             _ => "",
         }

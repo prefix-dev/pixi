@@ -916,11 +916,9 @@ fn is_dynamic(path: &Path) -> bool {
         return true;
     };
     // // If `[project]` is not present, we assume it's dynamic.
-    let Some(project) = &pyproject_toml.project else {
+    let Some(project) = pyproject_toml.project() else {
         // ...unless it appears to be a Poetry project.
-        return pyproject_toml
-            .tool
-            .map_or(true, |tool| tool.poetry.is_none());
+        return pyproject_toml.poetry().is_none();
     };
     // `[project.dynamic]` must be present and non-empty.
     project
