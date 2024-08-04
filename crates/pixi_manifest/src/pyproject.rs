@@ -1,10 +1,13 @@
 use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
+use indexmap::IndexMap;
 use miette::{IntoDiagnostic, Report};
 use pep440_rs::VersionSpecifiers;
-use pyproject_toml::{self, BuildSystem, Project};
+use pep508_rs::Requirement;
+use pyproject_toml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
+use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
@@ -16,19 +19,17 @@ use crate::FeatureName;
 pub struct PyProjectManifest {
     #[serde(flatten)]
     inner: pyproject_toml::PyProjectToml,
-    tool: Tool,
+    pub tool: Option<Tool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
     pub pixi: Option<ParsedManifest>,
-    #[allow(dead_code)]
     pub poetry: Option<ToolPoetry>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ToolPoetry {
-    #[allow(dead_code)]
     pub name: Option<String>,
 }
 
@@ -41,19 +42,114 @@ impl std::ops::Deref for PyProjectManifest {
 }
 
 impl PyProjectManifest {
-    /// Parses a toml string into a pyproject manifest.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        let manifest: PyProjectManifest =
-            toml_edit::de::from_str(source).map_err(TomlError::from)?;
+    /// Parses a toml string into a PyProjectManifest,
+    /// throwing an error if the `[tool.pixi.project]` table
+    /// and project name are defined
+    pub fn from_pixi_pyproject_toml_str(source: &str) -> Result<Self, TomlError> {
+        let manifest = Self::from_toml_str(source)?;
 
-        // Make sure [project] exists in pyproject.toml,
-        // This will ensure project.name is defined
-        // TODO: do we want to Err if tool.pixi.name is defined?
-        if manifest.project.is_none() {
-            return Err(TomlError::NoProjectTable);
+        // Make sure the `[tool.pixi.project]` table exist
+        if !manifest.is_pixi() {
+            return Err(TomlError::NoPixiProjectTable);
+        }
+
+        // Make sure a 'name' is defined
+        if manifest.name().is_none() {
+            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["tool"]["pixi"]
+                ["project"]
+                .span();
+            return Err(TomlError::NoProjectName(span));
         }
 
         Ok(manifest)
+    }
+
+    /// Parses a toml string into a PyProjectManifest
+    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        toml_edit::de::from_str(source).map_err(TomlError::from)
+    }
+
+    /// Parses a `pyproject.toml` file into a PyProjectManifest
+    pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
+        let source = fs::read_to_string(path).into_diagnostic()?;
+        Self::from_toml_str(&source).into_diagnostic()
+    }
+
+    pub fn tool(&self) -> Option<&Tool> {
+        self.tool.as_ref()
+    }
+
+    /// Checks whether a `pyproject.toml` is valid for use with pixi by
+    /// checking it contains a `[tool.pixi]` table.
+    pub fn is_pixi(&self) -> bool {
+        self.tool().is_some_and(|t| t.pixi.is_some())
+    }
+
+    /// Returns the project name from, in order of priority
+    ///  - the `[tool.pixi.project]` table
+    ///  - the `[project]` table
+    ///  - the `[tool.poetry]` table
+    pub fn name(&self) -> Option<String> {
+        if let Some(pixi_name) = self
+            .tool()
+            .and_then(|t| t.pixi.as_ref())
+            .and_then(|p| p.project.name.as_ref())
+        {
+            return Some(pixi_name.clone());
+        }
+        if let Some(project) = &self.project {
+            return Some(project.name.clone());
+        }
+        if let Some(poetry_name) = self
+            .tool()
+            .and_then(|t| t.poetry.as_ref())
+            .and_then(|p| p.name.as_ref())
+        {
+            return Some(poetry_name.clone());
+        }
+        None
+    }
+
+    /// Returns the project name as PEP508 name
+    pub fn package_name(&self) -> Option<pep508_rs::PackageName> {
+        self.name()
+            .and_then(|n| pep508_rs::PackageName::new(n).ok())
+    }
+
+    /// Returns optional dependencies from the `[project.optional-dependencies]` table
+    pub fn optional_dependencies(&self) -> Option<IndexMap<String, Vec<Requirement>>> {
+        self.project
+            .as_ref()
+            .and_then(|p| p.optional_dependencies.clone())
+    }
+
+    /// Builds a list of pixi environments from pyproject groups of extra
+    /// dependencies:
+    ///  - one environment is created per group of extra, with the same name as
+    ///    the group of extra
+    ///  - each environment includes the feature of the same name as the group
+    ///    of extra
+    ///  - it will also include other features inferred from any self references
+    ///    to other groups of extras
+    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
+        let mut environments = HashMap::new();
+        if let Some(extras) = self.optional_dependencies() {
+            let pname = self.package_name();
+            for (extra, reqs) in extras {
+                let mut features = vec![extra.to_string()];
+                // Add any references to other groups of extra dependencies
+                for req in reqs.iter() {
+                    if pname.as_ref() == Some(&req.name) {
+                        for extra in &req.extras {
+                            features.push(extra.to_string())
+                        }
+                    }
+                }
+                // Environments can only contain number, strings and dashes
+                environments.insert(extra.replace('_', "-").clone(), features);
+            }
+        }
+        environments
     }
 }
 
@@ -61,41 +157,42 @@ impl From<PyProjectManifest> for ParsedManifest {
     fn from(item: PyProjectManifest) -> Self {
         // Start by loading the data nested under "tool.pixi" as manifest,
         // and create a reference to the 'pyproject.toml' project table
-        let mut manifest = item.tool.pixi.clone().expect("pixi should be present");
-        let pyproject = item
-            .project
-            .as_ref()
-            .expect("the [project] table should exist");
+        let mut manifest = item
+            .tool()
+            .and_then(|t| t.pixi.clone())
+            .expect("The [tool.pixi] table should exist");
 
-        // Overwrite the project name and version with the ones from the [project] table
-        // of the pyproject.toml if they are not set.
-        if manifest.project.name.is_none() {
-            manifest.project.name = Some(pyproject.name.clone());
-        }
+        // Set pixi project name, version, description and authors (if they are not set)
+        // with the ones from the `[project]` table of the `pyproject.toml`.
+        if let Some(pyproject) = &item.project {
+            if manifest.project.name.is_none() {
+                manifest.project.name = item.name();
+            }
 
-        if manifest.project.version.is_none() {
-            manifest.project.version = pyproject
-                .version
-                .clone()
-                .and_then(|version| version.to_string().parse().ok())
-        }
+            if manifest.project.version.is_none() {
+                manifest.project.version = pyproject
+                    .version
+                    .clone()
+                    .and_then(|version| version.to_string().parse().ok())
+            }
 
-        if manifest.project.description.is_none() {
-            manifest.project.description = pyproject.description.clone();
-        }
+            if manifest.project.description.is_none() {
+                manifest.project.description = pyproject.description.clone();
+            }
 
-        if manifest.project.authors.is_none() {
-            manifest.project.authors = pyproject.authors.as_ref().map(|authors| {
-                authors
-                    .iter()
-                    .filter_map(|contact| match (&contact.name, &contact.email) {
-                        (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
-                        (Some(name), None) => Some(name.clone()),
-                        (None, Some(email)) => Some(email.clone()),
-                        (None, None) => None,
-                    })
-                    .collect()
-            });
+            if manifest.project.authors.is_none() {
+                manifest.project.authors = pyproject.authors.as_ref().map(|authors| {
+                    authors
+                        .iter()
+                        .filter_map(|contact| match (&contact.name, &contact.email) {
+                            (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
+                            (Some(name), None) => Some(name.clone()),
+                            (None, Some(email)) => Some(email.clone()),
+                            (None, None) => None,
+                        })
+                        .collect()
+                });
+            }
         }
 
         // TODO:  would be nice to add license, license-file, readme, homepage, repository, documentation,
@@ -103,9 +200,12 @@ impl From<PyProjectManifest> for ParsedManifest {
         // we could change these types or we can convert. Let's decide when we make it.
         // etc.
 
-        // Add python as dependency based on the project.requires_python property (if
-        // any)
-        let python_spec = pyproject.requires_python.clone();
+        // Add python as dependency based on the `project.requires_python` property
+        let python_spec = item
+            .project
+            .as_ref()
+            .and_then(|p| p.requires_python.clone())
+            .clone();
 
         let target = manifest.default_feature_mut().targets.default_mut();
         let python = PackageName::from_str("python").unwrap();
@@ -127,7 +227,7 @@ impl From<PyProjectManifest> for ParsedManifest {
         }
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = &pyproject.dependencies {
+        if let Some(deps) = item.project.as_ref().and_then(|p| p.dependencies.clone()) {
             for requirement in deps.iter() {
                 target.add_pypi_dependency(requirement, None);
             }
@@ -136,8 +236,8 @@ impl From<PyProjectManifest> for ParsedManifest {
         // For each extra group, create a feature of the same name if it does not exist,
         // and add pypi dependencies from project.optional-dependencies,
         // filtering out self-references
-        if let Some(extras) = pyproject.optional_dependencies.as_ref() {
-            let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
+        if let Some(extras) = item.optional_dependencies() {
+            let project_name = item.package_name();
             for (extra, reqs) in extras {
                 let feature_name = FeatureName::Named(extra.to_string());
                 let target = manifest
@@ -148,7 +248,7 @@ impl From<PyProjectManifest> for ParsedManifest {
                     .default_mut();
                 for requirement in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
-                    if project_name != requirement.name {
+                    if project_name.as_ref() != Some(&requirement.name) {
                         target.add_pypi_dependency(requirement, None);
                     }
                 }
@@ -178,91 +278,6 @@ fn version_or_url_to_nameless_matchspec(
             version: Some(VersionSpec::Any),
             ..Default::default()
         }),
-    }
-}
-
-/// A struct wrapping pyproject_toml::PyProjectToml
-///
-/// This is used during 'pixi init' to parse a potentially non-pixi
-/// 'pyproject.toml'
-#[derive(Deserialize, Clone)]
-pub struct PyProjectToml {
-    /// Build-related data
-    pub build_system: Option<BuildSystem>,
-    /// Project metadata
-    pub project: Option<Project>,
-    // Tool section
-    pub tool: Option<Tool>,
-}
-
-impl PyProjectToml {
-    /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
-    /// making sure it contains a 'project' table
-    pub fn from_toml_str(source: &str) -> Result<PyProjectToml, Report> {
-        match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
-            Err(e) => e.to_fancy("pyproject.toml", source),
-            Ok(pyproject) => {
-                // Make sure [project] exists in pyproject.toml,
-                // This will ensure project.name is defined
-                if pyproject.project.is_none() {
-                    TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
-                } else {
-                    Ok(pyproject)
-                }
-            }
-        }
-    }
-
-    /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
-    /// making sure it contains a 'project' table
-    pub fn from_path(path: &PathBuf) -> Result<PyProjectToml, Report> {
-        let source = fs::read_to_string(path).into_diagnostic()?;
-        PyProjectToml::from_toml_str(&source)
-    }
-
-    pub fn name(&self) -> String {
-        self.project().name.clone()
-    }
-
-    pub fn project(&self) -> &Project {
-        self.project.as_ref().unwrap()
-    }
-
-    /// Builds a list of pixi environments from pyproject groups of extra
-    /// dependencies:
-    ///  - one environment is created per group of extra, with the same name as
-    ///    the group of extra
-    ///  - each environment includes the feature of the same name as the group
-    ///    of extra
-    ///  - it will also include other features inferred from any self references
-    ///    to other groups of extras
-    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
-        let mut environments = HashMap::new();
-        if let Some(extras) = &self.project().optional_dependencies {
-            let pname = pep508_rs::PackageName::new(self.name()).unwrap();
-            for (extra, reqs) in extras {
-                let mut features = vec![extra.to_string()];
-                // Add any references to other groups of extra dependencies
-                for req in reqs.iter() {
-                    if pname == req.name {
-                        for extra in &req.extras {
-                            features.push(extra.to_string())
-                        }
-                    }
-                }
-                // Environments can only contain number, strings and dashes
-                environments.insert(extra.replace('_', "-").clone(), features);
-            }
-        }
-        environments
-    }
-
-    /// Checks whether a path is a valid `pyproject.toml` for use with pixi by
-    /// checking if it contains a `[tool.pixi.project]` item.
-    pub fn is_pixi(&self) -> bool {
-        self.tool
-            .as_ref()
-            .is_some_and(|project| project.pixi.is_some())
     }
 }
 
