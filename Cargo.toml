@@ -119,6 +119,10 @@ pixi_progress = { path = "crates/pixi_progress" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
 
 [package]
 authors.workspace = true
