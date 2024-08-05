@@ -9,9 +9,9 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use crate::utils::indicatif::IndicatifWriter;
 use pixi_progress;
 use pixi_progress::global_multi_progress;
+use pixi_utils::indicatif::IndicatifWriter;
 
 pub mod add;
 pub mod clean;

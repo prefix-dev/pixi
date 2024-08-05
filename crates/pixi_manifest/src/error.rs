@@ -30,10 +30,10 @@ pub enum RequirementConversionError {
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum TomlError {
-    #[error("{0}")]
+    #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("Missing field `project`")]
-    NoProjectTable,
+    #[error("Missing table `[tool.pixi]`")]
+    NoPixiTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
@@ -63,17 +63,15 @@ impl TomlError {
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             TomlError::Error(e) => e.span(),
-            TomlError::NoProjectTable => Some(0..1),
+            TomlError::NoPixiTable => Some(0..1),
             TomlError::NoProjectName(span) => span.clone(),
             _ => None,
         }
     }
-    fn message(&self) -> &str {
+    fn message(&self) -> String {
         match self {
-            TomlError::Error(e) => e.message(),
-            TomlError::NoProjectTable => "Missing field `project`",
-            TomlError::NoProjectName(_) => "Missing field `name`",
-            _ => "",
+            TomlError::Error(e) => e.message().to_owned(),
+            _ => self.to_string(),
         }
     }
 

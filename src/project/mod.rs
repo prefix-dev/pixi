@@ -26,8 +26,9 @@ use once_cell::sync::OnceCell;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
 };
+use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
@@ -39,7 +40,6 @@ use xxhash_rust::xxh3::xxh3_64;
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     project::grouped_environment::GroupedEnvironment,
-    utils::reqwest::build_reqwest_clients,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -627,7 +627,7 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                     match *manifest {
                         consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
                         consts::PYPROJECT_MANIFEST
-                            if PyProjectToml::from_path(&path)
+                            if PyProjectManifest::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {
                             Some(path.to_path_buf())

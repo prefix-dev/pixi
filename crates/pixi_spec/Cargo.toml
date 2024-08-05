@@ -11,7 +11,7 @@ repository.workspace = true
 [dependencies]
 cfg_eval = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
+rattler_digest = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_with = { workspace = true }
 serde-untagged = { workspace = true }
