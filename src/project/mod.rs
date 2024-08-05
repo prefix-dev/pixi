@@ -778,13 +778,7 @@ mod tests {
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
-            .map(|(name, spec)| {
-                format!(
-                    "{} = {}",
-                    name.as_source(),
-                    spec.to_toml_value().to_string()
-                )
-            })
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 

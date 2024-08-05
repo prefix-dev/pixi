@@ -104,12 +104,6 @@ impl<'de> Deserialize<'de> for Spec {
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.file_name.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        "`file-name` is only valid when `version` is specified",
-                    ));
-                }
-
                 if raw_spec.version.is_none() && raw_spec.channel.is_some() {
                     return Err(serde_untagged::de::Error::custom(
                         "`channel` is only valid when `version` is specified",

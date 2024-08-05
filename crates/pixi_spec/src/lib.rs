@@ -11,6 +11,7 @@ mod serde;
 
 use std::{
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -20,7 +21,6 @@ use rattler_conda_types::{
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
-use std::str::FromStr;
 use thiserror::Error;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 use url::Url;
@@ -235,6 +235,26 @@ impl Spec {
         };
 
         Ok(spec)
+    }
+
+    /// Returns true if this spec represents a binary package.
+    pub fn is_binary(&self) -> bool {
+        match self {
+            Self::Version(_) => true,
+            Self::DetailedVersion(_) => true,
+            Self::Url(url) => ArchiveIdentifier::try_from_url(&url.url).is_some(),
+            Self::Git(_) => false,
+            Self::Path(path) => path
+                .path
+                .file_name()
+                .and_then(ArchiveIdentifier::try_from_path)
+                .is_some(),
+        }
+    }
+
+    /// Returns true if this spec represents a source package.
+    pub fn is_source(&self) -> bool {
+        !self.is_binary()
     }
 
     #[cfg(feature = "toml_edit")]
@@ -473,6 +493,37 @@ mod test {
     use url::Url;
 
     use crate::Spec;
+
+    #[test]
+    fn test_is_binary() {
+        let binary_packages = [
+            json! { "1.2.3" },
+            json!({ "version": "1.2.3" }),
+            json! { "*" },
+            json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
+            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+        ];
+
+        for binary_package in binary_packages {
+            let spec: Spec = serde_json::from_value(binary_package).unwrap();
+            assert!(spec.is_binary());
+            assert!(!spec.is_source());
+        }
+
+        let source_packages = [
+            json!({ "path": "foobar" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "tag": "v1" }),
+            json!({ "url": "https://github.com/conda-forge/21cmfast-feedstock.zip" }),
+        ];
+
+        for source_package in source_packages {
+            let spec: Spec = serde_json::from_value(source_package).unwrap();
+            assert!(spec.is_source());
+            assert!(!spec.is_binary());
+        }
+    }
 
     #[test]
     fn test_into_nameless_match_spec() {
