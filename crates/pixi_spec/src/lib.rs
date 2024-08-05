@@ -229,12 +229,30 @@ impl Spec {
                 ..NamelessMatchSpec::default()
             }),
             Spec::DetailedVersion(spec) => Some(spec.into_nameless_match_spec(channel_config)),
-            Spec::Url(url) => url.into_nameless_match_spec(),
+            Spec::Url(url) => url.try_into_nameless_match_spec().ok(),
             Spec::Git(_) => None,
-            Spec::Path(path) => path.into_nameless_match_spec(&channel_config.root_dir)?,
+            Spec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir)?,
         };
 
         Ok(spec)
+    }
+
+    /// Converts this instance into a source spec if this instance represents a
+    /// source package.
+    #[allow(clippy::result_large_err)]
+    pub fn into_source_spec(self) -> Result<SourceSpec, Self> {
+        match self {
+            Spec::Url(url) => url
+                .try_into_source_url()
+                .map(SourceSpec::from)
+                .map_err(Spec::from),
+            Spec::Git(git) => Ok(SourceSpec::Git(git)),
+            Spec::Path(path) => path
+                .try_into_source_path()
+                .map(SourceSpec::from)
+                .map_err(Spec::from),
+            _ => Err(self),
+        }
     }
 
     /// Returns true if this spec represents a binary package.
@@ -242,13 +260,9 @@ impl Spec {
         match self {
             Self::Version(_) => true,
             Self::DetailedVersion(_) => true,
-            Self::Url(url) => ArchiveIdentifier::try_from_url(&url.url).is_some(),
+            Self::Url(url) => url.is_binary(),
             Self::Git(_) => false,
-            Self::Path(path) => path
-                .path
-                .file_name()
-                .and_then(ArchiveIdentifier::try_from_path)
-                .is_some(),
+            Self::Path(path) => path.is_binary(),
         }
     }
 
@@ -262,6 +276,33 @@ impl Spec {
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+}
+
+/// A specification for a source package.
+///
+/// This type only represents source packages. Use [`Spec`] to represent both
+/// binary and source packages.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum SourceSpec {
+    /// The spec is represented as an archive that can be downloaded from the
+    /// specified URL.
+    Url(UrlSourceSpec),
+
+    /// The spec is represented as a git repository.
+    Git(GitSpec),
+
+    /// The spec is represented as a local directory or local file archive.
+    Path(PathSourceSpec),
+}
+
+impl From<SourceSpec> for Spec {
+    fn from(value: SourceSpec) -> Self {
+        match value {
+            SourceSpec::Url(url) => Self::Url(url.into()),
+            SourceSpec::Git(git) => Self::Git(git),
+            SourceSpec::Path(path) => Self::Path(path.into()),
+        }
     }
 }
 
@@ -367,23 +408,73 @@ pub struct UrlSpec {
 impl UrlSpec {
     /// Converts this instance into a [`NamelessMatchSpec`] if the URL points to
     /// a binary package.
-    pub fn into_nameless_match_spec(self) -> Option<NamelessMatchSpec> {
-        if ArchiveIdentifier::try_from_url(&self.url).is_some() {
-            Some(NamelessMatchSpec {
+    #[allow(clippy::result_large_err)]
+    pub fn try_into_nameless_match_spec(self) -> Result<NamelessMatchSpec, Self> {
+        if self.is_binary() {
+            Ok(NamelessMatchSpec {
                 url: Some(self.url),
                 md5: self.md5,
                 sha256: self.sha256,
                 ..NamelessMatchSpec::default()
             })
         } else {
-            None
+            Err(self)
         }
+    }
+
+    /// Converts this instance into a [`SourceUrlSpec`] if the URL points to a
+    /// source package. Otherwise, returns this instance unmodified.
+    #[allow(clippy::result_large_err)]
+    pub fn try_into_source_url(self) -> Result<UrlSourceSpec, Self> {
+        if self.is_binary() {
+            Err(self)
+        } else {
+            Ok(UrlSourceSpec {
+                url: self.url,
+                md5: self.md5,
+                sha256: self.sha256,
+            })
+        }
+    }
+
+    /// Returns true if the URL points to a binary package.
+    pub fn is_binary(&self) -> bool {
+        ArchiveIdentifier::try_from_url(&self.url).is_some()
     }
 }
 
 impl From<UrlSpec> for Spec {
     fn from(value: UrlSpec) -> Self {
         Self::Url(value)
+    }
+}
+
+/// A specification of a source archive from a URL.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct UrlSourceSpec {
+    /// The URL of the package
+    pub url: Url,
+
+    /// The md5 hash of the archive
+    pub md5: Option<Md5Hash>,
+
+    /// The sha256 hash of the archive
+    pub sha256: Option<Sha256Hash>,
+}
+
+impl From<UrlSourceSpec> for UrlSpec {
+    fn from(value: UrlSourceSpec) -> Self {
+        Self {
+            url: value.url,
+            md5: value.md5,
+            sha256: value.sha256,
+        }
+    }
+}
+
+impl From<UrlSourceSpec> for SourceSpec {
+    fn from(value: UrlSourceSpec) -> Self {
+        SourceSpec::Url(value)
     }
 }
 
@@ -396,7 +487,7 @@ pub struct GitSpec {
 
     /// The git revision of the package
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
-    pub rev: Option<GitRev>,
+    pub rev: Option<GitReference>,
 }
 
 impl From<GitSpec> for Spec {
@@ -408,7 +499,7 @@ impl From<GitSpec> for Spec {
 /// A reference to a specific commit in a git repository.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum GitRev {
+pub enum GitReference {
     /// The HEAD commit of a branch.
     Branch(String),
 
@@ -416,7 +507,7 @@ pub enum GitRev {
     Tag(String),
 
     /// A specific commit.
-    Commit(String),
+    Rev(String),
 }
 
 /// A specification of a package from a git repository.
@@ -429,16 +520,11 @@ pub struct PathSpec {
 impl PathSpec {
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
     /// to binary archive.
-    pub fn into_nameless_match_spec(
+    pub fn try_into_nameless_match_spec(
         self,
         root_dir: &Path,
     ) -> Result<Option<NamelessMatchSpec>, SpecConversionError> {
-        if self
-            .path
-            .file_name()
-            .and_then(ArchiveIdentifier::try_from_path)
-            .is_none()
-        {
+        if !self.is_binary() {
             // Not a binary package
             return Ok(None);
         }
@@ -469,10 +555,49 @@ impl PathSpec {
             ..NamelessMatchSpec::default()
         }))
     }
+
+    /// Converts this instance into a [`PathSourceSpec`] if the path points to a
+    /// source package. Otherwise, returns this instance unmodified.
+    #[allow(clippy::result_large_err)]
+    pub fn try_into_source_path(self) -> Result<PathSourceSpec, Self> {
+        if self.is_binary() {
+            Err(self)
+        } else {
+            Ok(PathSourceSpec { path: self.path })
+        }
+    }
+
+    /// Returns true if this path points to a binary archive.
+    pub fn is_binary(&self) -> bool {
+        self.path
+            .file_name()
+            .and_then(ArchiveIdentifier::try_from_path)
+            .is_none()
+    }
 }
 
 impl From<PathSpec> for Spec {
     fn from(value: PathSpec) -> Self {
+        Self::Path(value)
+    }
+}
+
+/// Path to a source package. Different from [`PathSpec`] in that this type only
+/// refers to source packages.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PathSourceSpec {
+    /// The path to the package. Either a directory or an archive.
+    pub path: Utf8TypedPathBuf,
+}
+
+impl From<PathSourceSpec> for PathSpec {
+    fn from(value: PathSourceSpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
+impl From<PathSourceSpec> for SourceSpec {
+    fn from(value: PathSourceSpec) -> Self {
         Self::Path(value)
     }
 }

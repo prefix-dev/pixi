@@ -6,7 +6,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use url::Url;
 
-use crate::{DetailedVersionSpec, GitRev, GitSpec, PathSpec, Spec, UrlSpec};
+use crate::{DetailedVersionSpec, GitReference, GitSpec, PathSpec, Spec, UrlSpec};
 
 #[serde_as]
 #[derive(serde::Deserialize)]
@@ -148,9 +148,9 @@ impl<'de> Deserialize<'de> for Spec {
                     (None, None, Some(path), None) => Spec::Path(PathSpec { path: path.into() }),
                     (None, None, None, Some(git)) => {
                         let rev = match (raw_spec.branch, raw_spec.rev, raw_spec.tag) {
-                            (Some(branch), None, None) => Some(GitRev::Branch(branch)),
-                            (None, Some(rev), None) => Some(GitRev::Commit(rev)),
-                            (None, None, Some(tag)) => Some(GitRev::Tag(tag)),
+                            (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                            (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                            (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
                             (None, None, None) => None,
                             _ => {
                                 return Err(serde_untagged::de::Error::custom(
