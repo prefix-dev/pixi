@@ -1,0 +1,23 @@
+---
+source: crates/pixi_manifest/src/manifest.rs
+assertion_line: 1951
+expression: manifest.document.to_string()
+---
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+foo = "*"
+baz = ">=1.2.3"
+
+[feature.test.dependencies]
+bar = "*"
+bal = ">=2.3"
+
+[feature.extra.target.linux-64.dependencies]
+boef = ">=2.3"
+
+[feature.build.target.linux-64.build-dependencies]
+cmake = ">=2.3"

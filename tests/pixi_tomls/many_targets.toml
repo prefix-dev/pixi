@@ -1,10 +1,15 @@
 [project]
-name = "pixi"
-version = "0.14.0"
-description = "Package management made easy!"
-authors = ["Wolf Vollprecht <wolf@prefix.dev>", "Bas Zalmstra <bas@prefix.dev>", "Tim de Jager <tim@prefix.dev>", "Ruben Arts <ruben@prefix.dev>"]
+authors = [
+  "Wolf Vollprecht <wolf@prefix.dev>",
+  "Bas Zalmstra <bas@prefix.dev>",
+  "Tim de Jager <tim@prefix.dev>",
+  "Ruben Arts <ruben@prefix.dev>",
+]
 channels = ["conda-forge"]
+description = "Package management made easy!"
+name = "pixi"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+version = "0.14.0"
 
 [dependencies]
 all = "*"

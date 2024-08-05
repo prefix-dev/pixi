@@ -252,7 +252,7 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Osx-arm64"
     ```toml title="default system requirements for osx-arm64"
     [system-requirements]
-    macos = "13.0
+    macos = "13.0"
     ```
 
 Only if a project requires a different set should you define them.

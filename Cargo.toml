@@ -2,12 +2,12 @@
 members = ["crates/*"]
 
 [workspace.package]
-edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
+edition = "2021"
 homepage = "https://github.com/prefix-dev/pixi"
-repository = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"
+repository = "https://github.com/prefix-dev/pixi"
 
 [workspace.dependencies]
 ahash = "0.8.11"
@@ -44,25 +44,27 @@ install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
+libc = { version = "0.2.153", default-features = false }
 miette = "7.2.0"
 minijinja = "1.0.20"
+nix = { version = "0.28.0", default-features = false }
 once_cell = "1.19.0"
 parking_lot = "0.12.2"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pep440_rs = "0.6.0"
+pep508_rs = "0.6.0"
 percent-encoding = "2.3.1"
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 pyproject-toml = "0.11.0"
-rattler = { version = "0.27.0", default-features = false }
-rattler_conda_types = { version = "0.26.1", default-features = false }
+rattler = { version = "0.27.2", default-features = false }
+rattler_conda_types = { version = "0.26.3", default-features = false }
 rattler_digest = { version = "0.19.5", default-features = false }
-rattler_lock = { version = "0.22.14", default-features = false }
+rattler_lock = { version = "0.22.16", default-features = false }
 rattler_networking = { version = "0.20.10", default-features = false }
-rattler_repodata_gateway = { version = "0.21.1", default-features = false }
-rattler_shell = { version = "0.21.1", default-features = false }
-rattler_solve = { version = "0.25.1", default-features = false }
-rattler_virtual_packages = { version = "0.19.18", default-features = false }
+rattler_repodata_gateway = { version = "0.21.3", default-features = false }
+rattler_shell = { version = "0.21.3", default-features = false }
+rattler_solve = { version = "0.25.3", default-features = false }
+rattler_virtual_packages = { version = "0.19.20", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 reqwest = { version = "0.12.4", default-features = false }
@@ -78,6 +80,7 @@ serde_with = "3.7.0"
 serde_yaml = "0.9.34"
 serial_test = "3.0.0"
 shlex = "1.3.0"
+signal-hook = "0.3.17"
 spdx = "0.10.4"
 strsim = "0.11.1"
 tabwriter = "1.4.0"
@@ -91,7 +94,6 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = "2.5.0"
 uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
@@ -104,37 +106,44 @@ uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-toolchain = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "0.6.6", default-features = false }
-nix = { version = "0.28.0", default-features = false }
-libc = { version = "0.2.153", default-features = false }
-signal-hook = "0.3.17"
-winapi = { version = "0.3.9", default-features = false }
+
+fancy_display = { path = "crates/fancy_display" }
+pixi_config = { path = "crates/pixi_config" }
+pixi_consts = { path = "crates/pixi_consts" }
+pixi_default_versions = { path = "crates/pixi_default_versions" }
+pixi_manifest = { path = "crates/pixi_manifest" }
+pixi_progress = { path = "crates/pixi_progress" }
+pypi_mapping = { path = "crates/pypi_mapping" }
+pypi_modifiers = { path = "crates/pypi_modifiers" }
+
 
 [package]
-name = "pixi"
-version = "0.26.1"
+authors.workspace = true
 description = "A package management and workflow tool"
 edition.workspace = true
-authors.workspace = true
 homepage.workspace = true
-repository.workspace = true
 license.workspace = true
+name = "pixi"
 readme.workspace = true
+repository.workspace = true
+version = "0.26.1"
 
 [features]
 default = ["native-tls"]
 native-tls = [
-    "reqwest/native-tls",
-    "reqwest/native-tls-alpn",
-    "rattler_repodata_gateway/native-tls",
-    "rattler/native-tls"
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+  "rattler_repodata_gateway/native-tls",
+  "rattler/native-tls",
 ]
 rustls-tls = [
-    "reqwest/rustls-tls",
-    "reqwest/rustls-tls-native-roots",
-    "rattler_repodata_gateway/rustls-tls",
-    "rattler/rustls-tls"
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+  "rattler_repodata_gateway/rustls-tls",
+  "rattler/rustls-tls",
 ]
 slow_integration_tests = []
 
@@ -145,11 +154,18 @@ async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
 cfg-if = { workspace = true }
 chrono = { workspace = true }
-clap = { workspace = true, features = ["derive", "usage", "wrap_help", "std", "color", "error-context", "env"] }
+clap = { workspace = true, features = [
+  "derive",
+  "usage",
+  "wrap_help",
+  "std",
+  "color",
+  "error-context",
+  "env",
+] }
 clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
-concat-idents = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
@@ -159,6 +175,7 @@ dirs = { workspace = true }
 distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
+fancy_display = { workspace = true }
 fd-lock = { workspace = true }
 flate2 = { workspace = true }
 fs_extra = { workspace = true }
@@ -173,7 +190,14 @@ install-wheel-rs = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
-miette = { workspace = true, features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
+miette = { workspace = true, features = [
+  "fancy",
+  "supports-color",
+  "supports-hyperlinks",
+  "supports-unicode",
+  "terminal_size",
+  "textwrap",
+] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
@@ -183,31 +207,40 @@ pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 platform-tags = { workspace = true }
 pypi-types = { workspace = true }
-pyproject-toml = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
-rattler_repodata_gateway = { workspace = true, features = ["sparse", "gateway"] }
+rattler_repodata_gateway = { workspace = true, features = [
+  "sparse",
+  "gateway",
+] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
+pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
+pixi_consts = { workspace = true }
+pixi_default_versions = { workspace = true }
+pixi_manifest = { workspace = true }
+pixi_progress = { workspace = true }
+pypi_mapping = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
-requirements-txt = { workspace = true }
-reqwest = { workspace = true, features = ["http2", "macos-system-configuration"] }
+reqwest = { workspace = true, features = [
+  "http2",
+  "macos-system-configuration",
+] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
-serde-untagged = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
 serde_yaml = { workspace = true }
 shlex = { workspace = true }
-spdx = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
@@ -220,7 +253,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true }
 uv-auth = { workspace = true }
-uv-build = { workspace = true }
 uv-cache = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
@@ -235,25 +267,22 @@ uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
+
 [target.'cfg(unix)'.dependencies]
-nix = { workspace = true, features = [
-    "fs",
-    "signal",
-    "term",
-    "poll",
-] }
 libc = { workspace = true, default-features = false }
+nix = { workspace = true, features = ["fs", "signal", "term", "poll"] }
+pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
 
 # Remove this after updating to uv >= 0.1.40
 [target.'cfg(windows)'.dependencies]
 winapi = { workspace = true, features = [
-    "fileapi",
-    "handleapi",
-    "ioapiset",
-    "winbase",
-    "winioctl",
-    "winnt",
+  "fileapi",
+  "handleapi",
+  "ioapiset",
+  "winbase",
+  "winioctl",
+  "winnt",
 ] }
 
 [dev-dependencies]

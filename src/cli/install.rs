@@ -1,16 +1,16 @@
-use crate::config::ConfigCli;
+use crate::cli::cli_config::ProjectConfig;
 use crate::environment::get_up_to_date_prefix;
 use crate::Project;
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use std::path::PathBuf;
+use pixi_config::ConfigCli;
 
 /// Install all dependencies
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
@@ -27,8 +27,8 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.config);
 
     // Install either:
     //
@@ -78,6 +78,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }

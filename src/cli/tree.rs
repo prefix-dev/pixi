@@ -1,14 +1,14 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::lock_file::UpdateLockFileOptions;
+use crate::Project;
 use clap::Parser;
 use console::Color;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-
-use crate::lock_file::UpdateLockFileOptions;
-use crate::project::has_features::HasFeatures;
-use crate::Project;
 
 /// Show a tree of project dependencies
 #[derive(Debug, Parser)]
@@ -32,20 +32,15 @@ pub struct Args {
     #[arg(long, short)]
     pub platform: Option<Platform>,
 
-    /// The path to 'pixi.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
-    #[arg(long)]
-    pub no_install: bool,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
@@ -69,12 +64,12 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 };
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
-            no_install: args.no_install,
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -98,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
     }
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

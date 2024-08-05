@@ -1,18 +1,23 @@
-use crate::config::Config;
-use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::project::manifest::pyproject::PyProjectToml;
-use crate::project::manifest::DependencyOverwriteBehavior;
-use crate::utils::conda_environment_file::CondaEnvFile;
-use crate::{config::get_default_author, consts};
-use crate::{FeatureName, Project};
+use std::{
+    fs,
+    io::{Error, ErrorKind, Write},
+    path::{Path, PathBuf},
+};
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use rattler_conda_types::Platform;
-use std::io::{Error, ErrorKind, Write};
-use std::path::Path;
-use std::{fs, path::PathBuf};
+use pixi_manifest::{pyproject::PyProjectToml, DependencyOverwriteBehavior, FeatureName, SpecType};
+use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
+
+use crate::{
+    environment::{get_up_to_date_prefix, LockFileUsage},
+    utils::conda_environment_file::CondaEnvFile,
+    Project,
+};
+use pixi_config::{get_default_author, Config};
+use pixi_consts::consts;
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -23,7 +28,7 @@ pub struct Args {
 
     /// Channels to use in the project.
     #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
-    pub channels: Option<Vec<String>>,
+    pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Platforms that the project supports.
     #[arg(short, long = "platform", id = "platform")]
@@ -47,14 +52,14 @@ pub struct Args {
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
 const PROJECT_TEMPLATE: &str = r#"[project]
-name = "{{ name }}"
-version = "{{ version }}"
-description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = {{ channels }}
+description = "Add a short description here"
+name = "{{ name }}"
 platforms = {{ platforms }}
+version = "{{ version }}"
 
 {%- if index_url or extra_indexes %}
 
@@ -96,18 +101,18 @@ default = { solve-group = "default" }
 ///
 /// This is used to create a pyproject.toml from scratch
 const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
-name = "{{ name }}"
-version = "{{ version }}"
-description = "Add a short description here"
 {%- if author %}
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
-requires-python = ">= 3.11"
 dependencies = []
+description = "Add a short description here"
+name = "{{ name }}"
+requires-python = ">= 3.11"
+version = "{{ version }}"
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = {{ channels }}
@@ -158,9 +163,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.platforms.clone()
     };
 
-    // Create a 'pixi.toml' manifest and populate it by importing a conda environment file
+    // Create a 'pixi.toml' manifest and populate it by importing a conda
+    // environment file
     if let Some(env_file_path) = args.env_file {
-        // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
+        // Check if the 'pixi.toml' file doesn't already exist. We don't want to
+        // overwrite it.
         if pixi_manifest_path.is_file() {
             miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
         }
@@ -170,7 +177,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
-        //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
+        //  - Implement it for `[pixi_manifest::ProjectManifest]` to do this for other
+        //    filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
         let rv = render_project(
             &env,
@@ -187,14 +195,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_iter()
             .map(|p| p.parse().into_diagnostic())
             .collect::<Result<Vec<Platform>, _>>()?;
+        let channel_config = project.channel_config();
         for spec in conda_deps {
             // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
             project.manifest.add_dependency(
                 &spec,
-                crate::SpecType::Run,
+                SpecType::Run,
                 &platforms,
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )?;
         }
         for requirement in pypi_deps {
@@ -230,10 +240,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(args.pyproject_toml)
         }.into_diagnostic()?;
 
-        // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
+        // Inject a tool.pixi.project section into an existing pyproject.toml file if
+        // there is one without '[tool.pixi.project]'
         if pyproject {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
-            let pyproject = PyProjectToml::from_str(&file)?;
+            let pyproject = PyProjectToml::from_toml_str(&file)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
             if pyproject.is_pixi() {
@@ -270,7 +281,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     e
                 );
             } else {
-                // Inform about the addition of the package itself as an editable dependency of the project
+                // Inform about the addition of the package itself as an editable dependency of
+                // the project
                 eprintln!(
                     "{}Added package '{}' as an editable dependency.",
                     console::style(console::Emoji("✔ ", "")).green(),
@@ -309,7 +321,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             save_manifest_file(&pyproject_manifest_path, rv)?;
         // Create a 'pixi.toml' manifest
         } else {
-            // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
+            // Check if the 'pixi.toml' file doesn't already exist. We don't want to
+            // overwrite it.
             if pixi_manifest_path.is_file() {
                 miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
             }
@@ -361,7 +374,7 @@ fn render_project(
     name: String,
     version: &str,
     author: Option<&(String, String)>,
-    channels: Vec<String>,
+    channels: Vec<NamedChannelOrUrl>,
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
@@ -441,11 +454,15 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::Read,
+        path::{Path, PathBuf},
+    };
+
+    use tempfile::tempdir;
+
     use super::*;
     use crate::cli::init::get_dir;
-    use std::io::Read;
-    use std::path::{Path, PathBuf};
-    use tempfile::tempdir;
 
     #[test]
     fn test_get_name() {

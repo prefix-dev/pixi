@@ -1,6 +1,6 @@
-target-version = "py312"
 line-length = 100
+target-version = "py312"
 
 [format]
-quote-style = "double"
 indent-style = "space"
+quote-style = "double"

@@ -1,6 +1,6 @@
-use itertools::Itertools;
-
 use crate::Project;
+use fancy_display::FancyDisplay;
+use itertools::Itertools;
 
 pub async fn execute(project: Project) -> miette::Result<()> {
     println!(

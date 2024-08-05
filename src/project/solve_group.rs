@@ -2,9 +2,9 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 
-use super::{
-    has_features::HasFeatures, manifest, manifest::SystemRequirements, Environment, Project,
-};
+use super::{Environment, HasProjectRef, Project};
+use pixi_manifest as manifest;
+use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -53,9 +53,7 @@ impl<'p> SolveGroup<'p> {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
-                self.project.manifest.parsed.environments.environments[*env_idx]
-                    .as_ref()
-                    .expect("environment has been removed"),
+                &self.project.manifest.parsed.environments[*env_idx],
             )
         })
     }
@@ -70,7 +68,13 @@ impl<'p> SolveGroup<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for SolveGroup<'p> {
+impl<'p> HasManifestRef<'p> for SolveGroup<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+}
+
+impl<'p> HasFeaturesIter<'p> for SolveGroup<'p> {
     /// Returns all features that are part of the solve group.
     ///
     /// All features of all environments are combined and deduplicated.
@@ -79,8 +83,9 @@ impl<'p> HasFeatures<'p> for SolveGroup<'p> {
             .flat_map(|env: Environment<'p>| env.features().collect_vec().into_iter())
             .unique_by(|feat| &feat.name)
     }
+}
 
-    /// Returns the project to which the group belongs.
+impl<'p> HasProjectRef<'p> for SolveGroup<'p> {
     fn project(&self) -> &'p Project {
         self.project
     }
@@ -93,7 +98,8 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::PackageName;
 
-    use crate::{project::has_features::HasFeatures, Project};
+    use crate::Project;
+    use pixi_manifest::FeaturesExt;
 
     #[test]
     fn test_solve_group() {

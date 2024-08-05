@@ -89,7 +89,7 @@ The JSON should follow the following format:
         "BearerToken": "your_token"
     },
     "otherhost.com": {
-        "BasicHttp": {
+        "BasicHTTP": {
             "username": "your_username",
             "password": "your_password"
         }

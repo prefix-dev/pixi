@@ -1,18 +1,17 @@
-use crate::project::manifest::Feature;
+use crate::project::HasProjectRef;
 use crate::{
-    consts,
     prefix::Prefix,
-    project::{
-        manifest::SystemRequirements, virtual_packages::get_minimal_virtual_packages, Environment,
-        SolveGroup,
-    },
-    EnvironmentName, Project,
+    project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
+    Project,
 };
+use fancy_display::FancyDisplay;
 use itertools::Either;
+use pixi_consts::consts;
+use pixi_manifest::{
+    EnvironmentName, Feature, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements,
+};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
-
-use super::has_features::HasFeatures;
 
 /// Either a solve group or an individual environment without a solve group.
 ///
@@ -112,20 +111,27 @@ impl<'p> GroupedEnvironment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for GroupedEnvironment<'p> {
+impl<'p> HasProjectRef<'p> for GroupedEnvironment<'p> {
+    fn project(&self) -> &'p Project {
+        match self {
+            GroupedEnvironment::Group(group) => group.project(),
+            GroupedEnvironment::Environment(env) => env.project(),
+        }
+    }
+}
+
+impl<'p> HasManifestRef<'p> for GroupedEnvironment<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+}
+
+impl<'p> HasFeaturesIter<'p> for GroupedEnvironment<'p> {
     /// Returns the features of the group
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.features()),
             GroupedEnvironment::Environment(env) => Either::Right(env.features()),
-        }
-    }
-
-    /// Returns the project to which the group belongs.
-    fn project(&self) -> &'p Project {
-        match self {
-            GroupedEnvironment::Group(group) => group.project(),
-            GroupedEnvironment::Environment(env) => env.project(),
         }
     }
 }

@@ -1,11 +1,11 @@
 [project]
+dependencies = []
 name = "bar"
 version = "0.1.0"
-dependencies = []
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]

@@ -179,9 +179,15 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         [],
     ),
     [
-        "main",
-        "r",
-        "msys2",
+        Name(
+            "main",
+        ),
+        Name(
+            "r",
+        ),
+        Name(
+            "msys2",
+        ),
     ],
     Some(
         "crnntf",

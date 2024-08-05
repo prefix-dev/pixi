@@ -1,11 +1,13 @@
-use clap::Parser;
-use miette::IntoDiagnostic;
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
-use crate::{
-    config::{self, Config},
-    consts, project,
-};
+use clap::Parser;
+use miette::{IntoDiagnostic, WrapErr};
+use pixi_config;
+use pixi_config::Config;
+use pixi_consts::consts;
+use rattler_conda_types::NamedChannelOrUrl;
+
+use crate::project;
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -220,7 +222,7 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
     let write_path = if common_args.system {
-        config::config_path_system()
+        pixi_config::config_path_system()
     } else {
         if let Some(root) = determine_project_root(common_args)? {
             if !common_args.global {
@@ -228,7 +230,7 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
             }
         }
 
-        let mut global_locations = config::config_path_global();
+        let mut global_locations = pixi_config::config_path_global();
         let mut to = global_locations
             .pop()
             .expect("should have at least one global config path");
@@ -262,11 +264,14 @@ fn alter_config(
             match key {
                 "default-channels" => {
                     let input = value.expect("value must be provided");
+                    let channel = NamedChannelOrUrl::from_str(&input)
+                        .into_diagnostic()
+                        .context("invalid channel name")?;
                     let mut new_channels = config.default_channels.clone();
                     if is_prepend {
-                        new_channels.insert(0, input);
+                        new_channels.insert(0, channel);
                     } else {
-                        new_channels.push(input);
+                        new_channels.push(channel);
                     }
                     config.default_channels = new_channels;
                 }

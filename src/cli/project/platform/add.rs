@@ -1,9 +1,12 @@
 use std::str::FromStr;
 
-use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::{FeatureName, Project};
+use crate::{
+    environment::{get_up_to_date_prefix, LockFileUsage},
+    Project,
+};
 use clap::Parser;
 use miette::IntoDiagnostic;
+use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 
 #[derive(Parser, Debug, Default)]
@@ -12,7 +15,8 @@ pub struct Args {
     #[clap(required = true, num_args=1..)]
     pub platform: Vec<String>,
 
-    /// Don't update the environment, only add changed packages to the lock-file.
+    /// Don't update the environment, only add changed packages to the
+    /// lock-file.
     #[clap(long)]
     pub no_install: bool,
 

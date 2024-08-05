@@ -1,7 +1,7 @@
-use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
 use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use indicatif::ProgressBar;
 use itertools::Itertools;
+use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use uv_normalize::PackageName;
 
@@ -9,8 +9,8 @@ fn create_progress(length: u64, message: &'static str) -> ProgressBar {
     // Construct a progress bar to provide some indication on what is currently downloading.
     //  For instance if we could also show at what speed the downloads are progressing or the total
     //  size of the downloads that would really help the user I think.
-    let pb = progress::global_multi_progress().add(ProgressBar::new(length));
-    pb.set_style(progress::default_progress_style());
+    let pb = pixi_progress::global_multi_progress().add(ProgressBar::new(length));
+    pb.set_style(pixi_progress::default_progress_style());
     pb.set_prefix(message);
     pb.enable_steady_tick(Duration::from_millis(100));
     pb

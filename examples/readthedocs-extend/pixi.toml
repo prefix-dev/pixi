@@ -1,11 +1,11 @@
 [project]
+channels = ["conda-forge"]
 name = "readthedocs-extend"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
-channels = ["conda-forge"]
 
 [environments]
-rtd = ["docs", "rtd"]
 docs = ["docs", "dev"]
+rtd = ["docs", "rtd"]
 
 [feature.dev.tasks.start]
 cmd = "sphinx-autobuild docs ./build/docs"
@@ -33,6 +33,6 @@ inputs = ["build/docs/"]
 
 
 [feature.rtd]
+dependencies = { requests = "*", jinja2 = ">=2.9", packaging = "*" }
 platforms = ["linux-64"]
-dependencies = {requests = "*", jinja2 = ">=2.9", packaging = "*"}
-pypi-dependencies = {readthedocs-sphinx-ext = "*"}
+pypi-dependencies = { readthedocs-sphinx-ext = "*" }

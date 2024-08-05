@@ -1,8 +1,8 @@
-use crate::project::manifest::EnvironmentName;
-use crate::task::TaskName;
 use crate::Project;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
+use pixi_manifest::{EnvironmentName, TaskName};
 use rattler_conda_types::Platform;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

@@ -1,9 +1,7 @@
-mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
-pub mod has_features;
-pub mod manifest;
+mod has_project_ref;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -20,27 +18,30 @@ use std::{
 };
 
 use async_once_cell::OnceCell as AsyncCell;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 use indexmap::Equivalent;
-use manifest::{EnvironmentName, Manifest};
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::Version;
+use pixi_manifest::{
+    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+};
+use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
+use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use self::manifest::{pyproject::PyProjectToml, Environments};
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    config::Config,
-    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
-    project::{grouped_environment::GroupedEnvironment, manifest::ProjectManifest},
-    pypi_mapping::MappingSource,
+    project::grouped_environment::GroupedEnvironment,
     utils::reqwest::build_reqwest_clients,
 };
+use pixi_config::Config;
+use pixi_consts::consts;
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
+
+pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -58,35 +59,6 @@ impl DependencyType {
             DependencyType::CondaDependency(dep) => dep.name(),
             DependencyType::PypiDependency => consts::PYPI_DEPENDENCIES,
         }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-/// What kind of dependency spec do we have
-pub enum SpecType {
-    /// Host dependencies are used that are needed by the host environment when
-    /// running the project
-    Host,
-    /// Build dependencies are used when we need to build the project, may not
-    /// be required at runtime
-    Build,
-    /// Regular dependencies that are used when we need to run the project
-    Run,
-}
-
-impl SpecType {
-    /// Convert to a name used in the manifest
-    pub fn name(&self) -> &'static str {
-        match self {
-            SpecType::Host => "host-dependencies",
-            SpecType::Build => "build-dependencies",
-            SpecType::Run => "dependencies",
-        }
-    }
-
-    /// Returns all the variants of the enum
-    pub fn all() -> impl Iterator<Item = SpecType> {
-        [SpecType::Run, SpecType::Host, SpecType::Build].into_iter()
     }
 }
 
@@ -140,8 +112,8 @@ pub struct Project {
     repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
-    /// The environment variables that are activated when the environment is activated.
-    /// Cached per environment, for both clean and normal
+    /// The environment variables that are activated when the environment is
+    /// activated. Cached per environment, for both clean and normal
     env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     /// The cache that contains mapping
     mapping_source: OnceCell<MappingSource>,
@@ -158,18 +130,22 @@ impl Debug for Project {
     }
 }
 
-impl Borrow<ProjectManifest> for Project {
-    fn borrow(&self) -> &ProjectManifest {
+impl Borrow<ParsedManifest> for Project {
+    fn borrow(&self) -> &ParsedManifest {
         self.manifest.borrow()
     }
 }
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub fn from_manifest(manifest: Manifest) -> Self {
+    fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
+        let root = manifest
+            .path
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
 
         let config = Config::load(&root);
 
@@ -193,7 +169,6 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
-    /// Assumes the manifest is a Pixi manifest
     pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
@@ -217,7 +192,7 @@ impl Project {
                         );
                     }
                 }
-                return Self::load(Path::new(env_manifest_path.as_str()));
+                return Self::from_path(Path::new(env_manifest_path.as_str()));
             }
         }
 
@@ -225,12 +200,12 @@ impl Project {
             Some(file) => file,
             None => miette::bail!(
                 "could not find {} or {} which is configured to use pixi",
-                PROJECT_MANIFEST,
-                PYPROJECT_MANIFEST
+                consts::PROJECT_MANIFEST,
+                consts::PYPROJECT_MANIFEST
             ),
         };
 
-        Self::load(&project_toml)
+        Self::from_path(&project_toml)
     }
 
     /// Returns the source code of the project as [`NamedSource`].
@@ -240,38 +215,16 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
-        // Determine the parent directory of the manifest file
-        let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
-
-        let root = full_path
-            .parent()
-            .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
-
-        // Load the TOML document
-        let manifest = Manifest::from_path(&full_path)?;
-
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
-
-        // Load the user configuration from the local project and all default locations
-        let config = Config::load(root);
-
-        Ok(Self {
-            root: root.to_owned(),
-            client: Default::default(),
-            manifest,
-            env_vars,
-            mapping_source: Default::default(),
-            config,
-            repodata_gateway: Default::default(),
-        })
+    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
+        let manifest = Manifest::from_path(manifest_path)?;
+        Ok(Project::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
-            Some(path) => Project::load(path)?,
+            Some(path) => Project::from_path(path)?,
             None => Project::discover()?,
         };
         Ok(project)
@@ -553,15 +506,6 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
-    /// Returns the custom location of pypi-name-mapping
-    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
-        self.mapping_source.get_or_init(|| {
-            self.manifest
-                .pypi_name_mapping_source(&self.config)
-                .expect("mapping source should be ok")
-        })
-    }
-
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {
         &self.client_and_authenticated_client().0
@@ -582,8 +526,91 @@ impl Project {
         &self.config
     }
 
+    /// Construct a [`ChannelConfig`] that is specific to this project. This
+    /// ensures that the root directory is set correctly.
+    pub fn channel_config(&self) -> ChannelConfig {
+        ChannelConfig {
+            root_dir: self.root.clone(),
+            ..self.config.global_channel_config().clone()
+        }
+    }
+
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
+
+    /// Returns what pypi mapping configuration we should use.
+    /// It can be a custom one  in following format : conda_name: pypi_name
+    /// Or we can use our self-hosted
+    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+        fn build_pypi_name_mapping_source(
+            manifest: &Manifest,
+            channel_config: &ChannelConfig,
+        ) -> miette::Result<MappingSource> {
+            match manifest.parsed.project.conda_pypi_map.clone() {
+                Some(url) => {
+                    // transform user defined channels into rattler::Channel
+                    let channels = url
+                        .keys()
+                        .map(|channel_str| {
+                            (
+                                channel_str,
+                                channel_str
+                                    .clone()
+                                    .into_channel(channel_config)
+                                    .canonical_name(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+
+                    let project_channels = manifest
+                        .parsed
+                        .project
+                        .channels
+                        .iter()
+                        .map(|pc| pc.channel.to_string())
+                        .collect::<HashSet<_>>();
+
+                    // Throw a warning for each missing channel from project table
+                    channels.iter().for_each(|(_, channel_canonical_name)| {
+                        if !project_channels.contains(channel_canonical_name) {
+                            tracing::warn!(
+                                "Defined custom mapping channel {} is missing from project channels",
+                                channel_canonical_name
+                            );
+                        }
+                    });
+
+                    let mapping = channels
+                        .iter()
+                        .map(|(channel_str, channel)| {
+                            let mapping_location = url.get(channel_str).unwrap();
+
+                            let url_or_path = match Url::parse(mapping_location) {
+                                Ok(url) => MappingLocation::Url(url),
+                                Err(err) => {
+                                    if let ParseError::RelativeUrlWithoutBase = err {
+                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                    } else {
+                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                                    }
+                                }
+                            };
+
+                            Ok((channel.trim_end_matches('/').into(), url_or_path))
+                        })
+                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+
+                    Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
+                }
+                None => Ok(MappingSource::Prefix),
+            }
+        }
+
+        self.mapping_source.get_or_init(|| {
+            build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
+                .expect("mapping source should be ok")
+        })
     }
 }
 
@@ -593,14 +620,14 @@ impl Project {
 pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
-        [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
+        [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
             .iter()
             .find_map(|manifest| {
                 let path = dir.join(manifest);
                 if path.is_file() {
                     match *manifest {
-                        PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST
+                        consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
+                        consts::PYPROJECT_MANIFEST
                             if PyProjectToml::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {
@@ -695,12 +722,12 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use pixi_manifest::FeatureName;
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
-    use self::has_features::HasFeatures;
     use super::*;
-    use crate::project::manifest::FeatureName;
+    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -751,7 +778,7 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: CondaDependencies) -> String {
+    fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")
