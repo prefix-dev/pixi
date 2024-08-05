@@ -15,11 +15,11 @@ use url::Url;
 
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
-    utils::conda_environment_file::CondaEnvFile,
     Project,
 };
 use pixi_config::{get_default_author, Config};
 use pixi_consts::consts;
+use pixi_utils::conda_environment_file::CondaEnvFile;
 
 /// Creates a new project
 #[derive(Parser, Debug)]

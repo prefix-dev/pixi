@@ -13,11 +13,11 @@ use strsim::jaro;
 use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
-
-use crate::{repodata::fetch_sparse_repodata, utils::reqwest::build_reqwest_clients, Project};
+use crate::{repodata::fetch_sparse_repodata, Project};
 use pixi_config::{default_channel_config, Config};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
+use pixi_utils::reqwest::build_reqwest_clients;
 
 /// Search a conda package
 ///
