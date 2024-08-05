@@ -23,7 +23,7 @@ use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
 use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
 };
 use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
@@ -628,7 +628,7 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                     match *manifest {
                         consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
                         consts::PYPROJECT_MANIFEST
-                            if PyProjectToml::from_path(&path)
+                            if PyProjectManifest::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {
                             Some(path.to_path_buf())

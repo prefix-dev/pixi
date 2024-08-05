@@ -7,7 +7,9 @@ use std::{
 use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use pixi_manifest::{pyproject::PyProjectToml, DependencyOverwriteBehavior, FeatureName, SpecType};
+use pixi_manifest::{
+    pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
+};
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
@@ -74,6 +76,9 @@ version = "{{ version }}"
 /// This is injected into an existing pyproject.toml
 const PYROJECT_TEMPLATE_EXISTING: &str = r#"
 [tool.pixi.project]
+{%- if pixi_name %}
+name = "{{ name }}"
+{%- endif %}
 channels = {{ channels }}
 platforms = {{ platforms }}
 
@@ -227,8 +232,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Inject a tool.pixi.project section into an existing pyproject.toml file if
         // there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
-            let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
-            let pyproject = PyProjectToml::from_toml_str(&file)?;
+            let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
             if pyproject.is_pixi() {
@@ -239,7 +243,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 return Ok(());
             }
 
-            let name = pyproject.name();
+            let (name, pixi_name) = match pyproject.name() {
+                Some(name) => (name, false),
+                None => (default_name, true),
+            };
             let environments = pyproject.environments_from_extras();
             let rv = env
                 .render_named_str(
@@ -247,6 +254,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     PYROJECT_TEMPLATE_EXISTING,
                     context! {
                         name,
+                        pixi_name,
                         channels,
                         platforms,
                         environments,

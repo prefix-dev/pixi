@@ -12,7 +12,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use pixi_manifest::{pyproject::PyProjectToml, SystemRequirements};
+use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
 use pypi_types::{
     HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
     ParsedUrlError, VerbatimParsedUrl,
@@ -912,18 +912,19 @@ fn is_dynamic(path: &Path) -> bool {
     let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
         return true;
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml_str(&contents) else {
+    let Ok(pyproject_toml) = PyProjectManifest::from_toml_str(&contents) else {
         return true;
     };
     // // If `[project]` is not present, we assume it's dynamic.
-    let Some(project) = pyproject_toml.project else {
+    let Some(project) = pyproject_toml.project() else {
         // ...unless it appears to be a Poetry project.
-        return pyproject_toml
-            .tool
-            .map_or(true, |tool| tool.poetry.is_none());
+        return pyproject_toml.poetry().is_none();
     };
     // `[project.dynamic]` must be present and non-empty.
-    project.dynamic.is_some_and(|dynamic| !dynamic.is_empty())
+    project
+        .dynamic
+        .as_ref()
+        .is_some_and(|dynamic| !dynamic.is_empty())
 }
 
 #[cfg(test)]
