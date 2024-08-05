@@ -15,6 +15,7 @@ use crate::common::builders::{
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::task::{
     ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
 };
@@ -239,11 +240,15 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    specs,
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(specs),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
                 editable: false,
             },
         }
@@ -253,11 +258,15 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    vec![spec],
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
             },
         }
     }
@@ -289,7 +298,10 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
+        args.project_config.manifest_path = args
+            .project_config
+            .manifest_path
+            .or_else(|| Some(self.manifest_path()));
 
         // Load the project
         let project = self.project()?;
@@ -360,7 +372,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 lock_file_usage: LockFileUsageArgs {
                     frozen: false,
                     locked: false,
@@ -377,7 +391,9 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
@@ -448,7 +464,9 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
-            manifest_path: Some(self.pixi.manifest_path()),
+            project_config: ProjectConfig {
+                manifest_path: Some(self.pixi.manifest_path()),
+            },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],
                 platform,

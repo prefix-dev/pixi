@@ -1,12 +1,12 @@
 use std::io;
 use std::io::{stdout, Write};
-use std::path::PathBuf;
 
 use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::utils::uv::pypi_options_to_index_locations;
 use crate::Project;
@@ -52,20 +52,18 @@ pub struct Args {
     #[arg(long, default_value = "name", value_enum)]
     pub sort_by: SortBy,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
-    #[arg(long)]
-    pub no_install: bool,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// Only list packages that are explicitly defined in the project.
     #[arg(short = 'x', long)]
@@ -112,13 +110,13 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
-            no_install: args.no_install,
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -217,7 +215,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{}No packages found.",
             console::style(console::Emoji("✘ ", "")).red(),
         );
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
 
@@ -234,7 +232,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

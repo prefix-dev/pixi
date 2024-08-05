@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use rattler_networking::{
     authentication_storage::{self, backends::file::FileStorageError},
     mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff,
     AuthenticationMiddleware, AuthenticationStorage, MirrorMiddleware, OciMiddleware,
 };
 
@@ -12,12 +11,6 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use std::collections::HashMap;
 
 use pixi_config::Config;
-
-/// The default retry policy employed by pixi.
-/// TODO: At some point we might want to make this configurable.
-pub fn default_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff::builder().build_with_max_retries(3)
-}
 
 fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
     if let Some(auth_file) = config.authentication_override_file() {
