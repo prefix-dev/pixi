@@ -9,6 +9,19 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
+[features]
+default = ["native-tls"]
+native-tls = [
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+  "rattler_networking/native-tls",
+]
+rustls-tls = [
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+  "rattler_networking/rustls-tls",
+]
+
 
 [dependencies]
 fd-lock = { workspace = true }

@@ -116,7 +116,7 @@ pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
-pixi_utils = { path = "crates/pixi_utils" }
+pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
@@ -140,12 +140,14 @@ native-tls = [
   "reqwest/native-tls-alpn",
   "rattler_repodata_gateway/native-tls",
   "rattler/native-tls",
+  "pixi_utils/native-tls",
 ]
 rustls-tls = [
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
   "rattler_repodata_gateway/rustls-tls",
   "rattler/rustls-tls",
+  "pixi_utils/rustls-tls",
 ]
 slow_integration_tests = []
 
@@ -226,7 +228,7 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
-pixi_utils = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
