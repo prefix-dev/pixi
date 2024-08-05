@@ -4,6 +4,7 @@ use crate::DependencyType;
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
+use pixi_consts::consts;
 use pixi_manifest::{FeatureName, SpecType};
 use rattler_conda_types::Platform;
 use std::collections::HashMap;
@@ -124,6 +125,15 @@ impl DependencyConfig {
                 "{operation} these only for platform(s): {}",
                 console::style(self.platform.iter().join(", ")).bold()
             )
+        }
+        // Print something if we've modified for features
+        if let Some(feature) = &self.feature {
+            {
+                eprintln!(
+                    "{operation} these only for feature: {}",
+                    consts::FEATURE_STYLE.apply_to(feature)
+                )
+            }
         }
     }
 }

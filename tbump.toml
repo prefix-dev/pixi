@@ -59,6 +59,10 @@ src = "install/install.ps1"
 search = "version {current_version}"
 src = "src/cli/mod.rs"
 
+[[file]]
+search = "PIXI_VERSION = \"{current_version}\""
+src = "tests/integration/test_main_cli.py"
+
 [[field]]
 # the name of the field
 name = "candidate"
