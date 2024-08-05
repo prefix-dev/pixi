@@ -120,14 +120,18 @@ pub fn as_uv_req(
                 .unwrap_or_else(String::new);
             let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
 
-            // TODO: we should maybe also give an error when editable is used for something
-            // that is not a directory.
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized,
                     lock_path: path.clone(),
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
+                }
+            } else if *editable == Some(true) {
+                {
+                    return Err(AsPep508Error::EditableIsNotDir {
+                        path: canonicalized,
+                    });
                 }
             } else {
                 RequirementSource::Path {

@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::convert::identity;
-use std::{collections::HashMap, path::PathBuf, string::String};
+use std::{collections::HashMap, string::String};
 
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
@@ -11,6 +11,7 @@ use pixi_config::ConfigCli;
 use pixi_progress::await_in_progress;
 
 use crate::activation::CurrentEnvVarBehavior;
+use crate::cli::cli_config::ProjectConfig;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
@@ -35,9 +36,8 @@ pub struct Args {
     #[arg(required = true)]
     pub task: Vec<String>,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
@@ -60,8 +60,8 @@ pub struct Args {
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.config);
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
@@ -202,7 +202,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

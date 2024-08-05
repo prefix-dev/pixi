@@ -15,6 +15,7 @@ use pixi_utils::indicatif::IndicatifWriter;
 
 pub mod add;
 pub mod clean;
+pub mod cli_config;
 pub mod completion;
 pub mod config;
 mod exec;

@@ -19,7 +19,7 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-pub fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
