@@ -1,6 +1,7 @@
 [package]
 name = "pixi_spec"
 version = "0.1.0"
+description = "Provides a Rust representation of a Pixi spec"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

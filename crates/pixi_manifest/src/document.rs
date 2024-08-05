@@ -403,13 +403,7 @@ mod tests {
                 .into_nameless()
                 .1;
             let spec = Spec::from(spec);
-            table.insert(
-                example,
-                Item::Value(
-                    serde::Serialize::serialize(&spec, toml_edit::ser::ValueSerializer::new())
-                        .unwrap(),
-                ),
-            );
+            table.insert(example, Item::Value(spec.to_toml_value()));
         }
         assert_snapshot!(table);
     }
