@@ -3471,6 +3471,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_spec",
  "platform-tags",
  "pypi-types",
  "pypi_mapping",
@@ -3581,6 +3582,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
+ "pixi_spec",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
@@ -3635,6 +3637,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "thiserror",
+ "toml_edit 0.22.13",
  "typed-path",
  "url",
 ]

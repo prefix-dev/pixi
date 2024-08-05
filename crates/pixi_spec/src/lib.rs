@@ -20,6 +20,7 @@ use rattler_conda_types::{
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
+use std::str::FromStr;
 use thiserror::Error;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 use url::Url;
@@ -42,7 +43,7 @@ pub enum SpecConversionError {
 /// This type can represent both source and binary packages. Use the
 /// [`Self::to_nameless_match_spec`] method to convert this type into a type
 /// that only represents binary packages.
-#[derive(Debug, Clone, Hash, ::serde::Serialize)]
+#[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Spec {
     /// The spec is represented soley by a version string. The package should be
@@ -84,11 +85,56 @@ impl From<VersionSpec> for Spec {
     }
 }
 
+impl From<NamelessMatchSpec> for Spec {
+    fn from(value: NamelessMatchSpec) -> Self {
+        if let Some(url) = value.url {
+            Self::Url(UrlSpec {
+                url,
+                md5: value.md5,
+                sha256: value.sha256,
+            })
+        } else if value.build.is_none()
+            && value.build_number.is_none()
+            && value.file_name.is_none()
+            && value.channel.is_none()
+            && value.subdir.is_none()
+            && value.md5.is_none()
+            && value.sha256.is_none()
+        {
+            Self::Version(value.version.unwrap_or(VersionSpec::Any))
+        } else {
+            Self::DetailedVersion(DetailedVersionSpec {
+                version: value.version.unwrap_or(VersionSpec::Any),
+                build: value.build,
+                build_number: value.build_number,
+                file_name: value.file_name,
+                channel: value
+                    .channel
+                    .map(|c| NamedChannelOrUrl::from_str(c.name()).unwrap()),
+                subdir: value.subdir,
+                md5: value.md5,
+                sha256: value.sha256,
+            })
+        }
+    }
+}
+
 impl Spec {
+    /// Returns true if this spec has a version spec. `*` does not count as a
+    /// valid version spec.
+    pub fn has_version_spec(&self) -> bool {
+        match self {
+            Self::Version(v) => v != &VersionSpec::Any,
+            Self::DetailedVersion(v) => v.version != VersionSpec::Any,
+            _ => false,
+        }
+    }
+
     /// Returns a [`VersionSpec`] if this instance is a version spec.
     pub fn as_version(&self) -> Option<&VersionSpec> {
         match self {
             Self::Version(v) => Some(v),
+            Self::DetailedVersion(v) => Some(&v.version),
             _ => None,
         }
     }
@@ -189,6 +235,13 @@ impl Spec {
         };
 
         Ok(spec)
+    }
+
+    #[cfg(feature = "toml_edit")]
+    /// Converts this instance into a [`toml_edit::Value`].
+    pub fn to_toml_value(&self) -> toml_edit::Value {
+        ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
     }
 }
 
@@ -401,6 +454,14 @@ impl PathSpec {
 impl From<PathSpec> for Spec {
     fn from(value: PathSpec) -> Self {
         Self::Path(value)
+    }
+}
+
+#[cfg(feature = "toml_edit")]
+impl From<Spec> for toml_edit::Value {
+    fn from(value: Spec) -> Self {
+        ::serde::Serialize::serialize(&value, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
     }
 }
 

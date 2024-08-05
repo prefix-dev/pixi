@@ -1,7 +1,8 @@
 use std::fmt;
 
-use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName, Platform};
-use toml_edit::{value, Array, InlineTable, Item, Table, Value};
+use pixi_spec::Spec;
+use rattler_conda_types::{PackageName, Platform};
+use toml_edit::{value, Array, Item, Table, Value};
 
 use super::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
@@ -226,18 +227,14 @@ impl ManifestSource {
     pub fn add_dependency(
         &mut self,
         name: &PackageName,
-        spec: &NamelessMatchSpec,
+        spec: &Spec,
         spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-        channel_config: &ChannelConfig,
     ) -> Result<(), TomlError> {
         let dependency_table =
             self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-        dependency_table.insert(
-            name.as_normalized(),
-            Item::Value(nameless_match_spec_to_toml(spec, channel_config)),
-        );
+        dependency_table.insert(name.as_normalized(), Item::Value(spec.to_toml_value()));
         Ok(())
     }
 
@@ -370,91 +367,9 @@ impl ManifestSource {
     }
 }
 
-/// Given a nameless matchspec convert it into a TOML value. If the spec only
-/// contains a version a string is returned, otherwise an entire table is
-/// constructed.
-fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec, channel_config: &ChannelConfig) -> Value {
-    match spec {
-        NamelessMatchSpec {
-            version,
-            build: None,
-            build_number: None,
-            file_name: None,
-            channel: None,
-            subdir: None,
-            namespace: None,
-            md5: None,
-            sha256: None,
-            url: None,
-        } => {
-            // No other fields besides the version was specified, so we can just return the
-            // version as a string.
-            version
-                .as_ref()
-                .map_or_else(|| String::from("*"), |v| v.to_string())
-                .into()
-        }
-        NamelessMatchSpec {
-            version,
-            build,
-            build_number,
-            file_name,
-            channel,
-            subdir,
-            namespace,
-            md5,
-            sha256,
-            url,
-        } => {
-            let mut table = InlineTable::new();
-            table.insert(
-                "version",
-                version
-                    .as_ref()
-                    .map_or_else(|| String::from("*"), |v| v.to_string())
-                    .into(),
-            );
-            if let Some(build) = build {
-                table.insert("build", build.to_string().into());
-            }
-            if let Some(build_number) = build_number {
-                table.insert("build_number", build_number.to_string().into());
-            }
-            if let Some(file_name) = file_name {
-                table.insert("file_name", file_name.to_string().into());
-            }
-            if let Some(channel) = channel {
-                table.insert(
-                    "channel",
-                    channel_config
-                        .canonical_name(channel.base_url())
-                        .as_str()
-                        .into(),
-                );
-            }
-            if let Some(subdir) = subdir {
-                table.insert("subdir", subdir.to_string().into());
-            }
-            if let Some(namespace) = namespace {
-                table.insert("namespace", namespace.to_string().into());
-            }
-            if let Some(md5) = md5 {
-                table.insert("md5", format!("{:x}", md5).into());
-            }
-            if let Some(sha256) = sha256 {
-                table.insert("sha256", format!("{:x}", sha256).into());
-            }
-            if let Some(url) = url {
-                table.insert("url", url.to_string().into());
-            }
-            table.into()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use insta::assert_snapshot;
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
@@ -482,15 +397,18 @@ mod tests {
         ];
 
         let mut table = toml_edit::DocumentMut::new();
-        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
         for example in examples {
             let spec = MatchSpec::from_str(example, Strict)
                 .unwrap()
                 .into_nameless()
                 .1;
+            let spec = Spec::from(spec);
             table.insert(
                 example,
-                Item::Value(nameless_match_spec_to_toml(&spec, &channel_config)),
+                Item::Value(
+                    serde::Serialize::serialize(&spec, toml_edit::ser::ValueSerializer::new())
+                        .unwrap(),
+                ),
             );
         }
         assert_snapshot!(table);

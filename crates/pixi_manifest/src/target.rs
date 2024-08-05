@@ -2,9 +2,10 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
+use pixi_spec::Spec;
+use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Deserializer};
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde_with::serde_as;
 
 use super::error::DependencyError;
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
 #[derive(Default, Debug, Clone)]
 pub struct Target {
     /// Dependencies for this target.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, NamelessMatchSpec>>,
+    pub dependencies: HashMap<SpecType, IndexMap<PackageName, Spec>>,
 
     /// Specific python dependencies
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -35,17 +36,17 @@ pub struct Target {
 
 impl Target {
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, Spec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, Spec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, Spec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
@@ -63,7 +64,7 @@ impl Target {
     pub fn dependencies(
         &self,
         spec_type: Option<SpecType>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+    ) -> Option<Cow<'_, IndexMap<PackageName, Spec>>> {
         if let Some(spec_type) = spec_type {
             self.dependencies.get(&spec_type).map(Cow::Borrowed)
         } else {
@@ -81,7 +82,7 @@ impl Target {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, Spec>>> {
         let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
@@ -113,7 +114,7 @@ impl Target {
         &self,
         dep_name: &PackageName,
         spec_type: Option<SpecType>,
-        exact: Option<&NamelessMatchSpec>,
+        exact: Option<&Spec>,
     ) -> bool {
         let current_dependency = self
             .dependencies(spec_type)
@@ -133,7 +134,7 @@ impl Target {
         &mut self,
         dep_name: &PackageName,
         spec_type: SpecType,
-    ) -> Result<(PackageName, NamelessMatchSpec), DependencyError> {
+    ) -> Result<(PackageName, Spec), DependencyError> {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
             return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
@@ -145,12 +146,7 @@ impl Target {
     /// Adds a dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_dependency(
-        &mut self,
-        dep_name: &PackageName,
-        spec: &NamelessMatchSpec,
-        spec_type: SpecType,
-    ) {
+    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &Spec, spec_type: SpecType) {
         self.dependencies
             .entry(spec_type)
             .or_default()
@@ -164,13 +160,13 @@ impl Target {
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
-        spec: &NamelessMatchSpec,
+        spec: &Spec,
         spec_type: SpecType,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, Some(spec_type), None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if spec.version.is_none() => {
+                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
                     return Ok(false)
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
@@ -342,16 +338,16 @@ impl<'de> Deserialize<'de> for Target {
         #[serde(deny_unknown_fields)]
         pub struct TomlTarget {
             #[serde(default)]
-            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
-            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+            // #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            dependencies: IndexMap<PackageName, Spec>,
 
             #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            // #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            host_dependencies: Option<IndexMap<PackageName, Spec>>,
 
             #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            // #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            build_dependencies: Option<IndexMap<PackageName, Spec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -595,7 +591,7 @@ mod tests {
             .dependencies(None)
             .unwrap_or_default()
             .iter()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version().unwrap().to_string()))
             .join("\n"), @r###"
         run = ==2.0
         host = ==2.0

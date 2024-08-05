@@ -19,12 +19,16 @@ use std::{
 
 use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
+pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
+use pixi_config::Config;
+use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
 };
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
@@ -37,11 +41,6 @@ use crate::{
     project::grouped_environment::GroupedEnvironment,
     utils::reqwest::build_reqwest_clients,
 };
-use pixi_config::Config;
-use pixi_consts::consts;
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-
-pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -722,12 +721,11 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::FeatureName;
+    use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
     use super::*;
-    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -780,7 +778,13 @@ mod tests {
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
-            .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
+            .map(|(name, spec)| {
+                format!(
+                    "{} = {}",
+                    name.as_source(),
+                    spec.to_toml_value().to_string()
+                )
+            })
             .join("\n")
     }
 

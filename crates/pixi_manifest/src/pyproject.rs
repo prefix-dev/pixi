@@ -2,8 +2,9 @@ use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
 use miette::{IntoDiagnostic, Report};
 use pep440_rs::VersionSpecifiers;
+use pixi_spec::Spec;
 use pyproject_toml::{self, BuildSystem, Project};
-use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
+use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 
 use super::{
@@ -98,9 +99,10 @@ impl From<PyProjectManifest> for ParsedManifest {
             });
         }
 
-        // TODO:  would be nice to add license, license-file, readme, homepage, repository, documentation,
-        // regarding the above, the types are a bit different than we expect, so the conversion is not straightforward
-        // we could change these types or we can convert. Let's decide when we make it.
+        // TODO:  would be nice to add license, license-file, readme, homepage,
+        // repository, documentation, regarding the above, the types are a bit
+        // different than we expect, so the conversion is not straightforward we
+        // could change these types or we can convert. Let's decide when we make it.
         // etc.
 
         // Add python as dependency based on the project.requires_python property (if
@@ -114,7 +116,7 @@ impl From<PyProjectManifest> for ParsedManifest {
         if !target.has_dependency(&python, Some(SpecType::Run), None) {
             target.add_dependency(
                 &python,
-                &version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
@@ -162,22 +164,18 @@ impl From<PyProjectManifest> for ParsedManifest {
 /// Try to return a NamelessMatchSpec from a pep508_rs::VersionOrUrl
 /// This will only work if it is not URL and the VersionSpecifier can
 /// successfully be interpreted as a NamelessMatchSpec.version
-fn version_or_url_to_nameless_matchspec(
+fn version_or_url_to_spec(
     version: &Option<VersionSpecifiers>,
-) -> Result<NamelessMatchSpec, RequirementConversionError> {
+) -> Result<Spec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
         Some(v) => {
             let version_string = v.to_string();
             // Double equals works a bit different in conda vs. python
             let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
-
-            Ok(NamelessMatchSpec::from_str(version_string, Lenient)?)
+            Ok(VersionSpec::from_str(version_string, Lenient)?.into())
         }
-        None => Ok(NamelessMatchSpec {
-            version: Some(VersionSpec::Any),
-            ..Default::default()
-        }),
+        None => Ok(Spec::default()),
     }
 }
 
@@ -527,9 +525,10 @@ mod tests {
     fn test_version_url_to_matchspec() {
         fn cmp(v1: &str, v2: &str) {
             let v = VersionSpecifiers::from_str(v1).unwrap();
-            let matchspec = super::version_or_url_to_nameless_matchspec(&Some(v)).unwrap();
+            let matchspec = super::version_or_url_to_spec(&Some(v)).unwrap();
+            let version_spec = matchspec.as_version().unwrap();
             let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
-            assert_eq!(matchspec.version, Some(vspec));
+            assert_eq!(version_spec, &vspec);
         }
 
         // Check that we remove leading `==` for the conda version spec

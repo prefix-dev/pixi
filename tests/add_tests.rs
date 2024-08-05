@@ -1,19 +1,20 @@
 mod common;
 
-use crate::common::builders::{HasDependencyConfig, HasPrefixUpdateConfig};
-use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::LockFileExt;
-use crate::common::PixiControl;
+use std::str::FromStr;
+
 use pixi::{DependencyType, Project};
 use pixi_consts::consts;
-use pixi_manifest::pypi::PyPiPackageName;
-use pixi_manifest::FeaturesExt;
-use pixi_manifest::SpecType;
+use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
-use std::str::FromStr;
 use tempfile::TempDir;
 use uv_normalize::ExtraName;
+
+use crate::common::{
+    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -98,10 +99,18 @@ async fn add_with_channel() {
 
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
-    assert_eq!(spec.channel.unwrap().name(), "conda-forge");
+    assert_eq!(
+        spec.into_detailed_version()
+            .unwrap()
+            .channel
+            .unwrap()
+            .as_str(),
+        "conda-forge"
+    );
 }
 
-/// Test that we get the union of all packages in the lockfile for the run, build and host
+/// Test that we get the union of all packages in the lockfile for the run,
+/// build and host
 #[tokio::test]
 async fn add_functionality_union() {
     let mut package_database = PackageDatabase::default();
@@ -295,7 +304,8 @@ async fn add_pypi_functionality() {
         Platform::Linux64,
         pep508_rs::Requirement::from_str("pytest").unwrap(),
     ));
-    // Test that the dev extras are added, mock is a test dependency of `pytest==8.3.2`
+    // Test that the dev extras are added, mock is a test dependency of
+    // `pytest==8.3.2`
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,

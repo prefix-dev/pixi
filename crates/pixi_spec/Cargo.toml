@@ -19,6 +19,7 @@ typed-path = { workspace = true }
 url = { workspace = true }
 file_url = { workspace = true }
 thiserror = { workspace = true }
+toml_edit = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }

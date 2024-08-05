@@ -7,7 +7,8 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
+use pixi_spec::Spec;
+use rattler_conda_types::{PackageName, Platform};
 use rattler_solve::ChannelPriority;
 use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::{serde_as, SerializeDisplay};
@@ -15,8 +16,6 @@ use serde_with::{serde_as, SerializeDisplay};
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
     consts,
-    parsed_manifest::deserialize_opt_package_map,
-    parsed_manifest::deserialize_package_map,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
@@ -196,7 +195,7 @@ impl Feature {
         &self,
         spec_type: Option<SpecType>,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+    ) -> Option<Cow<'_, IndexMap<PackageName, Spec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -311,14 +310,14 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            #[serde(default, deserialize_with = "deserialize_package_map")]
-            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+            #[serde(default)]
+            dependencies: IndexMap<PackageName, Spec>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            #[serde(default)]
+            host_dependencies: Option<IndexMap<PackageName, Spec>>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            #[serde(default)]
+            build_dependencies: Option<IndexMap<PackageName, Spec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,

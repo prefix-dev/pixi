@@ -116,6 +116,7 @@ zip = { version = "0.6.6", default-features = false }
 fancy_display = { path = "crates/fancy_display" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
+pixi_spec = { path = "crates/pixi_spec" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
@@ -137,16 +138,16 @@ version = "0.26.1"
 [features]
 default = ["native-tls"]
 native-tls = [
-  "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
-  "rattler_repodata_gateway/native-tls",
-  "rattler/native-tls",
+    "reqwest/native-tls",
+    "reqwest/native-tls-alpn",
+    "rattler_repodata_gateway/native-tls",
+    "rattler/native-tls",
 ]
 rustls-tls = [
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
-  "rattler_repodata_gateway/rustls-tls",
-  "rattler/rustls-tls",
+    "reqwest/rustls-tls",
+    "reqwest/rustls-tls-native-roots",
+    "rattler_repodata_gateway/rustls-tls",
+    "rattler/rustls-tls",
 ]
 slow_integration_tests = []
 
@@ -158,13 +159,13 @@ barrier_cell = { path = "crates/barrier_cell" }
 cfg-if = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
-  "derive",
-  "usage",
-  "wrap_help",
-  "std",
-  "color",
-  "error-context",
-  "env",
+    "derive",
+    "usage",
+    "wrap_help",
+    "std",
+    "color",
+    "error-context",
+    "env",
 ] }
 clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
@@ -194,12 +195,12 @@ is_executable = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 miette = { workspace = true, features = [
-  "fancy",
-  "supports-color",
-  "supports-hyperlinks",
-  "supports-unicode",
-  "terminal_size",
-  "textwrap",
+    "fancy",
+    "supports-color",
+    "supports-hyperlinks",
+    "supports-unicode",
+    "terminal_size",
+    "textwrap",
 ] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
@@ -216,14 +217,15 @@ rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
-  "sparse",
-  "gateway",
+    "sparse",
+    "gateway",
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
 pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
 pixi_consts = { workspace = true }
+pixi_spec = { workspace = true, features = ["toml_edit"] }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
@@ -232,8 +234,8 @@ pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
-  "http2",
-  "macos-system-configuration",
+    "http2",
+    "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
@@ -280,12 +282,12 @@ signal-hook = { workspace = true }
 # Remove this after updating to uv >= 0.1.40
 [target.'cfg(windows)'.dependencies]
 winapi = { workspace = true, features = [
-  "fileapi",
-  "handleapi",
-  "ioapiset",
-  "winbase",
-  "winioctl",
-  "winnt",
+    "fileapi",
+    "handleapi",
+    "ioapiset",
+    "winbase",
+    "winioctl",
+    "winnt",
 ] }
 
 [dev-dependencies]

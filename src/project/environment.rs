@@ -432,7 +432,13 @@ mod tests {
     fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| {
+                format!(
+                    "{} = {}",
+                    name.as_source(),
+                    spec.to_toml_value().to_string()
+                )
+            })
             .join("\n")
     }
 

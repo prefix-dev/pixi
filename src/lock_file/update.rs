@@ -13,6 +13,7 @@ use std::{
 };
 
 use barrier_cell::BarrierCell;
+use fancy_display::FancyDisplay;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::IndexSet;
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
@@ -20,9 +21,10 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, HasFeaturesIter};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::is_python_record;
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_progress::global_multi_progress;
+use pypi_mapping::{self, Reporter};
+use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
@@ -33,7 +35,6 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
-use crate::project::HasProjectRef;
 use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
@@ -48,14 +49,10 @@ use crate::{
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment,
+        Environment, HasProjectRef,
     },
     Project,
 };
-use fancy_display::FancyDisplay;
-use pixi_manifest::FeaturesExt;
-use pixi_progress::global_multi_progress;
-use pypi_mapping::{self, Reporter};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -1479,7 +1476,12 @@ async fn spawn_solve_conda_environment_task(
             let match_specs = dependencies
                 .iter_specs()
                 .map(|(name, constraint)| {
-                    MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
+                    let nameless = constraint
+                        .clone()
+                        .into_nameless_match_spec(&channel_config)
+                        .unwrap()
+                        .expect("only binaries are supported at the moment");
+                    MatchSpec::from_nameless(nameless, Some(name.clone()))
                 })
                 .collect_vec();
 
@@ -1492,7 +1494,7 @@ async fn spawn_solve_conda_environment_task(
                         .into_iter()
                         .map(|c| c.into_channel(&channel_config)),
                     [platform, Platform::NoArch],
-                    dependencies.clone().into_match_specs(),
+                    match_specs.clone(),
                 )
                 .recursive(true)
                 .with_reporter(GatewayProgressReporter::new(pb.clone()))
