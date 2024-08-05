@@ -1,10 +1,11 @@
+use std::cmp::PartialEq;
 use std::{
     fs,
     io::{Error, ErrorKind, Write},
     path::{Path, PathBuf},
 };
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use pixi_manifest::{
@@ -20,6 +21,12 @@ use crate::{
 use pixi_config::{get_default_author, Config};
 use pixi_consts::consts;
 use pixi_utils::conda_environment_file::CondaEnvFile;
+
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum ManifestFormat {
+    Pixi,
+    Pyproject,
+}
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -40,9 +47,14 @@ pub struct Args {
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
 
+    /// The manifest format to create.
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"],)]
+    pub format: Option<ManifestFormat>,
+
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    #[arg(long, conflicts_with = "env_file")]
-    pub pyproject: bool,
+    // BREAK (0.27.0): Remove this option from the cli in favor of the `format` option.
+    #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
+    pub pyproject_toml: bool,
 }
 
 /// The pixi.toml template
@@ -151,6 +163,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
 
+    // Deprecation warning for the `pyproject` option
+    if args.pyproject_toml {
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
+            console::style("--pyproject").bold().red(),
+            console::style("--format pyproject").bold().green(),
+        );
+    }
+
     // Fail silently if the directory already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
@@ -173,7 +195,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         let env_file = CondaEnvFile::from_path(&env_file_path)?;
-        let name = env_file.name().unwrap_or(default_name.as_str()).to_string();
+        let name = env_file
+            .name()
+            .unwrap_or(default_name.clone().as_str())
+            .to_string();
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
@@ -229,9 +254,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let index_url = config.pypi_config.index_url;
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
+        // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
+        // If nothing is defined but there is a `pyproject.toml` file, ask the user.
+        let pyproject = if !pixi_manifest_path.is_file()
+            && args.format.is_none()
+            && !args.pyproject_toml
+            && pyproject_manifest_path.is_file()
+        {
+            dialoguer::Confirm::new()
+                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()) )
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?
+        } else {
+            args.format == Some(ManifestFormat::Pyproject) || args.pyproject_toml
+        };
+
         // Inject a tool.pixi.project section into an existing pyproject.toml file if
         // there is one without '[tool.pixi.project]'
-        if pyproject_manifest_path.is_file() {
+        if pyproject && pyproject_manifest_path.is_file() {
             let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
@@ -245,7 +287,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             let (name, pixi_name) = match pyproject.name() {
                 Some(name) => (name, false),
-                None => (default_name, true),
+                None => (default_name.clone(), true),
             };
             let environments = pyproject.environments_from_extras();
             let rv = env
@@ -292,8 +334,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
-        // Create a 'pyproject.toml' manifest
-        } else if args.pyproject {
+            // Create a 'pyproject.toml' manifest
+        }
+        if pyproject {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
@@ -309,7 +352,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     },
                 )
                 .unwrap();
-            fs::write(&pyproject_manifest_path, rv).into_diagnostic()?;
+            save_manifest_file(&pyproject_manifest_path, rv)?;
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to
@@ -327,7 +370,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 index_url.as_ref(),
                 &extra_index_urls,
             );
-            fs::write(&pixi_manifest_path, rv).into_diagnostic()?;
+            save_manifest_file(&pixi_manifest_path, rv)?;
         };
     }
 
@@ -348,13 +391,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             e
         );
     }
-
-    // Emit success
-    eprintln!(
-        "{}Initialized project in {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        dir.display()
-    );
 
     Ok(())
 }
@@ -384,6 +420,20 @@ fn render_project(
         },
     )
     .unwrap()
+}
+
+/// Save the rendered template to a file, and print a message to the user.
+fn save_manifest_file(path: &Path, content: String) -> miette::Result<()> {
+    fs::write(path, content).into_diagnostic()?;
+    eprintln!(
+        "{}Created {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+        dunce::canonicalize(path)
+            .unwrap_or(path.to_path_buf())
+            .display()
+    );
+    Ok(())
 }
 
 fn get_name_from_dir(path: &Path) -> miette::Result<String> {
