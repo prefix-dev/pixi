@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -231,7 +231,6 @@ pub fn get_static_environment_variables<'p>(
 
     // Get environment variables from the pixi environment
     let environment_env = environment.get_metadata_env();
-
 
     // Combine the environments
     project_env
