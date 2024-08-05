@@ -1,0 +1,72 @@
+---
+source: crates/pixi_spec/src/serde.rs
+assertion_line: 276
+expression: snapshot
+---
+- input: 1.2.3
+  result: "==1.2.3"
+- input:
+    version: 1.2.3
+  result:
+    version: "==1.2.3"
+- input:
+    ver: 1.2.3
+  result:
+    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build_number`, `file_name`, `channel`, `subdir`, `md5`, `sha256`"
+- input: "*"
+  result: "*"
+- input:
+    path: foobar
+  result:
+    path: foobar
+- input:
+    path: foobar
+    version: 1.2.3
+  result:
+    error: "ERROR: only one of `version`, `url`, `path`, or `git` can be specified"
+- input:
+    version: //
+  result:
+    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+- input:
+    path: foobar
+    version: //
+  result:
+    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+- input:
+    path: foobar
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: `sha256` is only valid when `version` or `url` is specified"
+- input:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    version: 1.2.3
+  result:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    version: "==1.2.3"
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+  result:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+  result:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+- input:
+    branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+- input:
+    branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    tag: v1
+  result:
+    error: "ERROR: only one of `branch`, `rev`, or `tag` can be specified"

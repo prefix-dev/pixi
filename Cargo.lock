@@ -768,6 +768,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
+name = "cfg_eval"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45565fc9416b9896014f5732ac776f810ee53a66730c17e4020c3ec064a8f88f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
+]
+
+[[package]]
 name = "charset"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2300,6 +2311,7 @@ dependencies = [
  "globset",
  "lazy_static",
  "linked-hash-map",
+ "regex",
  "serde",
  "similar",
  "walkdir",
@@ -3606,6 +3618,25 @@ dependencies = [
  "libc",
  "nix 0.28.0",
  "signal-hook",
+]
+
+[[package]]
+name = "pixi_spec"
+version = "0.1.0"
+dependencies = [
+ "cfg_eval",
+ "file_url",
+ "insta",
+ "rattler_conda_types",
+ "rattler_digest",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror",
+ "typed-path",
+ "url",
 ]
 
 [[package]]
@@ -5873,9 +5904,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "typed-path"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a3023f4683cd1a846dbd2666e8c34f54338ee5cebae578cda981a87cecd7aa"
+checksum = "04645b6c01cfb2ddabffc7c67ae6bfe7c3e28a5c37d729f6bb498e784f1fd70c"
 
 [[package]]
 name = "typeid"

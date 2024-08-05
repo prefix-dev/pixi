@@ -1,0 +1,26 @@
+[package]
+name = "pixi_spec"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[dependencies]
+cfg_eval = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+serde = { workspace = true }
+serde_with = { workspace = true }
+serde-untagged = { workspace = true }
+typed-path = { workspace = true }
+url = { workspace = true }
+file_url = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "filters"] }
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
