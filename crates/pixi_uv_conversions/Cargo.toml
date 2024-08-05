@@ -1,0 +1,23 @@
+[package]
+authors.workspace = true
+description = "Conversion between pixi and uv types"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_uv_conversions"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+
+[dependencies]
+distribution-types = { workspace = true }
+dunce = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_manifest = { workspace = true }
+pypi-types = { workspace = true }
+rattler_lock = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+uv-git = { workspace = true }
+uv-normalize = { workspace = true }
