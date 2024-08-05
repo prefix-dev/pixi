@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -68,14 +69,14 @@ const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
 
 impl Environment<'_> {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+    pub fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
                 format!("{}:{}", self.project().name(), name)
             }
             EnvironmentName::Default => self.project().name().to_string(),
         };
-        let mut map = HashMap::from_iter([
+        let mut map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
@@ -83,6 +84,8 @@ impl Environment<'_> {
             ),
             ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
         ]);
+
+        // Add the activation environment variables
         map.extend(self.activation_env(Some(Platform::current())));
         map
     }
@@ -211,14 +214,12 @@ pub async fn run_activation(
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
+/// This returns an IndexMap to make sure they get exported in the correct order.
 pub fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
-) -> HashMap<String, String> {
-    // Get environment variables from the project
+) -> IndexMap<String, String> {
+    // Get environment variables from the pixi project meta data
     let project_env = environment.project().get_metadata_env();
-
-    // Get environment variables from the environment
-    let environment_env = environment.get_metadata_env();
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
@@ -228,11 +229,15 @@ pub fn get_static_environment_variables<'p>(
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
 
+    // Get environment variables from the pixi environment
+    let environment_env = environment.get_metadata_env();
+
+
     // Combine the environments
     project_env
         .into_iter()
-        .chain(environment_env)
         .chain(shell_env)
+        .chain(environment_env)
         .collect()
 }
 
