@@ -380,6 +380,37 @@ mod tests {
     }
 
     #[test]
+    fn test_metadata_project_env_order() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = [""]
+        platforms = ["linux-64", "osx-64", "win-64"]
+
+        [activation.env]
+        ABC = "123test123"
+        ZZZ = "123test123"
+        ZAB = "123test123"
+        "#;
+        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let env = get_static_environment_variables(&project.default_environment());
+
+        // Make sure the user defined environment variables are at the end.
+        assert!(
+            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
+                < env.keys().position(|key| key == "ABC")
+        );
+        assert!(
+            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
+                < env.keys().position(|key| key == "ZZZ")
+        );
+
+        // Make sure the user defined environment variables are sorted by input order.
+        assert!(env.keys().position(|key| key == "ABC") < env.keys().position(|key| key == "ZZZ"));
+        assert!(env.keys().position(|key| key == "ZZZ") < env.keys().position(|key| key == "ZAB"));
+    }
+
+    #[test]
     #[cfg(target_os = "unix")]
     fn test_get_linux_clean_environment_variables() {
         let env = get_clean_environment_variables();
