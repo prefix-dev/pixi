@@ -268,7 +268,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .interact()
                 .into_diagnostic()?
         } else {
-            args.format.is_some_and(|f| f == ManifestFormat::Pyproject) || args.pyproject_toml
+            args.format == Some(ManifestFormat::Pyproject) || args.pyproject_toml
         };
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if
