@@ -256,15 +256,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
         // If nothing is defined but there is a `pyproject.toml` file, ask the user.
-        let pyproject  = if !pixi_manifest_path.is_file() && args.format.is_none() && !args.pyproject_toml && pyproject_manifest_path.is_file(){
+        let pyproject = if !pixi_manifest_path.is_file()
+            && args.format.is_none()
+            && !args.pyproject_toml
+            && pyproject_manifest_path.is_file()
+        {
             dialoguer::Confirm::new()
                 .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()) )
                 .default(false)
                 .show_default(true)
                 .interact()
+                .into_diagnostic()?
         } else {
-            Ok(args.format.is_some_and(|f| f == ManifestFormat::Pyproject) || args.pyproject_toml)
-        }.into_diagnostic()?;
+            args.format.is_some_and(|f| f == ManifestFormat::Pyproject) || args.pyproject_toml
+        };
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if
         // there is one without '[tool.pixi.project]'
