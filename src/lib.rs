@@ -9,7 +9,6 @@ mod prefix;
 mod project;
 mod prompt;
 pub mod task;
-pub mod utils;
 
 mod uv_reporter;
 

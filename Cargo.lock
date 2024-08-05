@@ -3459,6 +3459,8 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_utils",
+ "pixi_uv_conversions",
  "platform-tags",
  "pypi-types",
  "pypi_mapping",
@@ -3606,6 +3608,47 @@ dependencies = [
  "libc",
  "nix 0.29.0",
  "signal-hook",
+]
+
+[[package]]
+name = "pixi_utils"
+version = "0.1.0"
+dependencies = [
+ "fd-lock",
+ "indicatif",
+ "insta",
+ "itertools 0.12.1",
+ "miette 7.2.0",
+ "pep508_rs",
+ "pixi_config",
+ "rattler_conda_types",
+ "rattler_networking",
+ "reqwest 0.12.4",
+ "reqwest-middleware",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "pixi_uv_conversions"
+version = "0.1.0"
+dependencies = [
+ "distribution-types",
+ "dunce",
+ "pep508_rs",
+ "pixi_manifest",
+ "pypi-types",
+ "rattler_lock",
+ "thiserror",
+ "url",
+ "uv-git",
+ "uv-normalize",
 ]
 
 [[package]]

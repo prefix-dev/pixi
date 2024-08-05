@@ -9,15 +9,13 @@ use std::{
 
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::HasProjectRef;
-use crate::{
-    project::{grouped_environment::GroupedEnvironment, Environment},
-    utils::uv::{as_uv_req, AsPep508Error},
-};
+use crate::project::{grouped_environment::GroupedEnvironment, Environment};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
+use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,

@@ -1,0 +1,47 @@
+[package]
+authors.workspace = true
+description = "Utilities for use between pixi crates, contains misc features that could not be placed in other crates"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_utils"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[features]
+default = ["native-tls"]
+native-tls = [
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+  "rattler_networking/native-tls",
+]
+rustls-tls = [
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+  "rattler_networking/rustls-tls",
+]
+
+
+[dependencies]
+fd-lock = { workspace = true }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_config = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_networking = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
