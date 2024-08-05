@@ -38,7 +38,7 @@ rattler_solve = { workspace = true, features = ["serde"] }
 rattler_virtual_packages = { workspace = true }
 
 # TODO: Remove these dependencies
-console = "0.15.8"
+console = { workspace = true }
 miette = { workspace = true }
 
 [dev-dependencies]
