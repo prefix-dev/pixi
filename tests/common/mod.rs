@@ -208,8 +208,8 @@ impl PixiControl {
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
+                format: None,
                 pyproject_toml: false,
-                pixi_toml: false,
             },
         }
     }
@@ -225,8 +225,9 @@ impl PixiControl {
                 channels: None,
                 platforms,
                 env_file: None,
+                format: None,
                 pyproject_toml: false,
-                pixi_toml: false,
+
             },
         }
     }

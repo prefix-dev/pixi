@@ -1,10 +1,11 @@
+use std::cmp::PartialEq;
 use std::{
     fs,
     io::{Error, ErrorKind, Write},
     path::{Path, PathBuf},
 };
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use pixi_manifest::{
@@ -20,6 +21,12 @@ use crate::{
 };
 use pixi_config::{get_default_author, Config};
 use pixi_consts::consts;
+
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum ManifestFormat {
+    Pixi,
+    Pyproject,
+}
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -40,14 +47,14 @@ pub struct Args {
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
 
-    /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    // BREAK (0.27.0): Remove the `alias` attribute
-    #[arg(long, conflicts_with_all = ["env_file", "pixi_toml"], alias = "pyproject")]
-    pub pyproject_toml: bool,
+    /// The manifest format to create.
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"],)]
+    pub format: Option<ManifestFormat>,
 
-    /// Create a pixi.toml, even if a pyproject.toml already exists
-    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"])]
-    pub pixi_toml: bool,
+    /// Create a pyproject.toml manifest instead of a pixi.toml manifest
+    // BREAK (0.27.0): Remove this option from the cli in favor of the `format` option.
+    #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
+    pub pyproject_toml: bool,
 }
 
 /// The pixi.toml template
@@ -156,6 +163,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
 
+    // Deprecation warning for the `pyproject` option
+    if args.pyproject_toml {
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
+            console::style("--pyproject").bold().red(),
+            console::style("--format pyproject").bold().green(),
+        );
+    }
+
     // Fail silently if the directory already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
@@ -178,7 +195,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         let env_file = CondaEnvFile::from_path(&env_file_path)?;
-        let name = env_file.name().unwrap_or(default_name.as_str()).to_string();
+        let name = env_file
+            .name()
+            .unwrap_or(default_name.clone().as_str())
+            .to_string();
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
@@ -235,19 +255,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
-        let pyproject  = if !pixi_manifest_path.is_file() && (!args.pixi_toml && !args.pyproject_toml) && pyproject_manifest_path.is_file(){
+        // If nothing is defined but there is a `pyproject.toml` file, ask the user.
+        let pyproject  = if !pixi_manifest_path.is_file() && args.format.is_none() && !args.pyproject_toml && pyproject_manifest_path.is_file(){
             dialoguer::Confirm::new()
-                .with_prompt("\nA 'pyproject.toml' file already exists.\nDo you want to extend it with the [tool.pixi] configuration?")
+                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()) )
                 .default(false)
                 .show_default(true)
                 .interact()
         } else {
-            Ok(args.pyproject_toml)
+            Ok(args.format.is_some_and(|f| f == ManifestFormat::Pyproject) || args.pyproject_toml)
         }.into_diagnostic()?;
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if
         // there is one without '[tool.pixi.project]'
-        if pyproject {
+        if pyproject && pyproject_manifest_path.is_file() {
             let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
@@ -261,7 +282,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             let (name, pixi_name) = match pyproject.name() {
                 Some(name) => (name, false),
-                None => (default_name, true),
+                None => (default_name.clone(), true),
             };
             let environments = pyproject.environments_from_extras();
             let rv = env
@@ -366,13 +387,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // Emit success
-    eprintln!(
-        "{}Initialized project in {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        dir.display()
-    );
-
     Ok(())
 }
 
@@ -409,7 +423,10 @@ fn save_manifest_file(path: &Path, content: String) -> miette::Result<()> {
     eprintln!(
         "{}Created {}",
         console::style(console::Emoji("✔ ", "")).green(),
-        path.display()
+        // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+        dunce::canonicalize(path)
+            .unwrap_or(path.to_path_buf())
+            .display()
     );
     Ok(())
 }
