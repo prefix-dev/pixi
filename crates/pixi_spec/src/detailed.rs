@@ -1,15 +1,16 @@
+use std::sync::Arc;
+
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, StringMatcher,
     VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
-use std::sync::Arc;
 /// A specification for a package in a conda channel.
 ///
 /// This type maps closely to [`rattler_conda_types::NamelessMatchSpec`] but
-/// does not represent a `url` field. To represent a `url` spec, use [`UrlSpec`]
-/// instead.
+/// does not represent a `url` field. To represent a `url` spec, use
+/// [`crate::UrlSpec`] instead.
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Debug, Clone, Hash, Eq, Default, PartialEq, ::serde::Serialize, ::serde::Deserialize)]

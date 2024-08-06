@@ -39,7 +39,7 @@ impl UrlSpec {
         }
     }
 
-    /// Converts this instance into a [`SourceUrlSpec`] if the URL points to a
+    /// Converts this instance into a [`UrlSourceSpec`] if the URL points to a
     /// source package. Otherwise, returns this instance unmodified.
     #[allow(clippy::result_large_err)]
     pub fn try_into_source_url(self) -> Result<UrlSourceSpec, Self> {
