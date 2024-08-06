@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_spec/src/serde.rs
-assertion_line: 312
+assertion_line: 306
 expression: snapshot
 ---
 - input: 1.2.3
@@ -64,34 +64,34 @@ expression: snapshot
   result:
     error: "ERROR: `sha256` cannot be used with `path`"
 - input:
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
     version: 1.2.3
-  result:
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
     version: "==1.2.3"
-- input:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-  result:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-- input:
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+- input:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
   result:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
     tag: v1
   result:
     error: "ERROR: only one of `branch`, `rev`, or `tag` can be specified"
