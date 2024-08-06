@@ -48,8 +48,8 @@ pub enum SpecConversionError {
 #[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PixiSpec {
-    /// The spec is represented solely by a version string. The package should be
-    /// retrieved from a channel.
+    /// The spec is represented solely by a version string. The package should
+    /// be retrieved from a channel.
     ///
     /// This is similar to the `DetailedVersion` variant but with a simplified
     /// version spec.
@@ -95,8 +95,7 @@ impl From<NamelessMatchSpec> for PixiSpec {
                 md5: value.md5,
                 sha256: value.sha256,
             })
-        } else if value.version.is_some()
-            && value.build.is_none()
+        } else if value.build.is_none()
             && value.build_number.is_none()
             && value.file_name.is_none()
             && value.channel.is_none()

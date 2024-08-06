@@ -26,7 +26,8 @@ use once_cell::sync::OnceCell;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, HasManifestRef, Manifest,
+    ParsedManifest, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -610,6 +611,22 @@ impl Project {
             build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
                 .expect("mapping source should be ok")
         })
+    }
+
+    /// Returns the manifest of the project
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    /// Convert the project into its manifest
+    pub fn into_manifest(self) -> Manifest {
+        self.manifest
+    }
+}
+
+impl<'source> HasManifestRef<'source> for &'source Project {
+    fn manifest(&self) -> &'source Manifest {
+        Project::manifest(self)
     }
 }
 

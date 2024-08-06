@@ -1,21 +1,26 @@
-use crate::{pypi::PyPiPackageName, PyPiRequirement};
+use std::{borrow::Cow, hash::Hash};
+
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
-use std::{borrow::Cow, hash::Hash};
+
+use crate::{pypi::PyPiPackageName, PyPiRequirement};
 
 pub type PyPiDependencies = Dependencies<PyPiPackageName, PyPiRequirement>;
 pub type CondaDependencies = Dependencies<PackageName, PixiSpec>;
 
-/// Holds a list of dependencies where for each package name there can be multiple requirements.
+/// Holds a list of dependencies where for each package name there can be
+/// multiple requirements.
 ///
-/// This is used when combining the dependencies of multiple features. Although each target can only
-/// have one requirement for a given package, when combining the dependencies of multiple features
-/// there can be multiple requirements for a given package.
+/// This is used when combining the dependencies of multiple features. Although
+/// each target can only have one requirement for a given package, when
+/// combining the dependencies of multiple features there can be multiple
+/// requirements for a given package.
 ///
-/// The generic 'Dependencies' struct is aliased as specific PyPiDependencies and CondaDependencies struct to represent
-/// Pypi and Conda dependencies respectively.
+/// The generic 'Dependencies' struct is aliased as specific PyPiDependencies
+/// and CondaDependencies struct to represent Pypi and Conda dependencies
+/// respectively.
 
 #[derive(Debug, Clone)]
 pub struct Dependencies<N: Hash + Eq + Clone, D: Hash + Eq + Clone> {
@@ -43,7 +48,8 @@ impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for De
 where
     M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,
 {
-    /// Create Dependencies<N, D> from an iterator over items of type Cow<'a, IndexMap<N, D>
+    /// Create Dependencies<N, D> from an iterator over items of type Cow<'a,
+    /// IndexMap<N, D>
     fn from(m: M) -> Self {
         m.into_iter().fold(Self::default(), |mut acc: Self, deps| {
             // Either clone the values from the Cow or move the values from the owned map.
@@ -85,8 +91,8 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
         self.map.shift_remove_entry(name)
     }
 
-    /// Combines two sets of dependencies where the requirements of `self` are overwritten if the
-    /// same package is also defined in `other`.
+    /// Combines two sets of dependencies where the requirements of `self` are
+    /// overwritten if the same package is also defined in `other`.
     pub fn overwrite(&self, other: &Self) -> Self {
         let mut map = self.map.clone();
         for (name, specs) in other.map.iter() {
@@ -95,12 +101,14 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
         Self { map }
     }
 
-    /// Returns an iterator over tuples of dependency names and their combined requirements.
+    /// Returns an iterator over tuples of dependency names and their combined
+    /// requirements.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&N, &IndexSet<D>)> + '_ {
         self.map.iter()
     }
 
-    /// Returns an iterator over tuples of dependency names and individual requirements.
+    /// Returns an iterator over tuples of dependency names and individual
+    /// requirements.
     pub fn iter_specs(&self) -> impl DoubleEndedIterator<Item = (&N, &D)> + '_ {
         self.map
             .iter()
@@ -112,7 +120,8 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
         self.map.keys()
     }
 
-    /// Converts this instance into an iterator over tuples of dependency names and individual requirements.
+    /// Converts this instance into an iterator over tuples of dependency names
+    /// and individual requirements.
     pub fn into_specs(self) -> impl DoubleEndedIterator<Item = (N, D)> {
         self.map
             .into_iter()
@@ -125,6 +134,14 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
         Q: Hash + Equivalent<N>,
     {
         self.map.contains_key(name)
+    }
+
+    /// Returns the package specs for the specified package name.
+    pub fn get<Q: ?Sized>(&self, name: &Q) -> Option<&IndexSet<D>>
+    where
+        Q: Hash + Equivalent<N>,
+    {
+        self.map.get(name)
     }
 }
 

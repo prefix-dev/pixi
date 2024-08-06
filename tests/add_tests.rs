@@ -371,3 +371,53 @@ async fn add_sdist_functionality() {
         .await
         .unwrap();
 }
+
+#[rstest::rstest]
+#[tokio::test]
+async fn add_unconstrainted_dependency() {
+    // Create a channel with a single package
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foobar").await.unwrap();
+    pixi.add("bar").with_feature("unreferenced").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `foobar` package
+    let foo_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("foobar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    // Get the specs for the `bar` package
+    let bar_spec = project
+        .manifest()
+        .feature("unreferenced")
+        .expect("feature 'unreferenced' is missing")
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    insta::assert_snapshot!(format!("foobar = {foo_spec}\nbar = {bar_spec}"), @r###"
+    foobar = ">=1,<2"
+    bar = "*"
+    "###);
+}
