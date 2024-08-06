@@ -529,7 +529,7 @@ impl PathSpec {
             return Ok(None);
         }
 
-        // Convert the path to an absolute path based on the channel config
+        // Convert the path to an absolute path based on the root_dir
         let path = if self.path.is_absolute() {
             self.path
         } else {
