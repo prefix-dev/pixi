@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
-use pixi_spec::{Spec, SpecConversionError};
+use pixi_spec::{PixiSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_types::{
@@ -352,7 +352,11 @@ pub fn verify_platform_satisfiability(
 }
 
 enum Dependency {
-    Input(rattler_conda_types::PackageName, Spec, Cow<'static, str>),
+    Input(
+        rattler_conda_types::PackageName,
+        PixiSpec,
+        Cow<'static, str>,
+    ),
     Conda(MatchSpec, Cow<'static, str>),
     PyPi(pypi_types::Requirement, Cow<'static, str>),
 }
@@ -582,7 +586,7 @@ pub fn verify_package_platform_satisfiability(
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
-                let spec = match spec.into_nameless_match_spec(&channel_config) {
+                let spec = match spec.try_into_nameless_match_spec(&channel_config) {
                     Ok(Some(spec)) => MatchSpec::from_nameless(spec, Some(name)),
                     Ok(None) => unimplemented!("source dependencies are not yet implemented"),
                     Err(e) => {

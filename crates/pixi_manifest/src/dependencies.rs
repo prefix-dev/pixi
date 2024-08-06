@@ -1,12 +1,12 @@
 use crate::{pypi::PyPiPackageName, PyPiRequirement};
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Either;
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
 use std::{borrow::Cow, hash::Hash};
 
 pub type PyPiDependencies = Dependencies<PyPiPackageName, PyPiRequirement>;
-pub type CondaDependencies = Dependencies<PackageName, Spec>;
+pub type CondaDependencies = Dependencies<PackageName, PixiSpec>;
 
 /// Holds a list of dependencies where for each package name there can be multiple requirements.
 ///

@@ -1478,7 +1478,7 @@ async fn spawn_solve_conda_environment_task(
                 .map(|(name, constraint)| {
                     let nameless = constraint
                         .clone()
-                        .into_nameless_match_spec(&channel_config)
+                        .try_into_nameless_match_spec(&channel_config)
                         .unwrap()
                         .expect("only binaries are supported at the moment");
                     MatchSpec::from_nameless(nameless, Some(name.clone()))

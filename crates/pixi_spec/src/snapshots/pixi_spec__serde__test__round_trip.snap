@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_spec/src/serde.rs
-assertion_line: 271
+assertion_line: 312
 expression: snapshot
 ---
 - input: 1.2.3
@@ -23,7 +23,27 @@ expression: snapshot
     path: foobar
     version: 1.2.3
   result:
-    error: "ERROR: only one of `version`, `url`, `path`, or `git` can be specified"
+    error: "ERROR: `version` cannot be used with `path`"
+- input:
+    subdir: linux-64
+  result:
+    subdir: linux-64
+- input:
+    channel: conda-forge
+    subdir: linux-64
+  result:
+    channel: conda-forge
+    subdir: linux-64
+- input:
+    channel: conda-forge
+    subdir: linux-64
+  result:
+    channel: conda-forge
+    subdir: linux-64
+- input:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
     version: //
   result:
@@ -37,36 +57,46 @@ expression: snapshot
     path: foobar
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
-    error: "ERROR: `sha256` is only valid when `version` or `url` is specified"
+    error: "ERROR: `sha256` cannot be used with `path`"
 - input:
+    path: foobar
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: `sha256` cannot be used with `path`"
+- input:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
     version: 1.2.3
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
     version: "==1.2.3"
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+  result:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input:
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-- input:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-- input:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-  result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
     tag: v1
   result:
     error: "ERROR: only one of `branch`, `rev`, or `tag` can be specified"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: `sha256` cannot be used with `git`"

@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use miette::{IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use pyproject_toml::{self, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
@@ -303,7 +303,7 @@ impl From<PyProjectManifest> for ParsedManifest {
 /// successfully be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_spec(
     version: &Option<VersionSpecifiers>,
-) -> Result<Spec, RequirementConversionError> {
+) -> Result<PixiSpec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
         Some(v) => {
@@ -312,7 +312,7 @@ fn version_or_url_to_spec(
             let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
             Ok(VersionSpec::from_str(version_string, Lenient)?.into())
         }
-        None => Ok(Spec::default()),
+        None => Ok(PixiSpec::default()),
     }
 }
 
@@ -578,7 +578,7 @@ mod tests {
         fn cmp(v1: &str, v2: &str) {
             let v = VersionSpecifiers::from_str(v1).unwrap();
             let matchspec = super::version_or_url_to_spec(&Some(v)).unwrap();
-            let version_spec = matchspec.as_version().unwrap();
+            let version_spec = matchspec.as_version_spec().unwrap();
             let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
             assert_eq!(version_spec, &vspec);
         }

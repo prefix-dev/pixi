@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::PhantomData};
 
 use indexmap::{map::IndexMap, Equivalent};
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
 use serde_with::{serde_as, serde_derive::Deserialize};
@@ -122,13 +122,13 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             // #[serde(flatten)]
             // default_target: Target,
             #[serde(default, deserialize_with = "deserialize_package_map")]
-            dependencies: IndexMap<PackageName, Spec>,
+            dependencies: IndexMap<PackageName, PixiSpec>,
 
             #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            host_dependencies: Option<IndexMap<PackageName, Spec>>,
+            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            build_dependencies: Option<IndexMap<PackageName, Spec>>,
+            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -261,7 +261,7 @@ impl<'de> Deserialize<'de> for ParsedManifest {
     }
 }
 
-struct PackageMap<'a>(&'a IndexMap<PackageName, Spec>);
+struct PackageMap<'a>(&'a IndexMap<PackageName, PixiSpec>);
 
 impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
     type Value = PackageName;
@@ -285,14 +285,14 @@ impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
 
 pub fn deserialize_package_map<'de, D>(
     deserializer: D,
-) -> Result<IndexMap<PackageName, Spec>, D::Error>
+) -> Result<IndexMap<PackageName, PixiSpec>, D::Error>
 where
     D: Deserializer<'de>,
 {
     struct PackageMapVisitor(PhantomData<()>);
 
     impl<'de> Visitor<'de> for PackageMapVisitor {
-        type Value = IndexMap<PackageName, Spec>;
+        type Value = IndexMap<PackageName, PixiSpec>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(formatter, "a map")
@@ -304,7 +304,7 @@ where
         {
             let mut result = IndexMap::new();
             while let Some((package_name, spec)) =
-                map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<Spec>)?
+                map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<PixiSpec>)?
             {
                 if spec.is_source() {
                     return Err(serde::de::Error::custom(
@@ -324,7 +324,7 @@ where
 
 pub fn deserialize_opt_package_map<'de, D>(
     deserializer: D,
-) -> Result<Option<IndexMap<PackageName, Spec>>, D::Error>
+) -> Result<Option<IndexMap<PackageName, PixiSpec>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -383,7 +383,7 @@ mod tests {
                 .unwrap()
                 .get("foo")
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "==3.4.5"
@@ -394,7 +394,7 @@ mod tests {
                 .unwrap()
                 .get("foo")
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "==1.2.3"
@@ -408,8 +408,8 @@ mod tests {
             {PROJECT_BOILERPLATE}
             [dependencies]
             test_map = {{ version = ">=1.2.3", channel="conda-forge", build="py34_0" }}
-            test_build = {{ version = "*", build = "bla" }}
-            test_channel = {{ version = "*", channel = "conda-forge" }}
+            test_build = {{ build = "bla" }}
+            test_channel = {{ channel = "conda-forge" }}
             test_version = {{ version = ">=1.2.3" }}
             test_version_channel = {{ version = ">=1.2.3", channel = "conda-forge" }}
             test_version_build = {{ version = ">=1.2.3", build = "py34_0" }}
@@ -423,9 +423,12 @@ mod tests {
             .default()
             .run_dependencies()
             .unwrap();
-        let test_map_spec = deps.get("test_map").unwrap().as_detailed_version().unwrap();
+        let test_map_spec = deps.get("test_map").unwrap().as_detailed().unwrap();
 
-        assert_eq!(test_map_spec.version.to_string(), ">=1.2.3");
+        assert_eq!(
+            test_map_spec.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
         assert_eq!(test_map_spec.build.as_ref().unwrap().to_string(), "py34_0");
         assert_eq!(
             test_map_spec.channel,
@@ -435,7 +438,7 @@ mod tests {
         assert_eq!(
             deps.get("test_build")
                 .unwrap()
-                .as_detailed_version()
+                .as_detailed()
                 .unwrap()
                 .build
                 .as_ref()
@@ -444,30 +447,27 @@ mod tests {
             "bla"
         );
 
-        let test_channel = deps
-            .get("test_channel")
-            .unwrap()
-            .as_detailed_version()
-            .unwrap();
-        assert_eq!(test_channel.version.to_string(), "*");
+        let test_channel = deps.get("test_channel").unwrap().as_detailed().unwrap();
         assert_eq!(
             test_channel.channel,
             Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
         );
 
-        let test_version = deps
-            .get("test_version")
-            .unwrap()
-            .as_detailed_version()
-            .unwrap();
-        assert_eq!(test_version.version.to_string(), ">=1.2.3");
+        let test_version = deps.get("test_version").unwrap().as_detailed().unwrap();
+        assert_eq!(
+            test_version.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
 
         let test_version_channel = deps
             .get("test_version_channel")
             .unwrap()
-            .as_detailed_version()
+            .as_detailed()
             .unwrap();
-        assert_eq!(test_version_channel.version.to_string(), ">=1.2.3");
+        assert_eq!(
+            test_version_channel.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
         assert_eq!(
             test_version_channel.channel,
             Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
@@ -476,9 +476,12 @@ mod tests {
         let test_version_build = deps
             .get("test_version_build")
             .unwrap()
-            .as_detailed_version()
+            .as_detailed()
             .unwrap();
-        assert_eq!(test_version_build.version.to_string(), ">=1.2.3");
+        assert_eq!(
+            test_version_build.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
         assert_eq!(
             test_version_build.build.as_ref().unwrap().to_string(),
             "py34_0"
@@ -511,7 +514,7 @@ mod tests {
             run_dependencies
                 .get("my-game")
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "==1.0.0"
@@ -520,7 +523,7 @@ mod tests {
             build_dependencies
                 .get("cmake")
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "*"
@@ -529,7 +532,7 @@ mod tests {
             host_dependencies
                 .get("sdl2")
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "*"

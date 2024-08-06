@@ -7,7 +7,7 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use rattler_solve::ChannelPriority;
 use serde::{de::Error, Deserialize, Deserializer};
@@ -195,7 +195,7 @@ impl Feature {
         &self,
         spec_type: Option<SpecType>,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, Spec>>> {
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -311,13 +311,13 @@ impl<'de> Deserialize<'de> for Feature {
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
             #[serde(default)]
-            dependencies: IndexMap<PackageName, Spec>,
+            dependencies: IndexMap<PackageName, PixiSpec>,
 
             #[serde(default)]
-            host_dependencies: Option<IndexMap<PackageName, Spec>>,
+            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
-            build_dependencies: Option<IndexMap<PackageName, Spec>>,
+            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,

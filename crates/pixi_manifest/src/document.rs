@@ -1,6 +1,6 @@
 use std::fmt;
 
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use toml_edit::{value, Array, Item, Table, Value};
 
@@ -227,7 +227,7 @@ impl ManifestSource {
     pub fn add_dependency(
         &mut self,
         name: &PackageName,
-        spec: &Spec,
+        spec: &PixiSpec,
         spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
@@ -402,7 +402,7 @@ mod tests {
                 .unwrap()
                 .into_nameless()
                 .1;
-            let spec = Spec::from(spec);
+            let spec = PixiSpec::from(spec);
             table.insert(example, Item::Value(spec.to_toml_value()));
         }
         assert_snapshot!(table);

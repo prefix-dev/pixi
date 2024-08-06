@@ -100,11 +100,7 @@ async fn add_with_channel() {
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
     assert_eq!(
-        spec.into_detailed_version()
-            .unwrap()
-            .channel
-            .unwrap()
-            .as_str(),
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
         "conda-forge"
     );
 }

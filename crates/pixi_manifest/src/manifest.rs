@@ -11,7 +11,7 @@ use std::{
 use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
-use pixi_spec::Spec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use toml_edit::DocumentMut;
 
@@ -347,7 +347,7 @@ impl Manifest {
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
-        let spec = Spec::from(spec);
+        let spec = PixiSpec::from(spec);
         let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
@@ -1651,7 +1651,7 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cuda").unwrap())
                 .unwrap()
-                .as_version(),
+                .as_version_spec(),
             Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
         );
         assert_eq!(
@@ -1663,7 +1663,7 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cudnn").unwrap())
                 .unwrap()
-                .as_version(),
+                .as_version_spec(),
             Some(&VersionSpec::from_str("12", Lenient).unwrap())
         );
         assert_eq!(
@@ -1688,7 +1688,7 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cmake").unwrap())
                 .unwrap()
-                .as_version(),
+                .as_version_spec(),
             Some(&VersionSpec::Any)
         );
         assert_eq!(
@@ -1740,7 +1740,7 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("mlx").unwrap())
                 .unwrap()
-                .as_version(),
+                .as_version_spec(),
             Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
         );
         assert_eq!(
@@ -1863,7 +1863,7 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("baz").unwrap())
                 .unwrap()
-                .as_version(),
+                .as_version_spec(),
             Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
         );
         manifest
@@ -1887,7 +1887,7 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("bal").unwrap())
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             ">=2.3".to_string()
@@ -1915,7 +1915,7 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("boef").unwrap())
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             ">=2.3".to_string()
@@ -1943,7 +1943,7 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("cmake").unwrap())
                 .unwrap()
-                .as_version()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             ">=2.3".to_string()

@@ -6,7 +6,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use url::Url;
 
-use crate::{DetailedVersionSpec, GitReference, GitSpec, PathSpec, Spec, UrlSpec};
+use crate::{DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 
 #[serde_as]
 #[derive(serde::Deserialize)]
@@ -59,8 +59,8 @@ struct RawSpec {
     pub sha256: Option<Sha256Hash>,
 }
 
-impl<'de> Deserialize<'de> for Spec {
-    fn deserialize<D>(deserializer: D) -> Result<Spec, D::Error>
+impl<'de> Deserialize<'de> for PixiSpec {
+    fn deserialize<D>(deserializer: D) -> Result<PixiSpec, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -71,7 +71,7 @@ impl<'de> Deserialize<'de> for Spec {
             .string(|str| {
                 VersionSpec::from_str(str, Strict)
                     .map_err(serde_untagged::de::Error::custom)
-                    .map(Spec::Version)
+                    .map(PixiSpec::Version)
             })
             .map(|map| {
                 let raw_spec: RawSpec = map.deserialize()?;
@@ -86,67 +86,80 @@ impl<'de> Deserialize<'de> for Spec {
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.build.is_some() {
+                let is_git = raw_spec.git.is_some();
+                let is_path = raw_spec.path.is_some();
+                let is_url = raw_spec.url.is_some();
+
+
+                let git_key = is_git.then_some("`git`");
+                let path_key = is_path.then_some("`path`");
+                let url_key = is_url.then_some("`url`");
+                let non_detailed_keys = [git_key, path_key, url_key]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                if !non_detailed_keys.is_empty() && raw_spec.version.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`build` is only valid when `version` is specified",
+                        format!("`version` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.build_number.is_some() {
+                if !non_detailed_keys.is_empty() && raw_spec.build.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`build-number` is only valid when `version` is specified",
+                        format!("`build` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.file_name.is_some() {
+                if !non_detailed_keys.is_empty() && raw_spec.build_number.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`file-name` is only valid when `version` is specified",
+                        format!("`build` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.channel.is_some() {
+                if !non_detailed_keys.is_empty() && raw_spec.file_name.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`channel` is only valid when `version` is specified",
+                        format!("`build` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.subdir.is_some() {
+                if !non_detailed_keys.is_empty() && raw_spec.channel.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`subdir` is only valid when `version` is specified",
+                        format!("`build` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.url.is_none() && raw_spec.sha256.is_some()
-                {
+                if !non_detailed_keys.is_empty() && raw_spec.subdir.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`sha256` is only valid when `version` or `url` is specified",
+                        format!("`build` cannot be used with {non_detailed_keys}"),
                     ));
                 }
 
-                if raw_spec.version.is_none() && raw_spec.url.is_none() && raw_spec.md5.is_some() {
+                let non_url_keys = [git_key, path_key]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !non_url_keys.is_empty() && raw_spec.sha256.is_some() {
                     return Err(serde_untagged::de::Error::custom(
-                        "`md5` is only valid when `version` or `url` is specified",
+                        format!("`sha256` cannot be used with {non_url_keys}"),
+                    ));
+                }
+                if !non_url_keys.is_empty() && raw_spec.md5.is_some() {
+                    return Err(serde_untagged::de::Error::custom(
+                        format!("`md5` cannot be used with {non_url_keys}"),
                     ));
                 }
 
-                let spec = match (raw_spec.version, raw_spec.url, raw_spec.path, raw_spec.git) {
-                    (Some(version), None, None, None) => Spec::DetailedVersion(DetailedVersionSpec {
-                        version,
-                        build: raw_spec.build,
-                        build_number: raw_spec.build_number,
-                        file_name: raw_spec.file_name,
-                        channel: raw_spec.channel,
-                        subdir: raw_spec.subdir,
-                        md5: raw_spec.md5,
-                        sha256: raw_spec.sha256,
-                    }),
-                    (None, Some(url), None, None) => Spec::Url(UrlSpec {
+                let spec = match (raw_spec.url, raw_spec.path, raw_spec.git) {
+                    (Some(url), None, None) => PixiSpec::Url(UrlSpec {
                         url,
                         md5: raw_spec.md5,
                         sha256: raw_spec.sha256,
                     }),
-                    (None, None, Some(path), None) => Spec::Path(PathSpec { path: path.into() }),
-                    (None, None, None, Some(git)) => {
+                    (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+                    (None, None, Some(git)) => {
                         let rev = match (raw_spec.branch, raw_spec.rev, raw_spec.tag) {
                             (Some(branch), None, None) => Some(GitReference::Branch(branch)),
                             (None, Some(rev), None) => Some(GitReference::Rev(rev)),
@@ -158,16 +171,38 @@ impl<'de> Deserialize<'de> for Spec {
                                 ));
                             }
                         };
-                        Spec::Git(GitSpec { git, rev })
+                        PixiSpec::Git(GitSpec { git, rev })
+                    },
+                    (None, None, None) => {
+                        let is_detailed =
+                            raw_spec.version.is_some() ||
+                                raw_spec.build.is_some() ||
+                                raw_spec.build_number.is_some() ||
+                                raw_spec.file_name.is_some() ||
+                                raw_spec.channel.is_some() ||
+                                raw_spec.subdir.is_some() ||
+                                raw_spec.md5.is_some() ||
+                                raw_spec.sha256.is_some();
+                        if !is_detailed {
+                            return Err(serde_untagged::de::Error::custom(
+                                "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified",
+                            ))
+                        }
+
+                        PixiSpec::DetailedVersion(DetailedSpec {
+                            version: raw_spec.version,
+                            build: raw_spec.build,
+                            build_number: raw_spec.build_number,
+                            file_name: raw_spec.file_name,
+                            channel: raw_spec.channel,
+                            subdir: raw_spec.subdir,
+                            md5: raw_spec.md5,
+                            sha256: raw_spec.sha256,
+                        })
                     }
-                    (None, None, None, None) => {
+                    (_, _, _) => {
                         return Err(serde_untagged::de::Error::custom(
-                            "one of `version`, `url`, or `path` must be specified",
-                        ))
-                    }
-                    (_, _, _, _) => {
-                        return Err(serde_untagged::de::Error::custom(
-                            "only one of `version`, `url`, `path`, or `git` can be specified",
+                            "only one of `url`, `path`, or `git` can be specified",
                         ))
                     }
                 };
@@ -227,8 +262,13 @@ mod test {
             json! { "*" },
             json!({ "path": "foobar" }),
             json!({ "path": "foobar", "version": "1.2.3" }),
+            json!({ "subdir": "linux-64" }),
+            json!({ "channel": "conda-forge", "subdir": "linux-64" }),
+            json!({ "channel": "conda-forge", "subdir": "linux-64" }),
+            json!({ "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "version": "//" }),
             json!({ "path": "foobar", "version": "//" }),
+            json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
@@ -236,6 +276,7 @@ mod test {
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
         ];
 
         #[derive(Serialize)]
@@ -246,10 +287,10 @@ mod test {
 
         let mut snapshot = Vec::new();
         for input in examples {
-            let spec: Result<Spec, _> = serde_json::from_value(input.clone());
+            let spec: Result<PixiSpec, _> = serde_json::from_value(input.clone());
             let result = match spec {
                 Ok(spec) => {
-                    let spec = Spec::from(spec);
+                    let spec = PixiSpec::from(spec);
                     serde_json::to_value(&spec).unwrap()
                 }
                 Err(e) => {
