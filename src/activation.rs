@@ -214,7 +214,7 @@ pub async fn run_activation(
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
-/// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it. 
+/// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it.
 pub fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
 ) -> IndexMap<String, String> {
