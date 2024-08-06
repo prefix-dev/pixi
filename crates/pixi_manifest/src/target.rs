@@ -338,15 +338,12 @@ impl<'de> Deserialize<'de> for Target {
         #[serde(deny_unknown_fields)]
         pub struct TomlTarget {
             #[serde(default)]
-            // #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
             dependencies: IndexMap<PackageName, Spec>,
 
             #[serde(default)]
-            // #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
             host_dependencies: Option<IndexMap<PackageName, Spec>>,
 
             #[serde(default)]
-            // #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
             build_dependencies: Option<IndexMap<PackageName, Spec>>,
 
             #[serde(default)]
