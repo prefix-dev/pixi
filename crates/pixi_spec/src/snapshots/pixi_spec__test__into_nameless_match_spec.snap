@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_spec/src/lib.rs
-assertion_line: 453
+assertion_line: 454
 expression: snapshot
 ---
 - input:
@@ -52,11 +52,15 @@ expression: snapshot
   result:
     url: "file://<ROOT>/21cmfast-3.3.1-py38h0db86a8_1.conda"
 - input:
+    path: packages/foo/.././21cmfast-3.3.1-py38h0db86a8_1.conda
+  result:
+    url: "file://<ROOT>/packages/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input:
     url: "file:///21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
     url: "file:///21cmfast-3.3.1-py38h0db86a8_1.conda"
 - input:
-    path: ~/21cmfast-3.3.1-py38h0db86a8_1.conda
+    path: ~/foo/../21cmfast-3.3.1-py38h0db86a8_1.conda
   result:
     url: "file://<HOME>/21cmfast-3.3.1-py38h0db86a8_1.conda"
 - input:

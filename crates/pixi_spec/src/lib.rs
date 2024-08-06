@@ -415,8 +415,9 @@ mod test {
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "path": "21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "path": "packages/foo/.././21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             json!({ "url": "file:///21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "path": "~/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "path": "~/foo/../21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             // Should not be binary packages.
             json!({ "path": "foobar" }),
             json!({ "path": "~/.cache" }),
