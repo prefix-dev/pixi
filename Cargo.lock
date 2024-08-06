@@ -3609,6 +3609,7 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "cfg_eval",
+ "dirs",
  "file_url",
  "insta",
  "rattler_conda_types",

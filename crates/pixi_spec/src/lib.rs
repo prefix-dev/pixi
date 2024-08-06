@@ -34,6 +34,10 @@ pub enum SpecConversionError {
     /// The root directory is not UTF-8 encoded.
     #[error("root directory of channel config is not utf8 encoded")]
     NotUtf8RootDir(PathBuf),
+
+    /// Encountered an invalid path
+    #[error("invalid path '{0}'")]
+    InvalidPath(String),
 }
 
 /// A package specification for pixi.
@@ -412,8 +416,10 @@ mod test {
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "path": "21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             json!({ "url": "file:///21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "path": "~/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             // Should not be binary packages.
             json!({ "path": "foobar" }),
+            json!({ "path": "~/.cache" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
             json!({ "url": "http://github.com/conda-forge/21cmfast-feedstock/releases/21cmfast-3.3.1-py38h0db86a8_1.zip" }),
@@ -439,8 +445,10 @@ mod test {
         }
 
         let path = Url::from_directory_path(channel_config.root_dir).unwrap();
+        let home_dir = Url::from_directory_path(dirs::home_dir().unwrap()).unwrap();
         insta::with_settings!({filters => vec![
             (path.as_str(), "file://<ROOT>/"),
+            (home_dir.as_str(), "file://<HOME>/"),
         ]}, {
             insta::assert_yaml_snapshot!(snapshot);
         });

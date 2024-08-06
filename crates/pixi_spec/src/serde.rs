@@ -261,6 +261,7 @@ mod test {
             json!({ "ver": "1.2.3" }),
             json! { "*" },
             json!({ "path": "foobar" }),
+            json!({ "path": "~/.cache" }),
             json!({ "path": "foobar", "version": "1.2.3" }),
             json!({ "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),

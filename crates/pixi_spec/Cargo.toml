@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 toml_edit = { workspace = true, optional = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+dirs = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
