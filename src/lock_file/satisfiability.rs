@@ -590,17 +590,20 @@ pub fn verify_package_platform_satisfiability(
                     Ok(Some(spec)) => MatchSpec::from_nameless(spec, Some(name)),
                     Ok(None) => unimplemented!("source dependencies are not yet implemented"),
                     Err(e) => {
-                        let parse_channel_err = match e {
+                        let parse_channel_err: ParseMatchSpecError = match e {
                             SpecConversionError::NonAbsoluteRootDir(p) => {
-                                ParseChannelError::NonAbsoluteRootDir(p)
+                                ParseChannelError::NonAbsoluteRootDir(p).into()
                             }
                             SpecConversionError::NotUtf8RootDir(p) => {
-                                ParseChannelError::NotUtf8RootDir(p)
+                                ParseChannelError::NotUtf8RootDir(p).into()
+                            }
+                            SpecConversionError::InvalidPath(p) => {
+                                ParseChannelError::InvalidPath(p).into()
                             }
                         };
                         return Err(PlatformUnsat::FailedToParseMatchSpec(
                             name.as_source().to_string(),
-                            parse_channel_err.into(),
+                            parse_channel_err,
                         ));
                     }
                 };

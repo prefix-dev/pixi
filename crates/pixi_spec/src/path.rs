@@ -27,9 +27,9 @@ impl PathSpec {
         // Convert the path to an absolute path based on the root_dir
         let path = if self.path.is_absolute() {
             self.path
-        } else if let Some(user_path) = self.path.strip_prefix("~/").ok() {
-            let home_dir =
-                dirs::home_dir().ok_or_else(|| SpecConversionError::InvalidPath(self.path.to_string()))?;
+        } else if let Ok(user_path) = self.path.strip_prefix("~/") {
+            let home_dir = dirs::home_dir()
+                .ok_or_else(|| SpecConversionError::InvalidPath(self.path.to_string()))?;
             let Some(home_dir_str) = home_dir.to_str() else {
                 return Err(SpecConversionError::NotUtf8RootDir(home_dir));
             };
