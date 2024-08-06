@@ -3517,6 +3517,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_frontend"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "miette 7.2.0",
+ "pixi_manifest",
+ "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_solve",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,34 @@
+[package]
+authors.workspace = true
+description = "Sets up environments to use for building of pixi.toml files"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_build_frontend"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[features]
+cli = ["clap", "tracing-subscriber"]
+
+[dependencies]
+clap = { workspace = true, features = [
+    "derive",
+    "std",
+    "usage",
+    "wrap_help",
+], optional = true }
+miette = { workspace = true, features = ["fancy"] }
+pixi_manifest = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
+rattler_solve = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[[bin]]
+name = "pixi_build_frontend"
+path = "src/main.rs"
+required-features = ["cli"]
