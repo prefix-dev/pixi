@@ -44,7 +44,7 @@ pub enum SpecConversionError {
 #[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PixiSpec {
-    /// The spec is represented soley by a version string. The package should be
+    /// The spec is represented solely by a version string. The package should be
     /// retrieved from a channel.
     ///
     /// This is similar to the `DetailedVersion` variant but with a simplified

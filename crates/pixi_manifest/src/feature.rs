@@ -16,6 +16,8 @@ use serde_with::{serde_as, SerializeDisplay};
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
     consts,
+    parsed_manifest::deserialize_opt_package_map,
+    parsed_manifest::deserialize_package_map,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
@@ -310,13 +312,13 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            #[serde(default)]
+            #[serde(default, deserialize_with = "deserialize_package_map")]
             dependencies: IndexMap<PackageName, PixiSpec>,
 
-            #[serde(default)]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
-            #[serde(default)]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
