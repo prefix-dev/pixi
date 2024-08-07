@@ -164,20 +164,7 @@ jobs:
       # They're only enable it on main and releases.
       #
 
-      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
-      # binary size.
-      CARGO_PROFILE_RELEASE_LTO: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'true' || 'false' }}
-
-      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
-      # together in a single unit which reduces the file-size at the cost of link time.
-      # Default for a release build is 16
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 1 || 16 }}
-
-      # Strip the binaries. This reduces the filesize of the final release.
-      CARGO_PROFILE_RELEASE_STRIP: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'symbols' || 'false' }}
-
-      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
-      CARGO_PROFILE_OPT_LEVEL: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 's' || '0' }}
+      # Pick the profile to build, as defined in Cargo.toml
 
       CARGO_PROFILE: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dist' || 'ci' }}
     steps:
@@ -239,11 +226,20 @@ jobs:
         run: |
           echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS} --no-default-features --features rustls-tls" >> $GITHUB_OUTPUT
 
-      - name: Build
+      - name: Build on Linux / Mac
+        if: runner.os != 'Windows'
         run: >
           cargo build
           --locked
           --profile $CARGO_PROFILE
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+
+      - name: Build on Windows
+        if: runner.os == 'Windows'
+        run: >
+          cargo build
+          --locked
+          --profile $env:CARGO_PROFILE
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
