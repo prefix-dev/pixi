@@ -36,9 +36,10 @@ pip = "*"
 
 Install one or more packages `PACKAGE` into their own environments and expose their binaries.
 If no environment named `PACKAGE` exists, it will be created.
+The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 
 ```
-pixi global install [PACKAGE]...
+pixi global install --expose MAPPING [PACKAGE]...
 ```
 
 Remove environments `ENV`.
@@ -51,8 +52,8 @@ Upgrade all packages in environments `ENV`
 pixi global upgrade [ENV]...
 ```
 
-Add package `PACKAGE` to environment `ENV`.
-If environment `ENV` does not yet exist, then it will be created.
+Add package `PACKAGE` to an existing environment `ENV`.
+If environment `ENV` does not exist, it will return with an error.
 ```
 pixi global add --environment ENV PACKAGE
 ```
@@ -137,13 +138,13 @@ pixi global remove --environment=python hypercorn
 
 Make a new environment `python_3_10` with package `python=3.10` and no exposed binaries
 ```
-pixi global add --environment python_3_10 python=3.10
+pixi global install --environment python_3_10 --expose "python3.10=python" python=3.10
 ```
 
-Expose `python` from environment `python_3_10` as `python3.10`.
+Expose `python` from environment `python_3_10` as `python310` instead.
 
 ```
-pixi expose-bin --environment python_3_10 --package python "python3.10=python"
+pixi expose-bin --environment python_3_10 --package python "python310=python"
 ```
 
 
