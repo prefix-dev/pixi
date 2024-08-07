@@ -258,7 +258,7 @@ jobs:
 
           # Setup paths
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_SUFFIX}"
-          BIN_PATH="target/${{ matrix.target }}/release/${BIN_NAME}"
+          BIN_PATH="target/${{ matrix.target }}/${CARGO_PROFILE}/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
