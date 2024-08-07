@@ -22,58 +22,58 @@ There are a few things we wanted to keep in mind in the design:
 
 ```toml title="pixi-global.toml"
 # `python_3_10` is the name of the environment
-[envs.python_3_10.dependencies.python]
-spec = "3.10.*"
-expose_binaries = {"python3.10"="python"} # `python` from `python_3_10` will be available as `python3.10`
+[envs.python_3_10.dependencies]
+# `python` from `python_3_10` will be available as `python3.10`
+python = { spec = "3.10.*", expose_binaries = { "python3.10"="python" } }
 
-[envs.python.dependencies.python]
-spec = "3.11.*"
-expose_binaries = "auto" # This will expose python, python3 and python3.11
-
-[envs.python.dependencies.pip]
-spec = "*"
+[envs.python.dependencies]
+ # This will expose python, python3 and python3.11
+python = { spec = "3.11.*", expose_binaries = "auto" }
+pip = "*"
 ```
 
 ## CLI
 
-Install one or more packages `PACKAGE` into their own environments and expose their binaries
+Install one or more packages `PACKAGE` into their own environments and expose their binaries.
+If no environment named `PACKAGE` exists, it will be created.
 
 ```
 pixi global install [PACKAGE]...
 ```
 
-Remove environments of the named packages `PACKAGE`
+Remove environments `ENV`.
 ```
 pixi global uninstall [PACKAGE]...
 ```
 
-Resolve environment without previously defined specs
+Upgrade all packages in environments `ENV`
 ```
-pixi global upgrade python
+pixi global upgrade [ENV]...
 ```
 
 Add package `PACKAGE` to environment `ENV`.
 If environment `ENV` does not yet exist, then it will be created.
 ```
-pixi global add --name ENV PACKAGE
+pixi global add --environment ENV PACKAGE
 ```
 
 Remove package `PACKAGE` from environment `ENV`.
 ```
-pixi global remove --name ENV PACKAGE
+pixi global remove --environment ENV PACKAGE
 ```
 
 Update the version of one package
 ```
-pixi global update --name python python=3.12.*
+pixi global update --environment ENV PACKAGE
 ```
 
 Set for a specific package `PACKAGE` in environment `ENV` under which `MAPPING` binaries are exposed
+The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 ```
-pixi expose-bin --name ENV --package PACKAGE [MAPPING]...
+pixi expose-bin --environment ENV --package PACKAGE [MAPPING]...
 ```
 
-Ensure that the environments on the machine reflect the state in the manifest
+Ensure that the environments on the machine reflect the state in the manifest.
 ```
 pixi global sync
 ```
@@ -94,7 +94,7 @@ pixi global upgrade python
 
 Remove environment `python`
 ```
-pixi global remove python
+pixi global uninstall python
 ```
 
 Create environment `python` and `pip`, install corresponding packages and expose all binaries of that packages
@@ -104,7 +104,7 @@ pixi global install python pip
 
 Remove environments `python` and `pip`
 ```
-pixi global remove python pip
+pixi global uninstall python pip
 ```
 
 ### Injecting dependencies
@@ -114,18 +114,18 @@ Then add package `hypercorn` to environment `python` but doesn't expose its bina
 
 ```
 pixi global install python
-pixi global add --name=python hypercorn
+pixi global add --environment=python hypercorn
 ```
 
 Update package `cryptography` (a dependency of `hypercorn`) in environment `python`
 
 ```
-pixi update --name python cryptography
+pixi update --environment python cryptography
 ```
 
 Then remove `hypercorn` again.
 ```
-pixi global remove --name=python hypercorn
+pixi global remove --environment=python hypercorn
 ```
 
 
@@ -133,11 +133,30 @@ pixi global remove --name=python hypercorn
 
 Make a new environment `python_3_10` with package `python=3.10` and no exposed binaries
 ```
-pixi global add --name python_3_10 python=3.10
+pixi global add --environment python_3_10 python=3.10
 ```
 
 Expose `python` from environment `python_3_10` as `python3.10`.
 
 ```
-pixi expose-bin --name python_3_10 --package python "python3.10=python"
+pixi expose-bin --environment python_3_10 --package python "python3.10=python"
 ```
+
+
+## Behavior
+
+### How to behave when no `pixi-global.toml` exists?
+
+Every time a `pixi global` command is executed, it checks if `pixi-global.toml` exists.
+If not, it should offer to create one.
+If there are already environments on the system, it should offer to create a `pixi-global.toml` that matches the existing environments as close as possible.
+
+
+### Multiple manifests
+
+We could go for one default manifest, but also parse other `TOML` in the same directory.
+In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
+
+- pixi-global.toml: Default
+- pixi-global-company-tools.toml
+- pixi-global-from-my-dotfiles.toml
