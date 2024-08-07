@@ -265,7 +265,7 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
-          -B "${{ steps.bin.outputs.BIN_PATH }}"
+          --profile $env:CARGO_PROFILE
           --package pixi
           --target ${{ matrix.target }}
           --output target/wix/pixi-${{ matrix.target }}.msi
