@@ -145,16 +145,16 @@ pixi expose-bin --environment python_3_10 --package python "python3.10=python"
 
 ## Behavior
 
-### How to behave when no `pixi-global.toml` exists?
+### How to behave when no manifest exists?
 
-Every time a `pixi global` command is executed, it checks if `pixi-global.toml` exists.
+Every time a `pixi global` command is executed, it checks if manifest exists.
 If not, it should offer to create one.
-If there are already environments on the system, it should offer to create a `pixi-global.toml` that matches the existing environments as close as possible.
+If there are already environments on the system, it should offer to create a manifest that matches the existing environments as close as possible.
 
 
 ### Multiple manifests
 
-We could go for one default manifest, but also parse other `TOML` in the same directory.
+We could go for one default manifest, but also parse other manifests in the same directory.
 In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
 
 - pixi-global.toml: Default
