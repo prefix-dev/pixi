@@ -6,16 +6,16 @@
 The next iteration of this feature should fulfill the following needs:
 
 - Shareable global environments.
-- Allow managing complex environments with multiple packages as dependencies
+- Managing complex environments with multiple packages as dependencies
 - Flexible exposure of binaries
 
 ## Design Considerations
 
 There are a few things we wanted to keep in mind in the design:
 
-1. **User-friendliness**: Pixi is a user focussed tool that goes beyond developers. The feature should have good error reporting and helpful documentation from the start.
-2. **Keep it simple**: The CLI should be all you need to interact with the global environments.
-3. **Unsurprising**: Simple commands should still behave similar to traditional package managers.
+1. **User-friendliness**: Pixi is a user focused tool that goes beyond developers. The feature should have good error reporting and helpful documentation from the start.
+2. **Keep it simple**: The CLI should be all you strictly need to interact with global environments.
+3. **Unsurprising**: Simple commands should behave similar to traditional package managers.
 4. **Human Readable**: Any file created by this feature should be human-readable and modifiable.
 
 ## Manifest
@@ -43,7 +43,7 @@ pixi global install [PACKAGE]...
 
 Remove environments `ENV`.
 ```
-pixi global uninstall [PACKAGE]...
+pixi global uninstall [ENV]...
 ```
 
 Upgrade all packages in environments `ENV`
@@ -78,6 +78,10 @@ Ensure that the environments on the machine reflect the state in the manifest.
 pixi global sync
 ```
 
+List all environments, their specs and exposed binaries
+```
+pixi global list
+```
 
 
 ### Simple workflow
