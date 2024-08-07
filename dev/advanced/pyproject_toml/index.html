@@ -1521,7 +1521,7 @@ We don't advise to use the <code>pyproject.toml</code> file for anything else th
 <li>Add the current project as an editable pypi dependency;</li>
 <li>Add some defaults to the <code>.gitignore</code> and <code>.gitattributes</code> files.</li>
 </ul>
-<p>If you do not have an existing <code>pyproject.toml</code> file , you can run <code>pixi init --pyproject</code> in your project folder. In that case, pixi will create a <code>pyproject.toml</code> manifest from scratch with some sane defaults.</p>
+<p>If you do not have an existing <code>pyproject.toml</code> file , you can run <code>pixi init --format pyproject</code> in your project folder. In that case, pixi will create a <code>pyproject.toml</code> manifest from scratch with some sane defaults.</p>
 <h2 id="python-dependency">Python dependency<a class="headerlink" href="#python-dependency" title="Permanent link">#</a></h2>
 <p>The <code>pyproject.toml</code> file supports the <code>requires_python</code> field.
 Pixi understands that field and automatically adds the version to the dependencies.</p>
@@ -1676,7 +1676,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta:__legacy__&quot;</span>
 </span></code></pre></div>
 <p>Including a <code>[build-system]</code> section is <strong>highly recommended</strong>. If you are not sure of the <a href="https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend">build-backend</a> you want to use, including the <code>[build-system]</code> section below in your <code>pyproject.toml</code> is a good starting point.
-<code>pixi init --pyproject</code> defaults to <code>hatchling</code>.
+<code>pixi init --format pyproject</code> defaults to <code>hatchling</code>.
 The advantages of <code>hatchling</code> over <code>setuptools</code> are outlined on its <a href="https://hatch.pypa.io/latest/why/#build-backend">website</a>.</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[build-system]</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>

@@ -1655,7 +1655,7 @@ Best of both world, let's give it a go!</p>
 In this tutorial, we will use the <code>pyproject.toml</code> format because it is the most common format for Python projects.</p>
 <h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
 <p>Let's start out by making a directory and creating a new <code>pyproject.toml</code> file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>pixi-py<span class="w"> </span>--pyproject
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>pixi-py<span class="w"> </span>--format<span class="w"> </span>pyproject
 </span></code></pre></div>
 <p>This gives you the following pyproject.toml:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project]</span>
@@ -1814,10 +1814,14 @@ As you can see, the <code>pixi-py</code> package that we are working on is insta
 Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.</p>
 <p>We can create the <code>default</code> and <code>test</code> environments based on our own <code>test</code> feature from the <code>optional-dependency</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Environments</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">[tool.pixi.environments]</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>default<span class="w"> </span>--solve-group<span class="w"> </span>default
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>default
+</span></code></pre></div>
+<p>Which results in:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Environments</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">[tool.pixi.environments]</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <details class="note">
 <summary>Solve Groups</summary>
@@ -1832,18 +1836,18 @@ You can execute commands in this environment with e.g. <code>pixi run -e test py
 <h2 id="getting-code-to-run">Getting code to run<a class="headerlink" href="#getting-code-to-run" title="Permanent link">#</a></h2>
 <p>Let's add some code to the <code>pixi-py</code> package.
 We will add a new function to the <code>pixi_py/__init__.py</code> file:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span> <span class="nn">rich</span> <span class="kn">import</span> <span class="nb">print</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="k">def</span> <span class="nf">hello</span><span class="p">():</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="k">return</span> <span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="k">def</span> <span class="nf">say_hello</span><span class="p">():</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">hello</span><span class="p">())</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span> <span class="nn">rich</span> <span class="kn">import</span> <span class="nb">print</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="k">def</span> <span class="nf">hello</span><span class="p">():</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="k">return</span> <span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="k">def</span> <span class="nf">say_hello</span><span class="p">():</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">hello</span><span class="p">())</span>
 </span></code></pre></div>
 <p>Now add the <code>rich</code> dependency from PyPI using: <code>pixi add --pypi rich</code>.</p>
 <p>Let's see if this works by running:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
 </span></code></pre></div>
 <details class="note">
 <summary>Slow?</summary>
@@ -1857,21 +1861,21 @@ And it works! Cool!</p>
 <p>Okay, so let's add a test for this function.
 Let's add a <code>tests/test_me.py</code> file in the root of the project.</p>
 <p>Giving us the following project structure:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>.
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>├──<span class="w"> </span>pixi_py
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>└──<span class="w"> </span>tests/test_me.py
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>.
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>├──<span class="w"> </span>pixi.lock
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>├──<span class="w"> </span>pixi_py
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>├──<span class="w"> </span>pyproject.toml
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>└──<span class="w"> </span>tests/test_me.py
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span> <span class="nn">pixi_py</span> <span class="kn">import</span> <span class="n">hello</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">def</span> <span class="nf">test_pixi_py</span><span class="p">():</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="k">assert</span> <span class="n">hello</span><span class="p">()</span> <span class="o">==</span> <span class="p">(</span><span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span> <span class="nn">pixi_py</span> <span class="kn">import</span> <span class="n">hello</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="k">def</span> <span class="nf">test_pixi_py</span><span class="p">():</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="k">assert</span> <span class="n">hello</span><span class="p">()</span> <span class="o">==</span> <span class="p">(</span><span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Let's add an easy task for running the tests.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>✔<span class="w"> </span>Added<span class="w"> </span>task<span class="w"> </span><span class="sb">`</span><span class="nb">test</span><span class="sb">`</span>:<span class="w"> </span>pytest<span class="w"> </span>.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>✔<span class="w"> </span>Added<span class="w"> </span>task<span class="w"> </span><span class="sb">`</span><span class="nb">test</span><span class="sb">`</span>:<span class="w"> </span>pytest<span class="w"> </span>.
 </span></code></pre></div>
 <p>So pixi has a task system to make it easy to run commands.
 Similar to <code>npm</code> scripts or something you would specify in a <code>Justfile</code>.</p>
@@ -1881,30 +1885,30 @@ Similar to <code>npm</code> scripts or something you would specify in a <code>Ju
 You can do caching, dependencies and more.
 Read more about tasks in the <a href="../../features/advanced_tasks/">tasks</a> section.</p>
 </details>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>r<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">test</span><span class="o">)</span>:<span class="w"> </span>pytest<span class="w"> </span>.
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="o">=================================================================================================</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>session<span class="w"> </span><span class="nv">starts</span><span class="w"> </span><span class="o">=================================================================================================</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>platform<span class="w"> </span>darwin<span class="w"> </span>--<span class="w"> </span>Python<span class="w"> </span><span class="m">3</span>.12.2,<span class="w"> </span>pytest-8.1.1,<span class="w"> </span>pluggy-1.4.0
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>rootdir:<span class="w"> </span>/private/tmp/pixi-py
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>configfile:<span class="w"> </span>pyproject.toml
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>collected<span class="w"> </span><span class="m">1</span><span class="w"> </span>item
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>test_me.py<span class="w"> </span>.<span class="w">                                                                                                                                                                                                    </span><span class="o">[</span><span class="m">100</span>%<span class="o">]</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="o">==================================================================================================</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>passed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.00s<span class="w"> </span><span class="o">=================================================================================================</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>r<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">test</span><span class="o">)</span>:<span class="w"> </span>pytest<span class="w"> </span>.
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="o">=================================================================================================</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>session<span class="w"> </span><span class="nv">starts</span><span class="w"> </span><span class="o">=================================================================================================</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>platform<span class="w"> </span>darwin<span class="w"> </span>--<span class="w"> </span>Python<span class="w"> </span><span class="m">3</span>.12.2,<span class="w"> </span>pytest-8.1.1,<span class="w"> </span>pluggy-1.4.0
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>rootdir:<span class="w"> </span>/private/tmp/pixi-py
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>configfile:<span class="w"> </span>pyproject.toml
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>collected<span class="w"> </span><span class="m">1</span><span class="w"> </span>item
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>test_me.py<span class="w"> </span>.<span class="w">                                                                                                                                                                                                    </span><span class="o">[</span><span class="m">100</span>%<span class="o">]</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>
+</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="o">==================================================================================================</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>passed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.00s<span class="w"> </span><span class="o">=================================================================================================</span>
 </span></code></pre></div>
 <p>Neat! It seems to be working!</p>
 <h3 id="test-vs-default-environment">Test vs Default environment<a class="headerlink" href="#test-vs-default-environment" title="Permanent link">#</a></h3>
 <p>The interesting thing is if we compare the output of the two environments.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># v.s. default environment</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>pixi<span class="w"> </span>list
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># v.s. default environment</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pixi<span class="w"> </span>list
 </span></code></pre></div>
 <p>Is that the test environment has:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>package<span class="w">          </span>version<span class="w">       </span>build<span class="w">               </span>size<span class="w">       </span>kind<span class="w">   </span><span class="nb">source</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>...
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pytest<span class="w">           </span><span class="m">8</span>.1.1<span class="w">                             </span><span class="m">1</span>.1<span class="w"> </span>mib<span class="w">    </span>pypi<span class="w">   </span>pytest-8.1.1-py3-none-any.whl
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>...
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>package<span class="w">          </span>version<span class="w">       </span>build<span class="w">               </span>size<span class="w">       </span>kind<span class="w">   </span><span class="nb">source</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>...
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>pytest<span class="w">           </span><span class="m">8</span>.1.1<span class="w">                             </span><span class="m">1</span>.1<span class="w"> </span>mib<span class="w">    </span>pypi<span class="w">   </span>pytest-8.1.1-py3-none-any.whl
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>...
 </span></code></pre></div>
 <p>But the default environment is missing this package.
 This way, you can finetune your environments to only have the packages that are needed for that environment.
@@ -1913,29 +1917,29 @@ There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker
 <h2 id="replacing-pypi-packages-with-conda-packages">Replacing PyPI packages with conda packages<a class="headerlink" href="#replacing-pypi-packages-with-conda-packages" title="Permanent link">#</a></h2>
 <p>Last thing, pixi provides the ability for <code>pypi</code> packages to depend on <code>conda</code> packages.
 Let's confirm this with <code>pixi list</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>...
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">                            </span><span class="m">4</span>.1<span class="w"> </span>MiB<span class="w">    </span>pypi<span class="w">   </span>pygments-2.17.2-py3-none-any.http.whl
-</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>...
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>...
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">                            </span><span class="m">4</span>.1<span class="w"> </span>MiB<span class="w">    </span>pypi<span class="w">   </span>pygments-2.17.2-py3-none-any.http.whl
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>...
 </span></code></pre></div>
 <p>Let's explicitly add <code>pygments</code> to the <code>pyproject.toml</code> file.
 Which is a dependency of the <code>rich</code> package.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pygments
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pygments
 </span></code></pre></div>
 <p>This will add the following to the <code>pyproject.toml</code> file:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[tool.pixi.dependencies]</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">pygments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.17.2,&lt;2.18&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">pygments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.17.2,&lt;2.18&quot;</span>
 </span></code></pre></div>
 <p>We can now see that the <code>pygments</code> package is now installed as a conda package.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>...
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">        </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">840</span>.3<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pygments-2.17.2-pyhd8ed1ab_0.conda
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>...
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">        </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">840</span>.3<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pygments-2.17.2-pyhd8ed1ab_0.conda
 </span></code></pre></div>
 <p>This way, PyPI dependencies and conda dependencies can be mixed and matched to seamlessly interoperate.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>$<span class="w">  </span>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>$<span class="w">  </span>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
 </span></code></pre></div>
 <p>And it still works!</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
