@@ -178,6 +178,8 @@ jobs:
 
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
       CARGO_PROFILE_OPT_LEVEL: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 's' || '0' }}
+
+      CARGO_PROFILE: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dist' || 'ci' }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -241,7 +243,7 @@ jobs:
         run: >
           cargo build
           --locked
-          --release
+          --profile $CARGO_PROFILE
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
