@@ -1,13 +1,13 @@
 [project]
-name = "opencv"
-description = "Opencv example"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
+description = "Opencv example"
+name = "opencv"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
-start = "python webcam_capture.py"
 calibrate = "python calibrate.py"
+start = "python webcam_capture.py"
 
 [dependencies]
 opencv = "*"

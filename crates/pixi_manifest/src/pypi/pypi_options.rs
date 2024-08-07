@@ -1,6 +1,6 @@
 use crate::consts;
 use indexmap::IndexSet;
-use rattler_lock::FindLinksUrlOrPath;
+use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::{hash::Hash, iter};
@@ -126,13 +126,19 @@ impl From<PypiOptions> for rattler_lock::PypiIndexes {
     fn from(value: PypiOptions) -> Self {
         let primary_index = value
             .index_url
-            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.parse().unwrap());
+            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.clone());
         Self {
             indexes: iter::once(primary_index)
                 .chain(value.extra_index_urls.into_iter().flatten())
                 .collect(),
             find_links: value.find_links.into_iter().flatten().collect(),
         }
+    }
+}
+
+impl From<&PypiOptions> for rattler_lock::PypiIndexes {
+    fn from(value: &PypiOptions) -> Self {
+        PypiIndexes::from(value.clone())
     }
 }
 

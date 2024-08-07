@@ -1,23 +1,23 @@
+use std::cmp::Ordering;
 use std::io::{self, Write};
 use std::sync::Arc;
-use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
-
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::config::Config;
-use crate::util::default_channel_config;
-use crate::utils::reqwest::build_reqwest_clients;
-use crate::HasFeatures;
-use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
+use crate::cli::cli_config::ProjectConfig;
+use crate::{repodata::fetch_sparse_repodata, Project};
+use pixi_config::{default_channel_config, Config};
+use pixi_manifest::FeaturesExt;
+use pixi_progress::await_in_progress;
+use pixi_utils::reqwest::build_reqwest_clients;
 
 /// Search a conda package
 ///
@@ -32,11 +32,10 @@ pub struct Args {
     /// Channel to specifically search package, defaults to
     /// project channels or conda-forge
     #[clap(short, long)]
-    channel: Option<Vec<String>>,
+    channel: Option<Vec<NamedChannelOrUrl>>,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// The platform to search for, defaults to current platform
     #[arg(short, long, default_value_t = Platform::current())]
@@ -92,55 +91,70 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
         (Some(c), Some(p)) => {
-            let channels = p.config().compute_channels(&c).into_diagnostic()?;
+            let channels = if c.is_empty() {
+                p.config().default_channels()
+            } else {
+                c
+            };
             eprintln!(
                 "Using channels from arguments ({}): {:?}",
                 p.name(),
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
+            let channel_config = p.channel_config();
             channels
+                .into_iter()
+                .map(|c| c.into_channel(&channel_config))
+                .collect_vec()
         }
         // No project -> use the global config
         (Some(c), None) => {
-            let channels = Config::load_global()
-                .compute_channels(&c)
-                .into_diagnostic()?;
+            let config = Config::load_global();
+            let channels = if c.is_empty() {
+                config.default_channels()
+            } else {
+                c
+            };
             eprintln!(
                 "Using channels from arguments: {}",
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
             channels
+                .into_iter()
+                .map(|c| c.into_channel(config.global_channel_config()))
+                .collect_vec()
         }
         // if user doesn't pass channels and we are in a project
         (None, Some(p)) => {
-            let channels: Vec<_> = p
-                .default_environment()
-                .channels()
-                .into_iter()
-                .cloned()
-                .collect();
+            let c = p.default_environment().channels();
             eprintln!(
                 "Using channels from project ({}): {}",
                 p.name(),
-                channels.iter().map(|c| c.name()).join(", ")
+                c.iter().format(", ")
             );
-            channels
+            let channel_config = p.channel_config();
+            c.into_iter()
+                .cloned()
+                .map(|c| c.into_channel(&channel_config))
+                .collect_vec()
         }
         // if user doesn't pass channels and we are not in project
         (None, None) => {
-            let channels = Config::load_global()
-                .compute_channels(&[])
-                .into_diagnostic()?;
+            let config = Config::load_global();
+            let channels = config.default_channels();
             eprintln!(
                 "Using channels from global config: {}",
-                channels.iter().map(|c| c.name()).join(", ")
+                channels.iter().format(", ")
             );
             channels
+                .into_iter()
+                .map(|c| c.into_channel(config.global_channel_config()))
+                .collect_vec()
         }
     };
 
@@ -162,7 +176,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?,
     );
 
-    // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
+    // When package name filter contains * (wildcard), it will search and display a
+    // list of packages matching this filter
     if package_name_filter.contains('*') {
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
@@ -176,13 +191,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
     }
-    // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
+    // If package name filter doesn't contain * (wildcard), it will search and display specific
+    // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
         search_exact_package(package_name, repo_data, stdout).await?;
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

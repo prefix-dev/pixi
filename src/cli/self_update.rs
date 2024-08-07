@@ -6,8 +6,8 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use crate::consts;
 use miette::{Context, IntoDiagnostic};
+use pixi_consts::consts;
 use reqwest::Client;
 use serde::Deserialize;
 

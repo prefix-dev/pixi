@@ -1,13 +1,13 @@
 [project]
-name = "flask-hello-world"
-description = "Example how to get started with flask in a pixi environment."
 authors = ["Wolf Vollprecht <wolf@prefix.dev>"]
 channels = ["conda-forge"]
+description = "Example how to get started with flask in a pixi environment."
+name = "flask-hello-world"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
 start = "python -m flask run --port=5050"
 
 [dependencies]
-python = "3.11.*"
 flask = "2.*"
+python = "3.11.*"

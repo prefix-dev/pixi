@@ -1,21 +1,21 @@
 [project]
-name = "jupyterlab"
-description = "Jupyter Lab examples"
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
+description = "Jupyter Lab examples"
+name = "jupyterlab"
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tasks]
 start = "jupyter lab"
 
 [dependencies]
-jupyterlab = "4.*"
-numpy = "1.25.*"
-matplotlib = "3.*"
-sympy = "1.12.*"
-scipy = "1.11.*"
-scikit-learn = "1.*"
-ipywidgets = "8.*"
 ipython = "8.*"
+ipywidgets = "8.*"
+jupyterlab = "4.*"
+matplotlib = "3.*"
+numpy = "1.25.*"
+scikit-learn = "1.*"
+scipy = "1.11.*"
+sympy = "1.12.*"
 # Install pip to allow users to install pip packages after the server is started.
 pip = "23.2.*"

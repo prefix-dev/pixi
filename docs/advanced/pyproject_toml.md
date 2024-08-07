@@ -13,7 +13,7 @@ When you already have a `pyproject.toml` file in your project, you can run `pixi
 - Add the current project as an editable pypi dependency;
 - Add some defaults to the `.gitignore` and `.gitattributes` files.
 
-If you do not have an existing `pyproject.toml` file , you can run `pixi init --pyproject` in your project folder. In that case, pixi will create a `pyproject.toml` manifest from scratch with some sane defaults.
+If you do not have an existing `pyproject.toml` file , you can run `pixi init --format pyproject` in your project folder. In that case, pixi will create a `pyproject.toml` manifest from scratch with some sane defaults.
 
 ## Python dependency
 
@@ -207,10 +207,12 @@ requires = ["setuptools >= 40.8.0"]
 build-backend = "setuptools.build_meta:__legacy__"
 ```
 
-Including a `[build-system]` section is **highly recommended**. If you are not sure of the [build-backend](https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend) you want to use, including the `[build-system]` section below in your `pyproject.toml` is a good starting point
+Including a `[build-system]` section is **highly recommended**. If you are not sure of the [build-backend](https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend) you want to use, including the `[build-system]` section below in your `pyproject.toml` is a good starting point.
+`pixi init --format pyproject` defaults to `hatchling`.
+The advantages of `hatchling` over `setuptools` are outlined on its [website](https://hatch.pypa.io/latest/why/#build-backend).
 
 ```toml title="pyproject.toml"
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 ```

@@ -1,16 +1,16 @@
 [project]
-name = "foo"
-version = "0.1.0"
-description = "Add a short description here"
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
-requires-python = ">= 3.11"
 dependencies = [
-    "requests @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl",
+  "requests @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl",
 ]
+description = "Add a short description here"
+name = "foo"
+requires-python = ">= 3.11"
+version = "0.1.0"
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]

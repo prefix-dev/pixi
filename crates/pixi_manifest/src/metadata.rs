@@ -1,12 +1,14 @@
-use super::pypi::pypi_options::PypiOptions;
-use crate::utils::PixiSpanned;
+use std::{collections::HashMap, path::PathBuf};
+
 use indexmap::IndexSet;
-use rattler_conda_types::{Platform, Version};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 use rattler_solve::ChannelPriority;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
-use std::{collections::HashMap, path::PathBuf};
 use url::Url;
+
+use super::pypi::pypi_options::PypiOptions;
+use crate::utils::PixiSpanned;
 
 /// Describes the contents of the `[package]` section of the project manifest.
 #[serde_as]
@@ -24,8 +26,7 @@ pub struct ProjectMetadata {
     pub description: Option<String>,
 
     /// Optional authors
-    #[serde(default)]
-    pub authors: Vec<String>,
+    pub authors: Option<Vec<String>>,
 
     /// The channels used by the project
     #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
@@ -59,7 +60,7 @@ pub struct ProjectMetadata {
     pub documentation: Option<Url>,
 
     /// URL or Path of the conda to pypi name mapping
-    pub conda_pypi_map: Option<HashMap<String, String>>,
+    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,

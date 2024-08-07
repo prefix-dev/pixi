@@ -1,11 +1,14 @@
 mod activation;
 pub(crate) mod channel;
-pub mod consts;
+mod dependencies;
 mod document;
 mod environment;
 mod environments;
 mod error;
 mod feature;
+mod features_ext;
+mod has_features_iter;
+mod has_manifest_ref;
 mod manifest;
 mod metadata;
 mod nameless_matchspec;
@@ -19,6 +22,8 @@ mod target;
 pub mod task;
 mod utils;
 mod validation;
+
+pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
 pub use manifest::{Manifest, ManifestKind};
 
@@ -39,6 +44,10 @@ pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+
+pub use features_ext::FeaturesExt;
+pub use has_features_iter::HasFeaturesIter;
+pub use has_manifest_ref::HasManifestRef;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -68,5 +77,33 @@ fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
     match platforms.is_empty() {
         true => vec![None],
         false => platforms.iter().map(|p| Some(*p)).collect_vec(),
+    }
+}
+
+use console::StyledObject;
+use fancy_display::FancyDisplay;
+use pixi_consts::consts;
+
+impl FancyDisplay for EnvironmentName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for &EnvironmentName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for TaskName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::TASK_STYLE.apply_to(self.as_str())
+    }
+}
+
+impl FancyDisplay for FeatureName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::FEATURE_STYLE.apply_to(self.as_str())
     }
 }

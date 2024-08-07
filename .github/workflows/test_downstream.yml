@@ -68,7 +68,7 @@ jobs:
         run: git diff --exit-code pixi.lock
 
   test-examples:
-    name: Integration test on ${{ inputs.os }}
+    name: Test examples on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
     steps:
       - name: checkout repo
@@ -112,3 +112,42 @@ jobs:
       - name: Test examples
         shell: bash
         run: bash tests/test_examples.sh
+
+  test-integration:
+    name: Integration test on ${{ inputs.os }}
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+      - name: Download binary from build
+        uses: actions/download-artifact@v4
+        with:
+          name: pixi-${{ inputs.target }}${{ inputs.extension }}
+          path: pixi_bin
+      - name: Debug
+        run: |
+          pwd
+      - name: Setup unix binary, add to github path
+        if: inputs.os != 'windows-latest'
+        run: |
+          mv pixi_bin/pixi-${{ inputs.target }} pixi_bin/pixi
+          chmod a+x pixi_bin/pixi
+          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+      - name: Create Directory and Move Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\.pixi"
+          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "D:\.pixi\pixi.exe"
+        shell: pwsh
+      - name: Add to PATH
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+        shell: pwsh
+      - name: Verify and Use Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          echo "Current PATH: $env:PATH"
+          pixi --version
+        shell: pwsh
+      - name: Run integration tests
+        run: pixi run test-integration

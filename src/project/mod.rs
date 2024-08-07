@@ -1,8 +1,7 @@
-mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
-pub mod has_features;
+mod has_project_ref;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -18,30 +17,31 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    config::Config,
-    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
-    project::grouped_environment::GroupedEnvironment,
-    pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource},
-    utils::reqwest::build_reqwest_clients,
-};
 use async_once_cell::OnceCell as AsyncCell;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
-use pixi_manifest::Manifest;
 use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
 };
-use rattler_conda_types::{Channel, Version};
+use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
+
+use crate::{
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    project::grouped_environment::GroupedEnvironment,
+};
+use pixi_config::Config;
+use pixi_consts::consts;
+use pixi_utils::reqwest::build_reqwest_clients;
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
+
+pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -138,10 +138,14 @@ impl Borrow<ParsedManifest> for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub fn from_manifest(manifest: Manifest) -> Self {
+    fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
+        let root = manifest
+            .path
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
 
         let config = Config::load(&root);
 
@@ -165,7 +169,6 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
-    /// Assumes the manifest is a Pixi manifest
     pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
@@ -189,7 +192,7 @@ impl Project {
                         );
                     }
                 }
-                return Self::load(Path::new(env_manifest_path.as_str()));
+                return Self::from_path(Path::new(env_manifest_path.as_str()));
             }
         }
 
@@ -197,12 +200,12 @@ impl Project {
             Some(file) => file,
             None => miette::bail!(
                 "could not find {} or {} which is configured to use pixi",
-                PROJECT_MANIFEST,
-                PYPROJECT_MANIFEST
+                consts::PROJECT_MANIFEST,
+                consts::PYPROJECT_MANIFEST
             ),
         };
 
-        Self::load(&project_toml)
+        Self::from_path(&project_toml)
     }
 
     /// Returns the source code of the project as [`NamedSource`].
@@ -212,38 +215,16 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
-        // Determine the parent directory of the manifest file
-        let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
-
-        let root = full_path
-            .parent()
-            .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
-
-        // Load the TOML document
-        let manifest = Manifest::from_path(&full_path)?;
-
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
-
-        // Load the user configuration from the local project and all default locations
-        let config = Config::load(root);
-
-        Ok(Self {
-            root: root.to_owned(),
-            client: Default::default(),
-            manifest,
-            env_vars,
-            mapping_source: Default::default(),
-            config,
-            repodata_gateway: Default::default(),
-        })
+    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
+        let manifest = Manifest::from_path(manifest_path)?;
+        Ok(Project::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
-            Some(path) => Project::load(path)?,
+            Some(path) => Project::from_path(path)?,
             None => Project::discover()?,
         };
         Ok(project)
@@ -545,6 +526,15 @@ impl Project {
         &self.config
     }
 
+    /// Construct a [`ChannelConfig`] that is specific to this project. This
+    /// ensures that the root directory is set correctly.
+    pub fn channel_config(&self) -> ChannelConfig {
+        ChannelConfig {
+            root_dir: self.root.clone(),
+            ..self.config.global_channel_config().clone()
+        }
+    }
+
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
@@ -555,7 +545,7 @@ impl Project {
     pub fn pypi_name_mapping_source(&self) -> &MappingSource {
         fn build_pypi_name_mapping_source(
             manifest: &Manifest,
-            config: &Config,
+            channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
             match manifest.parsed.project.conda_pypi_map.clone() {
                 Some(url) => {
@@ -563,18 +553,22 @@ impl Project {
                     let channels = url
                         .keys()
                         .map(|channel_str| {
-                            Channel::from_str(channel_str, config.channel_config())
-                                .map(|channel| (channel_str, channel.canonical_name()))
+                            (
+                                channel_str,
+                                channel_str
+                                    .clone()
+                                    .into_channel(channel_config)
+                                    .canonical_name(),
+                            )
                         })
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
+                        .collect::<Vec<_>>();
 
                     let project_channels = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.canonical_name())
+                        .map(|pc| pc.channel.to_string())
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table
@@ -590,7 +584,7 @@ impl Project {
                     let mapping = channels
                         .iter()
                         .map(|(channel_str, channel)| {
-                            let mapping_location = url.get(*channel_str).unwrap();
+                            let mapping_location = url.get(channel_str).unwrap();
 
                             let url_or_path = match Url::parse(mapping_location) {
                                 Ok(url) => MappingLocation::Url(url),
@@ -614,8 +608,7 @@ impl Project {
         }
 
         self.mapping_source.get_or_init(|| {
-            let config = self.config();
-            build_pypi_name_mapping_source(&self.manifest, config)
+            build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
                 .expect("mapping source should be ok")
         })
     }
@@ -627,15 +620,15 @@ impl Project {
 pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
-        [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
+        [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
             .iter()
             .find_map(|manifest| {
                 let path = dir.join(manifest);
                 if path.is_file() {
                     match *manifest {
-                        PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST
-                            if PyProjectToml::from_path(&path)
+                        consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
+                        consts::PYPROJECT_MANIFEST
+                            if PyProjectManifest::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {
                             Some(path.to_path_buf())
@@ -733,8 +726,8 @@ mod tests {
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
-    use self::has_features::HasFeatures;
     use super::*;
+    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -785,7 +778,7 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: CondaDependencies) -> String {
+    fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")

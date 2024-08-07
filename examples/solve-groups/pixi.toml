@@ -1,25 +1,25 @@
 [project]
-name = "solve-groups"
 authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
 channels = ["conda-forge"]
+name = "solve-groups"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [dependencies]
 pytest = "*"
 
 [feature.max_py310.dependencies]
-python = "<=3.10"
 pydantic = "*"
+python = "<=3.10"
 
 [feature.min_py38.dependencies]
-python = ">=3.8"
 py-rattler = "*"
+python = ">=3.8"
 
 [feature.min_py38.pypi-dependencies]
 matplotlib = "*"
 
 [tasks]
-start ={ depends-on = ["test"]}
+start = { depends-on = ["test"] }
 test = "pytest -s"
 
 [environments]
@@ -30,8 +30,8 @@ test = "pytest -s"
 # The environments do not contain any dependencies from the other environments. This means that
 # the `min-py38` environment does not contain `pydantic` and the `max-py310` environment does not
 # contain `py-rattler`.
-min-py38 = { features = ["min_py38"], solve-group = "group1" }
 max-py310 = { features = ["max_py310"], solve-group = "group1" }
+min-py38 = { features = ["min_py38"], solve-group = "group1" }
 
 # The default environment does not specify a solve-group which means the python version does not
 # have an upperbound.

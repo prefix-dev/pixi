@@ -3,23 +3,23 @@ use std::{
     cmp::Ordering,
     collections::HashSet,
     io::{stdout, Write},
-    path::PathBuf,
 };
 
+use crate::cli::cli_config::ProjectConfig;
 use crate::{
-    config::ConfigCli,
-    consts,
-    consts::{CondaEmoji, PypiEmoji},
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
-    HasFeatures, Project,
+    Project,
 };
 use ahash::HashMap;
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use pixi_config::ConfigCli;
+use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 use serde::Serialize;
@@ -32,9 +32,8 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
@@ -125,8 +124,8 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
-    let project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(config);
 
     let specs = UpdateSpecs::from(args.specs);
 
@@ -538,8 +537,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("+").green(),
                     match p {
-                        Package::Conda(_) => CondaEmoji.to_string(),
-                        Package::Pypi(_) => PypiEmoji.to_string(),
+                        Package::Conda(_) => consts::CondaEmoji.to_string(),
+                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -551,8 +550,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("-").red(),
                     match p {
-                        Package::Conda(_) => CondaEmoji.to_string(),
-                        Package::Pypi(_) => PypiEmoji.to_string(),
+                        Package::Conda(_) => consts::CondaEmoji.to_string(),
+                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -576,7 +575,7 @@ impl LockFileDiff {
                         format!(
                             "{} {} {}\t{} {}\t->\t{} {}",
                             console::style("~").yellow(),
-                            CondaEmoji,
+                            consts::CondaEmoji,
                             name,
                             choose_style(&previous.version.as_str(), &current.version.as_str()),
                             choose_style(previous.build.as_str(), current.build.as_str()),
@@ -591,7 +590,7 @@ impl LockFileDiff {
                         format!(
                             "{} {} {}\t{}\t->\t{}",
                             console::style("~").yellow(),
-                            PypiEmoji,
+                            consts::PypiEmoji,
                             name,
                             choose_style(
                                 &previous.version.to_string(),

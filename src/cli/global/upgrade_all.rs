@@ -1,9 +1,9 @@
 use clap::Parser;
 use indexmap::IndexMap;
 
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
-use crate::config::{Config, ConfigCli};
+use pixi_config::{Config, ConfigCli};
 
 use super::{list::list_global_packages, upgrade::upgrade_packages};
 
@@ -20,7 +20,7 @@ pub struct Args {
     /// By default, if no channel is provided, `conda-forge` is used, the channel
     /// the package was installed from will always be used.
     #[clap(short, long)]
-    channel: Vec<String>,
+    channel: Vec<NamedChannelOrUrl>,
 
     #[clap(flatten)]
     config: ConfigCli,

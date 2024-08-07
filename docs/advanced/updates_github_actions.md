@@ -41,8 +41,8 @@ jobs:
           run-install: false
       - name: Update lockfiles
         run: |
-          pixi global install pixi-diff-to-markdown
-          pixi update --json --no-install | pixi-diff-to-markdown >> diff.md
+          set -o pipefail
+          pixi update --json --no-install | pixi exec pixi-diff-to-markdown >> diff.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:

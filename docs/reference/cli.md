@@ -31,7 +31,7 @@ It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
-- `--pyproject`: Create a `pyproject.toml` manifest, rather than a `pixi.toml` manifest. Recommended for a python project.
+- `--format <FORMAT>`: Specify the format of the project file, either `pyproject` or `pixi`. [default: `pixi`]
 
 !!! info "Importing an environment.yml"
   When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
@@ -45,6 +45,8 @@ pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
 pixi init --import environment.yml
+pixi init --format pyproject
+pixi init --format pixi
 ```
 
 ## `add`
@@ -94,7 +96,7 @@ pixi add --feature featurex numpy
 ```
 
 !!! tip
-    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](reference/pixi_configuration#pinning-strategy).
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
     ```
     pixi config set pinning-strategy no-pin --global
     ```
@@ -127,18 +129,6 @@ pixi install --locked
 pixi install --environment lint
 pixi install -e lint
 ```
-
-To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
-This process will regenerate the lock file based on the dependencies defined in your manifest file:
-
-```sh
-rm pixi.lock && pixi install
-```
-
-This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
-
-In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
-This command will allow you to update the lock file directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
 
 ## `update`
 

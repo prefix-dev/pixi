@@ -1,18 +1,22 @@
 [package]
-name = "pixi_manifest"
-version = "0.1.0"
-edition.workspace = true
 authors.workspace = true
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 license.workspace = true
+name = "pixi_manifest"
 readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
 
 [dependencies]
+dunce = { workspace = true }
+fancy_display = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+lazy_static = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_consts = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
@@ -34,11 +38,14 @@ rattler_solve = { workspace = true, features = ["serde"] }
 rattler_virtual_packages = { workspace = true }
 
 # TODO: Remove these dependencies
+console = { workspace = true }
 miette = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+fancy_display = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
+pixi_consts = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
