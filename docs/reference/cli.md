@@ -63,7 +63,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 
 ##### Arguments
 
-1. `<SPECS>`: The package(s) to add, space separated. The version constraint is optional.
+1. `[SPECS]`: The package(s) to add, space separated. The version constraint is optional.
 
 ##### Options
 
@@ -77,6 +77,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
+- `--editable`: Specifies an editable dependency, only use in combination with `--pypi`.
 
 ```shell
 pixi add numpy
@@ -85,14 +86,18 @@ pixi add "numpy>=1.22,<1.24"
 pixi add --manifest-path ~/myproject/pixi.toml numpy
 pixi add --host "python>=3.9.0"
 pixi add --build cmake
-pixi add --pypi requests[security]
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
-pixi add --pypi "project @ file:///absolute/path/to/project"
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
 pixi add --no-lockfile-update numpy
 pixi add --feature featurex numpy
+
+# Add a pypi dependency
+pixi add --pypi requests[security]
+pixi add --pypi "boltons>=24.0.0" mypy --feature lint
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
+pixi add --pypi "project @ file:///absolute/path/to/project"
+pixi add --pypi "project @ file:///absolute/path/to/project" --editable
 ```
 
 !!! tip
@@ -281,6 +286,7 @@ If the project manifest is a `pyproject.toml`, removing a pypi dependency with t
 - `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
 - `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
 - `--no-install`: Don't install the environment, only remove the package from the lock-file and manifest.
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 
 ```shell
 pixi remove numpy
@@ -907,6 +913,7 @@ This command installs package(s) into its own environment and adds the binary to
 ##### Options
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
 
 ```shell
 pixi global install ruff
@@ -922,7 +929,16 @@ pixi global install python=3.9.*
 pixi global install "python [version='3.11.0', build_number=1]"
 pixi global install "python [version='3.11.0', build=he550d4f_1_cpython]"
 pixi global install python=3.11.0=h10a6764_1_cpython
+
+# Install for a specific platform, only useful on osx-arm64
+pixi global install --platform osx-64 ruff
 ```
+
+!!! tip
+    Running `osx-64` on Apple Silicon will install the Intel binary but run it using [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment)
+    ```
+    pixi global install --platform osx-64 ruff
+    ```
 
 After using global install, you can use the package you installed anywhere on your system.
 
@@ -960,6 +976,7 @@ This command upgrades a globally installed package (to the latest version by def
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
   Defaults to `conda-forge`. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: specify a platform that you want to upgrade the package for. (default: current platform)
 
 ```shell
 pixi global upgrade ruff
