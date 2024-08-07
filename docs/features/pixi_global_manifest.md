@@ -47,7 +47,7 @@ Remove environments of the named packages `PACKAGE`
 pixi global uninstall [PACKAGE]...
 ```
 
-Resolve environment without specs
+Resolve environment without previously defined specs
 ```
 pixi global upgrade python
 ```
