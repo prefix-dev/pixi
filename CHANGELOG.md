@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.27.0] - 2024-08-07
+#### ✨ Highlights
+
+This release contains a lot of refactoring and improvements to the codebase, in preparation for future features and improvements.
+Including with that we've fixed a ton of bugs. To make sure we're not breaking anything we've added a lot of tests and CI checks.
+But let us know if you find any issues!
+
+As a reminder, you can update pixi using `pixi self-update` and move to a specific version, including backwards, with `pixi self-update --version 0.27.0`.
+
+#### Added
+
+- Add `pixi run` completion for `fish` shell by @dennis-wey in [#1680](https://github.com/prefix-dev/pixi/pull/1680)
+
+#### Changed
+
+- Move examples from setuptools to hatchling by @Hofer-Julian in [#1692](https://github.com/prefix-dev/pixi/pull/1692)
+- Let `pixi init` create hatchling pyproject.toml by @Hofer-Julian in [#1693](https://github.com/prefix-dev/pixi/pull/1693)
+- Make `[project]` table optional for `pyproject.toml` manifests by @olivier-lacroix in [#1732](https://github.com/prefix-dev/pixi/pull/1732)
+
+#### Documentation
+
+- Improve the `fish` completions location by @tdejager in [#1647](https://github.com/prefix-dev/pixi/pull/1647)
+- Explain why we use `hatchling` by @Hofer-Julian
+- Update install CLI doc now that the `update` command exist by @olivier-lacroix in [#1690](https://github.com/prefix-dev/pixi/pull/1690)
+- Mention `pixi exec` in GHA docs by @pavelzw in [#1724](https://github.com/prefix-dev/pixi/pull/1724)
+- Update to correct spelling by @ahnsn in [#1730](https://github.com/prefix-dev/pixi/pull/1730)
+- Ensure `hatchling` is used everywhere in documentation by @olivier-lacroix in [#1733](https://github.com/prefix-dev/pixi/pull/1733)
+- Add readme to WASM example by @wolfv in [#1703](https://github.com/prefix-dev/pixi/pull/1703)
+- Fix typo by @pavelzw in [#1660](https://github.com/prefix-dev/pixi/pull/1660)
+- Fix typo by @DimitriPapadopoulos in [#1743](https://github.com/prefix-dev/pixi/pull/1743)
+- Fix typo by @SeaOtocinclus in [#1651](https://github.com/prefix-dev/pixi/pull/1651)
+
+#### Testing
+
+- Added script and tasks for testing examples by @tdejager in [#1671](https://github.com/prefix-dev/pixi/pull/1671)
+- Add simple integration tests by @ruben-arts in [#1719](https://github.com/prefix-dev/pixi/pull/1719)
+
+#### Fixed
+
+- Prepend pixi to path instead of appending by @vigneshmanick in [#1644](https://github.com/prefix-dev/pixi/pull/1644)
+- Add manifest tests and run them in ci by @ruben-arts in [#1667](https://github.com/prefix-dev/pixi/pull/1667)
+- Use hashed pypi mapping by @baszalmstra in [#1663](https://github.com/prefix-dev/pixi/pull/1663)
+- Depend on `pep440_rs` from crates.io and use replace by @baszalmstra in [#1698](https://github.com/prefix-dev/pixi/pull/1698)
+- `pixi add` with more than just package name and version by @ruben-arts in [#1704](https://github.com/prefix-dev/pixi/pull/1704)
+- Ignore pypi logic on non pypi projects by @ruben-arts in [#1705](https://github.com/prefix-dev/pixi/pull/1705)
+- Fix and refactor `--no-lockfile-update` by @ruben-arts in [#1683](https://github.com/prefix-dev/pixi/pull/1683)
+- Changed example to use hatchling by @tdejager in [#1729](https://github.com/prefix-dev/pixi/pull/1729)
+- Todo clean up by @KGrewal1 in [#1735](https://github.com/prefix-dev/pixi/pull/1735)
+- Allow for init to `pixi.toml` when `pyproject.toml` is available. by @ruben-arts in [#1640](https://github.com/prefix-dev/pixi/pull/1640)
+- Test on `macos-13` by @ruben-arts in [#1739](https://github.com/prefix-dev/pixi/pull/1739)
+- Make sure pixi vars are available before `activation.env` vars are by @ruben-arts in [#1740](https://github.com/prefix-dev/pixi/pull/1740)
+- Authenticate exec package download by @olivier-lacroix in [#1751](https://github.com/prefix-dev/pixi/pull/1751)
+
+#### Refactor
+
+- Extract `pixi_manifest` by @baszalmstra in [#1656](https://github.com/prefix-dev/pixi/pull/1656)
+- Delay channel config url evaluation by @baszalmstra in [#1662](https://github.com/prefix-dev/pixi/pull/1662)
+- Split out pty functionality by @tdejager in [#1678](https://github.com/prefix-dev/pixi/pull/1678)
+- Make project manifest loading DRY and consistent by @olivier-lacroix in [#1688](https://github.com/prefix-dev/pixi/pull/1688)
+- Refactor channel add and remove CLI commands by @olivier-lacroix in [#1689](https://github.com/prefix-dev/pixi/pull/1689)
+- Refactor `pixi::consts` and `pixi::config` into separate crates by @tdejager in [#1684](https://github.com/prefix-dev/pixi/pull/1684)
+- Move dependencies to `pixi_manifest` by @tdejager in [#1700](https://github.com/prefix-dev/pixi/pull/1700)
+- Moved pypi environment modifiers by @tdejager in [#1699](https://github.com/prefix-dev/pixi/pull/1699)
+- Split `HasFeatures` by @tdejager in [#1712](https://github.com/prefix-dev/pixi/pull/1712)
+- Move, splits and renames the `HasFeatures` trait by @tdejager in [#1717](https://github.com/prefix-dev/pixi/pull/1717)
+- Merge `utils` by @tdejager in [#1718](https://github.com/prefix-dev/pixi/pull/1718)
+- Move `fancy` to its own crate by @tdejager in [#1722](https://github.com/prefix-dev/pixi/pull/1722)
+- Move `config` to repodata functions by @tdejager in [#1723](https://github.com/prefix-dev/pixi/pull/1723)
+- Move `pypi-mapping` to its own crate by @tdejager in [#1725](https://github.com/prefix-dev/pixi/pull/1725)
+- Split `utils` into 2 crates by @tdejager in [#1736](https://github.com/prefix-dev/pixi/pull/1736)
+- Add progress bar as a crate by @nichmor in [#1727](https://github.com/prefix-dev/pixi/pull/1727)
+- Split up `pixi_manifest` lib by @tdejager in [#1661](https://github.com/prefix-dev/pixi/pull/1661)
+
+
+#### New Contributors
+* @DimitriPapadopoulos made their first contribution in [#1743](https://github.com/prefix-dev/pixi/pull/1743)
+* @KGrewal1 made their first contribution in [#1735](https://github.com/prefix-dev/pixi/pull/1735)
+* @ahnsn made their first contribution in [#1730](https://github.com/prefix-dev/pixi/pull/1730)
+* @dennis-wey made their first contribution in [#1680](https://github.com/prefix-dev/pixi/pull/1680)
+
 ### [0.26.1] - 2024-07-22
 #### Fixed
 - Make sure we also build the msi installer by @ruben-arts in [#1645](https://github.com/prefix-dev/pixi/pull/1645)
