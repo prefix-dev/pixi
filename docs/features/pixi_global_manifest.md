@@ -61,6 +61,7 @@ pixi global inject --environment ENV PACKAGE
 ```
 
 Remove package `PACKAGE` from environment `ENV`.
+If that was the last package remove the whole environment and print that information in the console.
 ```
 pixi global remove --environment ENV PACKAGE
 ```
