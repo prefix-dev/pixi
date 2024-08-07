@@ -63,6 +63,10 @@ src = "src/cli/mod.rs"
 search = "PIXI_VERSION = \"{current_version}\""
 src = "tests/integration/test_main_cli.py"
 
+[[file]]
+search = "pub const PIXI_VERSION: &str = \"{current_version}\";"
+src = "crates/pixi_consts/src/consts.rs"
+
 [[field]]
 # the name of the field
 name = "candidate"
