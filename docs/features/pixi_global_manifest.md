@@ -52,10 +52,10 @@ Upgrade all packages in environments `ENV`
 pixi global upgrade [ENV]...
 ```
 
-Add package `PACKAGE` to an existing environment `ENV`.
+Inject package `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
 ```
-pixi global add --environment ENV PACKAGE
+pixi global inject --environment ENV PACKAGE
 ```
 
 Remove package `PACKAGE` from environment `ENV`.
@@ -119,7 +119,7 @@ Then add package `hypercorn` to environment `python` but doesn't expose its bina
 
 ```
 pixi global install python
-pixi global add --environment=python hypercorn
+pixi global inject --environment=python hypercorn
 ```
 
 Update package `cryptography` (a dependency of `hypercorn`) in environment `python`
