@@ -71,7 +71,7 @@ pixi global update --environment ENV PACKAGE
 Set for a specific package `PACKAGE` in environment `ENV` under which `MAPPING` binaries are exposed
 The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 ```
-pixi expose-bin --environment ENV --package PACKAGE [MAPPING]...
+pixi expose --environment ENV --package PACKAGE [MAPPING]...
 ```
 
 Ensure that the environments on the machine reflect the state in the manifest.
@@ -144,7 +144,7 @@ pixi global install --environment python_3_10 --expose "python3.10=python" pytho
 Expose `python` from environment `python_3_10` as `python310` instead.
 
 ```
-pixi expose-bin --environment python_3_10 --package python "python310=python"
+pixi expose --environment python_3_10 --package python "python310=python"
 ```
 
 
