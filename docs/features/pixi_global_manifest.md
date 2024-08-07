@@ -1,6 +1,6 @@
 # Pixi Global Manifest
 
-### Motivation
+## Motivation
 
 `pixi global` is currently limited to imperatively managing CLI packages.
 The next iteration of this feature should fulfill the following needs:
