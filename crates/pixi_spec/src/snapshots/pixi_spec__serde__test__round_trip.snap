@@ -8,10 +8,6 @@ expression: snapshot
     version: 1.2.3
   result:
     version: "==1.2.3"
-- input:
-    ver: 1.2.3
-  result:
-    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build_number`, `file_name`, `channel`, `subdir`, `md5`, `sha256`"
 - input: "*"
   result: "*"
 - input:
@@ -23,11 +19,6 @@ expression: snapshot
   result:
     path: ~/.cache
 - input:
-    path: foobar
-    version: 1.2.3
-  result:
-    error: "ERROR: `version` cannot be used with `path`"
-- input:
     subdir: linux-64
   result:
     subdir: linux-64
@@ -47,25 +38,6 @@ expression: snapshot
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-- input:
-    version: //
-  result:
-    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
-- input:
-    path: foobar
-    version: //
-  result:
-    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
-- input:
-    path: foobar
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-  result:
-    error: "ERROR: `sha256` cannot be used with `path`"
-- input:
-    path: foobar
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-  result:
-    error: "ERROR: `sha256` cannot be used with `path`"
 - input:
     version: 1.2.3
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
@@ -93,6 +65,29 @@ expression: snapshot
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
 - input:
+    ver: 1.2.3
+  result:
+    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build_number`, `file_name`, `channel`, `subdir`, `md5`, `sha256`"
+- input:
+    path: foobar
+    version: 1.2.3
+  result:
+    error: "ERROR: `version` cannot be used with `path`"
+- input:
+    version: //
+  result:
+    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+- input:
+    path: foobar
+    version: //
+  result:
+    error: "ERROR: invalid version tree: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+- input:
+    path: foobar
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: `sha256` cannot be used with `path`"
+- input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
     tag: v1
@@ -103,3 +98,36 @@ expression: snapshot
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     error: "ERROR: `sha256` cannot be used with `git`"
+- input: /path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"/path/style\" }'"
+- input: "./path/style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"./path/style\" }'"
+- input: "\\path\\style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"\\path\\style\" }'"
+- input: ~/path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"~/path/style\" }'"
+- input: "https://example.com"
+  result:
+    error: "ERROR: it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{ url = \"https://example.com\" }'"
+- input: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    error: "ERROR: it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{ git = \"https://github.com/conda-forge/21cmfast-feedstock\" }'"
+- input: "1.2.3[subdir=linux-64]"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{{ version = \">=x.y.z\", subdir = \"linux-64\" }'"
+- input: "1.2.3[channel=conda-forge]"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{{ version = \">=x.y.z\", channel = \"conda-forge\" }'"
+- input: "conda-forge::1.2.3"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{{ version = \">=x.y.z\", channel = \"conda-forge\" }'"
+- input: "1.2.3[md5=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{{ version = \">=x.y.z\", md5 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'"
+- input: "1.2.3[sha256=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{{ version = \"1.2.3\", sha256 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'"

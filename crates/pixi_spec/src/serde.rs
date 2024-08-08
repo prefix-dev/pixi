@@ -69,6 +69,49 @@ impl<'de> Deserialize<'de> for PixiSpec {
                 "a version string like \">=0.9.8\" or a detailed dependency like { version = \">=0.9.8\" }",
             )
             .string(|str| {
+                // Only supporting version strings for now, so if it looks like something else, error
+                if str.starts_with('/') || str.starts_with('.') || str.starts_with('\\') || str.starts_with("~/") {
+                    return Err(serde_untagged::de::Error::custom(
+                        format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{str}\" }}'"),
+                    ));
+                }
+
+                if str.contains("git") {
+                    return Err(serde_untagged::de::Error::custom(
+                        format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{str}\" }}'"),
+                    ));
+                }
+
+                if str.contains("://") {
+                    return Err(serde_untagged::de::Error::custom(
+                        format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{str}\" }}'"),
+                    ));
+                }
+
+                if str.contains("subdir") {
+                    return Err(serde_untagged::de::Error::custom(
+                        "it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{{ version = \">=x.y.z\", subdir = \"linux-64\" }'",
+                    ));
+                }
+
+                if str.contains("channel") || str.contains("::") {
+                    return Err(serde_untagged::de::Error::custom(
+                        "it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{{ version = \">=x.y.z\", channel = \"conda-forge\" }'",
+                    ));
+                }
+
+                if str.contains("md5") {
+                    return Err(serde_untagged::de::Error::custom(
+                        "it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{{ version = \">=x.y.z\", md5 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'",
+                    ));
+                }
+
+                if str.contains("sha256") {
+                    return Err(serde_untagged::de::Error::custom(
+                        "it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{{ version = \"1.2.3\", sha256 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'",
+                    ));
+                }
+
                 VersionSpec::from_str(str, Strict)
                     .map_err(serde_untagged::de::Error::custom)
                     .map(PixiSpec::Version)
@@ -258,26 +301,37 @@ mod test {
         let examples = [
             json! { "1.2.3" },
             json!({ "version": "1.2.3" }),
-            json!({ "ver": "1.2.3" }),
             json! { "*" },
             json!({ "path": "foobar" }),
             json!({ "path": "~/.cache" }),
-            json!({ "path": "foobar", "version": "1.2.3" }),
             json!({ "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
             json!({ "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "version": "//" }),
-            json!({ "path": "foobar", "version": "//" }),
-            json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            // Errors:
+            json!({ "ver": "1.2.3" }),
+            json!({ "path": "foobar", "version": "1.2.3" }),
+            json!({ "version": "//" }),
+            json!({ "path": "foobar", "version": "//" }),
+            json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
+            json! { "/path/style"},
+            json! { "./path/style"},
+            json! { "\\path\\style"},
+            json! { "~/path/style"},
+            json! { "https://example.com"},
+            json! { "https://github.com/conda-forge/21cmfast-feedstock"},
+            json! { "1.2.3[subdir=linux-64]"},
+            json! { "1.2.3[channel=conda-forge]"},
+            json! { "conda-forge::1.2.3"},
+            json! { "1.2.3[md5=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"},
+            json! { "1.2.3[sha256=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"},
         ];
 
         #[derive(Serialize)]
