@@ -56,6 +56,7 @@ It will only add if the package with its version constraint is able to work with
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
 If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+
 - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
 - `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
 
@@ -80,25 +81,44 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--editable`: Specifies an editable dependency, only use in combination with `--pypi`.
 
 ```shell
-pixi add numpy
-pixi add numpy pandas "pytorch>=1.8"
-pixi add "numpy>=1.22,<1.24"
-pixi add --manifest-path ~/myproject/pixi.toml numpy
-pixi add --host "python>=3.9.0"
-pixi add --build cmake
-pixi add --platform osx-64 --build clang
-pixi add --no-install numpy
-pixi add --no-lockfile-update numpy
-pixi add --feature featurex numpy
+pixi add numpy # (1)!
+pixi add numpy pandas "pytorch>=1.8" # (2)!
+pixi add "numpy>=1.22,<1.24" # (3)!
+pixi add --manifest-path ~/myproject/pixi.toml numpy # (4)!
+pixi add --host "python>=3.9.0" # (5)!
+pixi add --build cmake # (6)!
+pixi add --platform osx-64 clang # (7)!
+pixi add --no-install numpy # (8)!
+pixi add --no-lockfile-update numpy # (9)!
+pixi add --feature featurex numpy # (10)!
 
 # Add a pypi dependency
-pixi add --pypi requests[security]
-pixi add --pypi "boltons>=24.0.0" mypy --feature lint
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
-pixi add --pypi "project @ file:///absolute/path/to/project"
-pixi add --pypi "project @ file:///absolute/path/to/project" --editable
+pixi add --pypi requests[security] # (11)!
+pixi add --pypi Django==5.1rc1 # (12)!
+pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
+pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
+pixi add --pypi "project @ file:///absolute/path/to/project" --editable # (17)!
 ```
+
+1. This will add the `numpy` package to the project with the latest available for the solved environment.
+2. This will add multiple packages to the project solving them all together.
+3. This will add the `numpy` package with the version constraint.
+4. This will add the `numpy` package to the project of the manifest file at the given path.
+5. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
+6. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
+7. This will add the `clang` package only for the `osx-64` platform.
+8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
+9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
+10. This will add the `numpy` package in the feature `featurex`.
+11. This will add the `requests` package as `pypi` dependency with the `security` extra.
+12. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
+13. This will add the `boltons` package in the feature `lint`.
+14. This will add the `boltons` package with the given `url`.
+15. This will add the `exchangelib` package with the given `git` url.
+16. This will add the `project` package with the given `file` url.
+17. This will add the `project` package with the given `file` url as an `editable` package.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
