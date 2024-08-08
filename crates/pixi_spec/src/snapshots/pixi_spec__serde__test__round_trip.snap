@@ -8,6 +8,12 @@ expression: snapshot
     version: 1.2.3
   result:
     version: "==1.2.3"
+- input:
+    version: 1.2.3
+    build-number: ">=3"
+  result:
+    version: "==1.2.3"
+    build-number: ">=3"
 - input: "*"
   result: "*"
 - input:
@@ -67,7 +73,7 @@ expression: snapshot
 - input:
     ver: 1.2.3
   result:
-    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build_number`, `file_name`, `channel`, `subdir`, `md5`, `sha256`"
+    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`"
 - input:
     path: foobar
     version: 1.2.3

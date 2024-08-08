@@ -25,6 +25,7 @@ pub struct DetailedSpec {
     pub build: Option<StringMatcher>,
 
     /// The build number of the package
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub build_number: Option<BuildNumberSpec>,
 
     /// Match the specific filename of the package

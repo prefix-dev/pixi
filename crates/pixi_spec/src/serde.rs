@@ -12,6 +12,7 @@ use crate::{DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 #[serde_as]
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
 struct RawSpec {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
@@ -40,6 +41,7 @@ struct RawSpec {
     pub build: Option<StringMatcher>,
 
     /// The build number of the package
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub build_number: Option<BuildNumberSpec>,
 
     /// Match the specific filename of the package
@@ -304,6 +306,7 @@ mod test {
         let examples = [
             json! { "1.2.3" },
             json!({ "version": "1.2.3" }),
+            json!({ "version": "1.2.3", "build-number": ">=3" }),
             json! { "*" },
             json!({ "path": "foobar" }),
             json!({ "path": "~/.cache" }),
