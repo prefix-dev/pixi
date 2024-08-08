@@ -386,6 +386,12 @@ mod tests {
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
 
+    fn default_channel_config() -> rattler_conda_types::ChannelConfig {
+        rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not retrieve the current directory"),
+        )
+    }
+
     #[test]
     fn test_nameless_to_toml() {
         let examples = [
@@ -396,13 +402,14 @@ mod tests {
             "rattler >=1 *cuda",
         ];
 
+        let channel_config = default_channel_config();
         let mut table = toml_edit::DocumentMut::new();
         for example in examples {
             let spec = MatchSpec::from_str(example, Strict)
                 .unwrap()
                 .into_nameless()
                 .1;
-            let spec = PixiSpec::from(spec);
+            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
             table.insert(example, Item::Value(spec.to_toml_value()));
         }
         assert_snapshot!(table);

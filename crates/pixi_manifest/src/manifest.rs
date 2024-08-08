@@ -666,6 +666,12 @@ mod tests {
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
 
+    fn default_channel_config() -> rattler_conda_types::ChannelConfig {
+        rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not retrieve the current directory"),
+        )
+    }
+
     #[test]
     fn test_from_path() {
         // Test the toml from a path
@@ -1844,6 +1850,7 @@ foo = "*"
 [feature.test.dependencies]
 bar = "*"
             "#;
+        let channel_config = default_channel_config();
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         manifest
             .add_dependency(
@@ -1852,6 +1859,7 @@ bar = "*"
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )
             .unwrap();
         assert_eq!(
@@ -1874,6 +1882,7 @@ bar = "*"
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )
             .unwrap();
 
@@ -1901,6 +1910,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )
             .unwrap();
 
@@ -1929,24 +1939,20 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )
             .unwrap();
 
         assert_eq!(
             manifest
                 .feature(&FeatureName::Named("build".to_string()))
-                .unwrap()
-                .targets
-                .for_target(&TargetSelector::Platform(Platform::Linux64))
-                .unwrap()
-                .dependencies
-                .get(&SpecType::Build)
-                .unwrap()
-                .get(&PackageName::from_str("cmake").unwrap())
-                .unwrap()
-                .as_version_spec()
-                .unwrap()
-                .to_string(),
+                .map(|f| &f.targets)
+                .and_then(|t| t.for_target(&TargetSelector::Platform(Platform::Linux64)))
+                .and_then(|t| t.dependencies.get(&SpecType::Build))
+                .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
+                .and_then(|spec| spec.as_version_spec())
+                .map(|spec| spec.to_string())
+                .unwrap(),
             ">=2.3".to_string()
         );
 
