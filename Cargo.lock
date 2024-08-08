@@ -3613,7 +3613,7 @@ dependencies = [
  "file_url",
  "insta",
  "rattler_conda_types",
- "rattler_digest 1.0.0",
+ "rattler_digest",
  "serde",
  "serde-untagged",
  "serde_json",
@@ -4143,22 +4143,6 @@ dependencies = [
  "serde_with",
  "sha2",
  "tokio",
-]
-
-[[package]]
-name = "rattler_digest"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b747092584fbc2bfef5e4f7286a0b6f81aec1bf67b537ef9f1749cb7931ac7f"
-dependencies = [
- "blake2",
- "digest",
- "generic-array",
- "hex",
- "md-5",
- "serde",
- "serde_with",
- "sha2",
 ]
 
 [[package]]
