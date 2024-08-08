@@ -11,7 +11,6 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifest;
 mod metadata;
-mod nameless_matchspec;
 mod parsed_manifest;
 pub mod pypi;
 pub mod pyproject;

@@ -2292,6 +2292,7 @@ dependencies = [
  "globset",
  "lazy_static",
  "linked-hash-map",
+ "regex",
  "serde",
  "similar",
  "walkdir",
@@ -3439,6 +3440,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_spec",
  "pixi_utils",
  "pixi_uv_conversions",
  "platform-tags",
@@ -3551,6 +3553,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
+ "pixi_spec",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
@@ -3588,6 +3591,26 @@ dependencies = [
  "libc",
  "nix 0.29.0",
  "signal-hook",
+]
+
+[[package]]
+name = "pixi_spec"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "file_url",
+ "insta",
+ "rattler_conda_types",
+ "rattler_digest",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror",
+ "toml_edit 0.22.20",
+ "typed-path",
+ "url",
 ]
 
 [[package]]
