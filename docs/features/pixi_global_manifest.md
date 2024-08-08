@@ -20,6 +20,11 @@ There are a few things we wanted to keep in mind in the design:
 
 ## Manifest
 
+The global environments and exposed will be managed by a human-readable manifest.
+This manifest will stick to conventions set by `pixi.toml` where possible.
+Among other things it will be written in the TOML format, be named `pixi-global.toml` and be placed at `~/.pixi/manifests/pixi-global.toml`.
+The motivation for the location is discussed [further below](#multiple-manifests)
+
 ```toml title="pixi-global.toml"
 # The name of the environment is `python`
 # It will expose python, python3 and python3.11, but not pip
