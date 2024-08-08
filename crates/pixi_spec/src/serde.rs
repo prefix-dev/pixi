@@ -4,6 +4,7 @@ use rattler_conda_types::{
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use std::fmt::Display;
 use url::Url;
 
 use crate::{DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
@@ -59,6 +60,43 @@ struct RawSpec {
     pub sha256: Option<Sha256Hash>,
 }
 
+/// Returns a more helpful message when a version spec is used incorrectly.
+fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
+    let input = input.into();
+    if input.starts_with('/')
+        || input.starts_with('.')
+        || input.starts_with('\\')
+        || input.starts_with("~/")
+    {
+        return Some(format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"));
+    }
+
+    if input.contains("git") {
+        return Some(format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"));
+    }
+
+    if input.contains("://") {
+        return Some(format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"));
+    }
+
+    if input.contains("subdir") {
+        return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{ version = \"<VERSION_SPEC>\", subdir = \"<SUBDIR>\" }'".to_string());
+    }
+
+    if input.contains("channel") || input.contains("::") {
+        return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{ version = \"<VERSION_SPEC>\", channel = \"<CHANNEL>\" }'".to_string());
+    }
+
+    if input.contains("md5") {
+        return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{ version = \"<VERSION_SPEC>\", md5 = \"<MD5>\" }'".to_string());
+    }
+
+    if input.contains("sha256") {
+        return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{ version = \"<VERSION_SPEC>\", sha256 = \"<SHA256>\" }'".to_string());
+    }
+    None
+}
+
 impl<'de> Deserialize<'de> for PixiSpec {
     fn deserialize<D>(deserializer: D) -> Result<PixiSpec, D::Error>
     where
@@ -69,51 +107,16 @@ impl<'de> Deserialize<'de> for PixiSpec {
                 "a version string like \">=0.9.8\" or a detailed dependency like { version = \">=0.9.8\" }",
             )
             .string(|str| {
-                // Only supporting version strings for now, so if it looks like something else, error
-                if str.starts_with('/') || str.starts_with('.') || str.starts_with('\\') || str.starts_with("~/") {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{str}\" }}'"),
-                    ));
-                }
 
-                if str.contains("git") {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{str}\" }}'"),
-                    ));
-                }
-
-                if str.contains("://") {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{str}\" }}'"),
-                    ));
-                }
-
-                if str.contains("subdir") {
-                    return Err(serde_untagged::de::Error::custom(
-                        "it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{{ version = \">=x.y.z\", subdir = \"linux-64\" }'",
-                    ));
-                }
-
-                if str.contains("channel") || str.contains("::") {
-                    return Err(serde_untagged::de::Error::custom(
-                        "it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{{ version = \">=x.y.z\", channel = \"conda-forge\" }'",
-                    ));
-                }
-
-                if str.contains("md5") {
-                    return Err(serde_untagged::de::Error::custom(
-                        "it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{{ version = \">=x.y.z\", md5 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'",
-                    ));
-                }
-
-                if str.contains("sha256") {
-                    return Err(serde_untagged::de::Error::custom(
-                        "it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{{ version = \"1.2.3\", sha256 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }'",
-                    ));
-                }
 
                 VersionSpec::from_str(str, Strict)
-                    .map_err(serde_untagged::de::Error::custom)
+                    .map_err(|err|{
+                        if let Some(msg) = version_spec_error(str) {
+                            serde_untagged::de::Error::custom(msg)
+                        } else {
+                            serde_untagged::de::Error::custom(err)
+                        }
+                                            })
                     .map(PixiSpec::Version)
             })
             .map(|map| {
