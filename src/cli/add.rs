@@ -8,19 +8,21 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, SpecType};
+use pixi_manifest::{
+    pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    SpecType,
+};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
-use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
 use crate::{
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
     environment::verify_prefix_location_unchanged,
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
-use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 
 /// Adds dependencies to the project
 ///
@@ -200,12 +202,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Solve the updated project.
     let LockFileDerivedData {
+        project: _, // We don't need the project here
         lock_file,
         package_cache,
         uv_context,
         updated_conda_prefixes,
         updated_pypi_prefixes,
-        ..
+        io_concurrency_limit,
     } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
         .with_no_install(prefix_update_config.no_install())
@@ -249,6 +252,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_conda_prefixes,
         updated_pypi_prefixes,
         uv_context,
+        io_concurrency_limit,
     };
     if !prefix_update_config.no_lockfile_update {
         updated_lock_file.write_to_disk()?;
