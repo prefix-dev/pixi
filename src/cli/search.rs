@@ -166,13 +166,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         build_reqwest_clients(None).1
     };
 
-    // let gateway = Gateway::builder()
-    //     .with_client(client)
-    //     // .with_channel_config(default_channel_config())
-    //     .finish();
-
-    // let results = gateway.query(channels, [args.platform], specs).await.into_diagnostic()?;
-
     let repo_data = Arc::new(
         fetch_sparse_repodata(
             channels.iter(),
