@@ -142,7 +142,7 @@ pixi global remove --environment=python hypercorn
 
 ### Specifying which binaries to expose
 
-Make a new environment `python_3_10` with package `python=3.10` and no exposed binaries
+Make a new environment `python_3_10` with package `python=3.10` and expose the `python` executable as `python3.10`.
 ```
 pixi global install --environment python_3_10 --expose "python3.10=python" python=3.10
 ```
