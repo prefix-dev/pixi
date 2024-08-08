@@ -230,6 +230,7 @@ pub async fn create_exec_prefix(
 
     // Install the environment
     Installer::new()
+        .with_download_client(client.clone())
         .with_reporter(
             IndicatifReporter::builder()
                 .with_multi_progress(global_multi_progress())

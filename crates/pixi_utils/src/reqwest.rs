@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+use pixi_consts::consts;
 use rattler_networking::{
     authentication_storage::{self, backends::file::FileStorageError},
     mirror_middleware::Mirror,
@@ -75,7 +76,7 @@ pub fn oci_middleware() -> OciMiddleware {
 }
 
 pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
-    static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+    let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
@@ -91,7 +92,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
     let timeout = 5 * 60;
     let client = Client::builder()
         .pool_max_idle_per_host(20)
-        .user_agent(APP_USER_AGENT)
+        .user_agent(app_user_agent)
         .danger_accept_invalid_certs(config.tls_no_verify())
         .read_timeout(Duration::from_secs(timeout))
         .build()
