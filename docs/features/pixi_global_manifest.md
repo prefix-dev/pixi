@@ -179,7 +179,7 @@ pixi global install python
 
 Delete `~/.pixi` and syncing, should add environment `python` again as described in the manifest
 ```
-rm `~/.pixi`
+rm `~/.pixi/envs`
 pixi global sync
 ```
 
