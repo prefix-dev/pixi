@@ -8,6 +8,7 @@ use std::{
 };
 
 use clap::{ArgAction, Parser};
+use gateway::from_pixi_config;
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use pixi_consts::consts;
@@ -443,6 +444,12 @@ impl From<ConfigCliPrompt> for Config {
         let mut config: Config = cli.config.into();
         config.change_ps1 = cli.change_ps1;
         config
+    }
+}
+
+impl From<Config> for rattler_repodata_gateway::ChannelConfig {
+    fn from(val: Config) -> Self {
+        from_pixi_config(&val)
     }
 }
 
