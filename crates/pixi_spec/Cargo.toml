@@ -10,7 +10,6 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-cfg_eval = { workspace = true }
 dirs = { workspace = true }
 file_url = { workspace = true }
 rattler_conda_types = { workspace = true }

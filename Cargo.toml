@@ -14,7 +14,6 @@ ahash = "0.8.11"
 assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 cfg-if = "1.0"
-cfg_eval = "0.1.2"
 chrono = "0.4.38"
 clap = { version = "4.5.9", default-features = false }
 clap-verbosity-flag = "2.2.0"
