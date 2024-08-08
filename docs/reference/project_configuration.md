@@ -66,8 +66,8 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
 
-!!! tip "Special MacOS behavior"
-    MacOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
+!!! tip "Special macOS behavior"
+    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
     To support both, include both in your platforms list.
     Fallback: If `osx-arm64` can't resolve, use `osx-64`.
     Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
