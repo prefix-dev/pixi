@@ -91,6 +91,11 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
+    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+        .without_lockfile_update()
+        .await
+        .unwrap();
+
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
@@ -102,6 +107,13 @@ async fn add_with_channel() {
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
         "conda-forge"
+    );
+
+    let (name, spec) = specs.next().unwrap();
+    assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
+    assert_eq!(
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
+        "https://prefix.dev/conda-forge::_r-mutex"
     );
 }
 
