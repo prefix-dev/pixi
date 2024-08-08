@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+package:
+  name: dummy_package
+  version: "0.0.0"
+
+build:
+  noarch: generic
+  script:
+    - echo "test package"> package.txt
