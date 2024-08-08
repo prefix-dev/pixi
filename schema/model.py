@@ -149,9 +149,12 @@ class MatchspecTable(StrictBaseModel):
     build: NonEmptyStr | None = Field(None, description="The build string of the package")
     build_number: NonEmptyStr | None = Field(
         None,
+        alias="build-number",
         description="The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
     )
-    file_name: NonEmptyStr | None = Field(None, description="The file name of the package")
+    file_name: NonEmptyStr | None = Field(
+        None, alias="file-name", description="The file name of the package"
+    )
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",

@@ -553,8 +553,8 @@
           "type": "string",
           "minLength": 1
         },
-        "build_number": {
-          "title": "Build Number",
+        "build-number": {
+          "title": "Build-Number",
           "description": "The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
           "type": "string",
           "minLength": 1
@@ -570,8 +570,8 @@
             "https://repo.prefix.dev/conda-forge"
           ]
         },
-        "file_name": {
-          "title": "File Name",
+        "file-name": {
+          "title": "File-Name",
           "description": "The file name of the package",
           "type": "string",
           "minLength": 1

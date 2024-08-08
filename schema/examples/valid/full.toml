@@ -18,14 +18,14 @@ version = "0.1.0"
 
 [dependencies]
 detailed = { version = ">=1.2.3" }
+detailed-full = { version = ">=1.2.3", build = "py34_0", channel = "pytorch", subdir = "linux-64", md5 = "1234567890abcdef", sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" }
 detailed2 = { version = ">=1.2.3", build = "py34_0" }
-detailed3 = { version = ">=1.2.3", build_number = ">=1" }
-detailed4 = { version = ">=1.2.3", file_name = "package-1.2.3-py34_0.tar.bz2" }
+detailed3 = { version = ">=1.2.3", build-number = ">=1" }
+detailed4 = { version = ">=1.2.3", file-name = "package-1.2.3-py34_0.tar.bz2" }
 detailed5 = { version = ">=1.2.3", channel = "pytorch" }
 detailed6 = { version = ">=1.2.3", subdir = "linux-64" }
 detailed7 = { version = ">=1.2.3", md5 = "1234567890abcdef" }
 detailed8 = { version = ">=1.2.3", sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" }
-detailed_full = { version = ">=1.2.3", build = "py34_0", channel = "pytorch", subdir = "linux-64", md5 = "1234567890abcdef", sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" }
 test = "*"
 test1 = "*"
 
