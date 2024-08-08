@@ -35,12 +35,12 @@ package = { python = "3.11.*" }
 [envs.python.injected]
 pip = "*"
 
-# The name of the environment is `python_3_10`
+# The name of the environment is `python-3-10`
 # It will expose python as python3.10
-[envs.python_3_10]
+[envs.python-3-10]
 package = { python = "3.10.*" }
 
-[envs.python_3_10.expose]
+[envs.python-3-10.expose]
 "python3.10"="python"
 ```
 
@@ -162,18 +162,18 @@ pixi global uninject --environment=python hypercorn
 
 ### Specifying which binaries to expose
 
-Make a new environment `python_3_10` with package `python=3.10` and expose the `python` executable as `python3.10`.
+Make a new environment `python-3-10` with package `python=3.10` and expose the `python` executable as `python3.10`.
 ```
-pixi global install --environment python_3_10 --expose "python3.10=python" python=3.10
+pixi global install --environment python-3-10 --expose "python3.10=python" python=3.10
 ```
 
 Now `python3.10` is available.
 
 
-Run the following in order to expose `python` from environment `python_3_10` as `python310` instead.
+Run the following in order to expose `python` from environment `python-3-10` as `python310` instead.
 
 ```
-pixi global expose --environment python_3_10 "python310=python"
+pixi global expose --environment python-3-10 "python310=python"
 ```
 
 Now `python310` is available, but `python3.10` isn't anymore.
