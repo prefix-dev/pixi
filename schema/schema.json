@@ -586,7 +586,7 @@
           "title": "Md5",
           "description": "The md5 hash of the package",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-fA-F0-9]{32}$"
         },
         "path": {
           "title": "Path",
@@ -604,7 +604,7 @@
           "title": "Sha256",
           "description": "The sha256 hash of the package",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-fA-F0-9]{64}$"
         },
         "subdir": {
           "title": "Subdir",

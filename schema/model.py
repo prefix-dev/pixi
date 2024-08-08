@@ -26,6 +26,8 @@ SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
 
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
+Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
+Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
@@ -167,8 +169,8 @@ class MatchspecTable(StrictBaseModel):
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
     url: NonEmptyStr | None = Field(None, description="The URL to the package")
-    md5: NonEmptyStr | None = Field(None, description="The md5 hash of the package")
-    sha256: NonEmptyStr | None = Field(None, description="The sha256 hash of the package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
 
     git: NonEmptyStr | None = Field(None, description="The git URL to the repo")
     rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
