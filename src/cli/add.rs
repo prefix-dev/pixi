@@ -8,19 +8,21 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_manifest::{pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, SpecType};
+use pixi_manifest::{
+    pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    SpecType,
+};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
-use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
 use crate::{
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
     environment::verify_prefix_location_unchanged,
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
-use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 
 /// Adds dependencies to the project
 ///
@@ -94,9 +96,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
-    // Load the current lock-file
-    let lock_file = load_lock_file(&project).await?;
-
     // Add the platform if it is not already present
     project
         .manifest
@@ -110,6 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
             let specs = dependency_config.specs()?;
+            let channel_config = project.channel_config();
             for (name, spec) in specs {
                 let added = project.manifest.add_dependency(
                     &spec,
@@ -117,6 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
                     DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    &channel_config,
                 )?;
                 if added {
                     if spec.version.is_none() {
@@ -145,6 +146,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
     }
+
+    // If the lock-file should not be updated we only need to save the project.
+    if prefix_update_config.no_lockfile_update {
+        project.save()?;
+
+        // Notify the user we succeeded.
+        dependency_config.display_success("Added", HashMap::default());
+
+        Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
+        return Ok(());
+    }
+
+    // Load the current lock-file
+    let lock_file = load_lock_file(&project).await?;
 
     // Determine the environments that are affected by the change.
     let feature_name = dependency_config.feature_name();
@@ -362,6 +377,7 @@ fn update_conda_specs_from_lock_file(
         .collect_vec();
 
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
+    let channel_config = project.channel_config();
     for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             conda_records.iter().filter_map(|record| {
@@ -386,6 +402,7 @@ fn update_conda_specs_from_lock_file(
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
             )?;
         }
     }

@@ -87,41 +87,44 @@ impl From<VersionSpec> for PixiSpec {
     }
 }
 
-impl From<NamelessMatchSpec> for PixiSpec {
-    fn from(value: NamelessMatchSpec) -> Self {
-        if let Some(url) = value.url {
+impl PixiSpec {
+    /// Convert a [`NamelessMatchSpec`] into a [`PixiSpec`].
+    pub fn from_nameless_matchspec(
+        spec: NamelessMatchSpec,
+        channel_config: &ChannelConfig,
+    ) -> Self {
+        if let Some(url) = spec.url {
             Self::Url(UrlSpec {
                 url,
-                md5: value.md5,
-                sha256: value.sha256,
+                md5: spec.md5,
+                sha256: spec.sha256,
             })
-        } else if value.build.is_none()
-            && value.build_number.is_none()
-            && value.file_name.is_none()
-            && value.channel.is_none()
-            && value.subdir.is_none()
-            && value.md5.is_none()
-            && value.sha256.is_none()
+        } else if spec.build.is_none()
+            && spec.build_number.is_none()
+            && spec.file_name.is_none()
+            && spec.channel.is_none()
+            && spec.subdir.is_none()
+            && spec.md5.is_none()
+            && spec.sha256.is_none()
         {
-            Self::Version(value.version.unwrap_or(VersionSpec::Any))
+            Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
             Self::DetailedVersion(DetailedSpec {
-                version: value.version,
-                build: value.build,
-                build_number: value.build_number,
-                file_name: value.file_name,
-                channel: value
-                    .channel
-                    .map(|c| NamedChannelOrUrl::from_str(c.name()).unwrap()),
-                subdir: value.subdir,
-                md5: value.md5,
-                sha256: value.sha256,
+                version: spec.version,
+                build: spec.build,
+                build_number: spec.build_number,
+                file_name: spec.file_name,
+                channel: spec.channel.map(|c| {
+                    NamedChannelOrUrl::from_str(&channel_config.canonical_name(c.base_url()))
+                        .unwrap()
+                }),
+                subdir: spec.subdir,
+                md5: spec.md5,
+                sha256: spec.sha256,
             })
         }
     }
-}
 
-impl PixiSpec {
     /// Returns true if this spec has a version spec. `*` does not count as a
     /// valid version spec.
     pub fn has_version_spec(&self) -> bool {

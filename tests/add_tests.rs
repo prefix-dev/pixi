@@ -113,7 +113,7 @@ async fn add_with_channel() {
     assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "https://prefix.dev/conda-forge::_r-mutex"
+        "https://prefix.dev/conda-forge"
     );
 }
 

@@ -12,7 +12,7 @@ use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::DocumentMut;
 
 use crate::{
@@ -342,12 +342,13 @@ impl Manifest {
         platforms: &[Platform],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
+        channel_config: &ChannelConfig,
     ) -> miette::Result<bool> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
-        let spec = PixiSpec::from(spec);
+        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
         let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
