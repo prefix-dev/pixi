@@ -20,33 +20,46 @@ There are a few things we wanted to keep in mind in the design:
 
 ## Manifest
 
-The global environments and exposed will be managed by a human-readable manifest.
+The global environments and exposed binaries will be managed by a human-readable manifest.
 This manifest will stick to conventions set by `pixi.toml` where possible.
 Among other things it will be written in the TOML format, be named `pixi-global.toml` and be placed at `~/.pixi/manifests/pixi-global.toml`.
 The motivation for the location is discussed [further below](#multiple-manifests)
 
 ```toml title="pixi-global.toml"
 # The name of the environment is `python`
+# If the `envs.ENV.expose` key is missing, all binaries of `envs.ENV.package` will be exposed
 # It will expose python, python3 and python3.11, but not pip
-[envs.python.dependencies]
-python = { spec = "3.11.*", expose_binaries = "auto" }
+[envs.python]
+package = { python = "3.11.*" }
+
+[envs.python.injected]
 pip = "*"
 
 # The name of the environment is `python_3_10`
-# It will expose python3.10
-[envs.python_3_10.dependencies]
-python = { spec = "3.10.*", expose_binaries = { "python3.10"="python" } }
+# It will expose python as python3.10
+[envs.python_3_10]
+package = { python = "3.10.*" }
 
+[envs.python_3_10.expose]
+"python3.10"="python"
 ```
 
 ## CLI
 
-Install one or more packages `PACKAGE` into their own environments and expose their binaries.
-If no environment named `PACKAGE` exists, it will be created.
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+Install one or more packages `PACKAGE` into their own environments (`ENV` if given by `--environment` or else `PACKAGE`) and expose their binaries.
+The syntax for `MAPPING` is `exposed_name=binary_in_env`, so for example `python3.10=python`.
+If `binary_in_env` doesn't come from `env.ENV.package` it will error out.
+If the environment doesn't exist, it will be created.
+If the environment does exist, and
+- the package is the same, set the package version to the given spec
+- the package is not the same, error out
+
+If `--environment` or `--expose` and more than one `<PACKAGE>` are given, error out.
+
+In the manifest, `env.ENV.expose` will only be set if `--expose` is given.
 
 ```
-pixi global install [--expose MAPPING] <PACKAGE>...
+pixi global install [--environment ENV] [--expose MAPPING] <PACKAGE>...
 ```
 
 Remove environments `ENV`.
@@ -54,38 +67,40 @@ Remove environments `ENV`.
 pixi global uninstall [ENV]...
 ```
 
-Upgrade all packages in environments `ENV`
+Update all packages in environments `ENV`.
+The manifest will not be modified, the given specs are respected.
 ```
-pixi global upgrade [ENV]...
+pixi global update [ENV]...
 ```
 
 Inject package `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
+If `PACKAGE` already exists it will set it to the given spec
+In the manifest, `PACKAGE` will be added to `env.ENV.injected`.
+
 ```
 pixi global inject --environment ENV PACKAGE
 ```
 
 Remove package `PACKAGE` from environment `ENV`.
-If that was the last package remove the whole environment and print that information in the console.
+In the manifest, `PACKAGE` will be removed from `env.ENV.injected`.
 ```
-pixi global remove --environment ENV PACKAGE
-```
-
-Update the version of one package
-```
-pixi global update --environment ENV PACKAGE
+pixi global uninject --environment ENV PACKAGE
 ```
 
-Set for a specific package `PACKAGE` in environment `ENV` under which `MAPPING` binaries are exposed
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+Set for a specific environment `ENV` under which `MAPPING` binaries are exposed
+The syntax for `MAPPING` is `exposed_name=binary_in_env`, so for example `python3.10=python`.
+If `binary_in_env` doesn't come from `env.ENV.package` it will error out.
+In the manifest, existing mappings will be removed
 ```
-pixi expose --environment ENV --package PACKAGE [MAPPING]...
+pixi expose --environment ENV  [MAPPING]...
 ```
 
 Ensure that the environments on the machine reflect the state in the manifest.
 The manifest is the single source of truth.
 Only if there's no manifest, will the data from existing environments be used to create a manifest.
 `pixi global sync` is implied by most other `pixi global` commands.
+
 ```
 pixi global sync
 ```
@@ -103,9 +118,9 @@ Create environment `python`, install package `python=3.10.*` and expose all bina
 pixi global install python=3.10.*
 ```
 
-Upgrade all packages in environment `python`
+Update all packages in environment `python`
 ```
-pixi global upgrade python
+pixi global update python
 ```
 
 Remove environment `python`
@@ -126,7 +141,7 @@ pixi global uninstall python pip
 ### Injecting dependencies
 
 Create environment `python`, install package `python` and expose all binaries of that package.
-Then add package `hypercorn` to environment `python` but doesn't expose its binaries.
+Then inject package `hypercorn` into environment `python` but doesn't expose its binaries.
 
 ```
 pixi global install python
@@ -139,9 +154,9 @@ Update package `cryptography` (a dependency of `hypercorn`) in environment `pyth
 pixi update --environment python cryptography
 ```
 
-Then remove `hypercorn` again.
+Then uninject `hypercorn` again.
 ```
-pixi global remove --environment=python hypercorn
+pixi global uninject --environment=python hypercorn
 ```
 
 
@@ -158,22 +173,18 @@ Now `python3.10` is available.
 Run the following in order to expose `python` from environment `python_3_10` as `python310` instead.
 
 ```
-pixi global expose --environment python_3_10 --package python "python310=python"
+pixi global expose --environment python_3_10 "python310=python"
 ```
 
 Now `python310` is available, but `python3.10` isn't anymore.
-
-!!! note
-
-    It should be possible to infer `--package`, let's discuss if there are edge cases to consider.
 
 ### Syncing
 
 Most `pixi global` sub commands imply a `pixi global sync`.
 
-- Users should be able to change the manifest by hand (creating or modifying (adding or removing))
-- Users should be able to "export" their existing environments into the manifest, if non-existing.
-- The manifest is always "in sync" after `install`/`remove`/`inject`/`other global command`.
+- Users should be able to change the manifest by hand
+- Users should be able to "export" their existing environments into the manifest, if non-existing
+- The manifest is always be in sync after running any global command
 
 
 First time, clean computer.
@@ -183,6 +194,7 @@ pixi global install python
 ```
 
 Delete `~/.pixi` and syncing, should add environment `python` again as described in the manifest
+
 ```
 rm `~/.pixi/envs`
 pixi global sync
