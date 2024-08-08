@@ -33,14 +33,14 @@ pytorch-cuda = { version = "12.1.*", channel = "pytorch" }
 
 [feature.mlx]
 platforms = ["osx-arm64"]
-system-requirements = { macos = "13.3" }
+system-requirements = { macos = "13.5" }
+
+[feature.mlx.dependencies]
+mlx = ">=0.16.1,<0.17"
 
 [feature.mlx.tasks]
 test = "python test.py --mlx"
 train = "python train.py --mlx"
-
-[feature.mlx.dependencies]
-mlx = "*"
 
 [environments]
 cuda = ["cuda"]

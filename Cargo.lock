@@ -3601,6 +3601,7 @@ dependencies = [
  "miette 7.2.0",
  "pep508_rs",
  "pixi_config",
+ "pixi_consts",
  "rattler_conda_types",
  "rattler_networking",
  "reqwest 0.12.5",

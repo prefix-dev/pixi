@@ -1048,7 +1048,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/markupsafe-2.1.5-py311h05b510d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/matplotlib-base-3.8.4-py311h000fb6e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/matplotlib-inline-0.1.7-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/mlx-0.16.0-py311h6ca41e1_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/mlx-0.16.1-py311h025f708_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/mpc-1.3.1-h91ba8db_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/mpfr-4.2.1-h41d338b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/mpmath-1.3.0-pyhd8ed1ab_0.conda
@@ -6319,12 +6319,12 @@ packages:
   timestamp: 1698350992610
 - kind: conda
   name: mlx
-  version: 0.16.0
-  build: py311h6ca41e1_0
+  version: 0.16.1
+  build: py311h025f708_0
   subdir: osx-arm64
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/mlx-0.16.0-py311h6ca41e1_0.conda
-  sha256: efc6dcd39aa55107a4b8213681473f958a1b34f64cb77ff8fb5db37237594180
-  md5: bf57d24eb407de7f5abe0f5e587dc4ff
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/mlx-0.16.1-py311h025f708_0.conda
+  sha256: 4b459c6780641a2347ca68e9c92f212d99c80c9bd444cebba545559dc3885376
+  md5: 1f831c7b7c81db6b0487cc9698b1c45d
   depends:
   - __osx >=13.3
   - libcxx >=16
@@ -6333,8 +6333,8 @@ packages:
   - python_abi 3.11.* *_cp311
   license: MIT
   license_family: MIT
-  size: 7655215
-  timestamp: 1720732934647
+  size: 7659235
+  timestamp: 1721961376807
 - kind: conda
   name: mpc
   version: 1.3.1
