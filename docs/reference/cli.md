@@ -114,11 +114,11 @@ pixi add --pypi "project @ file:///absolute/path/to/project" --editable # (17)!
 10. This will add the `numpy` package in the feature `featurex`.
 11. This will add the `requests` package as `pypi` dependency with the `security` extra.
 12. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
-13. This will add the `boltons` package in the feature `lint`.
-14. This will add the `boltons` package with the given `url`.
-15. This will add the `exchangelib` package with the given `git` url.
-16. This will add the `project` package with the given `file` url.
-17. This will add the `project` package with the given `file` url as an `editable` package.
+13. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
+14. This will add the `boltons` package with the given `url` as `pypi` dependency.
+15. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
+16. This will add the `project` package with the given `file` url as `pypi` dependency.
+17. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
