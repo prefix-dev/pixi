@@ -2,8 +2,9 @@ mod common;
 
 use std::str::FromStr;
 
+use pixi::cli;
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::{NamedChannelOrUrl, Version};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 
 use crate::common::PixiControl;
 
@@ -74,6 +75,37 @@ async fn default_channel() {
         channels,
         [&NamedChannelOrUrl::Name(String::from("conda-forge"))]
     )
+}
+
+// Test the initialization from an existing pyproject.toml file without the pixi information
+#[tokio::test]
+async fn init_from_existing_pyproject_toml() {
+    let pixi = PixiControl::new().unwrap();
+
+    // Copy the pyproject.toml file to the project directory
+    let project_path = pixi.project_path();
+    let pyproject_toml = project_path.join("pyproject.toml");
+    let pyproject_toml_contents = include_str!("pixi_tomls/pyproject_no_pixi.toml");
+    std::fs::write(&pyproject_toml, pyproject_toml_contents).unwrap();
+
+    // Init a new project
+    pixi.init()
+        .with_format(cli::init::ManifestFormat::Pyproject)
+        .await
+        .unwrap();
+
+    // Check if the new manifest still contains all the same data as before
+    assert!(pixi
+        .manifest_contents()
+        .unwrap()
+        .contains(pyproject_toml_contents));
+
+    // Check if the new manifest is readable by pixi and contains the default values
+    let project = pixi.project().unwrap();
+    assert!(project
+        .default_environment()
+        .platforms()
+        .contains(&Platform::current()));
 }
 
 // TODO: enable and fix this test when we fix the global config loading
