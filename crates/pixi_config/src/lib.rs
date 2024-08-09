@@ -16,12 +16,10 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
 #[cfg(feature = "rattler_repodata_gateway")]
-use rattler_repodata_gateway::SourceConfig;
+use rattler_repodata_gateway::{Gateway, SourceConfig};
+use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
-
-#[cfg(feature = "rattler_repodata_gateway")]
-pub mod gateway;
 
 /// TODO: maybe remove this duplicate from `src/util.rs` at some point
 pub fn default_channel_config() -> ChannelConfig {
@@ -450,6 +448,13 @@ impl From<ConfigCliPrompt> for Config {
 #[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
+        config.into()
+    }
+}
+
+#[cfg(feature = "rattler_repodata_gateway")]
+impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
+    fn from(config: &Config) -> Self {
         let default_source_config = config
             .repodata_config
             .as_ref()
@@ -886,6 +891,23 @@ impl Config {
         fs::write(to, contents)
             .into_diagnostic()
             .wrap_err(format!("failed to write config to '{}'", to.display()))
+    }
+
+    /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
+    #[cfg(feature = "rattler_repodata_gateway")]
+    pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
+        // Determine the cache directory and fall back to sane defaults otherwise.
+        let cache_dir = get_cache_dir().unwrap_or_else(|e| {
+            tracing::error!("failed to determine repodata cache directory: {e}");
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
+        });
+
+        // Construct the gateway
+        Gateway::builder()
+            .with_client(client)
+            .with_cache_dir(cache_dir.join("repodata"))
+            .with_channel_config(self.into())
+            .finish()
     }
 }
 

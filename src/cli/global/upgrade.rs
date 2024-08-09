@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 
 use super::{common::find_installed_package, install::globally_install_package};
 use crate::cli::has_specs::HasSpecs;
-use pixi_config::{gateway::new_gateway, Config};
+use pixi_config::Config;
 use pixi_progress::{global_multi_progress, long_running_progress_style, wrap_in_progress};
 
 /// Upgrade specific package which is installed globally.
@@ -105,7 +105,7 @@ pub(super) async fn upgrade_packages(
 
     // Now ask gateway to query repodata for these channels
     let (_, authenticated_client) = build_reqwest_clients(Some(&config));
-    let gateway = new_gateway(authenticated_client.clone(), config.clone());
+    let gateway = config.gateway(authenticated_client.clone());
     let repodata = gateway
         .query(
             all_channels,
