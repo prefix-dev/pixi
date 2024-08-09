@@ -3522,6 +3522,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "miette 7.2.0",
+ "pixi_consts",
  "pixi_manifest",
  "rattler_conda_types",
  "rattler_repodata_gateway",
