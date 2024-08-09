@@ -17,6 +17,7 @@ lazy_static = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_spec = { workspace = true, features = ["toml_edit"] }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }

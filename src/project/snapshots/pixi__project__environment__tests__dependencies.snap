@@ -1,8 +1,9 @@
 ---
 source: src/project/environment.rs
+assertion_line: 475
 expression: format_dependencies(deps)
 ---
-foo = >=1.0
-foo = <2.0
-foo = <4.0
-bar = >=1.0
+foo = ">=1.0"
+foo = "<2.0"
+foo = "<4.0"
+bar = ">=1.0"
