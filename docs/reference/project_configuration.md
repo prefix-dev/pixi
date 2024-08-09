@@ -578,6 +578,14 @@ scripts = ["env_setup.bat"]
 
 [target.linux-64.activation.env]
 ENV_VAR = "linux-value"
+
+# You can also reference existing environment variables, but this has
+# to be done separately for unix-like operating systems and Windows
+[target.unix.activation.env]
+ENV_VAR = "$OTHER_ENV_VAR/unix-value"
+
+[target.win.activation.env]
+ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 ```
 
 ## The `target` table
