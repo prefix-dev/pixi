@@ -213,12 +213,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Solve the updated project.
     let LockFileDerivedData {
+        project: _, // We don't need the project here
         lock_file,
         package_cache,
         uv_context,
         updated_conda_prefixes,
         updated_pypi_prefixes,
-        ..
+        io_concurrency_limit,
     } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
         .with_no_install(prefix_update_config.no_install())
@@ -262,6 +263,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_conda_prefixes,
         updated_pypi_prefixes,
         uv_context,
+        io_concurrency_limit,
     };
     if !prefix_update_config.no_lockfile_update {
         updated_lock_file.write_to_disk()?;
