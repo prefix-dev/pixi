@@ -136,7 +136,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.27.0"
+version = "0.27.1"
 
 [features]
 default = ["native-tls"]

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.27.1] - 2024-08-09
+#### Documentation
+
+- Fix mlx feature in "multiple machines" example by @rgommers in [#1762](https://github.com/prefix-dev/pixi/pull/1762)
+- Update some of the cli and add osx rosetta mention by @ruben-arts in [#1760](https://github.com/prefix-dev/pixi/pull/1760)
+- Fix typo by @pavelzw in [#1771](https://github.com/prefix-dev/pixi/pull/1771)
+
+#### Fixed
+
+- User agent string was wrong by @wolfv in [#1759](https://github.com/prefix-dev/pixi/pull/1759)
+- Dont accidentally wipe pyproject.toml on `init` by @ruben-arts in [#1775](https://github.com/prefix-dev/pixi/pull/1775)
+
+#### Refactor
+
+- Add `pixi_spec` crate by @baszalmstra in [#1741](https://github.com/prefix-dev/pixi/pull/1741)
+
+#### New Contributors
+* @rgommers made their first contribution in [#1762](https://github.com/prefix-dev/pixi/pull/1762)
+
 ### [0.27.0] - 2024-08-07
 #### ✨ Highlights
 
