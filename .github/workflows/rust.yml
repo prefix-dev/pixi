@@ -264,10 +264,9 @@ jobs:
       - name: Build msi Installer
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
-          cargo wix -v --no-build --nocapture -I install/windows/main.wxs
+          cargo wix  -I install/windows/main.wxs
           --profile $env:CARGO_PROFILE
           --package pixi
-          --target ${{ matrix.target }}
           --output target/wix/pixi-${{ matrix.target }}.msi
 
       # Here we notarize the binary with a certificate from Apple
