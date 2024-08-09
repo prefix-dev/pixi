@@ -194,7 +194,25 @@ impl PixiControl {
     }
 
     pub fn manifest_path(&self) -> PathBuf {
-        self.project_path().join(consts::PROJECT_MANIFEST)
+        // Either pixi.toml or pyproject.toml
+        if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        } else if self
+            .project_path()
+            .join(consts::PYPROJECT_MANIFEST)
+            .exists()
+        {
+            return self.project_path().join(consts::PYPROJECT_MANIFEST);
+        } else {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        }
+    }
+
+    /// Get the manifest contents
+    pub fn manifest_contents(&self) -> miette::Result<String> {
+        std::fs::read_to_string(self.manifest_path())
+            .into_diagnostic()
+            .context("failed to read manifest")
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
