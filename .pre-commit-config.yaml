@@ -65,7 +65,7 @@ repos:
         name: clippy
         language: system
         types: [file, rust]
-        entry: cargo clippy --all-targets -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
+        entry: cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
         pass_filenames: false
       - id: test
         name: test

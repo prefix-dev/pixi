@@ -75,7 +75,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.5
 
       - name: Run clippy
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets --workspace
 
   crate_metadata:
     name: Extract crate metadata

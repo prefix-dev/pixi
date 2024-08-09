@@ -588,7 +588,7 @@ mod tests {
             .dependencies(None)
             .unwrap_or_default()
             .iter()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap().to_string()))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
             .join("\n"), @r###"
         run = ==2.0
         host = ==2.0
