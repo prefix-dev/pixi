@@ -75,6 +75,7 @@ pixi global update [--package PACKAGE] <ENV>...
 Add one ore more packages `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
 Without `--expose` no binary will be exposed.
+If you don't mention a spec like `python=3.8.*`, the spec will be unconstrained with `*`
 
 ```
 pixi global add --environment ENV [--expose MAPPING] <PACKAGE>...
