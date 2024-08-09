@@ -17,7 +17,6 @@ use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
     RepoDataRecord,
 };
-use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
@@ -28,7 +27,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
 use crate::{cli::has_specs::HasSpecs, prefix::Prefix};
-use pixi_config::{self, Config, ConfigCli};
+use pixi_config::{self, gateway::new_gateway, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
 /// Installs the defined package in a global accessible location.
@@ -316,16 +315,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(&config));
 
-    let cache_dir = pixi_config::get_cache_dir().unwrap_or_else(|e| {
-        tracing::error!("failed to determine repodata cache directory: {e}");
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
-    });
-
-    let gateway = Gateway::builder()
-        .with_client(auth_client.clone())
-        .with_channel_config(config.clone().into())
-        .with_cache_dir(cache_dir.join("repodata"))
-        .finish();
+    let gateway = new_gateway(auth_client.clone(), config.clone());
 
     let repodata = gateway
         .query(

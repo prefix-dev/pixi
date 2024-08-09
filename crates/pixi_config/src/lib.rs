@@ -8,7 +8,6 @@ use std::{
 };
 
 use clap::{ArgAction, Parser};
-use gateway::from_pixi_config;
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use pixi_consts::consts;
@@ -16,6 +15,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
+use rattler_repodata_gateway::SourceConfig;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
@@ -448,8 +448,22 @@ impl From<ConfigCliPrompt> for Config {
 }
 
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
-    fn from(val: Config) -> Self {
-        from_pixi_config(&val)
+    fn from(config: Config) -> Self {
+        let default_source_config = config
+            .repodata_config
+            .as_ref()
+            .map(|config| SourceConfig {
+                jlap_enabled: !config.disable_jlap.unwrap_or(false),
+                zstd_enabled: !config.disable_zstd.unwrap_or(false),
+                bz2_enabled: !config.disable_bzip2.unwrap_or(false),
+                cache_action: Default::default(),
+            })
+            .unwrap_or_default();
+
+        rattler_repodata_gateway::ChannelConfig {
+            default: default_source_config,
+            per_channel: Default::default(),
+        }
     }
 }
 

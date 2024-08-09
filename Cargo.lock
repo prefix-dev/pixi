@@ -3510,6 +3510,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_repodata_gateway",
+ "reqwest-middleware",
  "rstest",
  "serde",
  "serde_ignored",
