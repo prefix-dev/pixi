@@ -1,17 +1,10 @@
 use std::path::PathBuf;
 
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
-};
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl, SolverTask};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_conda_types::{Channel, ChannelConfig, PackageName, PrefixRecord};
 
 use crate::{prefix::Prefix, repodata};
-use pixi_config::{home_path, Config};
-use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_config::home_path;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
@@ -103,20 +96,6 @@ pub fn bin_env_dir() -> Option<PathBuf> {
     home_path().map(|path| path.join("envs"))
 }
 
-/// Returns the package name from a MatchSpec
-///
-/// # Returns
-///
-/// The package name from the given MatchSpec
-fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
-    package_matchspec.name.clone().ok_or_else(|| {
-        miette::miette!(
-            "could not find package name in MatchSpec {}",
-            package_matchspec
-        )
-    })
-}
-
 /// Get the friendly channel name of a [`PrefixRecord`]
 ///
 /// # Returns
@@ -129,62 +108,6 @@ pub(super) fn channel_name_from_prefix(
     Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
         .map(|ch| repodata::friendly_channel_name(&ch))
         .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
-}
-
-/// Load package records from [`SparseRepoData`] for the given package MatchSpec
-///
-/// # Returns
-///
-/// The package records (with dependencies records) for the given package
-/// MatchSpec
-pub fn load_package_records<'a>(
-    package_matchspec: MatchSpec,
-    sparse_repodata: impl IntoIterator<Item = &'a SparseRepoData>,
-) -> miette::Result<Vec<RepoDataRecord>> {
-    let package_name = package_name(&package_matchspec)?;
-    let available_packages =
-        SparseRepoData::load_records_recursive(sparse_repodata, vec![package_name], None)
-            .into_diagnostic()?;
-    let virtual_packages = rattler_virtual_packages::VirtualPackage::current()
-        .into_diagnostic()?
-        .iter()
-        .cloned()
-        .map(Into::into)
-        .collect();
-
-    // Solve for environment
-    // Construct a solver task that we can start solving.
-    let task = SolverTask {
-        specs: vec![package_matchspec],
-        virtual_packages,
-        ..SolverTask::from_iter(&available_packages)
-    };
-
-    // Solve it
-    let records = resolvo::Solver.solve(task).into_diagnostic()?;
-
-    Ok(records)
-}
-
-/// Get networking Client and fetch [`SparseRepoData`] for the given channels
-/// and current platform using the client
-///
-/// # Returns
-///
-/// The network client and the fetched sparse repodata
-pub(super) async fn get_client_and_sparse_repodata(
-    channels: impl IntoIterator<Item = &'_ Channel>,
-    platform: Platform,
-    config: &Config,
-) -> miette::Result<(
-    ClientWithMiddleware,
-    IndexMap<(Channel, Platform), SparseRepoData>,
-)> {
-    let authenticated_client = build_reqwest_clients(Some(config)).1;
-    let platform_sparse_repodata =
-        repodata::fetch_sparse_repodata(channels, [platform], &authenticated_client, Some(config))
-            .await?;
-    Ok((authenticated_client, platform_sparse_repodata))
 }
 
 /// Find the globally installed package with the given [`PackageName`]
