@@ -193,7 +193,7 @@ jobs:
       - name: Setup | Install cargo-wix [Windows]
         # aarch64 is only supported in wix 4.0 development builds
         if: startsWith(matrix.os, 'windows') && matrix.target != 'aarch64-pc-windows-msvc'
-        run: cargo install --version 0.3.4 cargo-wix
+        run: cargo install --version 0.3.8 cargo-wix
         env:
           # cargo-wix does not require static crt
           RUSTFLAGS: ""
@@ -269,7 +269,6 @@ jobs:
           --package pixi
           --target ${{ matrix.target }}
           --output target/wix/pixi-${{ matrix.target }}.msi
-          init
 
       # Here we notarize the binary with a certificate from Apple
       # To get a certificate, go to XCode and request a Developer ID certificate for the right team.
