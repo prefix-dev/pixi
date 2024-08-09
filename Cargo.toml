@@ -300,14 +300,14 @@ winapi = { workspace = true, features = [
 codegen-units = 1
 inherits = "release"
 lto = "fat"
-opt-level = "z"
+opt-level = 3
 strip = "symbols"
 
 [profile.ci]
 codegen-units = 16
 inherits = "release"
 lto = false
-opt-level = 0
+opt-level = 3
 strip = false
 
 
