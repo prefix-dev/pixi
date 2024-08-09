@@ -78,6 +78,12 @@ impl InitBuilder {
         self.args.channels = Some(vec![]);
         self
     }
+
+    /// Instruct init which manifest format to use
+    pub fn with_format(mut self, format: init::ManifestFormat) -> Self {
+        self.args.format = Some(format);
+        self
+    }
 }
 
 impl IntoFuture for InitBuilder {
