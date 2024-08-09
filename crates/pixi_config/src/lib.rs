@@ -15,6 +15,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
+#[cfg(feature = "rattler_repodata_gateway")]
 use rattler_repodata_gateway::SourceConfig;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
@@ -446,7 +447,7 @@ impl From<ConfigCliPrompt> for Config {
         config
     }
 }
-
+#[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
         let default_source_config = config
