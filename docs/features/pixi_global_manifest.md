@@ -29,63 +29,80 @@ The motivation for the location is discussed [further below](#multiple-manifests
 # The name of the environment is `python`
 # It will expose python, python3 and python3.11, but not pip
 [envs.python.dependencies]
-python = { spec = "3.11.*", expose_binaries = "auto" }
+python = "3.11.*"
 pip = "*"
+
+[envs.python.exposed]
+python = "python"
+python3 = "python3"
+"python3.11" = "python3.11"
 
 # The name of the environment is `python_3_10`
 # It will expose python3.10
 [envs.python_3_10.dependencies]
-python = { spec = "3.10.*", expose_binaries = { "python3.10"="python" } }
+python = "3.10.*"
+
+[envs.python_3_10.exposed]
+"python3.10" = "python"
 
 ```
 
 ## CLI
 
-Install one or more packages `PACKAGE` into their own environments and expose their binaries.
-If no environment named `PACKAGE` exists, it will be created.
+Install one or more packages `PACKAGE` and expose their binaries.
+If `--environment` has been given, all packages will be installed in the same environment.
+If the environment already exists, the command will return with an error.
+`--expose` can be given if `--environment` is given as well or if only a single `PACKAGE` will be installed.
 The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 
 ```
-pixi global install [--expose MAPPING] <PACKAGE>...
+pixi global install [--expose MAPPING] [--environment ENV] <PACKAGE>...
 ```
 
 Remove environments `ENV`.
 ```
-pixi global uninstall [ENV]...
+pixi global uninstall <ENV>...
 ```
 
-Upgrade all packages in environments `ENV`
+Update `PACKAGE` if `--package` is given. If not, all packages in environments `ENV` will be updated.
+If the update leads to binaries being removed, it will offer to remove the mappings.
+If the user declines the update process will stop.
+If the update leads to binaries being added, it will offer for each binary individually to expose it.
 ```
-pixi global upgrade [ENV]...
+pixi global update [--package PACKAGE] <ENV>...
 ```
 
-Inject package `PACKAGE` into an existing environment `ENV`.
+Add one ore more packages `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
+Without `--expose` no binary will be exposed.
+
 ```
-pixi global inject --environment ENV PACKAGE
+pixi global add --environment ENV [--expose MAPPING] <PACKAGE>...
 ```
 
 Remove package `PACKAGE` from environment `ENV`.
 If that was the last package remove the whole environment and print that information in the console.
+If this leads to binaries being removed, it will offer to remove the mappings.
+If the user declines the remove process will stop.
 ```
 pixi global remove --environment ENV PACKAGE
 ```
 
-Update the version of one package
+Add one or more `MAPPING` for environment `ENV` which describe which binaries are exposed
 ```
-pixi global update --environment ENV PACKAGE
+pixi expose add --environment ENV  <MAPPING>...
 ```
 
-Set for a specific package `PACKAGE` in environment `ENV` under which `MAPPING` binaries are exposed
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+Remove one or more exposed `BINARY` from environment `ENV`
 ```
-pixi expose --environment ENV --package PACKAGE [MAPPING]...
+pixi expose remove --environment ENV <BINARY>...
 ```
 
 Ensure that the environments on the machine reflect the state in the manifest.
 The manifest is the single source of truth.
 Only if there's no manifest, will the data from existing environments be used to create a manifest.
 `pixi global sync` is implied by most other `pixi global` commands.
+
 ```
 pixi global sync
 ```
@@ -103,9 +120,9 @@ Create environment `python`, install package `python=3.10.*` and expose all bina
 pixi global install python=3.10.*
 ```
 
-Upgrade all packages in environment `python`
+Update all packages in environment `python`
 ```
-pixi global upgrade python
+pixi global update python
 ```
 
 Remove environment `python`
@@ -123,25 +140,31 @@ Remove environments `python` and `pip`
 pixi global uninstall python pip
 ```
 
-### Injecting dependencies
+Create environment `python-pip`, install `python` and `pip` in the same environment and expose all binaries of these packages
+```
+pixi global install --environment python-pip python pip
+```
+
+
+### Adding dependencies
 
 Create environment `python`, install package `python` and expose all binaries of that package.
 Then add package `hypercorn` to environment `python` but doesn't expose its binaries.
 
 ```
 pixi global install python
-pixi global inject --environment=python hypercorn
+pixi global add --environment python hypercorn
 ```
 
-Update package `cryptography` (a dependency of `hypercorn`) in environment `python`
+Update package `cryptography` (a dependency of `hypercorn`) to `43.0.0` in environment `python`
 
 ```
-pixi update --environment python cryptography
+pixi update --environment python cryptography=43.0.0
 ```
 
 Then remove `hypercorn` again.
 ```
-pixi global remove --environment=python hypercorn
+pixi global remove --environment python hypercorn
 ```
 
 
@@ -158,14 +181,12 @@ Now `python3.10` is available.
 Run the following in order to expose `python` from environment `python_3_10` as `python310` instead.
 
 ```
-pixi global expose --environment python_3_10 --package python "python310=python"
+pixi global expose remove --environment python_3_10 python3.10
+pixi global expose add --environment python_3_10 "python310=python"
 ```
 
 Now `python310` is available, but `python3.10` isn't anymore.
 
-!!! note
-
-    It should be possible to infer `--package`, let's discuss if there are edge cases to consider.
 
 ### Syncing
 
