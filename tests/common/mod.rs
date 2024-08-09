@@ -197,8 +197,14 @@ impl PixiControl {
         // Either pixi.toml or pyproject.toml
         if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
             return self.project_path().join(consts::PROJECT_MANIFEST);
-        } else {
+        } else if self
+            .project_path()
+            .join(consts::PYPROJECT_MANIFEST)
+            .exists()
+        {
             return self.project_path().join(consts::PYPROJECT_MANIFEST);
+        } else {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
         }
     }
 
