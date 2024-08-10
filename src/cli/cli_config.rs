@@ -1,12 +1,16 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::DependencyType;
+use crate::Project;
 use clap::Parser;
+use indexmap::IndexSet;
 use itertools::Itertools;
-use pixi_config::ConfigCli;
+use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
+use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
-use rattler_conda_types::Platform;
+use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -16,6 +20,60 @@ pub struct ProjectConfig {
     /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+}
+
+/// Channel configuration
+#[derive(Parser, Debug, Default)]
+pub struct ChannelsConfig {
+    /// The channels to consider as a name or a url.
+    /// Multiple channels can be specified by using this field multiple times.
+    ///
+    /// When specifying a channel, it is common that the selected channel also
+    /// depends on the `conda-forge` channel.
+    ///
+    /// By default, if no channel is provided, `conda-forge` is used.
+    #[clap(long = "channel", short = 'c')]
+    channels: Vec<NamedChannelOrUrl>,
+}
+
+impl ChannelsConfig {
+    /// Parses the channels, getting channel config and default channels from config
+    pub fn resolve_from_config(&self, config: &Config) -> IndexSet<Channel> {
+        self.resolve(config.global_channel_config(), config.default_channels())
+    }
+
+    /// Parses the channels, getting channel config and default channels from project
+    pub fn resolve_from_project(&self, project: Option<&Project>) -> IndexSet<Channel> {
+        match project {
+            Some(project) => {
+                let channels = project
+                    .default_environment()
+                    .channels()
+                    .into_iter()
+                    .cloned()
+                    .collect_vec();
+                self.resolve(&project.channel_config(), channels)
+            }
+            None => self.resolve_from_config(&Config::load_global()),
+        }
+    }
+
+    /// Parses the channels from specified channel config and default channels
+    fn resolve(
+        &self,
+        channel_config: &ChannelConfig,
+        default_channels: Vec<NamedChannelOrUrl>,
+    ) -> IndexSet<Channel> {
+        let channels = if self.channels.is_empty() {
+            default_channels
+        } else {
+            self.channels.clone()
+        };
+        channels
+            .into_iter()
+            .map(|c| c.into_channel(channel_config))
+            .collect()
+    }
 }
 
 /// Configuration for how to update the prefix

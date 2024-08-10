@@ -5,14 +5,14 @@ use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
 use tokio::task::JoinSet;
 
 use super::{
     common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
     install::globally_install_package,
 };
-use crate::cli::has_specs::HasSpecs;
+use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 use pixi_config::Config;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
 
@@ -24,18 +24,8 @@ pub struct Args {
     #[arg(required = true)]
     pub specs: Vec<String>,
 
-    /// Represents the channels from which to upgrade specified package.
-    /// Multiple channels can be specified by using this field multiple times.
-    ///
-    /// When specifying a channel, it is common that the selected channel also
-    /// depends on the `conda-forge` channel.
-    /// For example: `pixi global upgrade --channel conda-forge --channel
-    /// bioconda`.
-    ///
-    /// By default, if no channel is provided, `conda-forge` is used, the
-    /// channel the package was installed from will always be used.
-    #[clap(short, long)]
-    channel: Vec<NamedChannelOrUrl>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
@@ -51,25 +41,16 @@ impl HasSpecs for Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
     let specs = args.specs()?;
-    upgrade_packages(specs, config, &args.channel, args.platform).await
+    upgrade_packages(specs, config, &args.channels, args.platform).await
 }
 
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
-    cli_channels: &[NamedChannelOrUrl],
+    cli_channels: &ChannelsConfig,
     platform: Platform,
 ) -> miette::Result<()> {
-    let default_channels = config.default_channels();
-    let channel_cli = if cli_channels.is_empty() {
-        default_channels.as_slice()
-    } else {
-        cli_channels
-    }
-    .iter()
-    .cloned()
-    .map(|c| c.into_channel(config.global_channel_config()))
-    .collect_vec();
+    let channel_cli = cli_channels.resolve_from_config(&config);
 
     // Get channels and version of globally installed packages in parallel
     let mut channels = HashMap::with_capacity(specs.len());

@@ -6,7 +6,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 use strsim::jaro;
@@ -14,10 +14,11 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::{repodata::fetch_sparse_repodata, Project};
-use pixi_config::{default_channel_config, Config};
-use pixi_manifest::FeaturesExt;
+use pixi_config::default_channel_config;
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
+
+use super::cli_config::ChannelsConfig;
 
 /// Search a conda package
 ///
@@ -29,10 +30,8 @@ pub struct Args {
     #[arg(required = true)]
     pub package: String,
 
-    /// Channel to specifically search package, defaults to
-    /// project channels or conda-forge
-    #[clap(short, long)]
-    channel: Option<Vec<NamedChannelOrUrl>>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     #[clap(flatten)]
     pub project_config: ProjectConfig,
@@ -93,70 +92,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
-    let channels = match (args.channel, project.as_ref()) {
-        // if user passes channels through the channel flag
-        (Some(c), Some(p)) => {
-            let channels = if c.is_empty() {
-                p.config().default_channels()
-            } else {
-                c
-            };
-            eprintln!(
-                "Using channels from arguments ({}): {:?}",
-                p.name(),
-                channels.iter().format(", ")
-            );
-            let channel_config = p.channel_config();
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(&channel_config))
-                .collect_vec()
-        }
-        // No project -> use the global config
-        (Some(c), None) => {
-            let config = Config::load_global();
-            let channels = if c.is_empty() {
-                config.default_channels()
-            } else {
-                c
-            };
-            eprintln!(
-                "Using channels from arguments: {}",
-                channels.iter().format(", ")
-            );
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(config.global_channel_config()))
-                .collect_vec()
-        }
-        // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => {
-            let c = p.default_environment().channels();
-            eprintln!(
-                "Using channels from project ({}): {}",
-                p.name(),
-                c.iter().format(", ")
-            );
-            let channel_config = p.channel_config();
-            c.into_iter()
-                .cloned()
-                .map(|c| c.into_channel(&channel_config))
-                .collect_vec()
-        }
-        // if user doesn't pass channels and we are not in project
-        (None, None) => {
-            let config = Config::load_global();
-            let channels = config.default_channels();
-            eprintln!(
-                "Using channels from global config: {}",
-                channels.iter().format(", ")
-            );
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(config.global_channel_config()))
-                .collect_vec()
-        }
-    };
+    // Resolve channels from project / CLI args
+    let channels = args.channels.resolve_from_project(project.as_ref());
+    eprintln!(
+        "Using channels: {}",
+        channels.iter().map(|c| c.name()).format(", ")
+    );
 
     let package_name_filter = args.package;
 

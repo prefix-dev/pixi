@@ -12,9 +12,7 @@ use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{
-    MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
@@ -25,7 +23,10 @@ use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
     load_package_records, BinDir, BinEnvDir,
 };
-use crate::{cli::has_specs::HasSpecs, prefix::Prefix};
+use crate::{
+    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
+    prefix::Prefix,
+};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress};
 
@@ -37,17 +38,8 @@ pub struct Args {
     #[arg(num_args = 1..)]
     packages: Vec<String>,
 
-    /// Represents the channels from which the package will be installed.
-    /// Multiple channels can be specified by using this field multiple times.
-    ///
-    /// When specifying a channel, it is common that the selected channel also
-    /// depends on the `conda-forge` channel.
-    /// For example: `pixi global install --channel conda-forge --channel
-    /// bioconda`.
-    ///
-    /// By default, if no channel is provided, `conda-forge` is used.
-    #[clap(short, long)]
-    channel: Vec<NamedChannelOrUrl>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     #[clap(short, long, default_value_t = Platform::current())]
     platform: Platform,
@@ -294,15 +286,7 @@ pub fn prompt_user_to_continue(
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = if args.channel.is_empty() {
-        config.default_channels()
-    } else {
-        args.channel.clone()
-    }
-    .iter()
-    .cloned()
-    .map(|c| c.into_channel(config.global_channel_config()))
-    .collect_vec();
+    let channels = args.channels.resolve_from_config(&config);
 
     let specs = args.specs()?;
 
@@ -313,7 +297,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
+        get_client_and_sparse_repodata(channels.iter(), args.platform, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];
