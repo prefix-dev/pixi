@@ -124,16 +124,22 @@ expression: snapshot
     error: "ERROR: it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{ git = \"https://github.com/conda-forge/21cmfast-feedstock\" }'"
 - input: "1.2.3[subdir=linux-64]"
   result:
-    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{ version = \"<VERSION_SPEC>\", subdir = \"<SUBDIR>\" }'"
+    error: "ERROR: expected a version specifier but looks like a matchspec, please use a table instead: { version = \"==1.2.3\", subdir = \"linux-64\" }"
 - input: "1.2.3[channel=conda-forge]"
   result:
     error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{ version = \"<VERSION_SPEC>\", channel = \"<CHANNEL>\" }'"
 - input: "conda-forge::1.2.3"
   result:
-    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `channel` key: '{ version = \"<VERSION_SPEC>\", channel = \"<CHANNEL>\" }'"
+    error: "ERROR: expected a version specifier but looks like a matchspec, please use a table instead: { version = \"==conda-forge\", build = \"::1.2.3\" }"
 - input: "1.2.3[md5=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
   result:
     error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{ version = \"<VERSION_SPEC>\", md5 = \"<MD5>\" }'"
 - input: "1.2.3[sha256=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
   result:
-    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{ version = \"<VERSION_SPEC>\", sha256 = \"<SHA256>\" }'"
+    error: "ERROR: expected a version specifier but looks like a matchspec, please use a table instead: { version = \"==1.2.3\", sha256 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }"
+- input: "*cpu*"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, please use a table instead: { version = \"*\", build = \"cpu*\" }"
+- input: "*=*openblas"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, please use a table instead: { version = \"*\", build = \"*openblas\" }"

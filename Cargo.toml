@@ -233,7 +233,7 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
-pixi_spec = { workspace = true, features = ["toml_edit"] }
+pixi_spec = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }

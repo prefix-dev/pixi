@@ -279,7 +279,6 @@ impl PixiSpec {
         !self.is_binary()
     }
 
-    #[cfg(feature = "toml_edit")]
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
@@ -350,7 +349,6 @@ impl From<PathSourceSpec> for SourceSpec {
     }
 }
 
-#[cfg(feature = "toml_edit")]
 impl From<PixiSpec> for toml_edit::Value {
     fn from(value: PixiSpec) -> Self {
         ::serde::Serialize::serialize(&value, toml_edit::ser::ValueSerializer::new())

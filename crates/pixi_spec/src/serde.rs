@@ -1,10 +1,13 @@
+use std::{fmt::Display, path::PathBuf};
+
 use rattler_conda_types::{
-    BuildNumberSpec, NamedChannelOrUrl, ParseStrictness::Strict, StringMatcher, VersionSpec,
+    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
+    ParseStrictness::{Lenient, Strict},
+    StringMatcher, VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
-use std::fmt::Display;
 use url::Url;
 
 use crate::{DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
@@ -81,6 +84,17 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
         return Some(format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"));
     }
 
+    if let Ok(match_spec) = NamelessMatchSpec::from_str(&input, Lenient) {
+        let spec = PixiSpec::from_nameless_matchspec(
+            match_spec,
+            &ChannelConfig::default_with_root_dir(PathBuf::default()),
+        );
+        return Some(format!(
+            "expected a version specifier but looks like a matchspec, please use a table instead: {}",
+            spec.to_toml_value()
+        ));
+    };
+
     if input.contains("subdir") {
         return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `subdir` key: '{ version = \"<VERSION_SPEC>\", subdir = \"<SUBDIR>\" }'".to_string());
     }
@@ -96,6 +110,7 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
     if input.contains("sha256") {
         return Some("it seems you're trying to add a detailed dependency, please specify as a table with a `sha256` key: '{ version = \"<VERSION_SPEC>\", sha256 = \"<SHA256>\" }'".to_string());
     }
+
     None
 }
 
@@ -109,14 +124,12 @@ impl<'de> Deserialize<'de> for PixiSpec {
                 "a version string like \">=0.9.8\" or a detailed dependency like { version = \">=0.9.8\" }",
             )
             .string(|str| {
-
-
                 VersionSpec::from_str(str, Strict)
-                    .map_err(|err|{
+                    .map_err(|_err|{
                         if let Some(msg) = version_spec_error(str) {
                             serde_untagged::de::Error::custom(msg)
                         } else {
-                            serde_untagged::de::Error::custom(err)
+                            serde_untagged::de::Error::custom("invalid version specifier")
                         }
                                             })
                     .map(PixiSpec::Version)
@@ -338,6 +351,8 @@ mod test {
             json! { "conda-forge::1.2.3"},
             json! { "1.2.3[md5=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"},
             json! { "1.2.3[sha256=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"},
+            json! { "*cpu*"},
+            json! { "*=*openblas"},
         ];
 
         #[derive(Serialize)]
