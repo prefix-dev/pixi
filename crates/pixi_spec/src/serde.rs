@@ -90,7 +90,7 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
             &ChannelConfig::default_with_root_dir(PathBuf::default()),
         );
         return Some(format!(
-            "expected a version specifier but looks like a matchspec, please use a table instead: {}",
+            "expected a version specifier but looks like a matchspec, did you mean {}?",
             spec.to_toml_value()
         ));
     };
