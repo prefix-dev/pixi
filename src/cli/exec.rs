@@ -13,13 +13,11 @@ use rattler::{
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
 };
-use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::prefix::Prefix;
-use pixi_config::gateway::from_pixi_config;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
@@ -154,11 +152,7 @@ pub async fn create_exec_prefix(
         .context("failed to write lock status to prefix guard")?;
 
     // Construct a gateway to get repodata.
-    let gateway = Gateway::builder()
-        .with_cache_dir(cache_dir.join("repodata"))
-        .with_client(client.clone())
-        .with_channel_config(from_pixi_config(config))
-        .finish();
+    let gateway = config.gateway(client.clone());
 
     // Determine the specs to use for the environment
     let specs = if args.specs.is_empty() {

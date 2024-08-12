@@ -7,26 +7,28 @@ use std::{
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress};
+use miette::{Context, IntoDiagnostic};
+use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
+    RepoDataRecord,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::common::{
-    channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, BinDir, BinEnvDir,
-};
+use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+
 use crate::{cli::has_specs::HasSpecs, prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 
 /// Installs the defined package in a global accessible location.
@@ -311,19 +313,49 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
+    // Fetch the repodata
+    let (_, auth_client) = build_reqwest_clients(Some(&config));
+
+    let gateway = config.gateway(auth_client.clone());
+
+    let repodata = gateway
+        .query(
+            channels,
+            [args.platform, Platform::NoArch],
+            specs.values().cloned().collect_vec(),
+        )
+        .recursive(true)
+        .await
+        .into_diagnostic()?;
+
+    // Determine virtual packages of the current platform
+    let virtual_packages = VirtualPackage::current()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .iter()
+        .cloned()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
+    // Solve the environment
+    let solver_specs = specs.clone();
+    let solved_records = wrap_in_progress("solving environment", move || {
+        Solver.solve(SolverTask {
+            specs: solver_specs.values().cloned().collect_vec(),
+            virtual_packages,
+            ..SolverTask::from_iter(&repodata)
+        })
+    })
+    .into_diagnostic()
+    .context("failed to solve environment")?;
 
     // Install the package(s)
     let mut executables = vec![];
-    for (package_name, package_matchspec) in specs {
-        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
-
+    for (package_name, _) in specs {
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
-            records,
-            authenticated_client.clone(),
+            solved_records.clone(),
+            auth_client.clone(),
             args.platform,
         )
         .await?;
