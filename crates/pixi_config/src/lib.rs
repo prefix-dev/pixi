@@ -17,6 +17,7 @@ use rattler_conda_types::{
 };
 #[cfg(feature = "rattler_repodata_gateway")]
 use rattler_repodata_gateway::{Gateway, SourceConfig};
+#[cfg(feature = "rattler_repodata_gateway")]
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
