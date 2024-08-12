@@ -62,6 +62,10 @@ jobs:
 
 In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -> "General").
 
+!!! tip
+
+    If you don't have any `pypi-dependencies`, you can use `pixi update --json --no-install` to speed up diff generation.
+
 ![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-light.png#only-light)
 ![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-dark.png#only-dark)
 
