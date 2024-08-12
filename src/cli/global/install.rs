@@ -301,8 +301,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in specs {
-        let records =
-            solve_package_records(&gateway, channels.clone(), vec![package_matchspec]).await?;
+        let records = solve_package_records(
+            &gateway,
+            args.platform,
+            channels.clone(),
+            vec![package_matchspec],
+        )
+        .await?;
 
         let (prefix_package, scripts, _) =
             globally_install_package(&package_name, records, client.clone(), args.platform).await?;

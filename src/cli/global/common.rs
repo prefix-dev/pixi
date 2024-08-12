@@ -125,6 +125,7 @@ pub(super) fn channel_name_from_prefix(
 /// MatchSpec
 pub async fn solve_package_records<AsChannel, ChannelIter>(
     gateway: &Gateway,
+    platform: Platform,
     channels: ChannelIter,
     specs: Vec<MatchSpec>,
 ) -> miette::Result<Vec<RepoDataRecord>>
@@ -135,11 +136,7 @@ where
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(
-                channels,
-                [Platform::current(), Platform::NoArch],
-                specs.clone(),
-            )
+            .query(channels, [platform, Platform::NoArch], specs.clone())
             .recursive(true)
             .execute()
             .await
@@ -149,6 +146,7 @@ where
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
+    // We cannot infer virtual_packages for another platform
     let virtual_packages = VirtualPackage::current()
         .into_diagnostic()
         .context("failed to determine virtual packages")?

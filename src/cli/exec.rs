@@ -9,7 +9,7 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{MatchSpec, PackageName};
+use rattler_conda_types::{MatchSpec, PackageName, Platform};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{cli::global::common::solve_package_records, prefix::Prefix};
@@ -162,7 +162,8 @@ pub async fn create_exec_prefix(
 
     // Solve the environment
     let channels = args.channels.resolve_from_config(config);
-    let solved_records = solve_package_records(&gateway, channels, specs.clone()).await?;
+    let solved_records =
+        solve_package_records(&gateway, Platform::current(), channels, specs.clone()).await?;
 
     // Install the environment
     tracing::info!(
