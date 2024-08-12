@@ -1,0 +1,28 @@
+---
+source: crates/pixi_build_frontend/src/conda_build.rs
+expression: "&rendered_recipe"
+---
+- hash_content: "{'__unix': '__unix',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'ppc64le',\r\n 'level': '8'}"
+  recipe:
+    package:
+      name: ppc64le-microarch-level
+      version: "8"
+    build:
+      number: "2"
+      string: "2"
+      noarch: generic
+    requirements:
+      run:
+        - __unix
+- hash_content: "{'__archspec': '__archspec 1=x86_64',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'x86_64',\r\n 'microarchitecture': 'x86_64'}"
+  recipe:
+    package:
+      name: _x86_64-microarch-level
+      version: "1"
+    build:
+      number: "2"
+      string: 2_x86_64
+      noarch: generic
+    requirements:
+      run:
+        - __archspec 1=x86_64

@@ -1,13 +1,15 @@
-mod backend;
+mod builder;
 mod conda_build;
 mod pixi;
 mod protocol;
+mod tool;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
+use miette::Context;
 use rattler_conda_types::MatchSpec;
 
-use crate::protocol::Protocol;
+use crate::{builder::Builder, protocol::Protocol, tool::ToolCache};
 
 #[derive(Debug, Clone)]
 pub struct BackendOverrides {
@@ -33,22 +35,29 @@ pub struct BuildOutput {
     pub artifacts: Vec<PathBuf>,
 }
 
+#[derive(Debug)]
+pub struct Metadata {}
+
 /// The frontend for building packages.
 pub struct BuildFrontend {
-    // TODO: Add caches?
+    /// The cache for tools. This is used to avoid re-installing tools.
+    tool_cache: Arc<ToolCache>,
 }
 
 impl Default for BuildFrontend {
     fn default() -> Self {
-        Self {}
+        Self {
+            tool_cache: Arc::new(ToolCache::new()),
+        }
     }
 }
 
 impl BuildFrontend {
-    pub fn build(&self, request: BuildRequest) -> miette::Result<BuildOutput> {
+    /// Construcst a new [`Builder`] for the given request. This object can be
+    /// used to build the package.
+    pub fn builder(&self, request: BuildRequest) -> miette::Result<Builder> {
         // Determine the build protocol to use for the source directory.
-        let Some(protocol) = Protocol::discover(&request.source_dir, request.build_tool_overrides)?
-        else {
+        let Some(protocol) = Protocol::discover(&request.source_dir)? else {
             miette::bail!(
                 "could not determine how to build the package, are you missing a pixi.toml file?"
             );
@@ -59,13 +68,16 @@ impl BuildFrontend {
             request.source_dir.display()
         );
 
-        // Determine the build backend to use for the protocol.
-        let backend_spec = protocol.backend_spec();
+        // Instantiate the build tool.
+        let tool_spec = request
+            .build_tool_overrides
+            .into_spec()
+            .unwrap_or(protocol.backend_tool());
+        let tool = self
+            .tool_cache
+            .instantiate(&tool_spec)
+            .context("failed to instantiate build tool")?;
 
-        // TODO: Instantiate the build backend
-
-        // TODO: Invoke the build backend through the protocol.
-
-        Ok(BuildOutput { artifacts: vec![] })
+        Ok(Builder::new(protocol, tool))
     }
 }

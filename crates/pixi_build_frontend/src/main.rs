@@ -52,12 +52,15 @@ fn main() -> miette::Result<()> {
     let frontend = BuildFrontend::default();
 
     // Build a specific package.
-    let output = frontend.build(BuildRequest {
+    let builder = frontend.builder(BuildRequest {
         source_dir: args.work_dir,
         build_tool_overrides: args.builder_opts.into(),
     })?;
 
-    dbg!(output);
+    // Request package metadata
+    let metadata = builder.get_metadata()?;
+
+    dbg!(metadata);
 
     Ok(())
 }

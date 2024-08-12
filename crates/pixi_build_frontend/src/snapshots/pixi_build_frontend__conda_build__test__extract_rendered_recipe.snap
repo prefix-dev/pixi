@@ -1,0 +1,17 @@
+---
+source: crates/pixi_build_frontend/src/conda_build.rs
+expression: "&rendered_recipe"
+---
+- hash_content: "{}"
+  recipe:
+    package:
+      name: pinject
+      version: 0.14.1
+    build:
+      number: "0"
+      noarch: python
+    requirements:
+      run:
+        - python >=3.4
+        - six >=1.7.3
+        - decorator >=4.3.0

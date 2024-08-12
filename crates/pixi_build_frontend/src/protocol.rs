@@ -1,7 +1,10 @@
 use std::path::Path;
 
 use crate::{
-    backend::BackendSpec, conda_build::CondaBuildProtocol, pixi::PixiProtocol, BackendOverrides,
+    conda_build::CondaBuildProtocol,
+    pixi::PixiProtocol,
+    tool::{Tool, ToolSpec},
+    Metadata,
 };
 
 /// A protocol describes how to communicate with a build backend. A build
@@ -34,10 +37,7 @@ impl From<CondaBuildProtocol> for Protocol {
 
 impl Protocol {
     /// Discovers the protocol for the given source directory.
-    pub fn discover(
-        source_dir: &Path,
-        overrides: BackendOverrides,
-    ) -> miette::Result<Option<Self>> {
+    pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
         if source_dir.is_file() {
             miette::bail!("source directory must be a directory");
         } else if !source_dir.is_dir() {
@@ -45,12 +45,12 @@ impl Protocol {
         }
 
         // Try to discover as a pixi project
-        if let Some(protocol) = PixiProtocol::discover(source_dir, &overrides)? {
+        if let Some(protocol) = PixiProtocol::discover(source_dir)? {
             return Ok(Some(protocol.into()));
         }
 
         // Try to discover as a conda build project
-        if let Some(protocol) = CondaBuildProtocol::discover(source_dir, &overrides)? {
+        if let Some(protocol) = CondaBuildProtocol::discover(source_dir)? {
             return Ok(Some(protocol.into()));
         }
 
@@ -68,10 +68,18 @@ impl Protocol {
 
     /// Returns a build tool specification for the protocol. This describes how
     /// to acquire the build tool for the specific package.
-    pub fn backend_spec(&self) -> &BackendSpec {
+    pub fn backend_tool(&self) -> ToolSpec {
         match self {
-            Self::Pixi(protocol) => protocol.backend_spec(),
-            Self::CondaBuild(protocol) => protocol.backend_spec(),
+            Self::Pixi(protocol) => protocol.backend_tool(),
+            Self::CondaBuild(protocol) => protocol.backend_tool(),
+        }
+    }
+
+    /// Get the metadata from the source directory.
+    pub fn get_metadata(&self, backend: &Tool) -> miette::Result<Metadata> {
+        match self {
+            Self::Pixi(protocol) => protocol.get_metadata(backend),
+            Self::CondaBuild(protocol) => protocol.get_metadata(backend),
         }
     }
 }
