@@ -32,7 +32,7 @@ pub struct ChannelsConfig {
     /// depends on the `conda-forge` channel.
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
-    #[clap(long = "channel", short = 'c')]
+    #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
     channels: Vec<NamedChannelOrUrl>,
 }
 
