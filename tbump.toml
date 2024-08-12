@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.27.0"
+current = "0.27.1"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -19,7 +19,7 @@ regex = '''
 
 [git]
 # The current version will get updated when tbump is run
-message_template = "Bump version: 0.27.0 → {new_version}"
+message_template = "Bump version: 0.27.1 → {new_version}"
 tag_template = "v{new_version}"
 
 # For each file to patch, add a [[file]] config
@@ -62,6 +62,10 @@ src = "src/cli/mod.rs"
 [[file]]
 search = "PIXI_VERSION = \"{current_version}\""
 src = "tests/integration/test_main_cli.py"
+
+[[file]]
+search = "pub const PIXI_VERSION: &str = \"{current_version}\";"
+src = "crates/pixi_consts/src/consts.rs"
 
 [[field]]
 # the name of the field

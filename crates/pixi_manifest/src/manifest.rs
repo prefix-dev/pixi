@@ -1,24 +1,30 @@
-use crate::document::ManifestSource;
-use crate::error::{DependencyError, TomlError, UnknownFeature};
-use crate::pypi::PyPiPackageName;
-use crate::pyproject::PyProjectManifest;
-use crate::{
-    consts, to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
-    FeatureName, GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target,
-    TargetSelector, Task, TaskName,
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    ffi::OsStr,
+    fmt::Display,
+    hash::Hash,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
+
 use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::fmt::Display;
-use std::hash::Hash;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use toml_edit::DocumentMut;
+
+use crate::{
+    consts,
+    document::ManifestSource,
+    error::{DependencyError, TomlError, UnknownFeature},
+    pypi::PyPiPackageName,
+    pyproject::PyProjectManifest,
+    to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
+    GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target, TargetSelector, Task,
+    TaskName,
+};
 
 #[derive(Debug, Clone)]
 pub enum ManifestKind {
@@ -342,6 +348,7 @@ impl Manifest {
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
+        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
         let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
@@ -356,7 +363,6 @@ impl Manifest {
                         spec_type,
                         platform,
                         feature_name,
-                        channel_config,
                     )?;
                     any_added = true;
                 }
@@ -635,20 +641,22 @@ impl Manifest {
 
 #[cfg(test)]
 mod tests {
-    use indexmap::IndexMap;
     use std::str::FromStr;
 
+    use indexmap::IndexMap;
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
-    use rattler_conda_types::ParseStrictness::Strict;
-    use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness};
+    use rattler_conda_types::{
+        NamedChannelOrUrl, ParseStrictness,
+        ParseStrictness::{Lenient, Strict},
+        VersionSpec,
+    };
     use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
     use super::*;
-    use crate::manifest::Manifest;
-    use crate::{channel::PrioritizedChannel, utils::default_channel_config};
+    use crate::{channel::PrioritizedChannel, manifest::Manifest};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -657,6 +665,12 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
+
+    fn default_channel_config() -> rattler_conda_types::ChannelConfig {
+        rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not retrieve the current directory"),
+        )
+    }
 
     #[test]
     fn test_from_path() {
@@ -1644,8 +1658,8 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cuda").unwrap())
                 .unwrap()
-                .to_string(),
-            "==x.y.z"
+                .as_version_spec(),
+            Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
         );
         assert_eq!(
             cuda_feature
@@ -1656,8 +1670,8 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cudnn").unwrap())
                 .unwrap()
-                .to_string(),
-            "==12.0"
+                .as_version_spec(),
+            Some(&VersionSpec::from_str("12", Lenient).unwrap())
         );
         assert_eq!(
             cuda_feature
@@ -1681,8 +1695,8 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("cmake").unwrap())
                 .unwrap()
-                .to_string(),
-            "*"
+                .as_version_spec(),
+            Some(&VersionSpec::Any)
         );
         assert_eq!(
             cuda_feature
@@ -1733,8 +1747,8 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PackageName::from_str("mlx").unwrap())
                 .unwrap()
-                .to_string(),
-            "==x.y.z"
+                .as_version_spec(),
+            Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
         );
         assert_eq!(
             cuda_feature
@@ -1836,6 +1850,7 @@ foo = "*"
 [feature.test.dependencies]
 bar = "*"
             "#;
+        let channel_config = default_channel_config();
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         manifest
             .add_dependency(
@@ -1844,7 +1859,7 @@ bar = "*"
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &channel_config,
             )
             .unwrap();
         assert_eq!(
@@ -1857,8 +1872,8 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("baz").unwrap())
                 .unwrap()
-                .to_string(),
-            ">=1.2.3".to_string()
+                .as_version_spec(),
+            Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
         );
         manifest
             .add_dependency(
@@ -1867,7 +1882,7 @@ bar = "*"
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &channel_config,
             )
             .unwrap();
 
@@ -1882,6 +1897,8 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("bal").unwrap())
                 .unwrap()
+                .as_version_spec()
+                .unwrap()
                 .to_string(),
             ">=2.3".to_string()
         );
@@ -1893,7 +1910,7 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &channel_config,
             )
             .unwrap();
 
@@ -1909,6 +1926,8 @@ bar = "*"
                 .unwrap()
                 .get(&PackageName::from_str("boef").unwrap())
                 .unwrap()
+                .as_version_spec()
+                .unwrap()
                 .to_string(),
             ">=2.3".to_string()
         );
@@ -1920,23 +1939,20 @@ bar = "*"
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &default_channel_config(),
+                &channel_config,
             )
             .unwrap();
 
         assert_eq!(
             manifest
                 .feature(&FeatureName::Named("build".to_string()))
-                .unwrap()
-                .targets
-                .for_target(&TargetSelector::Platform(Platform::Linux64))
-                .unwrap()
-                .dependencies
-                .get(&SpecType::Build)
-                .unwrap()
-                .get(&PackageName::from_str("cmake").unwrap())
-                .unwrap()
-                .to_string(),
+                .map(|f| &f.targets)
+                .and_then(|t| t.for_target(&TargetSelector::Platform(Platform::Linux64)))
+                .and_then(|t| t.dependencies.get(&SpecType::Build))
+                .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
+                .and_then(|spec| spec.as_version_spec())
+                .map(|spec| spec.to_string())
+                .unwrap(),
             ">=2.3".to_string()
         );
 

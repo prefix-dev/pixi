@@ -26,9 +26,10 @@ use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
-use crate::{cli::has_specs::HasSpecs, prefix::Prefix};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+
+use crate::{cli::has_specs::HasSpecs, prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -425,6 +426,8 @@ pub(super) async fn globally_install_package(
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    try_increase_rlimit_to_sensible();
+
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);

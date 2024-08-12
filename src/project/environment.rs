@@ -8,6 +8,7 @@ use std::{
 };
 
 use itertools::Either;
+use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
@@ -19,7 +20,6 @@ use super::{
     SolveGroup,
 };
 use crate::{project::HasProjectRef, Project};
-use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -319,9 +319,9 @@ mod tests {
 
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_manifest::CondaDependencies;
 
     use super::*;
-    use pixi_manifest::CondaDependencies;
 
     #[test]
     fn test_default_channels() {
@@ -433,7 +433,7 @@ mod tests {
     fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 

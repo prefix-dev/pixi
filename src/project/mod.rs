@@ -19,12 +19,18 @@ use std::{
 
 use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
+pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
+use pixi_config::Config;
+use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, HasManifestRef, Manifest,
+    ParsedManifest, SpecType,
 };
+use pixi_utils::reqwest::build_reqwest_clients;
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
@@ -36,12 +42,6 @@ use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     project::grouped_environment::GroupedEnvironment,
 };
-use pixi_config::Config;
-use pixi_consts::consts;
-use pixi_utils::reqwest::build_reqwest_clients;
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-
-pub use has_project_ref::HasProjectRef;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -612,6 +612,22 @@ impl Project {
                 .expect("mapping source should be ok")
         })
     }
+
+    /// Returns the manifest of the project
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    /// Convert the project into its manifest
+    pub fn into_manifest(self) -> Manifest {
+        self.manifest
+    }
+}
+
+impl<'source> HasManifestRef<'source> for &'source Project {
+    fn manifest(&self) -> &'source Manifest {
+        Project::manifest(self)
+    }
 }
 
 /// Iterates over the current directory and all its parent directories and
@@ -722,12 +738,11 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::FeatureName;
+    use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
     use super::*;
-    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -780,7 +795,7 @@ mod tests {
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
-            .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 

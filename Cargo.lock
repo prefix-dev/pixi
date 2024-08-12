@@ -2292,6 +2292,7 @@ dependencies = [
  "globset",
  "lazy_static",
  "linked-hash-map",
+ "regex",
  "serde",
  "similar",
  "walkdir",
@@ -3387,7 +3388,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.27.0"
+version = "0.27.1"
 dependencies = [
  "ahash 0.8.11",
  "assert_matches",
@@ -3439,6 +3440,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_spec",
  "pixi_utils",
  "pixi_uv_conversions",
  "platform-tags",
@@ -3458,6 +3460,7 @@ dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
  "reqwest-retry",
+ "rlimit",
  "rstest",
  "self-replace",
  "serde",
@@ -3552,6 +3555,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
+ "pixi_spec",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
@@ -3592,6 +3596,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_spec"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "file_url",
+ "insta",
+ "rattler_conda_types",
+ "rattler_digest",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror",
+ "toml_edit 0.22.20",
+ "typed-path",
+ "url",
+]
+
+[[package]]
 name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
@@ -3602,6 +3626,7 @@ dependencies = [
  "miette 7.2.0",
  "pep508_rs",
  "pixi_config",
+ "pixi_consts",
  "rattler_conda_types",
  "rattler_networking",
  "reqwest 0.12.5",
@@ -4707,6 +4732,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "rlimit"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3560f70f30a0f16d11d01ed078a07740fe6b489667abc7c7b029155d9f21c3d8"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

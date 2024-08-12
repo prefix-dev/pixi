@@ -7,22 +7,20 @@ use std::{
     str::FromStr,
 };
 
-use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-use crate::project::HasProjectRef;
-use crate::project::{grouped_environment::GroupedEnvironment, Environment};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
+use pixi_spec::{PixiSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseMatchSpecError,
-    ParseStrictness::Lenient, Platform, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
+    ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
     ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
@@ -31,6 +29,9 @@ use thiserror::Error;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
+
+use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -351,6 +352,11 @@ pub fn verify_platform_satisfiability(
 }
 
 enum Dependency {
+    Input(
+        rattler_conda_types::PackageName,
+        PixiSpec,
+        Cow<'static, str>,
+    ),
     Conda(MatchSpec, Cow<'static, str>),
     PyPi(pypi_types::Requirement, Cow<'static, str>),
 }
@@ -487,11 +493,13 @@ pub fn verify_package_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
+    let channel_config = environment.project().channel_config();
+
     // Determine the dependencies requested by the environment
     let conda_specs = environment
         .dependencies(None, Some(platform))
-        .into_match_specs()
-        .map(|spec| Dependency::Conda(spec, "<environment>".into()))
+        .into_specs()
+        .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
     if conda_specs.is_empty() && !locked_conda_packages.is_empty() {
@@ -575,74 +583,41 @@ pub fn verify_package_platform_satisfiability(
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
-        enum FoundPackage {
-            Conda(usize),
-            PyPi(usize, Vec<ExtraName>),
-        }
-
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
+            Dependency::Input(name, spec, source) => {
+                let spec = match spec.try_into_nameless_match_spec(&channel_config) {
+                    Ok(Some(spec)) => MatchSpec::from_nameless(spec, Some(name)),
+                    Ok(None) => unimplemented!("source dependencies are not yet implemented"),
+                    Err(e) => {
+                        let parse_channel_err: ParseMatchSpecError = match e {
+                            SpecConversionError::NonAbsoluteRootDir(p) => {
+                                ParseChannelError::NonAbsoluteRootDir(p).into()
+                            }
+                            SpecConversionError::NotUtf8RootDir(p) => {
+                                ParseChannelError::NotUtf8RootDir(p).into()
+                            }
+                            SpecConversionError::InvalidPath(p) => {
+                                ParseChannelError::InvalidPath(p).into()
+                            }
+                        };
+                        return Err(PlatformUnsat::FailedToParseMatchSpec(
+                            name.as_source().to_string(),
+                            parse_channel_err,
+                        ));
+                    }
+                };
+                match find_matching_package(locked_conda_packages, &virtual_packages, spec, source)?
+                {
+                    Some(pkg) => pkg,
+                    None => continue,
+                }
+            }
             Dependency::Conda(spec, source) => {
-                match &spec.name {
-                    None => {
-                        // No name means we have to find any package that matches the spec.
-                        match locked_conda_packages
-                            .records
-                            .iter()
-                            .position(|record| record.matches(&spec))
-                        {
-                            None => {
-                                // No records match the spec.
-                                return Err(PlatformUnsat::UnsatisfiableMatchSpec(
-                                    spec,
-                                    source.into_owned(),
-                                ));
-                            }
-                            Some(idx) => FoundPackage::Conda(idx),
-                        }
-                    }
-                    Some(name) => {
-                        match locked_conda_packages
-                            .index_by_name(name)
-                            .map(|idx| (idx, &locked_conda_packages.records[idx]))
-                        {
-                            Some((idx, record)) if record.matches(&spec) => {
-                                FoundPackage::Conda(idx)
-                            }
-                            Some(_) => {
-                                // The record does not match the spec, the lock-file is
-                                // inconsistent.
-                                return Err(PlatformUnsat::UnsatisfiableMatchSpec(
-                                    spec,
-                                    source.into_owned(),
-                                ));
-                            }
-                            None => {
-                                // Check if there is a virtual package by that name
-                                if let Some(vpkg) = virtual_packages.get(name.as_normalized()) {
-                                    if vpkg.matches(&spec) {
-                                        // The matchspec matches a virtual package. No need to
-                                        // propagate the dependencies.
-                                        continue;
-                                    } else {
-                                        // The record does not match the spec, the lock-file is
-                                        // inconsistent.
-                                        return Err(PlatformUnsat::UnsatisfiableMatchSpec(
-                                            spec,
-                                            source.into_owned(),
-                                        ));
-                                    }
-                                } else {
-                                    // The record does not match the spec, the lock-file is
-                                    // inconsistent.
-                                    return Err(PlatformUnsat::UnsatisfiableMatchSpec(
-                                        spec,
-                                        source.into_owned(),
-                                    ));
-                                }
-                            }
-                        }
-                    }
+                match find_matching_package(locked_conda_packages, &virtual_packages, spec, source)?
+                {
+                    Some(pkg) => pkg,
+                    None => continue,
                 }
             }
             Dependency::PyPi(requirement, source) => {
@@ -851,6 +826,80 @@ pub fn verify_package_platform_satisfiability(
     }
 
     Ok(())
+}
+
+enum FoundPackage {
+    Conda(usize),
+    PyPi(usize, Vec<ExtraName>),
+}
+
+fn find_matching_package(
+    locked_conda_packages: &RepoDataRecordsByName,
+    virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
+    spec: MatchSpec,
+    source: Cow<str>,
+) -> Result<Option<FoundPackage>, PlatformUnsat> {
+    let found_package = match &spec.name {
+        None => {
+            // No name means we have to find any package that matches the spec.
+            match locked_conda_packages
+                .records
+                .iter()
+                .position(|record| record.matches(&spec))
+            {
+                None => {
+                    // No records match the spec.
+                    return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                        spec,
+                        source.into_owned(),
+                    ));
+                }
+                Some(idx) => FoundPackage::Conda(idx),
+            }
+        }
+        Some(name) => {
+            match locked_conda_packages
+                .index_by_name(name)
+                .map(|idx| (idx, &locked_conda_packages.records[idx]))
+            {
+                Some((idx, record)) if record.matches(&spec) => FoundPackage::Conda(idx),
+                Some(_) => {
+                    // The record does not match the spec, the lock-file is
+                    // inconsistent.
+                    return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                        spec,
+                        source.into_owned(),
+                    ));
+                }
+                None => {
+                    // Check if there is a virtual package by that name
+                    if let Some(vpkg) = virtual_packages.get(name.as_normalized()) {
+                        if vpkg.matches(&spec) {
+                            // The matchspec matches a virtual package. No need to
+                            // propagate the dependencies.
+                            return Ok(None);
+                        } else {
+                            // The record does not match the spec, the lock-file is
+                            // inconsistent.
+                            return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                                spec,
+                                source.into_owned(),
+                            ));
+                        }
+                    } else {
+                        // The record does not match the spec, the lock-file is
+                        // inconsistent.
+                        return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                            spec,
+                            source.into_owned(),
+                        ));
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(Some(found_package))
 }
 
 trait MatchesMatchspec {
