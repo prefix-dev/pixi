@@ -75,7 +75,8 @@ pixi global update [--package PACKAGE] <ENV>...
 Add one or more packages `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
 Without `--expose` no binary will be exposed.
-If you don't mention a spec like `python=3.8.*`, the spec will be unconstrained with `*`
+If you don't mention a spec like `python=3.8.*`, the spec will be unconstrained with `*`.
+The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 
 ```
 pixi global add --environment ENV [--expose MAPPING] <PACKAGE>...
@@ -89,14 +90,15 @@ If the user declines the remove process will stop.
 pixi global remove --environment ENV PACKAGE
 ```
 
-Add one or more `MAPPING` for environment `ENV` which describe which binaries are exposed
+Add one or more `MAPPING` for environment `ENV` which describe which binaries are exposed.
+The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
 ```
-pixi expose add --environment ENV  <MAPPING>...
+pixi global expose add --environment ENV  <MAPPING>...
 ```
 
 Remove one or more exposed `BINARY` from environment `ENV`
 ```
-pixi expose remove --environment ENV <BINARY>...
+pixi global expose remove --environment ENV <BINARY>...
 ```
 
 Ensure that the environments on the machine reflect the state in the manifest.
@@ -247,3 +249,9 @@ In order to modify those with the `CLI` one would have to add an option `--manif
 
 It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
+
+
+### Non-interactive sessions
+
+Some commands involve interactivity.
+Let's find good ways how to allow usage with non-interactive sessions.
