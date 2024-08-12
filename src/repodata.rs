@@ -1,10 +1,9 @@
-use crate::config::Config;
-use crate::{config, progress};
 use futures::{stream, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_config::{self, Config};
 use rattler_conda_types::{Channel, Platform};
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -54,15 +53,15 @@ pub async fn fetch_sparse_repodata_targets(
     }
 
     // Construct a top-level progress bar
-    let multi_progress = progress::global_multi_progress();
+    let multi_progress = pixi_progress::global_multi_progress();
     let top_level_progress =
         multi_progress.add(ProgressBar::new(fetch_targets.size_hint().0 as u64));
-    top_level_progress.set_style(progress::long_running_progress_style());
+    top_level_progress.set_style(pixi_progress::long_running_progress_style());
     top_level_progress.set_message("fetching package metadata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
-    let repodata_cache_path = config::get_cache_dir()?.join("repodata");
-    let multi_progress = progress::global_multi_progress();
+    let repodata_cache_path = pixi_config::get_cache_dir()?.join("repodata");
+    let multi_progress = pixi_progress::global_multi_progress();
     let mut progress_bars = Vec::new();
 
     let fetch_repodata_options = config
@@ -82,7 +81,7 @@ pub async fn fetch_sparse_repodata_targets(
             let progress_bar = multi_progress.add(
                 indicatif::ProgressBar::new(1)
                     .with_prefix(format!("{}/{platform}", friendly_channel_name(&channel)))
-                    .with_style(progress::default_bytes_style()),
+                    .with_style(pixi_progress::default_bytes_style()),
             );
             progress_bar.enable_steady_tick(Duration::from_millis(50));
             progress_bars.push(progress_bar.clone());
@@ -161,12 +160,12 @@ async fn fetch_repo_data_records_with_progress(
     let result = match result {
         Err(e) => {
             if matches!(&e, fetch::FetchRepoDataError::NotFound(_)) && allow_not_found {
-                progress_bar.set_style(progress::finished_progress_style());
+                progress_bar.set_style(pixi_progress::finished_progress_style());
                 progress_bar.finish_with_message("Not Found");
                 return Ok(None);
             }
 
-            progress_bar.set_style(progress::errored_progress_style());
+            progress_bar.set_style(pixi_progress::errored_progress_style());
             progress_bar.finish_with_message("404 not found");
             return Err(e).into_diagnostic();
         }
@@ -174,7 +173,7 @@ async fn fetch_repo_data_records_with_progress(
     };
 
     // Notify that we are deserializing
-    progress_bar.set_style(progress::deserializing_progress_style());
+    progress_bar.set_style(pixi_progress::deserializing_progress_style());
     progress_bar.set_message("Deserializing..");
 
     // Deserialize the data. This is a hefty blocking operation so we spawn it as a tokio blocking
@@ -186,7 +185,7 @@ async fn fetch_repo_data_records_with_progress(
     .await
     {
         Ok(Ok(repodata)) => {
-            progress_bar.set_style(progress::finished_progress_style());
+            progress_bar.set_style(pixi_progress::finished_progress_style());
             let is_cache_hit = matches!(
                 result.cache_result,
                 fetch::CacheResult::CacheHit | fetch::CacheResult::CacheHitAfterFetch
@@ -195,7 +194,7 @@ async fn fetch_repo_data_records_with_progress(
             Ok(Some(repodata))
         }
         Ok(Err(err)) => {
-            progress_bar.set_style(progress::errored_progress_style());
+            progress_bar.set_style(pixi_progress::errored_progress_style());
             progress_bar.finish_with_message("Error");
             Err(err).into_diagnostic()
         }
@@ -204,7 +203,7 @@ async fn fetch_repo_data_records_with_progress(
                 std::panic::resume_unwind(panic);
             }
             Err(_) => {
-                progress_bar.set_style(progress::errored_progress_style());
+                progress_bar.set_style(pixi_progress::errored_progress_style());
                 progress_bar.finish_with_message("Cancelled..");
                 // Since the task was cancelled most likely the whole async stack is being cancelled.
                 Err(miette::miette!("cancelled"))

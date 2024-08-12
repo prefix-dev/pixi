@@ -9,12 +9,9 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{
-    config::{home_path, Config},
-    prefix::Prefix,
-    repodata,
-    utils::reqwest::build_reqwest_clients,
-};
+use crate::{prefix::Prefix, repodata};
+use pixi_config::{home_path, Config};
+use pixi_utils::reqwest::build_reqwest_clients;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);

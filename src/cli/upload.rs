@@ -12,7 +12,7 @@ use rattler_networking::AuthenticationMiddleware;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use crate::progress;
+use pixi_progress;
 
 /// Upload a conda package
 ///
@@ -61,7 +61,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let progress_bar = indicatif::ProgressBar::new(filesize)
         .with_prefix("Uploading")
-        .with_style(progress::default_bytes_style());
+        .with_style(pixi_progress::default_bytes_style());
 
     let reader_stream = ReaderStream::new(file)
         .inspect_ok(move |bytes| {

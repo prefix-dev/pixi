@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -7,8 +8,10 @@ use std::{
 };
 
 use itertools::Either;
+use pixi_consts::consts;
 use pixi_manifest::{
-    self as manifest, EnvironmentName, Feature, FeatureName, SystemRequirements, Task, TaskName,
+    self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
+    HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -16,7 +19,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{consts, project::has_features::HasFeatures, Project};
+use crate::{project::HasProjectRef, Project};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -91,7 +94,7 @@ impl<'p> Environment<'p> {
     /// Returns the manifest definition of this environment. See the
     /// documentation of [`Environment`] for an overview of the difference
     /// between [`manifest::Environment`] and [`Environment`].
-    pub fn manifest(&self) -> &'p manifest::Environment {
+    pub fn environment_manifest(&self) -> &'p manifest::Environment {
         self.environment
     }
 
@@ -244,10 +247,10 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.features()
             .filter_map(|f| f.activation_env(platform))
-            .fold(HashMap::new(), |mut acc, env| {
+            .fold(IndexMap::new(), |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
                 acc
             })
@@ -272,12 +275,24 @@ impl<'p> Environment<'p> {
     }
 }
 
-impl<'p> HasFeatures<'p> for Environment<'p> {
+impl<'p> HasProjectRef<'p> for Environment<'p> {
+    fn project(&self) -> &'p Project {
+        self.project
+    }
+}
+
+impl<'p> HasManifestRef<'p> for Environment<'p> {
+    fn manifest(&self) -> &'p Manifest {
+        &self.project().manifest
+    }
+}
+
+impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+        let manifest = self.manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
-            self.project
-                .manifest
+            manifest
                 .parsed
                 .features
                 .get(&FeatureName::Named(feature_name.clone()))
@@ -287,13 +302,8 @@ impl<'p> HasFeatures<'p> for Environment<'p> {
         if self.environment.no_default_feature {
             Either::Right(environment_features)
         } else {
-            Either::Left(environment_features.chain([self.project.manifest.default_feature()]))
+            Either::Left(environment_features.chain([self.manifest().default_feature()]))
         }
-    }
-
-    /// Returns the project this environment belongs to.
-    fn project(&self) -> &'p Project {
-        self.project
     }
 }
 
@@ -309,9 +319,9 @@ mod tests {
 
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_manifest::CondaDependencies;
 
     use super::*;
-    use crate::project::CondaDependencies;
 
     #[test]
     fn test_default_channels() {
@@ -423,7 +433,7 @@ mod tests {
     fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 

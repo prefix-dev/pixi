@@ -9,11 +9,13 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use super::util::IndicatifWriter;
-use crate::{progress, progress::global_multi_progress};
+use pixi_progress;
+use pixi_progress::global_multi_progress;
+use pixi_utils::indicatif::IndicatifWriter;
 
 pub mod add;
 pub mod clean;
+pub mod cli_config;
 pub mod completion;
 pub mod config;
 mod exec;
@@ -39,7 +41,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.26.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.27.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -238,7 +240,7 @@ pub async fn execute() -> miette::Result<()> {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
         .with_target(pixi_level >= LevelFilter::INFO)
-        .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
+        .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();
 
     cfg_if::cfg_if! {

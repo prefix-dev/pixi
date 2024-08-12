@@ -18,12 +18,11 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{
-    config::{self, Config, ConfigCli},
-    prefix::Prefix,
-    progress::{await_in_progress, global_multi_progress, wrap_in_progress},
-    utils::{reqwest::build_reqwest_clients, PrefixGuard},
-};
+use crate::prefix::Prefix;
+use pixi_config::gateway::from_pixi_config;
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug, Default)]
@@ -92,7 +91,7 @@ impl EnvironmentHash {
 /// CLI entry point for `pixi runx`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let cache_dir = config::get_cache_dir().context("failed to determine cache directory")?;
+    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
@@ -158,7 +157,7 @@ pub async fn create_exec_prefix(
     let gateway = Gateway::builder()
         .with_cache_dir(cache_dir.join("repodata"))
         .with_client(client.clone())
-        .with_channel_config(rattler_repodata_gateway::ChannelConfig::from(config))
+        .with_channel_config(from_pixi_config(config))
         .finish();
 
     // Determine the specs to use for the environment
@@ -231,6 +230,7 @@ pub async fn create_exec_prefix(
 
     // Install the environment
     Installer::new()
+        .with_download_client(client.clone())
         .with_reporter(
             IndicatifReporter::builder()
                 .with_multi_progress(global_multi_progress())

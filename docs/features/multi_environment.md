@@ -443,13 +443,15 @@ Dev
 
     [feature.mlx]
     platforms = ["osx-arm64"]
+    # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+    system-requirements = {macos = "13.5"}
 
     [feature.mlx.tasks]
     train-model = "python train.py --mlx"
     evaluate-model = "python test.py --mlx"
 
     [feature.mlx.dependencies]
-    mlx = ">=0.5.0,<0.6.0"
+    mlx = ">=0.16.0,<0.17.0"
 
     [feature.cpu]
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]

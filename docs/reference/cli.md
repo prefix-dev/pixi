@@ -31,7 +31,7 @@ It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
-- `--pyproject`: Create a `pyproject.toml` manifest, rather than a `pixi.toml` manifest. Recommended for a python project.
+- `--format <FORMAT>`: Specify the format of the project file, either `pyproject` or `pixi`. [default: `pixi`]
 
 !!! info "Importing an environment.yml"
   When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
@@ -45,6 +45,8 @@ pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
 pixi init --import environment.yml
+pixi init --format pyproject
+pixi init --format pixi
 ```
 
 ## `add`
@@ -54,6 +56,7 @@ It will only add if the package with its version constraint is able to work with
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
 If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+
 - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
 - `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
 
@@ -61,7 +64,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 
 ##### Arguments
 
-1. `<SPECS>`: The package(s) to add, space separated. The version constraint is optional.
+1. `[SPECS]`: The package(s) to add, space separated. The version constraint is optional.
 
 ##### Options
 
@@ -75,26 +78,50 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
+- `--editable`: Specifies an editable dependency, only use in combination with `--pypi`.
 
 ```shell
-pixi add numpy
-pixi add numpy pandas "pytorch>=1.8"
-pixi add "numpy>=1.22,<1.24"
-pixi add --manifest-path ~/myproject/pixi.toml numpy
-pixi add --host "python>=3.9.0"
-pixi add --build cmake
-pixi add --pypi requests[security]
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
-pixi add --pypi "project @ file:///absolute/path/to/project"
-pixi add --platform osx-64 --build clang
-pixi add --no-install numpy
-pixi add --no-lockfile-update numpy
-pixi add --feature featurex numpy
+pixi add numpy # (1)!
+pixi add numpy pandas "pytorch>=1.8" # (2)!
+pixi add "numpy>=1.22,<1.24" # (3)!
+pixi add --manifest-path ~/myproject/pixi.toml numpy # (4)!
+pixi add --host "python>=3.9.0" # (5)!
+pixi add --build cmake # (6)!
+pixi add --platform osx-64 clang # (7)!
+pixi add --no-install numpy # (8)!
+pixi add --no-lockfile-update numpy # (9)!
+pixi add --feature featurex numpy # (10)!
+
+# Add a pypi dependency
+pixi add --pypi requests[security] # (11)!
+pixi add --pypi Django==5.1rc1 # (12)!
+pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
+pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
+pixi add --pypi "project @ file:///absolute/path/to/project" --editable # (17)!
 ```
 
+1. This will add the `numpy` package to the project with the latest available for the solved environment.
+2. This will add multiple packages to the project solving them all together.
+3. This will add the `numpy` package with the version constraint.
+4. This will add the `numpy` package to the project of the manifest file at the given path.
+5. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
+6. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
+7. This will add the `clang` package only for the `osx-64` platform.
+8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
+9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
+10. This will add the `numpy` package in the feature `featurex`.
+11. This will add the `requests` package as `pypi` dependency with the `security` extra.
+12. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
+13. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
+14. This will add the `boltons` package with the given `url` as `pypi` dependency.
+15. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
+16. This will add the `project` package with the given `file` url as `pypi` dependency.
+17. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
+
 !!! tip
-    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](reference/pixi_configuration#pinning-strategy).
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
     ```
     pixi config set pinning-strategy no-pin --global
     ```
@@ -127,18 +154,6 @@ pixi install --locked
 pixi install --environment lint
 pixi install -e lint
 ```
-
-To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
-This process will regenerate the lock file based on the dependencies defined in your manifest file:
-
-```sh
-rm pixi.lock && pixi install
-```
-
-This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
-
-In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
-This command will allow you to update the lock file directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
 
 ## `update`
 
@@ -291,6 +306,7 @@ If the project manifest is a `pyproject.toml`, removing a pypi dependency with t
 - `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
 - `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
 - `--no-install`: Don't install the environment, only remove the package from the lock-file and manifest.
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 
 ```shell
 pixi remove numpy
@@ -917,6 +933,7 @@ This command installs package(s) into its own environment and adds the binary to
 ##### Options
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
 
 ```shell
 pixi global install ruff
@@ -932,7 +949,16 @@ pixi global install python=3.9.*
 pixi global install "python [version='3.11.0', build_number=1]"
 pixi global install "python [version='3.11.0', build=he550d4f_1_cpython]"
 pixi global install python=3.11.0=h10a6764_1_cpython
+
+# Install for a specific platform, only useful on osx-arm64
+pixi global install --platform osx-64 ruff
 ```
+
+!!! tip
+    Running `osx-64` on Apple Silicon will install the Intel binary but run it using [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment)
+    ```
+    pixi global install --platform osx-64 ruff
+    ```
 
 After using global install, you can use the package you installed anywhere on your system.
 
@@ -970,6 +996,7 @@ This command upgrades a globally installed package (to the latest version by def
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
   Defaults to `conda-forge`. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: specify a platform that you want to upgrade the package for. (default: current platform)
 
 ```shell
 pixi global upgrade ruff

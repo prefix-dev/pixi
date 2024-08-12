@@ -4,7 +4,11 @@ use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config;
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter};
+use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
@@ -12,10 +16,10 @@ use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
 
-use crate::{
-    config, consts, fancy_display::FancyDisplay, progress::await_in_progress,
-    project::has_features::HasFeatures, task::TaskName, Project,
-};
+use crate::cli::cli_config::ProjectConfig;
+
+use crate::{task::TaskName, Project};
+use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 18;
 
@@ -31,9 +35,8 @@ pub struct Args {
     #[arg(long)]
     json: bool,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 }
 
 #[derive(Serialize)]
@@ -288,11 +291,11 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());
-        let cache_dir = config::get_cache_dir()?;
+        let cache_dir = pixi_config::get_cache_dir()?;
         await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
                 let env_size = env_dir.and_then(|env| dir_size(env).ok());
@@ -363,7 +366,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let config = project
         .map(|p| p.config().clone())
-        .unwrap_or_else(config::Config::load_global);
+        .unwrap_or_else(pixi_config::Config::load_global);
 
     let auth_file = config
         .authentication_override_file()
@@ -378,7 +381,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
-        cache_dir: Some(config::get_cache_dir()?),
+        cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,
         project_info,
@@ -388,12 +391,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     }
 }

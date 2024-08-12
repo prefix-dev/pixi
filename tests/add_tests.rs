@@ -1,16 +1,20 @@
 mod common;
 
-use crate::common::builders::HasDependencyConfig;
-use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::LockFileExt;
-use crate::common::PixiControl;
-use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
-use pixi::{DependencyType, HasFeatures};
-use pixi_manifest::SpecType;
+use std::str::FromStr;
+
+use pixi::{DependencyType, Project};
+use pixi_consts::consts;
+use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
-use std::str::FromStr;
 use tempfile::TempDir;
+use uv_normalize::ExtraName;
+
+use crate::common::{
+    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -49,17 +53,72 @@ async fn add_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==3"));
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==2"));
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==3"
+    ));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==2"
+    ));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
 
     // remove the package, using matchspec
     pixi.remove("rattler==1").await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
-    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+    assert!(!lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
 }
 
-/// Test that we get the union of all packages in the lockfile for the run, build and host
+/// Test adding a package with a specific channel
+#[tokio::test]
+async fn add_with_channel() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
+
+    pixi.add("conda-forge::py_rattler")
+        .without_lockfile_update()
+        .await
+        .unwrap();
+
+    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+        .without_lockfile_update()
+        .await
+        .unwrap();
+
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let mut specs = project
+        .default_environment()
+        .dependencies(Some(SpecType::Run), Some(Platform::current()))
+        .into_specs();
+
+    let (name, spec) = specs.next().unwrap();
+    assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
+    assert_eq!(
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
+        "conda-forge"
+    );
+
+    let (name, spec) = specs.next().unwrap();
+    assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
+    assert_eq!(
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
+        "https://prefix.dev/conda-forge"
+    );
+}
+
+/// Test that we get the union of all packages in the lockfile for the run,
+/// build and host
 #[tokio::test]
 async fn add_functionality_union() {
     let mut package_database = PackageDatabase::default();
@@ -120,13 +179,21 @@ async fn add_functionality_union() {
 
     // Lock file should contain all packages as well
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
     assert!(lock.contains_match_spec(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "rattler==1"
+    ));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
         "libcomputer==1.2"
     ));
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "libidk==3.1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "libidk==3.1"
+    ));
 }
 
 /// Test adding a package for a specific OS
@@ -163,7 +230,11 @@ async fn add_functionality_os() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::LinuxS390X, "rattler==1"));
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::LinuxS390X,
+        "rattler==1"
+    ));
 }
 
 /// Test the `pixi add --pypi` functionality
@@ -204,25 +275,49 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package to a target
-    pixi.add("pytest[all]")
+    // Add a pypi package to a target with extras
+    pixi.add("pytest[dev]==8.3.2")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
         .with_install(true)
         .await
         .unwrap();
 
+    // Read project from file and check if the dev extras are added.
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("pytest").unwrap() {
+                assert_eq!(spec.extras(), &[ExtraName::from_str("dev").unwrap()]);
+            }
+        });
+
+    // Test all the added packages are in the lock file
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pipx"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "pipx"
+    ));
     assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Osx64,
         pep508_rs::Requirement::from_str("boltons").unwrap()
     ));
     assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
+        consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
-        pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
+        pep508_rs::Requirement::from_str("pytest").unwrap(),
+    ));
+    // Test that the dev extras are added, mock is a test dependency of
+    // `pytest==8.3.2`
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        pep508_rs::Requirement::from_str("mock").unwrap(),
     ));
 
     // Add a pypi package with a git url
@@ -248,9 +343,21 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "requests"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "isort"));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "pytest"));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "requests"
+    ));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "isort"
+    ));
+    assert!(lock.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "pytest"
+    ));
 }
 
 /// Test the sdist support for pypi packages
@@ -275,4 +382,54 @@ async fn add_sdist_functionality() {
         .with_install(true)
         .await
         .unwrap();
+}
+
+#[rstest::rstest]
+#[tokio::test]
+async fn add_unconstrainted_dependency() {
+    // Create a channel with a single package
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foobar").await.unwrap();
+    pixi.add("bar").with_feature("unreferenced").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `foobar` package
+    let foo_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("foobar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    // Get the specs for the `bar` package
+    let bar_spec = project
+        .manifest()
+        .feature("unreferenced")
+        .expect("feature 'unreferenced' is missing")
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    insta::assert_snapshot!(format!("foobar = {foo_spec}\nbar = {bar_spec}"), @r###"
+    foobar = ">=1,<2"
+    bar = "*"
+    "###);
 }

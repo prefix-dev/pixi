@@ -1,4 +1,3 @@
-use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::HashMap;
@@ -9,8 +8,8 @@ use crate::lock_file::LockedPypiPackages;
 use crate::lock_file::{
     package_identifier, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
 };
-use crate::pypi_marker_env::determine_marker_environment;
-use crate::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 use distribution_types::{
     BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
@@ -39,9 +38,9 @@ use uv_configuration::{
 };
 use uv_git::GitResolver;
 
-use crate::utils::uv::{as_uv_req, pypi_options_to_index_locations};
 use pixi_manifest::pypi::pypi_options::PypiOptions;
 use pixi_manifest::{PyPiRequirement, SystemRequirements};
+use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
@@ -268,6 +267,7 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
         .iter()

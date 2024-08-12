@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::fancy_display::FancyDisplay;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;

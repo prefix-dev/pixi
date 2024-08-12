@@ -15,6 +15,7 @@ use crate::common::builders::{
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::task::{
     ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
 };
@@ -27,10 +28,10 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
-    consts,
     task::TaskName,
     Project, UpdateLockFileOptions,
 };
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};
@@ -193,7 +194,25 @@ impl PixiControl {
     }
 
     pub fn manifest_path(&self) -> PathBuf {
-        self.project_path().join(consts::PROJECT_MANIFEST)
+        // Either pixi.toml or pyproject.toml
+        if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        } else if self
+            .project_path()
+            .join(consts::PYPROJECT_MANIFEST)
+            .exists()
+        {
+            return self.project_path().join(consts::PYPROJECT_MANIFEST);
+        } else {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        }
+    }
+
+    /// Get the manifest contents
+    pub fn manifest_contents(&self) -> miette::Result<String> {
+        std::fs::read_to_string(self.manifest_path())
+            .into_diagnostic()
+            .context("failed to read manifest")
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
@@ -207,7 +226,8 @@ impl PixiControl {
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
-                pyproject: false,
+                format: None,
+                pyproject_toml: false,
             },
         }
     }
@@ -223,7 +243,8 @@ impl PixiControl {
                 channels: None,
                 platforms,
                 env_file: None,
-                pyproject: false,
+                format: None,
+                pyproject_toml: false,
             },
         }
     }
@@ -239,11 +260,15 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    specs,
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(specs),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
                 editable: false,
             },
         }
@@ -253,11 +278,15 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    vec![spec],
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
             },
         }
     }
@@ -266,7 +295,7 @@ impl PixiControl {
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::channel::add::Args {
+            args: project::channel::AddRemoveArgs {
                 channel: vec![],
                 no_install: true,
                 feature: None,
@@ -289,7 +318,10 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
+        args.project_config.manifest_path = args
+            .project_config
+            .manifest_path
+            .or_else(|| Some(self.manifest_path()));
 
         // Load the project
         let project = self.project()?;
@@ -360,7 +392,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 lock_file_usage: LockFileUsageArgs {
                     frozen: false,
                     locked: false,
@@ -377,7 +411,9 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
@@ -448,7 +484,9 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
-            manifest_path: Some(self.pixi.manifest_path()),
+            project_config: ProjectConfig {
+                manifest_path: Some(self.pixi.manifest_path()),
+            },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],
                 platform,

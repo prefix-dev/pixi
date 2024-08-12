@@ -3,7 +3,8 @@ mod common;
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
-use pixi::{HasFeatures, Project};
+use pixi::Project;
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -40,7 +41,7 @@ async fn add_channel() {
         .unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = Project::load(&pixi.manifest_path()).unwrap();
+    let project = Project::from_path(&pixi.manifest_path()).unwrap();
 
     // Our channel should be in the list of channels
     let local_channel =

@@ -1,6 +1,6 @@
 [project]
-name = "simple"
 channels = ["conda-forge"]
+name = "simple"
 platforms = ["win-64"]
 
 [dependencies]

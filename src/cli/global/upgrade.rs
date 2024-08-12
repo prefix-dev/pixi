@@ -12,11 +12,9 @@ use super::{
     common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
     install::globally_install_package,
 };
-use crate::{
-    cli::has_specs::HasSpecs,
-    config::Config,
-    progress::{global_multi_progress, long_running_progress_style},
-};
+use crate::cli::has_specs::HasSpecs;
+use pixi_config::Config;
+use pixi_progress::{global_multi_progress, long_running_progress_style};
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]

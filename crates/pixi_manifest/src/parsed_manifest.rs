@@ -1,32 +1,31 @@
-use crate::activation::Activation;
-use crate::environment::{Environment, EnvironmentIdx, EnvironmentName, TomlEnvironmentMapOrSeq};
-use crate::environments::Environments;
-use crate::error::TomlError;
-use crate::feature::{Feature, FeatureName};
-use crate::metadata::ProjectMetadata;
-use crate::pypi::pypi_options::PypiOptions;
-use crate::pypi::pypi_requirement::PyPiRequirement;
-use crate::pypi::pypi_requirement_types::PyPiPackageName;
-use crate::solve_group::SolveGroups;
-use crate::spec_type::SpecType;
-use crate::system_requirements::SystemRequirements;
-use crate::target::{Target, TargetSelector, Targets};
-use crate::task::{Task, TaskName};
-use crate::utils::PixiSpanned;
-use crate::{consts, nameless_matchspec::NamelessMatchSpecWrapper};
-use indexmap::map::IndexMap;
-use indexmap::Equivalent;
-use rattler_conda_types::NamelessMatchSpec;
+use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::PhantomData};
+
+use indexmap::{map::IndexMap, Equivalent};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
-use serde_with::serde_as;
-use serde_with::serde_derive::Deserialize;
-use std::collections::HashMap;
-use std::fmt;
-use std::hash::Hash;
-use std::iter::FromIterator;
-use std::marker::PhantomData;
+use serde_with::{serde_as, serde_derive::Deserialize};
 use toml_edit::DocumentMut;
+
+use crate::{
+    activation::Activation,
+    consts,
+    environment::{Environment, EnvironmentIdx, EnvironmentName, TomlEnvironmentMapOrSeq},
+    environments::Environments,
+    error::TomlError,
+    feature::{Feature, FeatureName},
+    metadata::ProjectMetadata,
+    pypi::{
+        pypi_options::PypiOptions, pypi_requirement::PyPiRequirement,
+        pypi_requirement_types::PyPiPackageName,
+    },
+    solve_group::SolveGroups,
+    spec_type::SpecType,
+    system_requirements::SystemRequirements,
+    target::{Target, TargetSelector, Targets},
+    task::{Task, TaskName},
+    utils::PixiSpanned,
+};
 
 /// Describes the contents of a parsed project manifest.
 #[derive(Debug, Clone)]
@@ -56,11 +55,6 @@ impl ParsedManifest {
         }
 
         Ok(manifest)
-    }
-
-    /// Set the project name.
-    pub(crate) fn set_project_name(&mut self, name: String) {
-        self.project.name = Some(name);
     }
 
     /// Returns the default feature.
@@ -128,13 +122,13 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             // #[serde(flatten)]
             // default_target: Target,
             #[serde(default, deserialize_with = "deserialize_package_map")]
-            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+            dependencies: IndexMap<PackageName, PixiSpec>,
 
             #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -267,7 +261,7 @@ impl<'de> Deserialize<'de> for ParsedManifest {
     }
 }
 
-struct PackageMap<'a>(&'a IndexMap<PackageName, NamelessMatchSpec>);
+struct PackageMap<'a>(&'a IndexMap<PackageName, PixiSpec>);
 
 impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
     type Value = PackageName;
@@ -291,14 +285,14 @@ impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
 
 pub fn deserialize_package_map<'de, D>(
     deserializer: D,
-) -> Result<IndexMap<PackageName, NamelessMatchSpec>, D::Error>
+) -> Result<IndexMap<PackageName, PixiSpec>, D::Error>
 where
     D: Deserializer<'de>,
 {
     struct PackageMapVisitor(PhantomData<()>);
 
     impl<'de> Visitor<'de> for PackageMapVisitor {
-        type Value = IndexMap<PackageName, NamelessMatchSpec>;
+        type Value = IndexMap<PackageName, PixiSpec>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(formatter, "a map")
@@ -309,14 +303,16 @@ where
             A: MapAccess<'de>,
         {
             let mut result = IndexMap::new();
-            let match_spec = NamelessMatchSpecWrapper {};
-            while let Some((package_name, match_spec)) = map
-                .next_entry_seed::<PackageMap, &NamelessMatchSpecWrapper>(
-                    PackageMap(&result),
-                    &match_spec,
-                )?
+            while let Some((package_name, spec)) =
+                map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<PixiSpec>)?
             {
-                result.insert(package_name, match_spec);
+                if spec.is_source() {
+                    return Err(serde::de::Error::custom(
+                        "source dependencies are not allowed yet",
+                    ));
+                }
+
+                result.insert(package_name, spec);
             }
 
             Ok(result)
@@ -328,7 +324,7 @@ where
 
 pub fn deserialize_opt_package_map<'de, D>(
     deserializer: D,
-) -> Result<Option<IndexMap<PackageName, NamelessMatchSpec>>, D::Error>
+) -> Result<Option<IndexMap<PackageName, PixiSpec>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -337,11 +333,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parsed_manifest::ParsedManifest;
-    use crate::TargetSelector;
     use insta::{assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
-    use rattler_conda_types::{Channel, Platform};
+    use rattler_conda_types::{NamedChannelOrUrl, Platform};
+
+    use crate::{parsed_manifest::ParsedManifest, TargetSelector};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -387,6 +383,8 @@ mod tests {
                 .unwrap()
                 .get("foo")
                 .unwrap()
+                .as_version_spec()
+                .unwrap()
                 .to_string(),
             "==3.4.5"
         );
@@ -395,6 +393,8 @@ mod tests {
                 .run_dependencies()
                 .unwrap()
                 .get("foo")
+                .unwrap()
+                .as_version_spec()
                 .unwrap()
                 .to_string(),
             "==1.2.3"
@@ -423,41 +423,69 @@ mod tests {
             .default()
             .run_dependencies()
             .unwrap();
-        let test_map_spec = deps.get("test_map").unwrap();
+        let test_map_spec = deps.get("test_map").unwrap().as_detailed().unwrap();
 
-        assert_eq!(test_map_spec.to_string(), ">=1.2.3 py34_0");
         assert_eq!(
-            test_map_spec
-                .channel
-                .as_deref()
-                .map(Channel::canonical_name),
-            Some(String::from("https://conda.anaconda.org/conda-forge/"))
+            test_map_spec.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
+        assert_eq!(test_map_spec.build.as_ref().unwrap().to_string(), "py34_0");
+        assert_eq!(
+            test_map_spec.channel,
+            Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
         );
 
-        assert_eq!(deps.get("test_build").unwrap().to_string(), "* bla");
-
-        let test_channel = deps.get("test_channel").unwrap();
-        assert_eq!(test_channel.to_string(), "*");
         assert_eq!(
-            test_channel.channel.as_deref().map(Channel::canonical_name),
-            Some(String::from("https://conda.anaconda.org/conda-forge/"))
+            deps.get("test_build")
+                .unwrap()
+                .as_detailed()
+                .unwrap()
+                .build
+                .as_ref()
+                .unwrap()
+                .to_string(),
+            "bla"
         );
 
-        let test_version = deps.get("test_version").unwrap();
-        assert_eq!(test_version.to_string(), ">=1.2.3");
-
-        let test_version_channel = deps.get("test_version_channel").unwrap();
-        assert_eq!(test_version_channel.to_string(), ">=1.2.3");
+        let test_channel = deps.get("test_channel").unwrap().as_detailed().unwrap();
         assert_eq!(
-            test_version_channel
-                .channel
-                .as_deref()
-                .map(Channel::canonical_name),
-            Some(String::from("https://conda.anaconda.org/conda-forge/"))
+            test_channel.channel,
+            Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
         );
 
-        let test_version_build = deps.get("test_version_build").unwrap();
-        assert_eq!(test_version_build.to_string(), ">=1.2.3 py34_0");
+        let test_version = deps.get("test_version").unwrap().as_detailed().unwrap();
+        assert_eq!(
+            test_version.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
+
+        let test_version_channel = deps
+            .get("test_version_channel")
+            .unwrap()
+            .as_detailed()
+            .unwrap();
+        assert_eq!(
+            test_version_channel.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
+        assert_eq!(
+            test_version_channel.channel,
+            Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
+        );
+
+        let test_version_build = deps
+            .get("test_version_build")
+            .unwrap()
+            .as_detailed()
+            .unwrap();
+        assert_eq!(
+            test_version_build.version.as_ref().unwrap().to_string(),
+            ">=1.2.3"
+        );
+        assert_eq!(
+            test_version_build.build.as_ref().unwrap().to_string(),
+            "py34_0"
+        );
     }
 
     #[test]
@@ -483,11 +511,32 @@ mod tests {
         let host_dependencies = default_target.host_dependencies().unwrap();
 
         assert_eq!(
-            run_dependencies.get("my-game").unwrap().to_string(),
+            run_dependencies
+                .get("my-game")
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
             "==1.0.0"
         );
-        assert_eq!(build_dependencies.get("cmake").unwrap().to_string(), "*");
-        assert_eq!(host_dependencies.get("sdl2").unwrap().to_string(), "*");
+        assert_eq!(
+            build_dependencies
+                .get("cmake")
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "*"
+        );
+        assert_eq!(
+            host_dependencies
+                .get("sdl2")
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "*"
+        );
     }
 
     #[test]

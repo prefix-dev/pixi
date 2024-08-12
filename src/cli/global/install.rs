@@ -2,17 +2,21 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord, RepoDataRecord,
+};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
@@ -23,13 +27,7 @@ use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
     load_package_records, BinDir, BinEnvDir,
 };
-use crate::{
-    cli::has_specs::HasSpecs,
-    config,
-    config::{Config, ConfigCli},
-    prefix::Prefix,
-    progress::{await_in_progress, global_multi_progress},
-};
+use crate::{cli::has_specs::HasSpecs, prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -261,7 +259,9 @@ pub(super) async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
-pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<bool> {
+pub fn prompt_user_to_continue(
+    packages: &IndexMap<PackageName, MatchSpec>,
+) -> miette::Result<bool> {
     let dangerous_packages = HashMap::from([
         ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
         ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
@@ -269,8 +269,8 @@ pub fn prompt_user_to_continue(packages: Vec<PackageName>) -> miette::Result<boo
 
     // Check if any of the packages are dangerous, and prompt the user to ask if
     // they want to continue, including the advice.
-    for package in packages {
-        if let Some(advice) = dangerous_packages.get(&package.as_normalized()) {
+    for (name, _spec) in packages {
+        if let Some(advice) = dangerous_packages.get(&name.as_normalized()) {
             let prompt = format!(
                 "{}\nDo you want to continue?",
                 console::style(advice).yellow()
@@ -295,24 +295,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
     let channels = if args.channel.is_empty() {
-        &config.default_channels
+        config.default_channels()
     } else {
-        &args.channel
+        args.channel.clone()
     }
     .iter()
     .cloned()
     .map(|c| c.into_channel(config.global_channel_config()))
     .collect_vec();
 
-    let package_names: Result<Vec<PackageName>, _> = args
-        .packages()
-        .iter()
-        .map(|s| PackageName::from_str(s))
-        .collect();
-    let package_names = package_names.into_diagnostic()?;
+    let specs = args.specs()?;
 
     // Warn user on dangerous package installations, interactive yes no prompt
-    if !prompt_user_to_continue(package_names)? {
+    if !prompt_user_to_continue(&specs)? {
         return Ok(());
     }
 
@@ -322,7 +317,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Install the package(s)
     let mut executables = vec![];
-    for (package_name, package_matchspec) in args.specs()? {
+    for (package_name, package_matchspec) in specs {
         let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let (prefix_package, scripts, _) = globally_install_package(
@@ -399,12 +394,14 @@ pub(super) async fn globally_install_package(
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    try_increase_rlimit_to_sensible();
+
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
-    let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
+    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
 
     let result = await_in_progress("creating virtual environment", |pb| {
         Installer::new()

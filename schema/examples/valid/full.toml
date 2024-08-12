@@ -1,46 +1,65 @@
 #:schema ./../../schema.json
 
 [project]
-name = "project"
-version = "0.1.0"
-description = "A project"
 authors = ["Author <author@bla.com>"]
+channel-priority = "strict"
 channels = ["stable"]
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge" }
+description = "A project"
+documentation = "https://docs.project.com"
+homepage = "https://project.com"
 license = "MIT"
 license-file = "LICENSE"
+name = "project"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 readme = "README.md"
-homepage = "https://project.com"
 repository = "https://github.com/author/project"
-documentation = "https://docs.project.com"
-conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge" }
-channel-priority = "strict"
+version = "0.1.0"
 
 [dependencies]
+detailed = { version = ">=1.2.3" }
+detailed-full = { version = ">=1.2.3", build = "py34_0", channel = "pytorch", subdir = "linux-64", md5 = "6f5902ac237024bdd0c176cb93063dc4", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
+detailed2 = { version = ">=1.2.3", build = "py34_0" }
+detailed3 = { version = ">=1.2.3", build-number = ">=1" }
+detailed4 = { version = ">=1.2.3", file-name = "package-1.2.3-py34_0.tar.bz2" }
+detailed5 = { version = ">=1.2.3", channel = "pytorch" }
+detailed6 = { version = ">=1.2.3", subdir = "linux-64" }
+detailed7 = { version = ">=1.2.3", md5 = "6f5902ac237024bdd0c176cb93063dc4" }
+detailed8 = { version = ">=1.2.3", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
+
+md5 = { url = "https://example.com/package-1.2.3-asdf2.conda", md5 = "6f5902ac237024bdd0c176cb93063dc4" }
+package_path = { path = "path/to/package-1.2.3-abc1.conda" }
+sha256 = { url = "https://example.com/package-1.2.3-asdf2.conda", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
+
+# In the future we'll add source dependencies
+#git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+#git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
+#git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
+#path = { path = "~/path/to/package" }
+#path2 = { path = "path/to/package" }
 
 [pypi-dependencies]
-testpypi = "*"
-testpypi1 = "*"
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
   "security",
   "tests",
 ] } # Using the map allows the user to add `extras`
+testpypi = "*"
+testpypi1 = "*"
+
 
 [host-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [build-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [tasks]
 build = "conda build ."
@@ -53,13 +72,17 @@ test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends-on = ["test5"] }
-test7 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}}
-test8 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}, clean-env = true}
-test9 = { cmd = "pytest", clean-env = false}
+test7 = { cmd = "pytest", cwd = "tests", depends-on = [
+  "test5",
+], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" } }
+test8 = { cmd = "pytest", cwd = "tests", depends-on = [
+  "test5",
+], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" }, clean-env = true }
+test9 = { cmd = "pytest", clean-env = false }
 [system-requirements]
-linux = "5.10"
-libc = { family = "glibc", version = "2.17" }
 cuda = "10.1"
+libc = { family = "glibc", version = "2.17" }
+linux = "5.10"
 
 [feature.test.dependencies]
 test = "*"
@@ -68,20 +91,20 @@ test = "*"
 test = "*"
 
 [feature.prod]
-channel-priority = "disabled"
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
+channel-priority = "disabled"
 
 [feature.lint]
 channel-priority = "strict"
 dependencies = { flake8 = "3.7.9", black = "19.10b0" }
 
 [environments]
-test = { features = ["test"], solve-group = "test" }
 prod = { features = ["test2"], solve-group = "test" }
+test = { features = ["test"], solve-group = "test" }
 
 [activation]
-scripts = ["activate.sh", "deactivate.sh"]
 env = { TEST = "bla" }
+scripts = ["activate.sh", "deactivate.sh"]
 
 [target.unix.activation.env]
 TEST2 = "bla2"
@@ -90,30 +113,30 @@ TEST2 = "bla2"
 scripts = ["env_setup.bat"]
 
 [target.linux-64.dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.osx-arm64.pypi-dependencies]
-testpypi = "*"
-testpypi1 = "*"
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
   "security",
   "tests",
 ] } # Using the map allows the user to add `extras`
+testpypi = "*"
+testpypi1 = "*"
 
 [target.osx-64.host-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.linux-64.build-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-package1 = { version = ">=1.2.3", build = "py34_0" }
 
 [target.linux-64.tasks]
 build = "conda build ."
@@ -134,11 +157,11 @@ channels = [
   { channel = "pytorch", priority = -1 },
 ] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
 dependencies = { cuda = "x.y.z", cudnn = "12.0" }
-pypi-dependencies = { torch = "==1.9.0" }
 platforms = ["linux-64", "osx-arm64"]
+pypi-dependencies = { torch = "==1.9.0" }
 system-requirements = { cuda = "12" }
-tasks = { warmup = { cmd = "python warmup.py", description = "Warmup the GPU" } }
 target.osx-arm64 = { dependencies = { mlx = "x.y.z" } }
+tasks = { warmup = { cmd = "python warmup.py", description = "Warmup the GPU" } }
 
 [feature.cuda2.activation]
 scripts = ["cuda_activation.sh"]

@@ -46,12 +46,13 @@ repos:
         entry: pixi run -e lint typos --write-changes --force-exclude
         language: system
         types: [text]
-  # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
-  - repo: https://github.com/DevinR528/cargo-sort
-    rev: 55ec89082466f6bb246d870a8d56d166a8e1f08b
-    hooks:
-      - id: cargo-sort
-        args: [ '--workspace', '--grouped' ]
+      # TOML format
+      - id: taplo
+        name: taplo
+        entry: pixi run -e lint toml-format
+        language: system
+        types: [file, toml]
+        exclude: "schema/examples/invalid"
   - repo: local
     hooks:
       - id: fmt
@@ -64,7 +65,7 @@ repos:
         name: clippy
         language: system
         types: [file, rust]
-        entry: cargo clippy --all-targets -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
+        entry: cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
         pass_filenames: false
       - id: test
         name: test

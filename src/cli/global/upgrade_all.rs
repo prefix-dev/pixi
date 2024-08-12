@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
-use crate::config::{Config, ConfigCli};
+use pixi_config::{Config, ConfigCli};
 
 use super::{list::list_global_packages, upgrade::upgrade_packages};
 
