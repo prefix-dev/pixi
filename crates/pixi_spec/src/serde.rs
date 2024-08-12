@@ -350,10 +350,7 @@ mod test {
         for input in examples {
             let spec: Result<PixiSpec, _> = serde_json::from_value(input.clone());
             let result = match spec {
-                Ok(spec) => {
-                    let spec = PixiSpec::from(spec);
-                    serde_json::to_value(&spec).unwrap()
-                }
+                Ok(spec) => serde_json::to_value(&spec).unwrap(),
                 Err(e) => {
                     json!({
                         "error": format!("ERROR: {e}")
