@@ -7,28 +7,30 @@ use std::{
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
+use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::common::{
-    channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, BinDir, BinEnvDir,
-};
+use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
 use crate::{
-    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
-    prefix::Prefix,
+    cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
+    rlimit::try_increase_rlimit_to_sensible,
 };
 use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -295,19 +297,49 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(channels.iter(), args.platform, &config).await?;
+    // Fetch the repodata
+    let (_, auth_client) = build_reqwest_clients(Some(&config));
+
+    let gateway = config.gateway(auth_client.clone());
+
+    let repodata = gateway
+        .query(
+            channels,
+            [args.platform, Platform::NoArch],
+            specs.values().cloned().collect_vec(),
+        )
+        .recursive(true)
+        .await
+        .into_diagnostic()?;
+
+    // Determine virtual packages of the current platform
+    let virtual_packages = VirtualPackage::current()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .iter()
+        .cloned()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
+    // Solve the environment
+    let solver_specs = specs.clone();
+    let solved_records = wrap_in_progress("solving environment", move || {
+        Solver.solve(SolverTask {
+            specs: solver_specs.values().cloned().collect_vec(),
+            virtual_packages,
+            ..SolverTask::from_iter(&repodata)
+        })
+    })
+    .into_diagnostic()
+    .context("failed to solve environment")?;
 
     // Install the package(s)
     let mut executables = vec![];
-    for (package_name, package_matchspec) in specs {
-        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
-
+    for (package_name, _) in specs {
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
-            records,
-            authenticated_client.clone(),
+            solved_records.clone(),
+            auth_client.clone(),
             args.platform,
         )
         .await?;
@@ -378,6 +410,8 @@ pub(super) async fn globally_install_package(
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    try_increase_rlimit_to_sensible();
+
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);

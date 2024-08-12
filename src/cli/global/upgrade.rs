@@ -4,17 +4,17 @@ use clap::Parser;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, Report};
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
+use miette::{Context, IntoDiagnostic, Report};
+use pixi_utils::reqwest::build_reqwest_clients;
+use rattler_conda_types::{Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform};
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::VirtualPackage;
 use tokio::task::JoinSet;
 
-use super::{
-    common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
-    install::globally_install_package,
-};
+use super::{common::find_installed_package, install::globally_install_package};
 use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 use pixi_config::Config;
-use pixi_progress::{global_multi_progress, long_running_progress_style};
+use pixi_progress::{global_multi_progress, long_running_progress_style, wrap_in_progress};
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -72,30 +72,89 @@ pub(super) async fn upgrade_packages(
         versions.insert(package_name, version);
     }
 
-    // Fetch sparse repodata across all channels
-    let all_channels = channels.values().chain(channel_cli.iter()).unique();
-    let (client, repodata) =
-        get_client_and_sparse_repodata(all_channels, platform, &config).await?;
+    // Fetch repodata across all channels
+
+    // Start by aggregating all channels that we need to iterate
+    let all_channels: Vec<Channel> = channels
+        .values()
+        .cloned()
+        .chain(channel_cli.iter().cloned())
+        .unique()
+        .collect();
+
+    // Now ask gateway to query repodata for these channels
+    let (_, authenticated_client) = build_reqwest_clients(Some(&config));
+    let gateway = config.gateway(authenticated_client.clone());
+    let repodata = gateway
+        .query(
+            all_channels,
+            [platform, Platform::NoArch],
+            specs.values().cloned().collect_vec(),
+        )
+        .recursive(true)
+        .await
+        .into_diagnostic()?;
 
     // Resolve environments in parallel
     let mut set: JoinSet<Result<_, Report>> = JoinSet::new();
+
+    // Create arcs for these structs
+    // as they later will be captured by closure
     let repodata = Arc::new(repodata);
+    let config = Arc::new(config);
+    let channel_cli = Arc::new(channel_cli);
     let channels = Arc::new(channels);
+
     for (package_name, package_matchspec) in specs {
-        let repodata = Arc::clone(&repodata);
-        let channels = Arc::clone(&channels);
+        let repodata = repodata.clone();
+        let config = config.clone();
         let channel_cli = channel_cli.clone();
+        let channels = channels.clone();
+
         set.spawn_blocking(move || {
             // Filter repodata based on channels specific to the package (and from the CLI)
-            let specific_repodata = repodata.iter().filter_map(|((c, _), v)| {
-                if channel_cli.contains(c) || channels.get(&package_name).unwrap() == c {
-                    Some(v)
-                } else {
-                    None
-                }
-            });
-            let records = load_package_records(package_matchspec.clone(), specific_repodata)?;
-            Ok((package_name, package_matchspec, records))
+            let specific_repodata: Vec<_> = repodata
+                .iter()
+                .filter_map(|repodata| {
+                    let filtered: Vec<_> = repodata
+                        .iter()
+                        .filter(|item| {
+                            let item_channel =
+                                Channel::from_str(&item.channel, config.global_channel_config())
+                                    .expect("should be parseable");
+                            channel_cli.contains(&item_channel)
+                                || channels
+                                    .get(&package_name)
+                                    .map_or(false, |c| c == &item_channel)
+                        })
+                        .collect();
+
+                    (!filtered.is_empty()).then_some(filtered)
+                })
+                .collect();
+
+            // Determine virtual packages of the current platform
+            let virtual_packages = VirtualPackage::current()
+                .into_diagnostic()
+                .context("failed to determine virtual packages")?
+                .iter()
+                .cloned()
+                .map(GenericVirtualPackage::from)
+                .collect();
+
+            // Solve the environment
+            let solver_matchspec = package_matchspec.clone();
+            let solved_records = wrap_in_progress("solving environment", move || {
+                Solver.solve(SolverTask {
+                    specs: vec![solver_matchspec],
+                    virtual_packages,
+                    ..SolverTask::from_iter(specific_repodata)
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment")?;
+
+            Ok((package_name, package_matchspec.clone(), solved_records))
         });
     }
 
@@ -136,7 +195,13 @@ pub(super) async fn upgrade_packages(
                 console::style("Updating").green(),
                 message
             ));
-            globally_install_package(&package_name, records, client.clone(), platform).await?;
+            globally_install_package(
+                &package_name,
+                records,
+                authenticated_client.clone(),
+                platform,
+            )
+            .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
             upgraded = true;
         }

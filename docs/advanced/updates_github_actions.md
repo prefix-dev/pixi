@@ -42,7 +42,7 @@ jobs:
       - name: Update lockfiles
         run: |
           set -o pipefail
-          pixi update --json --no-install | pixi exec pixi-diff-to-markdown >> diff.md
+          pixi update --json | pixi exec pixi-diff-to-markdown >> diff.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:
@@ -61,6 +61,10 @@ jobs:
 2. Runs at 05:00, on day 1 of the month
 
 In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -> "General").
+
+!!! tip
+
+    If you don't have any `pypi-dependencies`, you can use `pixi update --json --no-install` to speed up diff generation.
 
 ![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-light.png#only-light)
 ![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-dark.png#only-dark)
