@@ -14,8 +14,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
-    RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -26,10 +25,12 @@ use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
+use crate::{
+    cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-
-use crate::{cli::has_specs::HasSpecs, prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -39,17 +40,8 @@ pub struct Args {
     #[arg(num_args = 1..)]
     packages: Vec<String>,
 
-    /// Represents the channels from which the package will be installed.
-    /// Multiple channels can be specified by using this field multiple times.
-    ///
-    /// When specifying a channel, it is common that the selected channel also
-    /// depends on the `conda-forge` channel.
-    /// For example: `pixi global install --channel conda-forge --channel
-    /// bioconda`.
-    ///
-    /// By default, if no channel is provided, `conda-forge` is used.
-    #[clap(short, long)]
-    channel: Vec<NamedChannelOrUrl>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     #[clap(short, long, default_value_t = Platform::current())]
     platform: Platform,
@@ -296,15 +288,7 @@ pub fn prompt_user_to_continue(
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = if args.channel.is_empty() {
-        config.default_channels()
-    } else {
-        args.channel.clone()
-    }
-    .iter()
-    .cloned()
-    .map(|c| c.into_channel(config.global_channel_config()))
-    .collect_vec();
+    let channels = args.channels.resolve_from_config(&config);
 
     let specs = args.specs()?;
 
