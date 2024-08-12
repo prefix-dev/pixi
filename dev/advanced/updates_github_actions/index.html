@@ -1505,7 +1505,7 @@ and for Renovate in <a href="https://github.com/renovatebot/renovate/issues/2213
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="no">set -o pipefail</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="no">pixi update --json --no-install | pixi exec pixi-diff-to-markdown &gt;&gt; diff.md</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="no">pixi update --json | pixi exec pixi-diff-to-markdown &gt;&gt; diff.md</span>
 </span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create pull request</span>
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/create-pull-request@v6</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
@@ -1524,6 +1524,10 @@ and for Renovate in <a href="https://github.com/renovatebot/renovate/issues/2213
 <li>Runs at 05:00, on day 1 of the month</li>
 </ol>
 <p>In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -&gt; "General").</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>If you don't have any <code>pypi-dependencies</code>, you can use <code>pixi update --json --no-install</code> to speed up diff generation.</p>
+</div>
 <p><img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-light.png#only-light" />
 <img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-dark.png#only-dark" /></p>
 <h2 id="triggering-ci-in-automated-prs">Triggering CI in automated PRs<a class="headerlink" href="#triggering-ci-in-automated-prs" title="Permanent link">#</a></h2>
