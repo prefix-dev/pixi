@@ -1,6 +1,5 @@
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
-    path::Path,
     str::FromStr,
 };
 
@@ -10,14 +9,12 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_conda_types::{MatchSpec, PackageName};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::prefix::Prefix;
+use crate::{cli::global::common::solve_package_records, prefix::Prefix};
 use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_progress::{global_multi_progress, wrap_in_progress};
 use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
 
 use super::cli_config::ChannelsConfig;
@@ -84,14 +81,13 @@ impl EnvironmentHash {
 /// CLI entry point for `pixi runx`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
+    let (_, client) = build_reqwest_clients(Some(&config));
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
-    let (_, client) = build_reqwest_clients(Some(&config));
 
     // Create the environment to run the command in.
-    let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
+    let prefix = create_exec_prefix(&args, &config, &client).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation(&prefix).await?;
@@ -114,11 +110,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
-    cache_dir: &Path,
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
     let environment_name = EnvironmentHash::from_args(args, config).name();
+    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
 
     let mut guard = PrefixGuard::new(prefix.root())
@@ -164,32 +160,11 @@ pub async fn create_exec_prefix(
         args.specs.clone()
     };
 
-    // Get the repodata for the specs
-    let repodata = await_in_progress("fetching repodata for environment", |_| async {
-        gateway
-            .query(
-                args.channels.resolve_from_config(config),
-                [Platform::current(), Platform::NoArch],
-                specs.clone(),
-            )
-            .recursive(true)
-            .execute()
-            .await
-    })
-    .await
-    .into_diagnostic()
-    .context("failed to get repodata")?;
-
-    // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::current()
-        .into_diagnostic()
-        .context("failed to determine virtual packages")?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
     // Solve the environment
+    let channels = args.channels.resolve_from_config(config);
+    let solved_records = solve_package_records(&gateway, channels, specs.clone()).await?;
+
+    // Install the environment
     tracing::info!(
         "creating environment in {}",
         dunce::canonicalize(prefix.root())
@@ -197,17 +172,6 @@ pub async fn create_exec_prefix(
             .unwrap_or(prefix.root())
             .display()
     );
-    let solved_records = wrap_in_progress("solving environment", move || {
-        Solver.solve(SolverTask {
-            specs,
-            virtual_packages,
-            ..SolverTask::from_iter(&repodata)
-        })
-    })
-    .into_diagnostic()
-    .context("failed to solve environment")?;
-
-    // Install the environment
     Installer::new()
         .with_download_client(client.clone())
         .with_reporter(
