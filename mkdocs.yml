@@ -119,8 +119,9 @@ nav:
       - Tasks: features/advanced_tasks.md
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
-      - Pixi Global Manifest: features/pixi_global_manifest.md
       - Lockfile: features/lockfile.md
+  - Design Proposals:
+      - Pixi Global Manifest: design_proposals/pixi_global_manifest.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Info Command: advanced/explain_info_command.md

@@ -68,8 +68,9 @@ Update `PACKAGE` if `--package` is given. If not, all packages in environments `
 If the update leads to binaries being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
 If the update leads to binaries being added, it will offer for each binary individually to expose it.
+`--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
 ```
-pixi global update [--package PACKAGE] <ENV>...
+pixi global update [--package PACKAGE] [--assume-yes] <ENV>...
 ```
 
 Add one or more packages `PACKAGE` into an existing environment `ENV`.
@@ -249,9 +250,3 @@ In order to modify those with the `CLI` one would have to add an option `--manif
 
 It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
-
-
-### Non-interactive sessions
-
-Some commands involve interactivity.
-Let's find good ways how to allow usage with non-interactive sessions.
