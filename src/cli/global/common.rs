@@ -187,7 +187,7 @@ pub(super) async fn find_installed_package(
     find_designated_package(&prefix, package_name).await
 }
 
-/// Find the designated package in the given [`Prefix`]
+/// Find the designated package in the given prefix
 ///
 /// # Returns
 ///

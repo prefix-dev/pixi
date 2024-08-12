@@ -73,11 +73,7 @@ pub(super) async fn upgrade_packages(
             let channel = Channel::from_str(record.channel, &channel_config).into_diagnostic()?;
             let version = record.package_record.version.into_version();
 
-            let channels = channel_cli
-                .iter()
-                .cloned()
-                .chain(once(channel).into_iter())
-                .unique();
+            let channels = channel_cli.iter().cloned().chain(once(channel)).unique();
             let records = solve_package_records(
                 &gateway,
                 platform,
