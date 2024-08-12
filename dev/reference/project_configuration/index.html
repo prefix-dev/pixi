@@ -2483,6 +2483,14 @@ Only <code>.sh</code>, <code>.bash</code> and <code>.bat</code> files are suppor
 </span><span id="__span-39-8"><a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a>
 </span><span id="__span-39-9"><a id="__codelineno-39-9" name="__codelineno-39-9" href="#__codelineno-39-9"></a><span class="k">[target.linux-64.activation.env]</span>
 </span><span id="__span-39-10"><a id="__codelineno-39-10" name="__codelineno-39-10" href="#__codelineno-39-10"></a><span class="n">ENV_VAR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;linux-value&quot;</span>
+</span><span id="__span-39-11"><a id="__codelineno-39-11" name="__codelineno-39-11" href="#__codelineno-39-11"></a>
+</span><span id="__span-39-12"><a id="__codelineno-39-12" name="__codelineno-39-12" href="#__codelineno-39-12"></a><span class="c1"># You can also reference existing environment variables, but this has</span>
+</span><span id="__span-39-13"><a id="__codelineno-39-13" name="__codelineno-39-13" href="#__codelineno-39-13"></a><span class="c1"># to be done separately for unix-like operating systems and Windows</span>
+</span><span id="__span-39-14"><a id="__codelineno-39-14" name="__codelineno-39-14" href="#__codelineno-39-14"></a><span class="k">[target.unix.activation.env]</span>
+</span><span id="__span-39-15"><a id="__codelineno-39-15" name="__codelineno-39-15" href="#__codelineno-39-15"></a><span class="n">ENV_VAR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$OTHER_ENV_VAR/unix-value&quot;</span>
+</span><span id="__span-39-16"><a id="__codelineno-39-16" name="__codelineno-39-16" href="#__codelineno-39-16"></a>
+</span><span id="__span-39-17"><a id="__codelineno-39-17" name="__codelineno-39-17" href="#__codelineno-39-17"></a><span class="k">[target.win.activation.env]</span>
+</span><span id="__span-39-18"><a id="__codelineno-39-18" name="__codelineno-39-18" href="#__codelineno-39-18"></a><span class="n">ENV_VAR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;%OTHER_ENV_VAR%</span><span class="se">\\</span><span class="s2">windows-value&quot;</span>
 </span></code></pre></div>
 <h2 id="the-target-table">The <code>target</code> table<a class="headerlink" href="#the-target-table" title="Permanent link">#</a></h2>
 <p>The target table is a table that allows for platform specific configuration.
