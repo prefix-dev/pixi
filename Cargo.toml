@@ -298,6 +298,21 @@ winapi = { workspace = true, features = [
   "winnt",
 ] }
 
+[profile.dist]
+codegen-units = 1
+inherits = "release"
+lto = "fat"
+opt-level = 3
+strip = "symbols"
+
+[profile.ci]
+codegen-units = 16
+inherits = "release"
+lto = false
+opt-level = 3
+strip = false
+
+
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "glob"] }
 rstest = { workspace = true }
