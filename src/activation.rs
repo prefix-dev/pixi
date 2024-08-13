@@ -52,6 +52,16 @@ impl Project {
                     }),
             ),
             (String::from("PIXI_IN_SHELL"), String::from("1")),
+            // Keep INIT_CWD or set to current working directory.
+            (
+                String::from("INIT_CWD"),
+                std::env::var("INIT_CWD").unwrap_or_else(|_| {
+                    std::env::current_dir()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                }),
+            ),
         ]);
 
         if let Ok(exe_path) = std::env::current_exe() {
@@ -408,6 +418,29 @@ mod tests {
         // Make sure the user defined environment variables are sorted by input order.
         assert!(env.keys().position(|key| key == "ABC") < env.keys().position(|key| key == "ZZZ"));
         assert!(env.keys().position(|key| key == "ZZZ") < env.keys().position(|key| key == "ZAB"));
+    }
+
+    // Test INIT_CWD environment variable
+    #[test]
+    fn test_metadata_project_env_init_cwd() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = [""]
+        platforms = ["linux-64", "osx-64", "win-64"]
+        "#;
+        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let env = project.get_metadata_env();
+
+        assert_eq!(
+            env.get("INIT_CWD").unwrap(),
+            std::env::current_dir().unwrap().to_str().unwrap()
+        );
+
+        // Test if the INIT_CWD is set to the original value if it exists.
+        std::env::set_var("INIT_CWD", "hoi");
+        let env = project.get_metadata_env();
+        assert_eq!(env.get("INIT_CWD").unwrap(), "hoi");
     }
 
     #[test]
