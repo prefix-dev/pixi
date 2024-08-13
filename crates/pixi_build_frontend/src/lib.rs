@@ -6,6 +6,7 @@ mod tool;
 
 use std::{path::PathBuf, sync::Arc};
 
+pub use builder::Builder;
 use miette::Context;
 use pixi_manifest::Dependencies;
 use pixi_spec::PixiSpec;
@@ -15,7 +16,7 @@ use rattler_conda_types::{
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
-use crate::{builder::Builder, protocol::Protocol, tool::ToolCache};
+use crate::{protocol::Protocol, tool::ToolCache};
 
 #[derive(Debug, Clone)]
 pub struct BackendOverrides {
