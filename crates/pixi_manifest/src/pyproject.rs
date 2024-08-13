@@ -336,6 +336,7 @@ mod tests {
         authors = [
             { name = "Author", email = "author@bla.com" }
         ]
+        dependencies = ["attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"]ck
 
         [tool.pixi.project]
         channels = ["stable"]
