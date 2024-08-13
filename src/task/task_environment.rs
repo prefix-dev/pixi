@@ -98,7 +98,9 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
 
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation function.
-    pub fn with_disambiguate_fn<F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>>(
+    pub(crate) fn with_disambiguate_fn<
+        F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>,
+    >(
         self,
         func: F,
     ) -> SearchEnvironments<'p, DisambiguateFn<F>> {
@@ -112,7 +114,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 
     /// Finds the task with the given name or returns an error that explains why the task could not
     /// be found.
-    pub fn find_task(
+    pub(crate) fn find_task(
         &self,
         name: TaskName,
         source: FindTaskSource<'p>,

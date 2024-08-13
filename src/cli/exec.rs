@@ -55,7 +55,7 @@ pub struct EnvironmentHash {
 }
 
 impl EnvironmentHash {
-    pub fn from_args(args: &Args, config: &Config) -> Self {
+    pub(crate) fn from_args(args: &Args, config: &Config) -> Self {
         Self {
             command: args
                 .command
@@ -73,7 +73,7 @@ impl EnvironmentHash {
     }
 
     /// Returns the name of the environment.
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();

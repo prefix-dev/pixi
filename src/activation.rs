@@ -32,7 +32,7 @@ pub enum CurrentEnvVarBehavior {
 
 impl Project {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+    pub(crate) fn get_metadata_env(&self) -> HashMap<String, String> {
         let mut map = HashMap::from_iter([
             (
                 format!("{PROJECT_PREFIX}ROOT"),
@@ -69,7 +69,7 @@ const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
 
 impl Environment<'_> {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub fn get_metadata_env(&self) -> IndexMap<String, String> {
+    pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
                 format!("{}:{}", self.project().name(), name)
@@ -95,7 +95,7 @@ impl Environment<'_> {
 /// This method will create an activator for the environment and add the activation scripts from the project.
 /// The activator will be created for the current platform and the default shell.
 /// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
-pub fn get_activator<'p>(
+pub(crate) fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
 ) -> Result<Activator<ShellEnum>, ActivationError> {
@@ -215,7 +215,7 @@ pub async fn run_activation(
 
 /// Get the environment variables that are statically generated from the project and the environment.
 /// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it.
-pub fn get_static_environment_variables<'p>(
+pub(crate) fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
 ) -> IndexMap<String, String> {
     // Get environment variables from the pixi project meta data
@@ -242,7 +242,7 @@ pub fn get_static_environment_variables<'p>(
 
 /// Get the environment variables that are set in the current shell
 /// and strip them down to the minimal set required to run a command.
-pub fn get_clean_environment_variables() -> HashMap<String, String> {
+pub(crate) fn get_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
 
     let unix_keys = if cfg!(unix) {

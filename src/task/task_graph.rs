@@ -79,7 +79,7 @@ impl<'p> TaskNode<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub fn full_command(&self) -> Option<String> {
+    pub(crate) fn full_command(&self) -> Option<String> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
@@ -128,7 +128,7 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 }
 
 impl<'p> TaskGraph<'p> {
-    pub fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Project {
         self.project
     }
 

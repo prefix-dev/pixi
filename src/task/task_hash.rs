@@ -21,7 +21,7 @@ impl From<String> for ComputationHash {
 }
 
 impl ComputationHash {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -109,7 +109,7 @@ impl TaskHash {
     }
 
     /// Computes a single hash for the task.
-    pub fn computation_hash(&self) -> ComputationHash {
+    pub(crate) fn computation_hash(&self) -> ComputationHash {
         let mut hasher = Xxh3::new();
         self.command.hash(&mut hasher);
         self.inputs.hash(&mut hasher);

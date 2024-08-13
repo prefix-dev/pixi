@@ -63,7 +63,7 @@ impl<'p> Eq for Environment<'p> {}
 
 impl<'p> Environment<'p> {
     /// Return new instance of Environment
-    pub fn new(project: &'p Project, environment: &'p manifest::Environment) -> Self {
+    pub(crate) fn new(project: &'p Project, environment: &'p manifest::Environment) -> Self {
         Self {
             project,
             environment,
@@ -71,18 +71,18 @@ impl<'p> Environment<'p> {
     }
 
     /// Returns true if this environment is the default environment.
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         self.environment.name == EnvironmentName::Default
     }
 
     /// Returns the name of this environment.
-    pub fn name(&self) -> &EnvironmentName {
+    pub(crate) fn name(&self) -> &EnvironmentName {
         &self.environment.name
     }
 
     /// Returns the solve group to which this environment belongs, or `None` if
     /// no solve group was specified.
-    pub fn solve_group(&self) -> Option<SolveGroup<'p>> {
+    pub(crate) fn solve_group(&self) -> Option<SolveGroup<'p>> {
         self.environment
             .solve_group
             .map(|solve_group_idx| SolveGroup {
@@ -94,7 +94,7 @@ impl<'p> Environment<'p> {
     /// Returns the manifest definition of this environment. See the
     /// documentation of [`Environment`] for an overview of the difference
     /// between [`manifest::Environment`] and [`Environment`].
-    pub fn environment_manifest(&self) -> &'p manifest::Environment {
+    pub(crate) fn environment_manifest(&self) -> &'p manifest::Environment {
         self.environment
     }
 
@@ -170,7 +170,7 @@ impl<'p> Environment<'p> {
 
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+    pub(crate) fn get_filtered_tasks(&self) -> HashSet<TaskName> {
         self.tasks(Some(self.best_platform()))
             .into_iter()
             .flat_map(|tasks| {
@@ -187,7 +187,7 @@ impl<'p> Environment<'p> {
     }
     /// Returns the task with the given `name` and for the specified `platform`
     /// or an `UnknownTask` which explains why the task was not available.
-    pub fn task(
+    pub(crate) fn task(
         &self,
         name: &TaskName,
         platform: Option<Platform>,
@@ -221,7 +221,7 @@ impl<'p> Environment<'p> {
     /// If you want to get the system requirements for this environment without
     /// taking the solve group into account, use the
     /// [`Self::local_system_requirements`] method.
-    pub fn system_requirements(&self) -> SystemRequirements {
+    pub(crate) fn system_requirements(&self) -> SystemRequirements {
         if let Some(solve_group) = self.solve_group() {
             solve_group.system_requirements()
         } else {
@@ -234,7 +234,7 @@ impl<'p> Environment<'p> {
     ///
     /// The activation scripts of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+    pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
@@ -247,7 +247,7 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
+    pub(crate) fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.features()
             .filter_map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {

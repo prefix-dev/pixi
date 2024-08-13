@@ -97,29 +97,31 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the name of the task or `None` if this is an anonymous task.
-    pub fn name(&self) -> Option<&str> {
+    pub(crate) fn name(&self) -> Option<&str> {
         self.name.as_ref().map(|name| name.as_str())
     }
 
     /// Returns the task description from the project.
-    pub fn task(&self) -> &Task {
+    pub(crate) fn task(&self) -> &Task {
         self.task.as_ref()
     }
 
     /// Returns any additional args to pass to the execution of the task.
-    pub fn additional_args(&self) -> &[String] {
+    pub(crate) fn additional_args(&self) -> &[String] {
         &self.additional_args
     }
 
     /// Returns the project in which this task is defined.
-    pub fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Project {
         self.project
     }
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
     /// an alias.
-    pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+    pub(crate) fn as_deno_script(
+        &self,
+    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let Some(task) = self.task.as_single_command() else {
             return Ok(None);
@@ -163,7 +165,7 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the working directory for this task.
-    pub fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
+    pub(crate) fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
         Ok(match self.task.working_directory() {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
             Some(cwd) => {
@@ -185,7 +187,7 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub fn full_command(&self) -> Option<String> {
+    pub(crate) fn full_command(&self) -> Option<String> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
@@ -198,7 +200,7 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns an object that implements [`Display`] which outputs the command
     /// of the wrapped task.
-    pub fn display_command(&self) -> impl Display + '_ {
+    pub(crate) fn display_command(&self) -> impl Display + '_ {
         ExecutableTaskConsoleDisplay { task: self }
     }
 
