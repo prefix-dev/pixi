@@ -3528,6 +3528,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_types"
+version = "0.1.0"
+dependencies = [
+ "rattler_conda_types",
+ "serde",
+ "serde_with",
+ "url",
+]
+
+[[package]]
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [
