@@ -1,12 +1,12 @@
 use std::{
     borrow::Borrow,
+    env,
     fmt::Formatter,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
 
 use manifest::Manifest;
-use miette::NamedSource;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
@@ -69,12 +69,23 @@ impl Project {
         Ok(Self::from_manifest(manifest))
     }
 
-    /// Discovers the project manifest file in path set by `PIXI_GLOBAL_MANIFEST`
-    /// or alternatively at `~/.pixi/`
+    /// Discovers the project manifest file in path set by `PIXI_GLOBAL_MANIFESTS`
+    /// or alternatively at `~/.pixi/manifests/pixi-global.toml`
     pub fn discover() -> miette::Result<Self> {
-        let project_toml = find_project_manifest();
+        // Retrieve the path from the environment variable
+        let manifest_path = env::var("PIXI_GLOBAL_MANIFESTS")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                // Default directory if the environment variable is not set
+                let mut default_dir = dirs::home_dir()?.join(".pixi/manifests");
+            })
+            .join("pixi-global.toml");
 
-        Self::from_path(&project_toml)
+        if manifest_path.exists() {
+            Self::from_path(&manifest_path)
+        } else {
+            miette::bail!("Manifest file not found at {}", manifest_path.display())
+        }
     }
 
     /// Loads a project from manifest file.
