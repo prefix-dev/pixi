@@ -88,7 +88,7 @@ struct PackageToOutput {
 }
 
 /// Get directory size
-pub fn get_dir_size<P>(path: P) -> std::io::Result<u64>
+pub(crate) fn get_dir_size<P>(path: P) -> std::io::Result<u64>
 where
     P: AsRef<std::path::Path>,
 {

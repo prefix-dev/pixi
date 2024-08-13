@@ -253,7 +253,7 @@ pub(super) async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
-pub fn prompt_user_to_continue(
+pub(crate) fn prompt_user_to_continue(
     packages: &IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<bool> {
     let dangerous_packages = HashMap::from([

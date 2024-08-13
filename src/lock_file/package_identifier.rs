@@ -19,7 +19,7 @@ pub struct PypiPackageIdentifier {
 impl PypiPackageIdentifier {
     /// Extracts the python packages that will be installed when the specified conda package is
     /// installed.
-    pub fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
+    pub(crate) fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
 
@@ -81,7 +81,7 @@ impl PypiPackageIdentifier {
     /// Tries to construct an instance from a generic PURL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub fn convert_from_purl(
+    pub(crate) fn convert_from_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Option<Self>, ConversionError> {
@@ -95,7 +95,7 @@ impl PypiPackageIdentifier {
     /// Constructs a new instance from a PyPI package URL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub fn from_pypi_purl(
+    pub(crate) fn from_pypi_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Self, ConversionError> {
@@ -120,7 +120,7 @@ impl PypiPackageIdentifier {
 
     /// Checks of a found pypi requirement satisfies with the information
     /// in this package identifier.
-    pub fn satisfies(&self, requirement: &pypi_types::Requirement) -> bool {
+    pub(crate) fn satisfies(&self, requirement: &pypi_types::Requirement) -> bool {
         // Verify the name of the package
         if self.name.as_normalized() != &requirement.name {
             return false;

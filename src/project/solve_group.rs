@@ -34,12 +34,12 @@ impl Hash for SolveGroup<'_> {
 
 impl<'p> SolveGroup<'p> {
     /// The name of the group
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         &self.solve_group.name
     }
 
     /// Returns the directory where this solve group stores its environment
-    pub fn dir(&self) -> PathBuf {
+    pub(crate) fn dir(&self) -> PathBuf {
         self.project
             .solve_group_environments_dir()
             .join(self.name())
@@ -47,7 +47,7 @@ impl<'p> SolveGroup<'p> {
 
     /// Returns an iterator over all the environments that are part of the
     /// group.
-    pub fn environments(
+    pub(crate) fn environments(
         &self,
     ) -> impl DoubleEndedIterator<Item = Environment<'p>> + ExactSizeIterator + 'p {
         self.solve_group.environments.iter().map(|env_idx| {
@@ -63,7 +63,7 @@ impl<'p> SolveGroup<'p> {
     /// requirements of all the environments that share the same solve
     /// group. If multiple environments specify a requirement for the same
     /// system package, the highest is chosen.
-    pub fn system_requirements(&self) -> SystemRequirements {
+    pub(crate) fn system_requirements(&self) -> SystemRequirements {
         self.local_system_requirements()
     }
 }

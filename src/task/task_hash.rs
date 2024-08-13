@@ -20,12 +20,6 @@ impl From<String> for ComputationHash {
     }
 }
 
-impl ComputationHash {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 impl Display for ComputationHash {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

@@ -11,7 +11,7 @@ pub struct Args {
     pub urls: bool,
 }
 
-pub fn execute(project: Project, args: Args) -> miette::Result<()> {
+pub(crate) fn execute(project: Project, args: Args) -> miette::Result<()> {
     let channel_config = project.channel_config();
     project
         .environments()
