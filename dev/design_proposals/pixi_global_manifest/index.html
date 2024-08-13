@@ -1117,6 +1117,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#discovery-via-environment-variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      Discovery via environment variable
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1663,6 +1672,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#discovery-via-environment-variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      Discovery via environment variable
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1866,6 +1884,9 @@ In order to modify those with the <code>CLI</code> one would have to add an opti
 </ul>
 <p>It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like <code>~/.pixi/global/manifests/pixi-global.toml</code></p>
+<h3 id="discovery-via-environment-variable">Discovery via environment variable<a class="headerlink" href="#discovery-via-environment-variable" title="Permanent link">#</a></h3>
+<p>In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a environment variable.
+That environment variable could be called <code>PIXI_GLOBAL_MANIFESTS</code>.</p>
 
 
 
