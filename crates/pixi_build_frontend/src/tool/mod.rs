@@ -30,7 +30,7 @@ impl SystemTool {
 
 impl From<SystemTool> for Tool {
     fn from(value: SystemTool) -> Self {
-        Self::System(value.into())
+        Self::System(value)
     }
 }
 

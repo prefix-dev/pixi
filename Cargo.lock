@@ -3504,21 +3504,26 @@ name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dashmap 6.0.1",
  "insta",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "miette 7.2.0",
  "pixi_consts",
  "pixi_manifest",
+ "pixi_spec",
  "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_solve",
  "regex",
  "rstest",
  "serde",
+ "serde_with",
  "serde_yaml",
+ "sha1",
  "thiserror",
  "tracing",
  "tracing-subscriber",
+ "url",
  "which",
 ]
 

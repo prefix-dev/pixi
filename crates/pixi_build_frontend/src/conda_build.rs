@@ -4,13 +4,21 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{MatchSpec, NoArchType, ParseStrictness::Strict, VersionWithSource};
+use pixi_manifest::Dependencies;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, NoArchType, PackageName,
+    ParseStrictness::{Lenient, Strict},
+    Platform, VersionWithSource,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use sha1::{Digest, Sha1};
 
 use crate::{
     tool::{IsolatedToolSpec, Tool, ToolSpec},
-    Metadata,
+    CondaMetadata, CondaMetadataRequest, CondaPackageMetadata,
 };
 
 #[derive(Debug, Clone)]
@@ -18,6 +26,7 @@ pub struct CondaBuildProtocol {
     _source_dir: PathBuf,
     recipe_dir: PathBuf,
     backend_spec: ToolSpec,
+    channel_config: ChannelConfig,
 }
 
 impl CondaBuildProtocol {
@@ -45,6 +54,15 @@ impl CondaBuildProtocol {
             _source_dir: source_dir.to_path_buf(),
             recipe_dir: recipe_dir.to_path_buf(),
             backend_spec,
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+        }
+    }
+
+    /// Sets the channel configuration used by this instance.
+    pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
+        Self {
+            channel_config,
+            ..self
         }
     }
 
@@ -54,7 +72,11 @@ impl CondaBuildProtocol {
     }
 
     /// Extract metadata from the recipe.
-    pub fn get_metadata(&self, backend: &Tool) -> miette::Result<Metadata> {
+    pub fn get_conda_metadata(
+        &self,
+        backend: &Tool,
+        request: &CondaMetadataRequest,
+    ) -> miette::Result<CondaMetadata> {
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
         let conda_render_executable = backend.executable().with_file_name("conda-render");
@@ -73,7 +95,13 @@ impl CondaBuildProtocol {
             // .arg("--verbose")
             // This is currently apparently broken in conda-build..
             // .arg("--use-channeldata")
-            .args(&["--override-channels", "--channel", "conda-forge"])
+            .arg("--override-channels")
+            .args(
+                request
+                    .channel_base_urls
+                    .iter()
+                    .flat_map(|url| ["--channel", url.as_str()]),
+            )
             .arg(&self.recipe_dir)
             .stderr(std::process::Stdio::inherit())
             .stdout(std::process::Stdio::piped())
@@ -97,12 +125,29 @@ impl CondaBuildProtocol {
         // Parse the output of conda-render.
         let rendered_recipes = extract_rendered_recipes(&stdout)?;
 
-        panic!("{:#?}", rendered_recipes);
+        let metadata = CondaMetadata {
+            packages: rendered_recipes
+                .into_iter()
+                .map(|(recipe, meta_yaml)| {
+                    convert_conda_render_output(recipe, &self.channel_config).with_context(|| {
+                        format!(
+                            "failed to extract metadata from conda-render output:\n{}",
+                            meta_yaml
+                        )
+                    })
+                })
+                .collect::<miette::Result<_>>()?,
+        };
+
+        Ok(metadata)
     }
 }
 
-/// Given output from `conda-render`, parse the rendered recipe.
-fn extract_rendered_recipes(rendered_recipe: &str) -> miette::Result<Vec<CondaRenderRecipe>> {
+/// Given output from `conda-render`, parse it into one or more
+/// [`CondaRenderRecipe`]s.
+fn extract_rendered_recipes(
+    rendered_recipe: &str,
+) -> miette::Result<Vec<(CondaRenderRecipe, &str)>> {
     static OUTPUT_REGEX: OnceLock<Regex> = OnceLock::new();
     let output_regex = OUTPUT_REGEX.get_or_init(|| {
         Regex::new(r#"(?sR)Hash contents:\r?\n-{14}\r?\n(.+?)-{10}\r?\nmeta.yaml:\r?\n-{10}\r?\n(.+?)(?:-{14}|$)"#)
@@ -121,14 +166,69 @@ fn extract_rendered_recipes(rendered_recipe: &str) -> miette::Result<Vec<CondaRe
         let hash = captures.get(1).unwrap().as_str().trim();
         let meta_yaml = captures.get(2).unwrap().as_str().trim();
         serde_yaml::from_str(meta_yaml)
-            .map(|recipe| CondaRenderRecipe {
-                hash_content: hash.to_string(),
-                recipe,
+            .map(|recipe| {
+                (
+                    CondaRenderRecipe {
+                        hash_content: hash.to_string(),
+                        recipe,
+                    },
+                    meta_yaml,
+                )
             })
             .into_diagnostic()
             .with_context(|| format!("failed to parse the rendered recipe:\n{meta_yaml}"))
     })
     .collect()
+}
+
+/// Convert a list of matchspecs into a map of [`PixiSpec`].
+fn dependencies_from_depends_vec(
+    depends: Vec<String>,
+    channel_config: &ChannelConfig,
+) -> miette::Result<Dependencies<PackageName, PixiSpec>> {
+    depends
+        .into_iter()
+        .filter_map(|dep| {
+            let spec = MatchSpec::from_str(&dep, Lenient);
+            spec.map(|spec| {
+                let (name, spec) = spec.into_nameless();
+                name.map(|name| {
+                    (
+                        name,
+                        PixiSpec::from_nameless_matchspec(spec, channel_config),
+                    )
+                })
+            })
+            .into_diagnostic()
+            .transpose()
+        })
+        .collect()
+}
+
+/// Converts a [`CondaRenderRecipe`] output into a [`CondaPackageMetadata`].
+fn convert_conda_render_output(
+    recipe: CondaRenderRecipe,
+    channel_config: &ChannelConfig,
+) -> miette::Result<CondaPackageMetadata> {
+    Ok(CondaPackageMetadata {
+        build: recipe.hash(),
+        name: recipe.recipe.package.name,
+        version: recipe.recipe.package.version,
+        build_number: recipe.recipe.build.number.unwrap_or(0),
+        subdir: if recipe.recipe.build.noarch.is_none() {
+            Platform::current()
+        } else {
+            Platform::NoArch
+        },
+        depends: dependencies_from_depends_vec(recipe.recipe.requirements.run, channel_config)?,
+        constraints: dependencies_from_depends_vec(
+            recipe.recipe.requirements.run_constrained,
+            channel_config,
+        )?,
+        license: recipe.recipe.about.license,
+        license_family: recipe.recipe.about.license_family,
+        noarch: recipe.recipe.build.noarch,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -137,23 +237,47 @@ struct CondaRenderRecipe {
     recipe: RenderedRecipe,
 }
 
+impl CondaRenderRecipe {
+    /// Determine the hash of the recipe. This is based on the user specified
+    /// hash or the hash computed from the hash content.
+    pub fn hash(&self) -> String {
+        // TODO: Verify if this logic is actually correct.
+
+        if let Some(hash) = &self.recipe.build.string {
+            return hash.clone();
+        }
+
+        let mut hasher = Sha1::new();
+        hasher.update(self.hash_content.as_bytes());
+        let result = hasher.finalize();
+
+        const HASH_LENGTH: usize = 7;
+
+        let res = format!("{:x}", result);
+        res[..HASH_LENGTH].to_string()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct RenderedRecipe {
     package: RenderedPackage,
     build: RenderedBuild,
     requirements: RenderedRequirements,
+    about: RenderedAbout,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RenderedPackage {
-    name: String,
+    name: PackageName,
     version: VersionWithSource,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 struct RenderedBuild {
+    #[serde_as(as = "Option<serde_with::PickFirst<(_, serde_with::DisplayFromStr)>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    number: Option<String>,
+    number: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     string: Option<String>,
     #[serde(default, skip_serializing_if = "NoArchType::is_none")]
@@ -162,7 +286,10 @@ struct RenderedBuild {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RenderedRequirements {
+    #[serde(default)]
     run: Vec<String>,
+    #[serde(default)]
+    run_constrained: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

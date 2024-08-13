@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use pixi_build_frontend::{BackendOverrides, BuildFrontend, BuildRequest};
-use rattler_conda_types::MatchSpec;
+use pixi_build_frontend::{BackendOverrides, BuildFrontend, BuildRequest, CondaMetadataRequest};
+use rattler_conda_types::{ChannelConfig, MatchSpec};
 
 /// CLI options for the build frontend. These are used to override values from
 /// a manifest to specify the build tool to use.
@@ -47,9 +47,11 @@ fn main() -> miette::Result<()> {
 
     let args = Args::parse();
 
+    let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
     // Construct a frontend, this could be a global instance in a real application.
     // It mainly stores caches.
-    let frontend = BuildFrontend::default();
+    let frontend = BuildFrontend::default().with_channel_config(channel_config);
 
     // Build a specific package.
     let builder = frontend.builder(BuildRequest {
@@ -58,7 +60,9 @@ fn main() -> miette::Result<()> {
     })?;
 
     // Request package metadata
-    let metadata = builder.get_metadata()?;
+    let metadata = builder.get_conda_metadata(&CondaMetadataRequest {
+        channel_base_urls: vec!["https://conda.anaconda.org/conda-forge".parse().unwrap()],
+    })?;
 
     dbg!(metadata);
 

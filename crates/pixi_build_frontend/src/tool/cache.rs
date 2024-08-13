@@ -1,5 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
-
+use dashmap::{DashMap, Entry};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 
@@ -10,14 +9,14 @@ use crate::tool::{SystemTool, Tool, ToolSpec};
 /// This is useful to ensure that if we need to build multiple packages that use
 /// the same tool, we can reuse their environments.
 pub struct ToolCache {
-    cache: RefCell<HashMap<ToolSpec, Tool>>,
+    cache: DashMap<ToolSpec, Tool>,
 }
 
 impl ToolCache {
     /// Construct a new tool cache.
     pub fn new() -> Self {
         Self {
-            cache: RefCell::new(HashMap::new()),
+            cache: DashMap::default(),
         }
     }
 
@@ -25,9 +24,10 @@ impl ToolCache {
     ///
     /// If the tool is not already cached, it will be created and cached.
     pub fn instantiate(&self, spec: &ToolSpec) -> miette::Result<Tool> {
-        if let Some(tool) = self.cache.borrow().get(spec) {
-            return Ok(tool.clone());
-        }
+        let cache_entry = match self.cache.entry(spec.clone()) {
+            Entry::Occupied(entry) => return Ok(entry.get().clone()),
+            Entry::Vacant(entry) => entry,
+        };
 
         let tool: Tool = match spec {
             ToolSpec::Isolated(spec) => {
@@ -48,7 +48,7 @@ impl ToolCache {
             }
         };
 
-        self.cache.borrow_mut().insert(spec.clone(), tool.clone());
+        cache_entry.insert(tool.clone());
         Ok(tool)
     }
 }

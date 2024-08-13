@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
-use crate::Metadata;
+use crate::{CondaMetadata, CondaMetadataRequest};
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
@@ -32,7 +32,7 @@ impl PixiProtocol {
     /// Discovers a pixi project in the given source directory.
     pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
-            let manifest = Manifest::from_path(&manifest_path)?;
+            let manifest = Manifest::from_path(manifest_path)?;
             return Ok(Some(Self::new(manifest)));
         }
         Ok(None)
@@ -44,7 +44,11 @@ impl PixiProtocol {
     }
 
     /// Extract metadata from the recipe.
-    pub fn get_metadata(&self, _backend: &Tool) -> miette::Result<Metadata> {
+    pub fn get_conda_metadata(
+        &self,
+        _backend: &Tool,
+        _request: &CondaMetadataRequest,
+    ) -> miette::Result<CondaMetadata> {
         todo!("extract metadata from pixi manifest")
     }
 }

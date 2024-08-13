@@ -1,4 +1,4 @@
-use crate::{protocol::Protocol, tool::Tool, Metadata};
+use crate::{protocol::Protocol, tool::Tool, CondaMetadata, CondaMetadataRequest};
 
 /// A statful object to communicate with a build backend and perform tasks.
 #[derive(Debug)]
@@ -18,7 +18,10 @@ impl Builder {
 
     /// Builds the package by invoking the tool and communicating with it
     /// through the backend protocol.
-    pub fn get_metadata(&self) -> miette::Result<Metadata> {
-        self.protocol.get_metadata(&self.tool)
+    pub fn get_conda_metadata(
+        &self,
+        request: &CondaMetadataRequest,
+    ) -> miette::Result<CondaMetadata> {
+        self.protocol.get_conda_metadata(&self.tool, request)
     }
 }

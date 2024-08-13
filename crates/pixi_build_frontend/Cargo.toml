@@ -19,19 +19,24 @@ clap = { workspace = true, features = [
   "usage",
   "wrap_help",
 ], optional = true }
+dashmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_solve = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
 serde_yaml = { workspace = true }
+sha1 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
+url = "2.5.0"
 which = { workspace = true }
 
 [dev-dependencies]
