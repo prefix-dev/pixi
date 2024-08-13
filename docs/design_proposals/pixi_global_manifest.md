@@ -1,5 +1,10 @@
 # Pixi Global Manifest
 
+!!! tip "Feedback wanted"
+
+    This document is work in progress, and community feedback is greatly appreciated.
+    Please share your thoughts at our [GitHub discussion](https://github.com/prefix-dev/pixi/discussions/1799).
+
 ## Motivation
 
 `pixi global` is currently limited to imperatively managing CLI packages.
