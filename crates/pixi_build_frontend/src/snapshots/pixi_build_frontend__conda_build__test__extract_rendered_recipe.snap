@@ -2,16 +2,20 @@
 source: crates/pixi_build_frontend/src/conda_build.rs
 expression: "&rendered_recipe"
 ---
-- hash_content: "{}"
-  recipe:
-    package:
-      name: pinject
-      version: 0.14.1
-    build:
-      number: "0"
-      noarch: python
-    requirements:
-      run:
-        - python >=3.4
-        - six >=1.7.3
-        - decorator >=4.3.0
+- - hash_content: "{}"
+    recipe:
+      package:
+        name: pinject
+        version: 0.14.1
+      build:
+        number: 0
+        noarch: python
+      requirements:
+        run:
+          - python >=3.4
+          - six >=1.7.3
+          - decorator >=4.3.0
+        run_constrained: []
+      about:
+        license: Apache-2.0
+  - "package:\r\n  name: pinject\r\n  version: 0.14.1\r\nsource:\r\n  sha256: 0f0a0b14f9df87a85b529a21cdaf530269b1f24fb303d418583a12bb53f69382\r\n  url: https://pypi.io/packages/source/p/pinject/pinject-0.14.1.tar.gz\r\nbuild:\r\n  noarch: python\r\n  number: '0'\r\n  script: C:\\\\Users\\\\zalms\\\\conda-bld\\\\pinject_1723465624118\\\\_h_env\\\\python.exe -m\r\n    pip install . -vv\r\nrequirements:\r\n  host:\r\n    - ca-certificates 2024.7.4 h56e8100_0\r\n    - libexpat 2.6.2 h63175ca_0\r\n    - tzdata 2024a h0c530f3_0\r\n    - ucrt 10.0.22621.0 h57928b3_0\r\n    - vc14_runtime 14.40.33810 ha82c5b3_20\r\n    - vc 14.3 h8a93ad2_20\r\n    - vs2015_runtime 14.40.33810 h3bf8584_20\r\n    - bzip2 1.0.8 h2466b09_7\r\n    - libffi 3.4.2 h8ffe710_5\r\n    - libsqlite 3.46.0 h2466b09_0\r\n    - libzlib 1.3.1 h2466b09_1\r\n    - openssl 3.3.1 h2466b09_2\r\n    - tk 8.6.13 h5226925_1\r\n    - xz 5.2.6 h8d14728_0\r\n    - python 3.12.5 h889d299_0_cpython\r\n    - setuptools 72.1.0 pyhd8ed1ab_0\r\n    - wheel 0.44.0 pyhd8ed1ab_0\r\n    - pip 24.2 pyhd8ed1ab_0\r\n  run:\r\n    - python >=3.4\r\n    - six >=1.7.3\r\n    - decorator >=4.3.0\r\ntest:\r\n  commands:\r\n    - pip check\r\n  imports:\r\n    - pinject\r\n  requires:\r\n    - pip\r\nabout:\r\n  home: https://github.com/google/pinject\r\n  license: Apache-2.0\r\n  license_file: LICENSE\r\n  summary: A pythonic dependency injection library\r\nextra:\r\n  copy_test_source_files: true\r\n  final: true\r\n  recipe-maintainers:\r\n    - baszalmstra"
