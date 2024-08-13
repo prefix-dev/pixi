@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     env,
     fmt::Formatter,
     path::{Path, PathBuf},
@@ -11,7 +10,10 @@ use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
+mod document;
+mod environments;
 mod manifest;
+mod parsed_manifest;
 
 /// The pixi global project, this main struct to interact with the pixi global project.
 /// This struct holds the `Manifest` and has functions to modify
@@ -69,10 +71,7 @@ impl Project {
         // Retrieve the path from the environment variable
         let manifest_path = env::var("PIXI_GLOBAL_MANIFESTS")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                // Default directory if the environment variable is not set
-                let mut default_dir = dirs::home_dir()?.join(".pixi/manifests");
-            })
+            .or_else(|_| Self::default_dir())?
             .join("pixi-global.toml");
 
         if manifest_path.exists() {
@@ -80,6 +79,15 @@ impl Project {
         } else {
             miette::bail!("Manifest file not found at {}", manifest_path.display())
         }
+    }
+
+    /// Get default dir for the pixi global manifest
+    fn default_dir() -> miette::Result<PathBuf> {
+        // If environment variable is not set, use default directory
+        let default_dir = dirs::home_dir()
+            .ok_or_else(|| miette::miette!("Could not get home directory"))?
+            .join(".pixi/manifests");
+        Ok(default_dir)
     }
 
     /// Loads a project from manifest file.
