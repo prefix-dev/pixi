@@ -1,13 +1,13 @@
 [project]
-name = "basic"
-version = "0.1.0"
-description = "Add a short description here"
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
+description = "Add a short description here"
+name = "basic"
 platforms = ["osx-arm64"]
+version = "0.1.0"
 
 [tasks]
 
 [host-dependencies]
-python = "3.12.*"
 pip = "24.*"
+python = "3.12.*"
