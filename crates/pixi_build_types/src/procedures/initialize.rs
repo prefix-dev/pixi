@@ -6,8 +6,8 @@ use std::path::PathBuf;
 #[serde(rename_all = "camelCase")]
 /// Parameters for the initialize request.
 pub struct InitializeParams {
-    /// The directory that the backend needs to operate on.
-    pub source_dir: PathBuf,
+    /// The manifest that the build backend should use.
+    pub manifest_path: PathBuf,
     /// The capabilities that the frontend provides.
     pub capabilities: FrontendCapabilities,
 }
