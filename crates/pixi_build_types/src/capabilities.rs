@@ -11,4 +11,4 @@ pub struct BackendCapabilities {
 
 #[derive(Debug, Serialize, Deserialize)]
 /// Capabilities that the frontend provides.
-pub struct FrontendCapabilities;
+pub struct FrontendCapabilities {}
