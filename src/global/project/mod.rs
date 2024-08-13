@@ -33,16 +33,10 @@ pub struct Project {
 
 impl Debug for Project {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Project")
+        f.debug_struct("Global Project")
             .field("root", &self.root)
             .field("manifest", &self.manifest)
             .finish()
-    }
-}
-
-impl Borrow<ParsedManifest> for Project {
-    fn borrow(&self) -> &ParsedManifest {
-        self.manifest.borrow()
     }
 }
 
