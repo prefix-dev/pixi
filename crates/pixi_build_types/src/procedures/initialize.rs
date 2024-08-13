@@ -17,5 +17,5 @@ pub struct InitializeParams {
 /// The result of the initialize request.
 pub struct InitializeResult {
     /// The capabilities that the backend provides.
-    capabilities: BackendCapabilities,
+    pub capabilities: BackendCapabilities,
 }
