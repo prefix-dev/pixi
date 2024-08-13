@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -7,6 +8,7 @@ use std::{
 };
 
 use itertools::Either;
+use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
@@ -18,7 +20,6 @@ use super::{
     SolveGroup,
 };
 use crate::{project::HasProjectRef, Project};
-use pixi_consts::consts;
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -246,10 +247,10 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.features()
             .filter_map(|f| f.activation_env(platform))
-            .fold(HashMap::new(), |mut acc, env| {
+            .fold(IndexMap::new(), |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
                 acc
             })
@@ -318,9 +319,9 @@ mod tests {
 
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_manifest::CondaDependencies;
 
     use super::*;
-    use pixi_manifest::CondaDependencies;
 
     #[test]
     fn test_default_channels() {
@@ -432,7 +433,7 @@ mod tests {
     fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 

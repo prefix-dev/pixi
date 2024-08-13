@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.26.1/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.27.1/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -13,7 +13,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.26.1/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.27.1/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -541,9 +541,21 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
+          "type": "string",
+          "minLength": 1
+        },
         "build": {
           "title": "Build",
           "description": "The build string of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
           "type": "string",
           "minLength": 1
         },
@@ -557,6 +569,60 @@
             "pytorch",
             "https://repo.prefix.dev/conda-forge"
           ]
+        },
+        "file-name": {
+          "title": "File-Name",
+          "description": "The file name of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "md5": {
+          "title": "Md5",
+          "description": "The md5 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "path": {
+          "title": "Path",
+          "description": "The path to the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "subdir": {
+          "title": "Subdir",
+          "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the package",
+          "type": "string",
+          "minLength": 1
         },
         "version": {
           "title": "Version",

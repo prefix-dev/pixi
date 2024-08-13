@@ -66,6 +66,12 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
 
+!!! tip "Special macOS behavior"
+    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
+    To support both, include both in your platforms list.
+    Fallback: If `osx-arm64` can't resolve, use `osx-64`.
+    Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+
 ### `version` (optional)
 
 The version of the project.
@@ -572,6 +578,14 @@ scripts = ["env_setup.bat"]
 
 [target.linux-64.activation.env]
 ENV_VAR = "linux-value"
+
+# You can also reference existing environment variables, but this has
+# to be done separately for unix-like operating systems and Windows
+[target.unix.activation.env]
+ENV_VAR = "$OTHER_ENV_VAR/unix-value"
+
+[target.win.activation.env]
+ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 ```
 
 ## The `target` table
@@ -648,7 +662,7 @@ This will create an environment called `test` that has `pytest` installed.
 The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
-- `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
+- `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).

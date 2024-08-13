@@ -2,7 +2,7 @@ use std::{borrow::Borrow, fmt::Display};
 
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
-use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
+use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
 use thiserror::Error;
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
@@ -24,8 +24,8 @@ pub enum DependencyError {
 pub enum RequirementConversionError {
     #[error("Invalid package name error")]
     InvalidPackageNameError(#[from] InvalidPackageNameError),
-    #[error("Failed to parse specification")]
-    ParseError(#[from] ParseMatchSpecError),
+    #[error("Failed to parse version")]
+    InvalidVersion(#[from] ParseVersionSpecError),
 }
 
 #[derive(Error, Debug, Clone, Diagnostic)]

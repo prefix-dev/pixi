@@ -26,6 +26,8 @@ SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
 
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
+Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
+Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
@@ -147,21 +149,37 @@ class MatchspecTable(StrictBaseModel):
         description="The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
     )
     build: NonEmptyStr | None = Field(None, description="The build string of the package")
+    build_number: NonEmptyStr | None = Field(
+        None,
+        alias="build-number",
+        description="The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
+    )
+    file_name: NonEmptyStr | None = Field(
+        None, alias="file-name", description="The file name of the package"
+    )
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
         examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
     )
+    subdir: NonEmptyStr | None = Field(
+        None, description="The subdir of the package, also known as platform"
+    )
+
+    path: NonEmptyStr | None = Field(None, description="The path to the package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
 
 
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
-
-
-# { version = "sdfds" extras = ["sdf"] }
-# { git = "sfds", rev = "fssd" }
-# { path = "asfdsf" }
-# { url = "asdfs" }
 
 
 class _PyPIRequirement(StrictBaseModel):

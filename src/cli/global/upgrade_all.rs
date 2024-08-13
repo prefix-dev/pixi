@@ -1,26 +1,19 @@
 use clap::Parser;
 use indexmap::IndexMap;
 
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{MatchSpec, Platform};
 
 use pixi_config::{Config, ConfigCli};
+
+use crate::cli::cli_config::ChannelsConfig;
 
 use super::{list::list_global_packages, upgrade::upgrade_packages};
 
 /// Upgrade all globally installed packages
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// Represents the channels from which to upgrade packages.
-    /// Multiple channels can be specified by using this field multiple times.
-    ///
-    /// When specifying a channel, it is common that the selected channel also
-    /// depends on the `conda-forge` channel.
-    /// For example: `pixi global upgrade-all --channel conda-forge --channel bioconda`.
-    ///
-    /// By default, if no channel is provided, `conda-forge` is used, the channel
-    /// the package was installed from will always be used.
-    #[clap(short, long)]
-    channel: Vec<NamedChannelOrUrl>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -45,5 +38,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    upgrade_packages(specs, config, &args.channel, args.platform).await
+    upgrade_packages(specs, config, &args.channels, args.platform).await
 }

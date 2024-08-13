@@ -21,7 +21,7 @@ In this tutorial, we will use the `pyproject.toml` format because it is the most
 Let's start out by making a directory and creating a new `pyproject.toml` file.
 
 ```shell
-pixi init pixi-py --pyproject
+pixi init pixi-py --format pyproject
 ```
 
 This gives you the following pyproject.toml:
@@ -236,6 +236,13 @@ Every environment in pixi is isolated but reuses files that are hard-linked from
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
 
 We can create the `default` and `test` environments based on our own `test` feature from the `optional-dependency`:
+
+```shell
+pixi project environment add default --solve-group default
+pixi project environment add test --feature test --solve-group default
+```
+
+Which results in:
 
 ```toml
 # Environments
