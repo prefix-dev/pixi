@@ -1,6 +1,6 @@
 use clap::Parser;
 
-mod common;
+pub mod common;
 mod install;
 mod list;
 mod remove;

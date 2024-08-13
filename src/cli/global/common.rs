@@ -1,7 +1,14 @@
 use std::path::PathBuf;
 
-use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, PackageName, PrefixRecord};
+use miette::{Context, IntoDiagnostic};
+use pixi_progress::{await_in_progress, wrap_in_progress};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    RepoDataRecord,
+};
+use rattler_repodata_gateway::Gateway;
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::VirtualPackage;
 
 use crate::{prefix::Prefix, repodata};
 use pixi_config::home_path;
@@ -110,6 +117,58 @@ pub(super) fn channel_name_from_prefix(
         .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
 }
 
+/// Solve package records from [`Gateway`] for the given package MatchSpec
+///
+/// # Returns
+///
+/// The package records (with dependencies records) for the given package
+/// MatchSpec
+pub async fn solve_package_records<AsChannel, ChannelIter>(
+    gateway: &Gateway,
+    platform: Platform,
+    channels: ChannelIter,
+    specs: Vec<MatchSpec>,
+) -> miette::Result<Vec<RepoDataRecord>>
+where
+    AsChannel: Into<Channel>,
+    ChannelIter: IntoIterator<Item = AsChannel>,
+{
+    // Get the repodata for the specs
+    let repodata = await_in_progress("fetching repodata for environment", |_| async {
+        gateway
+            .query(channels, [platform, Platform::NoArch], specs.clone())
+            .recursive(true)
+            .execute()
+            .await
+    })
+    .await
+    .into_diagnostic()
+    .context("failed to get repodata")?;
+
+    // Determine virtual packages of the current platform
+    // We cannot infer virtual_packages for another platform
+    let virtual_packages = VirtualPackage::current()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .iter()
+        .cloned()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
+    // Solve the environment
+    let solved_records = wrap_in_progress("solving environment", move || {
+        Solver.solve(SolverTask {
+            specs,
+            virtual_packages,
+            ..SolverTask::from_iter(&repodata)
+        })
+    })
+    .into_diagnostic()
+    .context("failed to solve environment")?;
+
+    Ok(solved_records)
+}
+
 /// Find the globally installed package with the given [`PackageName`]
 ///
 /// # Returns
@@ -128,7 +187,7 @@ pub(super) async fn find_installed_package(
     find_designated_package(&prefix, package_name).await
 }
 
-/// Find the designated package in the given [`Prefix`]
+/// Find the designated package in the given prefix
 ///
 /// # Returns
 ///
