@@ -21,7 +21,7 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
 pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
-use miette::{IntoDiagnostic, NamedSource};
+use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pixi_config::Config;
 use pixi_consts::consts;
@@ -38,10 +38,7 @@ pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    project::grouped_environment::GroupedEnvironment,
-};
+use crate::activation::{initialize_env_variables, CurrentEnvVarBehavior};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -206,12 +203,6 @@ impl Project {
         };
 
         Self::from_path(&project_toml)
-    }
-
-    /// Returns the source code of the project as [`NamedSource`].
-    /// Used in error reporting.
-    pub(crate) fn manifest_named_source(&self) -> NamedSource<String> {
-        NamedSource::new(self.manifest.file_name(), self.manifest.contents.clone())
     }
 
     /// Loads a project from manifest file.
@@ -481,31 +472,6 @@ impl Project {
             })
     }
 
-    /// Return the grouped environments, which are all solve-groups and the
-    /// environments that need to be solved.
-    pub(crate) fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
-        let mut environments = HashSet::new();
-        environments.extend(
-            self.environments()
-                .into_iter()
-                .filter(|env| env.solve_group().is_none())
-                .map(GroupedEnvironment::from),
-        );
-        environments.extend(
-            self.solve_groups()
-                .into_iter()
-                .map(GroupedEnvironment::from),
-        );
-        environments.into_iter().collect()
-    }
-
-    /// Returns true if the project contains any reference pypi dependencies.
-    /// Even if just `[pypi-dependencies]` is specified without any
-    /// requirements this will return true.
-    pub(crate) fn has_pypi_dependencies(&self) -> bool {
-        self.manifest.has_pypi_dependencies()
-    }
-
     /// Returns the reqwest client used for http networking
     pub(crate) fn client(&self) -> &reqwest::Client {
         &self.client_and_authenticated_client().0
@@ -616,11 +582,6 @@ impl Project {
     /// Returns the manifest of the project
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
-    }
-
-    /// Convert the project into its manifest
-    pub(crate) fn into_manifest(self) -> Manifest {
-        self.manifest
     }
 }
 

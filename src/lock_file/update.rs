@@ -656,7 +656,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
     /// Sets the io concurrency semaphore to use when updating environments.
     #[allow(unused)]
-    pub(crate) fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {
+    pub fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {
         Self {
             io_concurrency_limit: Some(io_concurrency_limit),
             ..self

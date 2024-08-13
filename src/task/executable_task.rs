@@ -106,11 +106,6 @@ impl<'p> ExecutableTask<'p> {
         self.task.as_ref()
     }
 
-    /// Returns any additional args to pass to the execution of the task.
-    pub(crate) fn additional_args(&self) -> &[String] {
-        &self.additional_args
-    }
-
     /// Returns the project in which this task is defined.
     pub(crate) fn project(&self) -> &'p Project {
         self.project

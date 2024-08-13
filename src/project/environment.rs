@@ -91,13 +91,6 @@ impl<'p> Environment<'p> {
             })
     }
 
-    /// Returns the manifest definition of this environment. See the
-    /// documentation of [`Environment`] for an overview of the difference
-    /// between [`manifest::Environment`] and [`Environment`].
-    pub(crate) fn environment_manifest(&self) -> &'p manifest::Environment {
-        self.environment
-    }
-
     /// Returns the directory where this environment is stored.
     pub fn dir(&self) -> std::path::PathBuf {
         self.project
