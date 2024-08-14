@@ -217,6 +217,7 @@ alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
