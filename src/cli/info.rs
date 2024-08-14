@@ -217,13 +217,17 @@ impl Display for Info {
             .config_locations
             .iter()
             .map(|p| p.to_string_lossy())
-            .join(", ");
+            .join(" ");
 
         writeln!(
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Config locations"),
-            config_locations
+            if config_locations.is_empty() {
+                "No config files found"
+            } else {
+                &config_locations
+            }
         )?;
 
         if let Some(pi) = self.project_info.as_ref() {
