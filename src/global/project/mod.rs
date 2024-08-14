@@ -146,7 +146,11 @@ mod tests {
 
     #[test]
     fn test_project_from_manifest() {
-        todo!();
+        let manifest_path: PathBuf = FilePath().fake();
+
+        let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
+        let project = Project::from_manifest(manifest);
+        assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
     #[test]
