@@ -138,7 +138,7 @@ impl Borrow<ParsedManifest> for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         let root = manifest

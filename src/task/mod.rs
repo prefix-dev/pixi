@@ -10,8 +10,8 @@ pub use pixi_manifest::{Task, TaskName};
 pub use task_hash::{ComputationHash, InputHashes, TaskHash};
 
 pub use executable_task::{
-    CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
-    TaskExecutionError,
+    get_task_env, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    RunOutput, TaskExecutionError,
 };
 pub use task_environment::{
     AmbiguousTask, FindTaskError, FindTaskSource, SearchEnvironments, TaskAndEnvironment,
