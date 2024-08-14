@@ -61,7 +61,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyReco
 
 impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
     /// Returns the record with the given name or `None` if no such record exists.
-    pub fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&D>
+    pub(crate) fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&D>
     where
         N: Borrow<Q>,
         Q: Hash + Eq,
@@ -70,7 +70,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
     }
 
     /// Returns the index of the record with the given name or `None` if no such record exists.
-    pub fn index_by_name<Q: ?Sized>(&self, key: &Q) -> Option<usize>
+    pub(crate) fn index_by_name<Q: ?Sized>(&self, key: &Q) -> Option<usize>
     where
         N: Borrow<Q>,
         Q: Hash + Eq,
@@ -78,29 +78,29 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
         self.by_name.get(key).copied()
     }
     /// Returns true if there are no records stored in this instance
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
 
     /// Returns the number of entries in the mapping.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.records.len()
     }
 
     /// Converts this instance into the internally stored records.
-    pub fn into_inner(self) -> Vec<D> {
+    pub(crate) fn into_inner(self) -> Vec<D> {
         self.records
     }
 
     /// Returns an iterator over the names of the records stored in this instance.
-    pub fn names(&self) -> impl Iterator<Item = &N> {
+    pub(crate) fn names(&self) -> impl Iterator<Item = &N> {
         // Iterate over the records to retain the index of the original record.
         self.records.iter().map(|r| r.name())
     }
 
     /// Constructs a new instance from an iterator of pypi records. If multiple records exist
     /// for the same package name an error is returned.
-    pub fn from_unique_iter<I: IntoIterator<Item = D>>(iter: I) -> Result<Self, Box<D>> {
+    pub(crate) fn from_unique_iter<I: IntoIterator<Item = D>>(iter: I) -> Result<Self, Box<D>> {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
         let mut by_name = HashMap::with_capacity(min_size);
@@ -122,7 +122,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
 
     /// Constructs a new instance from an iterator of repodata records. The records are
     /// deduplicated where the record with the highest version wins.
-    pub fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
+    pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
         let mut by_name = HashMap::with_capacity(min_size);
@@ -150,13 +150,13 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
 
 impl RepoDataRecordsByName {
     /// Returns the record that represents the python interpreter or `None` if no such record exists.
-    pub fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
+    pub(crate) fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
         self.records.iter().find(|record| is_python_record(*record))
     }
 
     /// Convert the records into a map of pypi package identifiers mapped to the records they were
     /// extracted from.
-    pub fn by_pypi_name(
+    pub(crate) fn by_pypi_name(
         &self,
     ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
         self.records

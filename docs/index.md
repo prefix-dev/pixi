@@ -78,7 +78,7 @@ Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-
 ### Fish
 
 ```fish
-echo 'pixi completion --shell | source' >> ~/.config/fish/completions/pixi.fish
+echo 'pixi completion --shell fish | source' > ~/.config/fish/completions/pixi.fish
 ```
 
 ### Nushell

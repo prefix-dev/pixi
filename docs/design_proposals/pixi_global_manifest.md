@@ -1,5 +1,10 @@
 # Pixi Global Manifest
 
+!!! tip "Feedback wanted"
+
+    This document is work in progress, and community feedback is greatly appreciated.
+    Please share your thoughts at our [GitHub discussion](https://github.com/prefix-dev/pixi/discussions/1799).
+
 ## Motivation
 
 `pixi global` is currently limited to imperatively managing CLI packages.
@@ -250,3 +255,9 @@ In order to modify those with the `CLI` one would have to add an option `--manif
 
 It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
+
+
+### Discovery via environment variable
+
+In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a environment variable.
+That environment variable could be called `PIXI_GLOBAL_MANIFESTS`.

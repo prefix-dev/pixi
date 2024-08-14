@@ -275,7 +275,7 @@ pub struct PackagesDiff {
 
 impl PackagesDiff {
     /// Returns true if the diff is empty.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
     }
 }
@@ -287,7 +287,7 @@ pub struct LockFileDiff {
 
 impl LockFileDiff {
     /// Determine the difference between two lock-files.
-    pub fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
+    pub(crate) fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
         let mut result = Self {
             environment: IndexMap::new(),
         };
@@ -425,12 +425,12 @@ impl LockFileDiff {
     }
 
     /// Returns true if the diff is empty.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.environment.is_empty()
     }
 
     // Format the lock-file diff.
-    pub fn print(&self) -> std::io::Result<()> {
+    pub(crate) fn print(&self) -> std::io::Result<()> {
         let mut writer = TabWriter::new(stdout());
         for (idx, (environment_name, environment)) in self
             .environment

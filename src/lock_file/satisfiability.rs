@@ -144,7 +144,7 @@ pub enum PlatformUnsat {
 impl PlatformUnsat {
     /// Returns true if this is a problem with pypi packages only. This means
     /// the conda packages are still considered valid.
-    pub fn is_pypi_only(&self) -> bool {
+    pub(crate) fn is_pypi_only(&self) -> bool {
         matches!(
             self,
             PlatformUnsat::UnsatisfiableRequirement(_, _)
@@ -364,7 +364,7 @@ enum Dependency {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub fn pypi_satifisfies_editable(
+pub(crate) fn pypi_satifisfies_editable(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
 ) -> bool {
@@ -403,7 +403,7 @@ fn seems_like_commit_sha(s: &str) -> bool {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub fn pypi_satifisfies_requirement(
+pub(crate) fn pypi_satifisfies_requirement(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
 ) -> bool {
@@ -486,7 +486,7 @@ pub fn pypi_satifisfies_requirement(
     }
 }
 
-pub fn verify_package_platform_satisfiability(
+pub(crate) fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_conda_packages: &RepoDataRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,

@@ -109,7 +109,7 @@ pub struct LockFileDerivedData<'p> {
 
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
-    pub fn write_to_disk(&self) -> miette::Result<()> {
+    pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.project.lock_file_path();
         self.lock_file
             .to_path(&lock_file_path)
@@ -350,7 +350,7 @@ impl<'p> UpdateContext<'p> {
     /// Returns a future that will resolve to the solved repodata records for
     /// the given environment group or `None` if the records do not exist
     /// and are also not in the process of being updated.
-    pub fn get_latest_group_repodata_records(
+    pub(crate) fn get_latest_group_repodata_records(
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
@@ -378,7 +378,7 @@ impl<'p> UpdateContext<'p> {
     /// Returns a future that will resolve to the solved pypi records for the
     /// given environment group or `None` if the records do not exist and
     /// are also not in the process of being updated.
-    pub fn get_latest_group_pypi_records(
+    pub(crate) fn get_latest_group_pypi_records(
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
@@ -401,7 +401,7 @@ impl<'p> UpdateContext<'p> {
     /// process of being updated.
     ///
     /// This function panics if the repodata records are still pending.
-    pub fn take_latest_repodata_records(
+    pub(crate) fn take_latest_repodata_records(
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
@@ -428,7 +428,7 @@ impl<'p> UpdateContext<'p> {
     /// of being updated.
     ///
     /// This function panics if the repodata records are still pending.
-    pub fn take_latest_pypi_records(
+    pub(crate) fn take_latest_pypi_records(
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
@@ -451,7 +451,7 @@ impl<'p> UpdateContext<'p> {
     }
 
     /// Get a list of conda prefixes that have been updated.
-    pub fn take_instantiated_conda_prefixes(
+    pub(crate) fn take_instantiated_conda_prefixes(
         &mut self,
     ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
         self.instantiated_conda_prefixes
@@ -472,7 +472,7 @@ impl<'p> UpdateContext<'p> {
     /// Returns a future that will resolve to the solved repodata records for
     /// the given environment or `None` if no task was spawned to
     /// instantiate the prefix.
-    pub fn get_conda_prefix(
+    pub(crate) fn get_conda_prefix(
         &self,
         environment: &GroupedEnvironment<'p>,
     ) -> Option<impl Future<Output = (Prefix, PythonStatus)>> {
@@ -614,7 +614,7 @@ pub struct UpdateContextBuilder<'p> {
 impl<'p> UpdateContextBuilder<'p> {
     /// The package cache to use during the update process. Prefixes might need
     /// to be instantiated to be able to solve pypi dependencies.
-    pub fn with_package_cache(self, package_cache: PackageCache) -> Self {
+    pub(crate) fn with_package_cache(self, package_cache: PackageCache) -> Self {
         Self {
             package_cache: Some(package_cache),
             ..self
@@ -624,19 +624,19 @@ impl<'p> UpdateContextBuilder<'p> {
     /// Defines if during the update-process it is allowed to create prefixes.
     /// This might be required to solve pypi dependencies because those require
     /// a python interpreter.
-    pub fn with_no_install(self, no_install: bool) -> Self {
+    pub(crate) fn with_no_install(self, no_install: bool) -> Self {
         Self { no_install, ..self }
     }
 
     /// Sets the current lock-file that should be used to determine the
     /// previously locked packages.
-    pub fn with_lock_file(self, lock_file: LockFile) -> Self {
+    pub(crate) fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
     }
 
     /// Explicitly set the environments that are considered out-of-date. Only
     /// these environments will be updated during the update process.
-    pub fn with_outdated_environments(
+    pub(crate) fn with_outdated_environments(
         self,
         outdated_environments: OutdatedEnvironments<'p>,
     ) -> Self {
@@ -647,7 +647,7 @@ impl<'p> UpdateContextBuilder<'p> {
     }
 
     /// Sets the maximum number of solves that are allowed to run concurrently.
-    pub fn with_max_concurrent_solves(self, max_concurrent_solves: usize) -> Self {
+    pub(crate) fn with_max_concurrent_solves(self, max_concurrent_solves: usize) -> Self {
         Self {
             max_concurrent_solves: Some(max_concurrent_solves),
             ..self
@@ -664,7 +664,7 @@ impl<'p> UpdateContextBuilder<'p> {
     }
 
     /// Construct the context.
-    pub fn finish(self) -> miette::Result<UpdateContext<'p>> {
+    pub(crate) fn finish(self) -> miette::Result<UpdateContext<'p>> {
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
@@ -857,7 +857,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub fn builder(project: &'p Project) -> UpdateContextBuilder<'p> {
+    pub(crate) fn builder(project: &'p Project) -> UpdateContextBuilder<'p> {
         UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -1948,7 +1948,7 @@ pub(crate) struct SolveProgressBar {
 }
 
 impl SolveProgressBar {
-    pub fn new(
+    pub(crate) fn new(
         pb: ProgressBar,
         platform: Platform,
         environment_name: GroupedEnvironmentName,
@@ -1965,24 +1965,24 @@ impl SolveProgressBar {
         Self { pb }
     }
 
-    pub fn start(&self) {
+    pub(crate) fn start(&self) {
         self.pb.reset_elapsed();
         self.reset_style()
     }
 
-    pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
+    pub(crate) fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
         self.pb.set_message(msg);
     }
 
-    pub fn inc(&self, n: u64) {
+    pub(crate) fn inc(&self, n: u64) {
         self.pb.inc(n);
     }
 
-    pub fn set_position(&self, n: u64) {
+    pub(crate) fn set_position(&self, n: u64) {
         self.pb.set_position(n)
     }
 
-    pub fn set_update_style(&self, total: usize) {
+    pub(crate) fn set_update_style(&self, total: usize) {
         self.pb.set_length(total as u64);
         self.pb.set_position(0);
         self.pb.set_style(
@@ -1993,7 +1993,7 @@ impl SolveProgressBar {
         );
     }
 
-    pub fn set_bytes_update_style(&self, total: usize) {
+    pub(crate) fn set_bytes_update_style(&self, total: usize) {
         self.pb.set_length(total as u64);
         self.pb.set_position(0);
         self.pb.set_style(
@@ -2013,7 +2013,7 @@ impl SolveProgressBar {
         );
     }
 
-    pub fn reset_style(&self) {
+    pub(crate) fn reset_style(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
@@ -2022,7 +2022,7 @@ impl SolveProgressBar {
         );
     }
 
-    pub fn finish(&self) {
+    pub(crate) fn finish(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
                 "  {} {{prefix:20!}} [{{elapsed_precise}}]",
@@ -2067,7 +2067,7 @@ struct GatewayProgressReporter {
 }
 
 impl GatewayProgressReporter {
-    pub fn new(pb: Arc<SolveProgressBar>) -> Self {
+    pub(crate) fn new(pb: Arc<SolveProgressBar>) -> Self {
         Self {
             inner: Mutex::new(InnerProgressState {
                 pb,

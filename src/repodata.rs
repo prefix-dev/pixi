@@ -213,7 +213,7 @@ async fn fetch_repo_data_records_with_progress(
 }
 
 /// Returns a friendly name for the specified channel.
-pub fn friendly_channel_name(channel: &Channel) -> String {
+pub(crate) fn friendly_channel_name(channel: &Channel) -> String {
     channel
         .name
         .as_ref()

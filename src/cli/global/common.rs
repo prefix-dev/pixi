@@ -83,7 +83,7 @@ impl BinEnvDir {
 /// # Returns
 ///
 /// The global binaries directory
-pub fn bin_dir() -> Option<PathBuf> {
+pub(crate) fn bin_dir() -> Option<PathBuf> {
     home_path().map(|path| path.join("bin"))
 }
 
@@ -92,7 +92,7 @@ pub fn bin_dir() -> Option<PathBuf> {
 /// # Returns
 ///
 /// The global binary environments directory
-pub fn bin_env_dir() -> Option<PathBuf> {
+pub(crate) fn bin_env_dir() -> Option<PathBuf> {
     home_path().map(|path| path.join("envs"))
 }
 
