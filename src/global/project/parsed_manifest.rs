@@ -35,9 +35,7 @@ struct ParsedEnvironment {
 
 #[cfg(test)]
 mod tests {
-    use insta::{assert_snapshot, assert_yaml_snapshot};
-    use itertools::Itertools;
-    use rattler_conda_types::{NamedChannelOrUrl, Platform};
+    use insta::assert_snapshot;
 
     use super::ParsedManifest;
 
