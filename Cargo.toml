@@ -314,6 +314,7 @@ strip = false
 
 
 [dev-dependencies]
+fake = "2.9.2"
 insta = { workspace = true, features = ["yaml", "glob"] }
 rstest = { workspace = true }
 serde_json = { workspace = true }
