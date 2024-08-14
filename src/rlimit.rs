@@ -39,7 +39,7 @@ pub(crate) fn try_increase_rlimit_to_sensible() {
 }
 
 #[cfg(win)]
-pub fn increase_rlimit_to_desired() {
+pub(crate) fn increase_rlimit_to_desired() {
     // On Windows, there is no need to increase the RLIMIT_NOFILE resource
     // limit.
 }

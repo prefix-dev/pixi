@@ -18,7 +18,7 @@ use pixi_manifest::FeaturesExt;
 /// <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
 ///
 /// The method also takes into account system requirements specified in the project manifest.
-pub fn get_minimal_virtual_packages(
+pub(crate) fn get_minimal_virtual_packages(
     platform: Platform,
     system_requirements: &SystemRequirements,
 ) -> Vec<VirtualPackage> {
@@ -74,7 +74,7 @@ pub fn get_minimal_virtual_packages(
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform. This method
     /// takes into account the system requirements specified in the project manifest.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
+    pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
     }
 }
@@ -112,7 +112,7 @@ pub enum VerifyCurrentPlatformError {
 }
 
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
-pub fn verify_current_platform_has_required_virtual_packages(
+pub(crate) fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
 ) -> Result<(), VerifyCurrentPlatformError> {
     let current_platform = environment.best_platform();

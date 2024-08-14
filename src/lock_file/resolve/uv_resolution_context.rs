@@ -22,7 +22,7 @@ pub struct UvResolutionContext {
 }
 
 impl UvResolutionContext {
-    pub fn from_project(project: &Project) -> miette::Result<Self> {
+    pub(crate) fn from_project(project: &Project) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             std::fs::create_dir_all(&uv_cache)

@@ -172,7 +172,7 @@ pub(crate) struct EnvironmentFile {
 /// Write information about the environment to a file in the environment
 /// directory. This can be useful for other tools that only know the environment
 /// directory to find the original project.
-pub fn write_environment_file(
+pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
@@ -231,7 +231,7 @@ pub enum LockFileUsage {
 
 impl LockFileUsage {
     /// Returns true if the lock-file should be updated if it is out of date.
-    pub fn allows_lock_file_updates(self) -> bool {
+    pub(crate) fn allows_lock_file_updates(self) -> bool {
         match self {
             LockFileUsage::Update => true,
             LockFileUsage::Locked | LockFileUsage::Frozen => false,
@@ -239,7 +239,7 @@ impl LockFileUsage {
     }
 
     /// Returns true if the lock-file should be checked if it is out of date.
-    pub fn should_check_if_out_of_date(self) -> bool {
+    pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked => true,
             LockFileUsage::Frozen => false,
@@ -444,7 +444,9 @@ pub enum PythonStatus {
 
 impl PythonStatus {
     /// Determine the [`PythonStatus`] from a [`Transaction`].
-    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
+    pub(crate) fn from_transaction(
+        transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    ) -> Self {
         match (
             transaction.current_python_info.as_ref(),
             transaction.python_info.as_ref(),
@@ -464,7 +466,7 @@ impl PythonStatus {
 
     /// Returns the info of the current situation (e.g. after the transaction
     /// completed).
-    pub fn current_info(&self) -> Option<&PythonInfo> {
+    pub(crate) fn current_info(&self) -> Option<&PythonInfo> {
         match self {
             PythonStatus::Changed { new, .. }
             | PythonStatus::Unchanged(new)
@@ -475,7 +477,7 @@ impl PythonStatus {
 
     /// Returns the location of the python interpreter relative to the root of
     /// the prefix.
-    pub fn location(&self) -> Option<&Path> {
+    pub(crate) fn location(&self) -> Option<&Path> {
         Some(&self.current_info()?.path)
     }
 }
