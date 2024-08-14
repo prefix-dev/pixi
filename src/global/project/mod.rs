@@ -14,6 +14,7 @@ use std::fmt::Debug;
 
 mod document;
 mod environment;
+mod errors;
 mod manifest;
 mod parsed_manifest;
 
@@ -111,6 +112,8 @@ mod tests {
     const SIMPLE_MANIFEST: &str = r#"   
         [envs.python.dependencies]
         python = "3.11.*"
+        [envs.python.exposed]
+        python = "python"
         "#;
 
     #[test]

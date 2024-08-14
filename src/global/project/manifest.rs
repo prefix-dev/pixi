@@ -2,6 +2,9 @@ use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, PackageName};
+use toml_edit::DocumentMut;
+
+use super::errors::TomlError;
 
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
 
@@ -35,7 +38,28 @@ impl Manifest {
 
     /// Create a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
-        todo!()
+        let contents = contents.into();
+        let parsed = ParsedManifest::from_toml_str(&contents);
+
+        let (manifest, document) = match parsed.and_then(|manifest| {
+            contents
+                .parse::<DocumentMut>()
+                .map(|doc| (manifest, doc))
+                .map_err(TomlError::from)
+        }) {
+            Ok(result) => result,
+            Err(e) => e.to_fancy("pixi-global.toml", &contents)?,
+        };
+
+        let source = ManifestSource(document);
+        let manifest = Self {
+            path: manifest_path.to_path_buf(),
+            contents,
+            document: source,
+            parsed: manifest,
+        };
+
+        Ok(manifest)
     }
 
     /// Adds an environment to the project.

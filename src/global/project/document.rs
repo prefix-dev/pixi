@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct ManifestSource(toml_edit::DocumentMut);
+pub(crate) struct ManifestSource(pub(crate) toml_edit::DocumentMut);
 
 impl fmt::Display for ManifestSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

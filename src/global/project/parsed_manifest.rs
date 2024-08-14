@@ -5,8 +5,8 @@ use serde_with::{serde_as, serde_derive::Deserialize};
 
 use super::environment::EnvironmentName;
 
+use super::errors::TomlError;
 use pixi_spec::PixiSpec;
-use toml_edit::TomlError;
 
 /// Describes the contents of a parsed global project manifest.
 #[serde_as]
@@ -14,6 +14,7 @@ use toml_edit::TomlError;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ParsedManifest {
     /// The environments the project can create.
+    #[serde(default)]
     envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
@@ -57,6 +58,8 @@ mod tests {
         [envs.python.dependencies]
         python = "*"
         PYTHON = "*"
+        [envs.python.exposed]
+        python = "python"
         "#;
         let manifest = ParsedManifest::from_toml_str(&contents);
 
