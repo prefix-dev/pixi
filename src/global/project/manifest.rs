@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
 
+use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
+
 /// Handles the project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format

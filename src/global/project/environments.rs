@@ -1,3 +1,5 @@
+use indexmap::IndexMap;
+
 /// The environments in the global project.
 #[derive(Debug, Clone, Default)]
 pub struct Environments {

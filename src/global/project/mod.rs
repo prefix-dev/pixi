@@ -11,6 +11,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
 mod document;
+mod environment;
 mod environments;
 mod manifest;
 mod parsed_manifest;

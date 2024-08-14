@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[derive(Debug, Clone)]
 pub struct ManifestSource(toml_edit::DocumentMut);
 
 impl fmt::Display for ManifestSource {
