@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
+use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
 
@@ -48,26 +49,12 @@ impl Manifest {
     }
 
     /// Add a matchspec to the manifest
-    pub fn add_dependency(
-        &mut self,
-        spec: &MatchSpec,
-        spec_type: SpecType,
-        platforms: &[Platform],
-        feature_name: &FeatureName,
-        overwrite_behavior: DependencyOverwriteBehavior,
-        channel_config: &ChannelConfig,
-    ) -> miette::Result<bool> {
+    pub fn add_dependency(&mut self, spec: &MatchSpec) -> miette::Result<bool> {
         todo!()
     }
 
     /// Removes a dependency based on `SpecType`.
-    pub fn remove_dependency(
-        &mut self,
-        dep: &PackageName,
-        spec_type: SpecType,
-        platforms: &[Platform],
-        feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    pub fn remove_dependency(&mut self, dep: &PackageName) -> miette::Result<()> {
         todo!()
     }
 }
