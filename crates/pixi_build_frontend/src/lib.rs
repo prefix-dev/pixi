@@ -1,21 +1,20 @@
+mod build_frontend;
 mod conda_build;
 mod jsonrpc;
 pub mod pixi;
 pub mod protocol;
+mod protocol_builder;
 mod tool;
 
-use std::{path::PathBuf, sync::Arc};
-
-use pixi_manifest::Dependencies;
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NoArchType, PackageName, Platform, VersionWithSource,
-};
-pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
-use url::Url;
+use std::path::PathBuf;
 
 pub use crate::protocol::Protocol;
-use crate::{protocol::ProtocolBuilder, tool::ToolCache};
+pub use build_frontend::{BuildFrontend, BuildFrontendError};
+use pixi_manifest::Dependencies;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{MatchSpec, NoArchType, PackageName, Platform, VersionWithSource};
+pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct BackendOverrides {
@@ -84,76 +83,4 @@ pub struct CondaPackageMetadata {
 pub struct CondaMetadataRequest {
     /// The base urls of the channels to use.
     pub channel_base_urls: Vec<Url>,
-}
-
-/// The frontend for building packages.
-pub struct BuildFrontend {
-    /// The cache for tools. This is used to avoid re-installing tools.
-    tool_cache: Arc<ToolCache>,
-
-    /// The channel configuration used by the frontend
-    channel_config: ChannelConfig,
-}
-
-impl Default for BuildFrontend {
-    fn default() -> Self {
-        Self {
-            tool_cache: Arc::new(ToolCache::new()),
-            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum BuildFrontendError {
-    /// Error while discovering the pixi.toml
-    #[error("Error while discovering the pixi.toml")]
-    DiscoveringManifest(#[from] protocol::DiscoveryError),
-    /// Error from the build protocol.
-    #[error("Error setting up frontend/backend communication")]
-    Protocol(#[from] protocol::FinishError),
-    /// Error discovering system-tool
-    #[error("Error discovering system-tool")]
-    ToolError(#[from] which::Error),
-}
-
-impl BuildFrontend {
-    /// Specify the channel configuration
-    pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
-        Self {
-            channel_config,
-            ..self
-        }
-    }
-
-    /// Returns the channel config of the frontend
-    pub fn channel_config(&self) -> &ChannelConfig {
-        &self.channel_config
-    }
-
-    /// Construcst a new [`Builder`] for the given request. This object can be
-    /// used to build the package.
-    pub async fn setup_protocol(
-        &self,
-        request: SetupRequest,
-    ) -> Result<Protocol, BuildFrontendError> {
-        // Determine the build protocol to use for the source directory.
-        let protocol = ProtocolBuilder::discover(&request.source_dir)?
-            .with_channel_config(self.channel_config.clone());
-
-        tracing::info!(
-            "discovered a {} source package at {}",
-            protocol.name(),
-            request.source_dir.display()
-        );
-
-        // Instantiate the build tool.
-        let tool_spec = request
-            .build_tool_overrides
-            .into_spec()
-            .unwrap_or(protocol.backend_tool());
-        let tool = self.tool_cache.instantiate(&tool_spec)?;
-
-        Ok(protocol.finish(tool).await?)
-    }
 }

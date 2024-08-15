@@ -5,9 +5,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_build_frontend::{BackendOverrides, BuildFrontend, CondaMetadataRequest, SetupRequest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
-use tracing_subscriber::{
-    fmt, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// CLI options for the build frontend. These are used to override values from
 /// a manifest to specify the build tool to use.
