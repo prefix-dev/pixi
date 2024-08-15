@@ -16,7 +16,7 @@ pub enum DiscoveryError {
     NotFound(String),
     #[error("loading manifest error '{0}'")]
     ManifestError(String),
-    #[error("unsupported format, unable to discover protocol")]
+    #[error("unable to discover communication protocol, currently expects pixi.toml or meta.yaml")]
     UnsupportedFormat,
 }
 

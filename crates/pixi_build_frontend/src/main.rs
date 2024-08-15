@@ -2,8 +2,9 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, WrapErr};
 use pixi_build_frontend::{BackendOverrides, BuildFrontend, CondaMetadataRequest, SetupRequest};
+use pixi_build_types::procedures::conda_metadata::{ChannelConfiguration, CondaMetadataParams};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -64,12 +65,19 @@ async fn main() -> miette::Result<()> {
             build_tool_overrides: args.builder_opts.into(),
         })
         .await
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .context("error during setup build-frontend")?;
 
     // Request package metadata
     let metadata = protocol
-        .get_conda_metadata(&CondaMetadataRequest {
-            channel_base_urls: vec!["https://conda.anaconda.org/conda-forge".parse().unwrap()],
+        .get_conda_metadata(&CondaMetadataParams {
+            target_platform: None,
+            channel_configuration: ChannelConfiguration {
+                base_url: "https://conda.anaconda.org".parse().unwrap(),
+            },
+            channel_base_urls: Some(vec!["https://conda.anaconda.org/conda-forge"
+                .parse()
+                .unwrap()]),
         })
         .await?;
 

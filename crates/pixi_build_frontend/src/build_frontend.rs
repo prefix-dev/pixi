@@ -27,13 +27,13 @@ impl Default for BuildFrontend {
 #[derive(thiserror::Error, Debug)]
 pub enum BuildFrontendError {
     /// Error while discovering the pixi.toml
-    #[error("Error while discovering the pixi.toml")]
+    #[error("error while discovering protocol from source directory")]
     DiscoveringManifest(#[from] protocol::DiscoveryError),
     /// Error from the build protocol.
-    #[error("Error setting up frontend/backend communication")]
+    #[error("error setting up frontend/backend communication")]
     Protocol(#[from] protocol::FinishError),
     /// Error discovering system-tool
-    #[error("Error discovering system-tool")]
+    #[error("error discovering system-tool")]
     ToolError(#[from] which::Error),
 }
 

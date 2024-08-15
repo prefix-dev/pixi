@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::OnceLock};
 
-use crate::{tool::Tool, CondaMetadata, CondaMetadataRequest, CondaPackageMetadata};
+use crate::{tool::Tool, CondaMetadata, CondaPackageMetadata};
 use miette::{Context, IntoDiagnostic};
 use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
 use pixi_manifest::Dependencies;
