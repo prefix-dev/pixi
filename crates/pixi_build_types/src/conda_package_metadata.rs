@@ -16,7 +16,7 @@ pub struct CondaPackageMetadata {
     pub build: String,
 
     /// The build number of the package.
-    pub build_number: u32,
+    pub build_number: u64,
 
     /// The subdir or platform
     pub subdir: Platform,
