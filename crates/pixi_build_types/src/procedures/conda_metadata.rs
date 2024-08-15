@@ -2,7 +2,7 @@ use rattler_conda_types::Platform;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{CondaPackageMetadata, CondaUrl};
+use crate::CondaPackageMetadata;
 
 /// Parameters for the condaMetadata request.
 #[derive(Debug, Serialize, Deserialize)]
@@ -12,7 +12,7 @@ pub struct CondaMetadataParams {
     pub target_platform: Option<Platform>,
 
     /// The channel base URLs that the metadata should be fetched from.
-    pub channel_base_urls: Option<Vec<CondaUrl>>,
+    pub channel_base_urls: Option<Vec<Url>>,
 
     /// The channel configuration to use to resolve dependencies.
     pub channel_configuration: ChannelConfiguration,

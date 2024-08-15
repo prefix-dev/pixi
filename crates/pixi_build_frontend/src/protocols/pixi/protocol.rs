@@ -1,21 +1,21 @@
 use std::path::PathBuf;
 
+use crate::{
+    jsonrpc::{stdio_transport, RpcParams},
+    tool::Tool,
+    CondaMetadata,
+};
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error as ClientError, TransportReceiverT, TransportSenderT},
 };
+use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
 use pixi_build_types::{
     procedures,
     procedures::initialize::{InitializeParams, InitializeResult},
     BackendCapabilities, FrontendCapabilities,
 };
 use rattler_conda_types::ChannelConfig;
-
-use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
-    tool::Tool,
-    CondaMetadata, CondaMetadataRequest,
-};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitializeError {
@@ -95,7 +95,7 @@ impl Protocol {
     /// Extract metadata from the recipe.
     pub async fn get_conda_metadata(
         &self,
-        _request: &CondaMetadataRequest,
+        _request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadata> {
         todo!("extract metadata from pixi manifest")
     }

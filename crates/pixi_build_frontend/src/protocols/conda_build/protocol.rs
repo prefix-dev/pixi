@@ -1,6 +1,8 @@
 use std::{path::PathBuf, sync::OnceLock};
 
+use crate::{tool::Tool, CondaMetadata, CondaMetadataRequest, CondaPackageMetadata};
 use miette::{Context, IntoDiagnostic};
+use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
 use pixi_manifest::Dependencies;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
@@ -11,8 +13,6 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sha1::{Digest, Sha1};
-
-use crate::{tool::Tool, CondaMetadata, CondaMetadataRequest, CondaPackageMetadata};
 
 pub struct Protocol {
     pub(super) channel_config: ChannelConfig,
@@ -25,7 +25,7 @@ impl Protocol {
     // Extract metadata from the recipe.
     pub fn get_conda_metadata(
         &self,
-        request: &CondaMetadataRequest,
+        request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadata> {
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
@@ -40,18 +40,19 @@ impl Protocol {
         // TODO: Properly pass channels
         // TODO: Setup --exclusive-config-files
 
+        let channels = request
+            .channel_base_urls
+            .iter()
+            .flatten()
+            .flat_map(|url| ["--channel", url.as_str()]);
+
         let output = conda_render_tool
             .command()
             // .arg("--verbose")
             // This is currently apparently broken in conda-build..
             // .arg("--use-channeldata")
             .arg("--override-channels")
-            .args(
-                request
-                    .channel_base_urls
-                    .iter()
-                    .flat_map(|url| ["--channel", url.as_str()]),
-            )
+            .args(channels)
             .arg(&self.recipe_dir)
             .stderr(std::process::Stdio::inherit())
             .stdout(std::process::Stdio::piped())

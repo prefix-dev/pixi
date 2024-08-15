@@ -1,3 +1,4 @@
+//! This module is the main entry
 use crate::protocol_builder::ProtocolBuilder;
 use crate::tool::ToolCache;
 use crate::{protocol, Protocol, SetupRequest};
