@@ -59,7 +59,7 @@ impl ProtocolBuilder {
     }
 
     pub async fn finish(self, tool: Tool) -> Result<Protocol, InitializeError> {
-        Protocol::new(self._manifest.path, self.channel_config, tool).await
+        Protocol::setup(self._manifest.path, self.channel_config, tool).await
     }
 }
 

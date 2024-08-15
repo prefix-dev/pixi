@@ -39,7 +39,7 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub(crate) async fn new(
+    pub(crate) async fn setup(
         manifest_path: PathBuf,
         channel_config: ChannelConfig,
         tool: Tool,
@@ -60,10 +60,10 @@ impl Protocol {
         // Construct a JSON-RPC client to communicate with the backend process.
         let (tx, rx) = stdio_transport(stdin, stdout);
 
-        Self::new_with_transport(manifest_path, channel_config, tx, rx).await
+        Self::setup_with_transport(manifest_path, channel_config, tx, rx).await
     }
 
-    pub async fn new_with_transport(
+    pub async fn setup_with_transport(
         manifest_path: PathBuf,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,

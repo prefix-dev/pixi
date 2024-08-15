@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_build_frontend::{BackendOverrides, BuildFrontend, BuildRequest, CondaMetadataRequest};
+use pixi_build_frontend::{BackendOverrides, BuildFrontend, CondaMetadataRequest, SetupRequest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use tracing_subscriber::{
     fmt, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
@@ -61,7 +61,7 @@ async fn main() -> miette::Result<()> {
 
     // Build a specific package.
     let protocol = frontend
-        .protocol(BuildRequest {
+        .setup_protocol(SetupRequest {
             source_dir: args.work_dir,
             build_tool_overrides: args.builder_opts.into(),
         })

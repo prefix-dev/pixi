@@ -27,7 +27,7 @@ pub struct BackendOverrides {
 }
 
 #[derive(Debug)]
-pub struct BuildRequest {
+pub struct SetupRequest {
     /// The source directory that contains the source package.
     pub source_dir: PathBuf,
 
@@ -133,7 +133,10 @@ impl BuildFrontend {
 
     /// Construcst a new [`Builder`] for the given request. This object can be
     /// used to build the package.
-    pub async fn protocol(&self, request: BuildRequest) -> Result<Protocol, BuildFrontendError> {
+    pub async fn setup_protocol(
+        &self,
+        request: SetupRequest,
+    ) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
         let protocol = ProtocolBuilder::discover(&request.source_dir)?
             .with_channel_config(self.channel_config.clone());
