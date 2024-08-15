@@ -35,7 +35,7 @@ pub struct Protocol {
     pub(super) channel_config: ChannelConfig,
     pub(super) client: Client,
 
-    backend_capabilities: BackendCapabilities,
+    _backend_capabilities: BackendCapabilities,
 }
 
 impl Protocol {
@@ -88,7 +88,7 @@ impl Protocol {
         Ok(Self {
             channel_config,
             client,
-            backend_capabilities: result.capabilities,
+            _backend_capabilities: result.capabilities,
         })
     }
 

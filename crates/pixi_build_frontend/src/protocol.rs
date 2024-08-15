@@ -77,7 +77,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by the protocol.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         match self {
-            Self::Pixi(protocol) => Self::Pixi(protocol),
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_channel_config(channel_config)),
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_channel_config(channel_config))
             }
