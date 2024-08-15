@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
-use pixi_build_frontend::{BackendOverrides, BuildFrontend, CondaMetadataRequest, SetupRequest};
+use pixi_build_frontend::{BackendOverrides, BuildFrontend,  SetupRequest};
 use pixi_build_types::procedures::conda_metadata::{ChannelConfiguration, CondaMetadataParams};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};

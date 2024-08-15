@@ -4,6 +4,8 @@ use url::Url;
 
 use crate::CondaPackageMetadata;
 
+pub const METHOD_NAME: &str = "conda/getMetadata";
+
 /// Parameters for the condaMetadata request.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,21 +1,27 @@
 use std::path::PathBuf;
 
-use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
-    tool::Tool,
-    CondaMetadata,
-};
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error as ClientError, TransportReceiverT, TransportSenderT},
 };
-use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
+use miette::IntoDiagnostic;
 use pixi_build_types::{
     procedures,
-    procedures::initialize::{InitializeParams, InitializeResult},
+    procedures::{
+        conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+        initialize::{InitializeParams, InitializeResult},
+    },
     BackendCapabilities, FrontendCapabilities,
 };
-use rattler_conda_types::ChannelConfig;
+use pixi_manifest::Dependencies;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ChannelConfig, MatchSpec, NoArchType, PackageName};
+
+use crate::{
+    jsonrpc::{stdio_transport, RpcParams},
+    tool::Tool,
+    CondaMetadata, CondaPackageMetadata,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitializeError {
@@ -95,8 +101,56 @@ impl Protocol {
     /// Extract metadata from the recipe.
     pub async fn get_conda_metadata(
         &self,
-        _request: &CondaMetadataParams,
+        request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadata> {
-        todo!("extract metadata from pixi manifest")
+        let result: CondaMetadataResult = self
+            .client
+            .request(
+                procedures::conda_metadata::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await
+            .into_diagnostic()?;
+
+        Ok(CondaMetadata {
+            packages: result
+                .packages
+                .into_iter()
+                .map(|pkg| CondaPackageMetadata {
+                    name: pkg.name,
+                    version: pkg.version.into(),
+                    build: pkg.build,
+                    build_number: pkg.build_number,
+                    subdir: pkg.subdir,
+                    depends: pkg
+                        .depends
+                        .map(|specs| matchspecs_to_dependencies(specs, &self.channel_config))
+                        .unwrap_or_default(),
+                    constraints: pkg
+                        .constrains
+                        .map(|specs| matchspecs_to_dependencies(specs, &self.channel_config))
+                        .unwrap_or_default(),
+                    license: pkg.license,
+                    license_family: pkg.license_family,
+                    noarch: NoArchType::python(),
+                })
+                .collect(),
+        })
     }
+}
+
+fn matchspecs_to_dependencies(
+    matchspecs: Vec<MatchSpec>,
+    channel_config: &ChannelConfig,
+) -> Dependencies<PackageName, PixiSpec> {
+    matchspecs
+        .into_iter()
+        .filter_map(|spec| {
+            let (name, spec) = spec.into_nameless();
+            Some((
+                name?,
+                PixiSpec::from_nameless_matchspec(spec, channel_config),
+            ))
+        })
+        .collect()
 }
