@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*"]
+resolver = "2"
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -45,6 +46,7 @@ insta = "1.38.0"
 install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 is_executable = "1.0.1"
 itertools = "0.13.0"
+jsonrpsee = "=0.24.2"
 lazy_static = "1.4.0"
 libc = { version = "0.2.153", default-features = false }
 miette = "7.2.0"

@@ -2,6 +2,8 @@ use crate::capabilities::{BackendCapabilities, FrontendCapabilities};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+pub const METHOD_NAME: &str = "initialize";
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Parameters for the initialize request.

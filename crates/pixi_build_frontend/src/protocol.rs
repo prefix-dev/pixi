@@ -103,9 +103,9 @@ impl ProtocolBuilder {
     }
 
     /// Finish the construction of the protocol and return the protocol object
-    pub fn finish(self, tool: Tool) -> miette::Result<Protocol> {
+    pub async fn finish(self, tool: Tool) -> miette::Result<Protocol> {
         match self {
-            Self::Pixi(protocol) => Ok(Protocol::Pixi(protocol.finish(tool)?)),
+            Self::Pixi(protocol) => Ok(Protocol::Pixi(protocol.finish(tool).await?)),
             Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(protocol.finish(tool))),
         }
     }
@@ -129,12 +129,12 @@ impl From<conda_build::Protocol> for Protocol {
 }
 
 impl Protocol {
-    pub fn get_conda_metadata(
+    pub async fn get_conda_metadata(
         &self,
         request: &crate::CondaMetadataRequest,
     ) -> miette::Result<crate::CondaMetadata> {
         match self {
-            Self::Pixi(protocol) => protocol.get_conda_metadata(request),
+            Self::Pixi(protocol) => protocol.get_conda_metadata(request).await,
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
         }
     }

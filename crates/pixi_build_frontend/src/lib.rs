@@ -1,4 +1,5 @@
 mod conda_build;
+mod jsonrpc;
 pub mod pixi;
 pub mod protocol;
 mod tool;
@@ -120,7 +121,7 @@ impl BuildFrontend {
 
     /// Construcst a new [`Builder`] for the given request. This object can be
     /// used to build the package.
-    pub fn protocol(&self, request: BuildRequest) -> miette::Result<Protocol> {
+    pub async fn protocol(&self, request: BuildRequest) -> miette::Result<Protocol> {
         // Determine the build protocol to use for the source directory.
         let protocol = ProtocolBuilder::discover(&request.source_dir)?
             .ok_or_else(|| {
@@ -144,6 +145,6 @@ impl BuildFrontend {
             .instantiate(&tool_spec)
             .context("failed to instantiate build tool")?;
 
-        Ok(protocol.finish(tool)?)
+        protocol.finish(tool).await
     }
 }

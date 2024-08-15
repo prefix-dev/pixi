@@ -60,10 +60,8 @@ impl ProtocolBuilder {
         self.backend_spec.clone()
     }
 
-    pub fn finish(self, tool: Tool) -> miette::Result<Protocol> {
-        Ok(Protocol {
-            channel_config: self.channel_config,
-        })
+    pub async fn finish(self, tool: Tool) -> miette::Result<Protocol> {
+        Protocol::new(self._manifest.path, self.channel_config, tool).await
     }
 }
 

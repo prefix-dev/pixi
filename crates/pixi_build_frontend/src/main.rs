@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use pixi_build_frontend::{BackendOverrides, BuildFrontend, BuildRequest, CondaMetadataRequest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
+use tracing_subscriber::{
+    fmt, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
 
 /// CLI options for the build frontend. These are used to override values from
 /// a manifest to specify the build tool to use.
@@ -39,10 +42,12 @@ struct Args {
     work_dir: PathBuf,
 }
 
-fn main() -> miette::Result<()> {
+#[tokio::main]
+async fn main() -> miette::Result<()> {
     // install global collector configured based on RUST_LOG env var.
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
         .init();
 
     let args = Args::parse();
@@ -54,15 +59,19 @@ fn main() -> miette::Result<()> {
     let frontend = BuildFrontend::default().with_channel_config(channel_config);
 
     // Build a specific package.
-    let protocol = frontend.protocol(BuildRequest {
-        source_dir: args.work_dir,
-        build_tool_overrides: args.builder_opts.into(),
-    })?;
+    let protocol = frontend
+        .protocol(BuildRequest {
+            source_dir: args.work_dir,
+            build_tool_overrides: args.builder_opts.into(),
+        })
+        .await?;
 
     // Request package metadata
-    let metadata = protocol.get_conda_metadata(&CondaMetadataRequest {
-        channel_base_urls: vec!["https://conda.anaconda.org/conda-forge".parse().unwrap()],
-    })?;
+    let metadata = protocol
+        .get_conda_metadata(&CondaMetadataRequest {
+            channel_base_urls: vec!["https://conda.anaconda.org/conda-forge".parse().unwrap()],
+        })
+        .await?;
 
     dbg!(metadata);
 
