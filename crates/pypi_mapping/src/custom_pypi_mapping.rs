@@ -52,6 +52,12 @@ pub async fn amend_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
+    // If the mapping is empty we don't have to do anything.
+    if mapping_url.mapping.is_empty() {
+        tracing::info!("No custom mapping provided, skipping pypi purl amendment");
+        return Ok(());
+    }
+
     trim_conda_packages_channel_url_suffix(conda_packages);
     let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
