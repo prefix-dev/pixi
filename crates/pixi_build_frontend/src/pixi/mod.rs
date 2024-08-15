@@ -6,11 +6,9 @@ use pixi_consts::consts;
 use pixi_manifest::Manifest;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
-use crate::{
-    tool::{IsolatedToolSpec, Tool, ToolSpec},
-    CondaMetadata, CondaMetadataRequest,
-};
+use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
+pub use crate::pixi::protocol::InitializeError;
 pub use protocol::Protocol;
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
@@ -60,7 +58,7 @@ impl ProtocolBuilder {
         self.backend_spec.clone()
     }
 
-    pub async fn finish(self, tool: Tool) -> miette::Result<Protocol> {
+    pub async fn finish(self, tool: Tool) -> Result<Protocol, InitializeError> {
         Protocol::new(self._manifest.path, self.channel_config, tool).await
     }
 }

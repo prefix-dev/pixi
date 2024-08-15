@@ -1,6 +1,5 @@
 use dashmap::{DashMap, Entry};
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
 
 use crate::tool::{SystemTool, Tool, ToolSpec};
 
@@ -23,7 +22,7 @@ impl ToolCache {
     /// Instantiate a tool from a specification.
     ///
     /// If the tool is not already cached, it will be created and cached.
-    pub fn instantiate(&self, spec: &ToolSpec) -> miette::Result<Tool> {
+    pub fn instantiate(&self, spec: &ToolSpec) -> which::Result<Tool> {
         let cache_entry = match self.cache.entry(spec.clone()) {
             Entry::Occupied(entry) => return Ok(entry.get().clone()),
             Entry::Vacant(entry) => entry,
@@ -40,9 +39,7 @@ impl ToolCache {
                 let exec = if spec.command.is_absolute() {
                     spec.command.clone()
                 } else {
-                    which::which(&spec.command)
-                        .into_diagnostic()
-                        .with_context(|| format!("failed to find '{}'", spec.command.display()))?
+                    which::which(&spec.command)?
                 };
                 SystemTool::new(exec).into()
             }

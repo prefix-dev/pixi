@@ -2,6 +2,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_build_frontend::{BackendOverrides, BuildFrontend, BuildRequest, CondaMetadataRequest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use tracing_subscriber::{
@@ -64,7 +65,8 @@ async fn main() -> miette::Result<()> {
             source_dir: args.work_dir,
             build_tool_overrides: args.builder_opts.into(),
         })
-        .await?;
+        .await
+        .into_diagnostic()?;
 
     // Request package metadata
     let metadata = protocol

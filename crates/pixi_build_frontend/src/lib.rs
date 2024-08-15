@@ -6,7 +6,6 @@ mod tool;
 
 use std::{path::PathBuf, sync::Arc};
 
-use miette::Context;
 use pixi_manifest::Dependencies;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
@@ -105,6 +104,19 @@ impl Default for BuildFrontend {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum BuildFrontendError {
+    /// Error while discovering the pixi.toml
+    #[error("Error while discovering the pixi.toml")]
+    DiscoveringManifest(#[from] protocol::DiscoveryError),
+    /// Error from the build protocol.
+    #[error("Error setting up frontend/backend communication")]
+    Protocol(#[from] protocol::FinishError),
+    /// Error discovering system-tool
+    #[error("Error discovering system-tool")]
+    ToolError(#[from] which::Error),
+}
+
 impl BuildFrontend {
     /// Specify the channel configuration
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
@@ -121,12 +133,9 @@ impl BuildFrontend {
 
     /// Construcst a new [`Builder`] for the given request. This object can be
     /// used to build the package.
-    pub async fn protocol(&self, request: BuildRequest) -> miette::Result<Protocol> {
+    pub async fn protocol(&self, request: BuildRequest) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
         let protocol = ProtocolBuilder::discover(&request.source_dir)?
-            .ok_or_else(|| {
-                miette::miette!("could not determine how to build the package, are you missing a pixi.toml file?")
-            })?
             .with_channel_config(self.channel_config.clone());
 
         tracing::info!(
@@ -140,11 +149,8 @@ impl BuildFrontend {
             .build_tool_overrides
             .into_spec()
             .unwrap_or(protocol.backend_tool());
-        let tool = self
-            .tool_cache
-            .instantiate(&tool_spec)
-            .context("failed to instantiate build tool")?;
+        let tool = self.tool_cache.instantiate(&tool_spec)?;
 
-        protocol.finish(tool).await
+        Ok(protocol.finish(tool).await?)
     }
 }

@@ -1,11 +1,10 @@
 mod protocol;
 
+use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
-use miette::{Context, IntoDiagnostic};
 pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
-use serde::{Deserialize, Serialize};
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
@@ -19,7 +18,7 @@ pub struct ProtocolBuilder {
 
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
-    pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
+    pub fn discover(source_dir: &Path) -> Result<Option<Self>, Infallible> {
         let recipe_dir = source_dir.join("recipe");
         let protocol = if source_dir.join("meta.yaml").is_file() {
             Self::new(source_dir, source_dir)
