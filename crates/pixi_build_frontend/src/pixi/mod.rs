@@ -1,19 +1,27 @@
+mod protocol;
+
 use std::path::{Path, PathBuf};
 
-use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
-use crate::{CondaMetadata, CondaMetadataRequest};
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
-use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
+use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+
+use crate::{
+    tool::{IsolatedToolSpec, Tool, ToolSpec},
+    CondaMetadata, CondaMetadataRequest,
+};
+
+pub use protocol::Protocol;
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]
-pub(crate) struct PixiProtocol {
+pub(crate) struct ProtocolBuilder {
     _manifest: Manifest,
     backend_spec: ToolSpec,
+    channel_config: ChannelConfig,
 }
 
-impl PixiProtocol {
+impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
     pub fn new(manifest: Manifest) -> Self {
         // TODO: Replace this with something that we read from the manifest.
@@ -26,6 +34,15 @@ impl PixiProtocol {
         Self {
             _manifest: manifest,
             backend_spec,
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+        }
+    }
+
+    /// Sets the channel configuration used by this instance.
+    pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
+        Self {
+            channel_config,
+            ..self
         }
     }
 
@@ -43,13 +60,10 @@ impl PixiProtocol {
         self.backend_spec.clone()
     }
 
-    /// Extract metadata from the recipe.
-    pub fn get_conda_metadata(
-        &self,
-        _backend: &Tool,
-        _request: &CondaMetadataRequest,
-    ) -> miette::Result<CondaMetadata> {
-        todo!("extract metadata from pixi manifest")
+    pub fn finish(self, tool: Tool) -> miette::Result<Protocol> {
+        Ok(Protocol {
+            channel_config: self.channel_config,
+        })
     }
 }
 

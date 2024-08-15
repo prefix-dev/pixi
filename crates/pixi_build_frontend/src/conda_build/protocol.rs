@@ -1,91 +1,41 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::OnceLock,
-};
+use std::{path::PathBuf, sync::OnceLock};
 
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::Dependencies;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NoArchType, PackageName,
-    ParseStrictness::{Lenient, Strict},
-    Platform, VersionWithSource,
+    ChannelConfig, MatchSpec, NoArchType, PackageName, ParseStrictness::Lenient, Platform,
+    VersionWithSource,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sha1::{Digest, Sha1};
 
-use crate::{
-    tool::{IsolatedToolSpec, Tool, ToolSpec},
-    CondaMetadata, CondaMetadataRequest, CondaPackageMetadata,
-};
+use crate::{tool::Tool, CondaMetadata, CondaMetadataRequest, CondaPackageMetadata};
 
-#[derive(Debug, Clone)]
-pub struct CondaBuildProtocol {
-    _source_dir: PathBuf,
-    recipe_dir: PathBuf,
-    backend_spec: ToolSpec,
-    channel_config: ChannelConfig,
+pub struct Protocol {
+    pub(super) channel_config: ChannelConfig,
+    pub(super) tool: Tool,
+    pub(super) _source_dir: PathBuf,
+    pub(super) recipe_dir: PathBuf,
 }
 
-impl CondaBuildProtocol {
-    /// Discovers the protocol for the given source directory.
-    pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
-        let recipe_dir = source_dir.join("recipe");
-        let protocol = if source_dir.join("meta.yaml").is_file() {
-            Self::new(source_dir, source_dir)
-        } else if recipe_dir.join("meta.yaml").is_file() {
-            Self::new(source_dir, &recipe_dir)
-        } else {
-            return Ok(None);
-        };
-
-        Ok(Some(protocol))
-    }
-
-    /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: &Path, recipe_dir: &Path) -> Self {
-        let backend_spec =
-            IsolatedToolSpec::from_specs(vec![MatchSpec::from_str("conda-build", Strict).unwrap()])
-                .into();
-
-        Self {
-            _source_dir: source_dir.to_path_buf(),
-            recipe_dir: recipe_dir.to_path_buf(),
-            backend_spec,
-            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
-        }
-    }
-
-    /// Sets the channel configuration used by this instance.
-    pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
-        Self {
-            channel_config,
-            ..self
-        }
-    }
-
-    /// Information about the backend tool to install.
-    pub fn backend_tool(&self) -> ToolSpec {
-        self.backend_spec.clone()
-    }
-
-    /// Extract metadata from the recipe.
+impl Protocol {
+    // Extract metadata from the recipe.
     pub fn get_conda_metadata(
         &self,
-        backend: &Tool,
         request: &CondaMetadataRequest,
     ) -> miette::Result<CondaMetadata> {
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
-        let conda_render_executable = backend.executable().with_file_name("conda-render");
-        let conda_render_executable = if let Some(ext) = backend.executable().extension() {
+        let conda_render_executable = self.tool.executable().with_file_name("conda-render");
+        let conda_render_executable = if let Some(ext) = self.tool.executable().extension() {
             conda_render_executable.with_extension(ext)
         } else {
             conda_render_executable
         };
-        let conda_render_tool = backend.with_executable(conda_render_executable);
+        let conda_render_tool = self.tool.with_executable(conda_render_executable);
 
         // TODO: Properly pass channels
         // TODO: Setup --exclusive-config-files
@@ -302,6 +252,8 @@ struct RenderedAbout {
 
 #[cfg(test)]
 mod test {
+    use std::path::Path;
+
     use rstest::*;
 
     use super::*;

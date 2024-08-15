@@ -54,13 +54,13 @@ fn main() -> miette::Result<()> {
     let frontend = BuildFrontend::default().with_channel_config(channel_config);
 
     // Build a specific package.
-    let builder = frontend.builder(BuildRequest {
+    let protocol = frontend.protocol(BuildRequest {
         source_dir: args.work_dir,
         build_tool_overrides: args.builder_opts.into(),
     })?;
 
     // Request package metadata
-    let metadata = builder.get_conda_metadata(&CondaMetadataRequest {
+    let metadata = protocol.get_conda_metadata(&CondaMetadataRequest {
         channel_base_urls: vec!["https://conda.anaconda.org/conda-forge".parse().unwrap()],
     })?;
 

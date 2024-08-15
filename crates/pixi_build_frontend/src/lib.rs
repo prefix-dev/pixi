@@ -1,12 +1,10 @@
-mod builder;
 mod conda_build;
-mod pixi;
-mod protocol;
+pub mod pixi;
+pub mod protocol;
 mod tool;
 
 use std::{path::PathBuf, sync::Arc};
 
-pub use builder::Builder;
 use miette::Context;
 use pixi_manifest::Dependencies;
 use pixi_spec::PixiSpec;
@@ -16,7 +14,8 @@ use rattler_conda_types::{
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
-use crate::{protocol::Protocol, tool::ToolCache};
+pub use crate::protocol::Protocol;
+use crate::{protocol::ProtocolBuilder, tool::ToolCache};
 
 #[derive(Debug, Clone)]
 pub struct BackendOverrides {
@@ -121,9 +120,9 @@ impl BuildFrontend {
 
     /// Construcst a new [`Builder`] for the given request. This object can be
     /// used to build the package.
-    pub fn builder(&self, request: BuildRequest) -> miette::Result<Builder> {
+    pub fn protocol(&self, request: BuildRequest) -> miette::Result<Protocol> {
         // Determine the build protocol to use for the source directory.
-        let protocol = Protocol::discover(&request.source_dir)?
+        let protocol = ProtocolBuilder::discover(&request.source_dir)?
             .ok_or_else(|| {
                 miette::miette!("could not determine how to build the package, are you missing a pixi.toml file?")
             })?
@@ -145,6 +144,6 @@ impl BuildFrontend {
             .instantiate(&tool_spec)
             .context("failed to instantiate build tool")?;
 
-        Ok(Builder::new(protocol, tool))
+        Ok(protocol.finish(tool)?)
     }
 }

@@ -3,10 +3,8 @@ use std::path::Path;
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
-    conda_build::CondaBuildProtocol,
-    pixi::PixiProtocol,
+    conda_build, pixi,
     tool::{Tool, ToolSpec},
-    CondaMetadata, CondaMetadataRequest,
 };
 
 /// A protocol describes how to communicate with a build backend. A build
@@ -16,7 +14,7 @@ use crate::{
 /// determine which backend to use for a given source directory and how to
 /// communicate with it.
 ///
-/// The [`PixiProtocol`] protocol is a generic implementation that uses a
+/// The [`PixiProtocolBuilder`] protocol is a generic implementation that uses a
 /// client-server JSON-RPC interface to communicate with another tool.
 ///
 /// Using this JSON-RPC interface means we can evolve the backend and frontend
@@ -33,28 +31,28 @@ use crate::{
 /// bridge executable is needed. We can always add this later too using the
 /// existing protocol.
 #[derive(Debug)]
-pub(crate) enum Protocol {
+pub(crate) enum ProtocolBuilder {
     /// A pixi project.
-    Pixi(PixiProtocol),
+    Pixi(pixi::ProtocolBuilder),
 
     /// A directory containing a `meta.yaml` that can be interpreted by
     /// conda-build.
-    CondaBuild(CondaBuildProtocol),
+    CondaBuild(conda_build::ProtocolBuilder),
 }
 
-impl From<PixiProtocol> for Protocol {
-    fn from(value: PixiProtocol) -> Self {
+impl From<pixi::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: pixi::ProtocolBuilder) -> Self {
         Self::Pixi(value)
     }
 }
 
-impl From<CondaBuildProtocol> for Protocol {
-    fn from(value: CondaBuildProtocol) -> Self {
+impl From<conda_build::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: conda_build::ProtocolBuilder) -> Self {
         Self::CondaBuild(value)
     }
 }
 
-impl Protocol {
+impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
     pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
         if source_dir.is_file() {
@@ -64,12 +62,12 @@ impl Protocol {
         }
 
         // Try to discover as a pixi project
-        if let Some(protocol) = PixiProtocol::discover(source_dir)? {
+        if let Some(protocol) = pixi::ProtocolBuilder::discover(source_dir)? {
             return Ok(Some(protocol.into()));
         }
 
         // Try to discover as a conda build project
-        if let Some(protocol) = CondaBuildProtocol::discover(source_dir)? {
+        if let Some(protocol) = conda_build::ProtocolBuilder::discover(source_dir)? {
             return Ok(Some(protocol.into()));
         }
 
@@ -91,7 +89,7 @@ impl Protocol {
     pub fn name(&self) -> &str {
         match self {
             Self::Pixi(_) => "pixi",
-            Protocol::CondaBuild(_) => "conda-build",
+            Self::CondaBuild(_) => "conda-build",
         }
     }
 
@@ -104,15 +102,40 @@ impl Protocol {
         }
     }
 
-    /// Get the metadata from the source directory.
+    /// Finish the construction of the protocol and return the protocol object
+    pub fn finish(self, tool: Tool) -> miette::Result<Protocol> {
+        match self {
+            Self::Pixi(protocol) => Ok(Protocol::Pixi(protocol.finish(tool)?)),
+            Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(protocol.finish(tool))),
+        }
+    }
+}
+
+pub enum Protocol {
+    Pixi(pixi::Protocol),
+    CondaBuild(conda_build::Protocol),
+}
+
+impl From<pixi::Protocol> for Protocol {
+    fn from(value: pixi::Protocol) -> Self {
+        Self::Pixi(value)
+    }
+}
+
+impl From<conda_build::Protocol> for Protocol {
+    fn from(value: conda_build::Protocol) -> Self {
+        Self::CondaBuild(value)
+    }
+}
+
+impl Protocol {
     pub fn get_conda_metadata(
         &self,
-        backend: &Tool,
-        request: &CondaMetadataRequest,
-    ) -> miette::Result<CondaMetadata> {
+        request: &crate::CondaMetadataRequest,
+    ) -> miette::Result<crate::CondaMetadata> {
         match self {
-            Self::Pixi(protocol) => protocol.get_conda_metadata(backend, request),
-            Self::CondaBuild(protocol) => protocol.get_conda_metadata(backend, request),
+            Self::Pixi(protocol) => protocol.get_conda_metadata(request),
+            Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
         }
     }
 }
