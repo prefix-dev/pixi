@@ -1,10 +1,10 @@
-use crate::{conda_build, pixi};
+use crate::{conda_build_protocol, pixi_protocol};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error)]
 pub enum FinishError {
     #[error("error while setting up pixi protocol")]
-    Pixi(#[from] pixi::InitializeError),
+    Pixi(#[from] pixi_protocol::InitializeError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,18 +48,18 @@ pub enum DiscoveryError {
 // sense here.
 #[allow(clippy::large_enum_variant)]
 pub enum Protocol {
-    Pixi(pixi::Protocol),
-    CondaBuild(conda_build::Protocol),
+    Pixi(pixi_protocol::Protocol),
+    CondaBuild(conda_build_protocol::Protocol),
 }
 
-impl From<pixi::Protocol> for Protocol {
-    fn from(value: pixi::Protocol) -> Self {
+impl From<pixi_protocol::Protocol> for Protocol {
+    fn from(value: pixi_protocol::Protocol) -> Self {
         Self::Pixi(value)
     }
 }
 
-impl From<conda_build::Protocol> for Protocol {
-    fn from(value: conda_build::Protocol) -> Self {
+impl From<conda_build_protocol::Protocol> for Protocol {
+    fn from(value: conda_build_protocol::Protocol) -> Self {
         Self::CondaBuild(value)
     }
 }

@@ -3,11 +3,11 @@ mod protocol;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
-pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
+pub use protocol::Protocol;
 #[derive(Debug, Clone)]
 pub struct ProtocolBuilder {
     source_dir: PathBuf,

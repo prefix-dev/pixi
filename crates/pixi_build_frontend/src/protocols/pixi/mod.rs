@@ -8,7 +8,7 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
-pub use crate::pixi::protocol::InitializeError;
+pub use protocol::InitializeError;
 pub use protocol::Protocol;
 
 /// A protocol that uses a pixi manifest to invoke a build backend .

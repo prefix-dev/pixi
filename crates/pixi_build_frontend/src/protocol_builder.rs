@@ -1,27 +1,27 @@
 use crate::protocol::{DiscoveryError, FinishError};
 use crate::tool::Tool;
-use crate::{conda_build, pixi, Protocol, ToolSpec};
+use crate::{conda_build_protocol, pixi_protocol, Protocol, ToolSpec};
 use rattler_conda_types::ChannelConfig;
 use std::path::Path;
 
 #[derive(Debug)]
 pub(crate) enum ProtocolBuilder {
     /// A pixi project.
-    Pixi(pixi::ProtocolBuilder),
+    Pixi(pixi_protocol::ProtocolBuilder),
 
     /// A directory containing a `meta.yaml` that can be interpreted by
     /// conda-build.
-    CondaBuild(conda_build::ProtocolBuilder),
+    CondaBuild(conda_build_protocol::ProtocolBuilder),
 }
 
-impl From<pixi::ProtocolBuilder> for ProtocolBuilder {
-    fn from(value: pixi::ProtocolBuilder) -> Self {
+impl From<pixi_protocol::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: pixi_protocol::ProtocolBuilder) -> Self {
         Self::Pixi(value)
     }
 }
 
-impl From<conda_build::ProtocolBuilder> for ProtocolBuilder {
-    fn from(value: conda_build::ProtocolBuilder) -> Self {
+impl From<conda_build_protocol::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: conda_build_protocol::ProtocolBuilder) -> Self {
         Self::CondaBuild(value)
     }
 }
@@ -37,7 +37,7 @@ impl ProtocolBuilder {
 
         // TODO: get rid of the converted miette error
         // Try to discover as a pixi project
-        if let Some(protocol) = pixi::ProtocolBuilder::discover(source_dir)
+        if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)
             .map_err(|e| DiscoveryError::ManifestError(e.to_string()))?
         {
             return Ok(protocol.into());
@@ -45,7 +45,8 @@ impl ProtocolBuilder {
 
         // Try to discover as a conda build project
         // Unwrap because error is Infallible
-        if let Some(protocol) = conda_build::ProtocolBuilder::discover(source_dir).unwrap() {
+        if let Some(protocol) = conda_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
+        {
             return Ok(protocol.into());
         }
 

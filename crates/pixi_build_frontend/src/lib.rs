@@ -1,8 +1,11 @@
 mod build_frontend;
-mod conda_build;
 mod jsonrpc;
-pub mod pixi;
 pub mod protocol;
+mod protocols;
+
+pub(crate) use protocols::conda_build as conda_build_protocol;
+pub(crate) use protocols::pixi as pixi_protocol;
+
 mod protocol_builder;
 mod tool;
 
