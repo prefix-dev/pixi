@@ -42,7 +42,11 @@ mod tests {
 
     #[test]
     fn test_invalid_key() {
-        let examples = ["[invalid]", "[envs.ipython.invalid]"];
+        let examples = [
+            "[invalid]",
+            "[envs.ipython.invalid]",
+            "[envs.INVALID.dependencies]",
+        ];
         assert_snapshot!(examples
             .into_iter()
             .map(|example| ParsedManifest::from_toml_str(example)

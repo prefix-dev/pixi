@@ -2,11 +2,11 @@ use std::{borrow::Borrow, fmt, str::FromStr};
 
 use miette::Diagnostic;
 use regex::Regex;
-use serde_with::serde_derive::Deserialize;
+use serde::{self, Deserialize, Deserializer};
 use thiserror::Error;
 
 /// Represents the name of an environment.
-#[derive(Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct EnvironmentName(String);
 
 impl EnvironmentName {
@@ -31,6 +31,16 @@ impl fmt::Display for EnvironmentName {
 impl PartialEq<str> for EnvironmentName {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
+    }
+}
+
+impl<'de> Deserialize<'de> for EnvironmentName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let name = String::deserialize(deserializer)?;
+        EnvironmentName::from_str(&name).map_err(serde::de::Error::custom)
     }
 }
 
