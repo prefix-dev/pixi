@@ -146,10 +146,9 @@ mod tests {
         env::set_var("PIXI_GLOBAL_MANIFESTS", manifest_dir);
         let project = Project::discover().unwrap();
         assert!(project.manifest.path.exists());
-        assert_eq!(
-            project.manifest.path,
-            manifest_dir.join(MANIFEST_DEFAULT_NAME)
-        )
+        let expected_manifest_path =
+            dunce::canonicalize(manifest_dir.join(MANIFEST_DEFAULT_NAME)).unwrap();
+        assert_eq!(project.manifest.path, expected_manifest_path)
     }
 
     #[test]
