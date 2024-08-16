@@ -2,8 +2,9 @@ use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 
 use thiserror::Error;
 
+/// Represents errors that can occur when working with a pixi global manifest
 #[derive(Error, Debug, Clone, Diagnostic)]
-pub enum TomlError {
+pub enum ManifestError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
@@ -15,7 +16,7 @@ pub enum TomlError {
     },
 }
 
-impl TomlError {
+impl ManifestError {
     pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
         if let Some(span) = self.span() {
             Err(miette::miette!(
@@ -30,13 +31,13 @@ impl TomlError {
 
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
-            TomlError::Error(e) => e.span(),
+            ManifestError::Error(e) => e.span(),
             _ => None,
         }
     }
     fn message(&self) -> String {
         match self {
-            TomlError::Error(e) => e.message().to_owned(),
+            ManifestError::Error(e) => e.message().to_owned(),
             _ => self.to_string(),
         }
     }
@@ -55,8 +56,8 @@ impl TomlError {
         }
     }
 }
-impl From<toml_edit::de::Error> for TomlError {
+impl From<toml_edit::de::Error> for ManifestError {
     fn from(e: toml_edit::de::Error) -> Self {
-        TomlError::Error(e.into())
+        ManifestError::Error(e.into())
     }
 }

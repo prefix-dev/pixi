@@ -4,7 +4,7 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, PackageName};
 use toml_edit::DocumentMut;
 
-use super::errors::TomlError;
+use super::errors::ManifestError;
 
 use super::MANIFEST_DEFAULT_NAME;
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
@@ -46,7 +46,7 @@ impl Manifest {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
-                .map_err(TomlError::from)
+                .map_err(ManifestError::from)
         }) {
             Ok(result) => result,
             Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,

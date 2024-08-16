@@ -5,7 +5,7 @@ use serde_with::{serde_as, serde_derive::Deserialize};
 
 use super::environment::EnvironmentName;
 
-use super::errors::TomlError;
+use super::errors::ManifestError;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
@@ -20,8 +20,8 @@ pub struct ParsedManifest {
 
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
+    pub fn from_toml_str(source: &str) -> Result<Self, ManifestError> {
+        toml_edit::de::from_str(source).map_err(ManifestError::from)
     }
 }
 

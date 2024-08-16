@@ -5,6 +5,7 @@ use regex::Regex;
 use serde_with::serde_derive::Deserialize;
 use thiserror::Error;
 
+/// Represents the name of an environment.
 #[derive(Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct EnvironmentName(String);
 
@@ -33,6 +34,9 @@ impl PartialEq<str> for EnvironmentName {
     }
 }
 
+/// Represents an error that occurs when parsing an environment name.
+///
+/// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
 pub struct ParseEnvironmentNameError {
