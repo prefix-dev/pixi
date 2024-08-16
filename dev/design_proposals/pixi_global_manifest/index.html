@@ -1747,12 +1747,12 @@ The motivation for the location is discussed <a href="#multiple-manifests">furth
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">python3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python3&quot;</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="s2">&quot;python3.11&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python3.11&quot;</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># The name of the environment is `python_3_10`</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># The name of the environment is `python3-10`</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># It will expose python3.10</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[envs.python_3_10.dependencies]</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[envs.python3-10.dependencies]</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.10.*&quot;</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">[envs.python_3_10.exposed]</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">[envs.python3-10.exposed]</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="s2">&quot;python3.10&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python&quot;</span>
 </span></code></pre></div>
 <h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">#</a></h2>
@@ -1834,15 +1834,15 @@ Then add package <code>hypercorn</code> to environment <code>python</code> but d
 <div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi global remove --environment python hypercorn
 </span></code></pre></div></p>
 <h3 id="specifying-which-binaries-to-expose">Specifying which binaries to expose<a class="headerlink" href="#specifying-which-binaries-to-expose" title="Permanent link">#</a></h3>
-<p>Make a new environment <code>python_3_10</code> with package <code>python=3.10</code> and expose the <code>python</code> executable as <code>python3.10</code>.
-<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi global install --environment python_3_10 --expose &quot;python3.10=python&quot; python=3.10
+<p>Make a new environment <code>python3-10</code> with package <code>python=3.10</code> and expose the <code>python</code> executable as <code>python3.10</code>.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi global install --environment python3-10 --expose &quot;python3.10=python&quot; python=3.10
 </span></code></pre></div></p>
 <p>Now <code>python3.10</code> is available.</p>
-<p>Run the following in order to expose <code>python</code> from environment <code>python_3_10</code> as <code>python310</code> instead.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi global expose remove --environment python_3_10 python3.10
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi global expose add --environment python_3_10 &quot;python310=python&quot;
+<p>Run the following in order to expose <code>python</code> from environment <code>python3-10</code> as <code>python3-10</code> instead.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi global expose remove --environment python3-10 python3.10
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi global expose add --environment python3-10 &quot;python3-10=python&quot;
 </span></code></pre></div>
-<p>Now <code>python310</code> is available, but <code>python3.10</code> isn't anymore.</p>
+<p>Now <code>python3-10</code> is available, but <code>python3.10</code> isn't anymore.</p>
 <h3 id="syncing">Syncing<a class="headerlink" href="#syncing" title="Permanent link">#</a></h3>
 <p>Most <code>pixi global</code> sub commands imply a <code>pixi global sync</code>.</p>
 <ul>
