@@ -1,9 +1,6 @@
-use futures::{stream, StreamExt, TryStreamExt};
-use indexmap::IndexMap;
+use futures::StreamExt;
 use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
-use pixi_config::{self, Config};
+use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, Platform};
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -11,7 +8,6 @@ use rattler_repodata_gateway::{fetch, Reporter};
 use reqwest_middleware::ClientWithMiddleware;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 use url::Url;
 
 struct DownloadProgressReporter {

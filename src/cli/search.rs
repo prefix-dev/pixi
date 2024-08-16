@@ -1,21 +1,17 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::future::{Future, IntoFuture};
+use std::future::IntoFuture;
 use std::io::{self, Write};
-use std::sync::Arc;
 
 use clap::Parser;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_repodata_gateway::{Gateway, GatewayError, RepoData};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
-use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;

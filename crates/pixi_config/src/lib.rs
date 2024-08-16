@@ -968,7 +968,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
-        assert!(unused.contains(&"UNUSED".to_string()));
+        assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml).unwrap();
