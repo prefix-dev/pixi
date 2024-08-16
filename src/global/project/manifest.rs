@@ -6,6 +6,7 @@ use toml_edit::DocumentMut;
 
 use super::errors::TomlError;
 
+use super::MANIFEST_DEFAULT_NAME;
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
 
 /// Handles the project's manifest file.
@@ -48,7 +49,7 @@ impl Manifest {
                 .map_err(TomlError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy("pixi-global.toml", &contents)?,
+            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,
         };
 
         let source = ManifestSource(document);

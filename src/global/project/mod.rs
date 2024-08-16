@@ -18,6 +18,8 @@ mod errors;
 mod manifest;
 mod parsed_manifest;
 
+const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
+
 /// The pixi global project, this main struct to interact with the pixi global project.
 /// This struct holds the `Manifest` and has functions to modify
 /// or request information from it. This allows in the future to have multiple manifests
@@ -78,7 +80,7 @@ impl Project {
 
         fs::create_dir_all(&manifest_dir).into_diagnostic()?;
 
-        let manifest_path = manifest_dir.join("pixi-global.toml");
+        let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
         if !manifest_path.exists() {
             fs::File::create(&manifest_path).into_diagnostic()?;
@@ -128,9 +130,9 @@ mod tests {
     #[test]
     fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
-        let manifest_path = tempdir.path().join("pixi-global.toml");
+        let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
 
-        // Create and write to the pixi-global.toml file
+        // Create and write global manifest
         let mut file = fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path).unwrap();
@@ -144,7 +146,10 @@ mod tests {
         env::set_var("PIXI_GLOBAL_MANIFESTS", manifest_dir);
         let project = Project::discover().unwrap();
         assert!(project.manifest.path.exists());
-        assert_eq!(project.manifest.path, manifest_dir.join("pixi-global.toml"))
+        assert_eq!(
+            project.manifest.path,
+            manifest_dir.join(MANIFEST_DEFAULT_NAME)
+        )
     }
 
     #[test]
