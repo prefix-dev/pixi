@@ -136,9 +136,11 @@ mod tests {
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path).unwrap();
 
-        let expected_root = manifest_path.parent().unwrap().canonicalize().unwrap();
+        // Canonicalize both paths
+        let canonical_root = project.root.canonicalize().unwrap();
+        let canonical_manifest_parent = manifest_path.parent().unwrap().canonicalize().unwrap();
 
-        assert_eq!(project.root, expected_root);
+        assert_eq!(canonical_root, canonical_manifest_parent);
     }
 
     #[test]
