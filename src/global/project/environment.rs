@@ -40,7 +40,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
         D: Deserializer<'de>,
     {
         let name = String::deserialize(deserializer)?;
-        EnvironmentName::from_str(&name).map_err(serde::de::Error::custom)
+        name.parse().map_err(serde::de::Error::custom)
     }
 }
 

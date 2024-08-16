@@ -46,6 +46,7 @@ mod tests {
             "[invalid]",
             "[envs.ipython.invalid]",
             "[envs.INVALID.dependencies]",
+            "[envs.python_3.dependencies]",
         ];
         assert_snapshot!(examples
             .into_iter()
