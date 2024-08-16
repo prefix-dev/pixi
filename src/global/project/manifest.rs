@@ -9,7 +9,7 @@ use super::errors::ManifestError;
 use super::MANIFEST_DEFAULT_NAME;
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
 
-/// Handles the project's manifest file.
+/// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format
 /// and structure. The manifest data is represented as a [`ParsedManifest`]
