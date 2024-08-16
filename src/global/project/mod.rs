@@ -119,7 +119,6 @@ mod tests {
         "#;
 
     #[test]
-
     fn test_project_from_str() {
         let manifest_path: PathBuf = FilePath().fake();
 
@@ -136,7 +135,10 @@ mod tests {
         let mut file = fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path).unwrap();
-        assert_eq!(project.root, manifest_path.parent().unwrap());
+
+        let expected_root = manifest_path.parent().unwrap().canonicalize().unwrap();
+
+        assert_eq!(project.root, expected_root);
     }
 
     #[test]
