@@ -45,7 +45,7 @@ mod tests {
         let examples = ["[invalid]", "[envs.ipython.invalid]"];
         assert_snapshot!(examples
             .into_iter()
-            .map(|example| ParsedManifest::from_toml_str(&example)
+            .map(|example| ParsedManifest::from_toml_str(example)
                 .unwrap_err()
                 .to_string())
             .collect::<Vec<_>>()
@@ -61,7 +61,7 @@ mod tests {
         [envs.python.exposed]
         python = "python"
         "#;
-        let manifest = ParsedManifest::from_toml_str(&contents);
+        let manifest = ParsedManifest::from_toml_str(contents);
 
         assert!(manifest.is_err());
         assert!(manifest

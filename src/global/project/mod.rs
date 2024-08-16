@@ -109,7 +109,7 @@ mod tests {
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
 
-    const SIMPLE_MANIFEST: &str = r#"   
+    const SIMPLE_MANIFEST: &str = r#"
         [envs.python.dependencies]
         python = "3.11.*"
         [envs.python.exposed]

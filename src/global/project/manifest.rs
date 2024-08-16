@@ -63,22 +63,22 @@ impl Manifest {
     }
 
     /// Adds an environment to the project.
-    pub fn add_environment(&mut self, name: String) -> miette::Result<()> {
+    pub fn add_environment(&mut self, _name: String) -> miette::Result<()> {
         todo!()
     }
 
     /// Removes an environment from the project.
-    pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
+    pub fn remove_environment(&mut self, _name: &str) -> miette::Result<bool> {
         todo!()
     }
 
     /// Add a matchspec to the manifest
-    pub fn add_dependency(&mut self, spec: &MatchSpec) -> miette::Result<bool> {
+    pub fn add_dependency(&mut self, _spec: &MatchSpec) -> miette::Result<bool> {
         todo!()
     }
 
     /// Removes a dependency based on `SpecType`.
-    pub fn remove_dependency(&mut self, dep: &PackageName) -> miette::Result<()> {
+    pub fn remove_dependency(&mut self, _dep: &PackageName) -> miette::Result<()> {
         todo!()
     }
 }

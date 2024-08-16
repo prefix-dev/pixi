@@ -1,8 +1,5 @@
-use std::{borrow::Borrow, fmt::Display};
-
-use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
-use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
+
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, Diagnostic)]
