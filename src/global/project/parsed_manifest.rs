@@ -88,12 +88,12 @@ mod tests {
         python3 = "python3"
         "python3.11" = "python3.11"
 
-        # The name of the environment is `python_3_10`
+        # The name of the environment is `python3-10`
         # It will expose python3.10
-        [envs.python_3_10.dependencies]
+        [envs.python3-10.dependencies]
         python = "3.10.*"
 
-        [envs.python_3_10.exposed]
+        [envs.python3-10.exposed]
         "python3.10" = "python"
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
