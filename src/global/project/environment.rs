@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt, str::FromStr};
+use std::{fmt, str::FromStr};
 
 use miette::Diagnostic;
 use regex::Regex;
@@ -13,12 +13,6 @@ impl EnvironmentName {
     /// Returns the name of the environment.
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-}
-
-impl Borrow<str> for EnvironmentName {
-    fn borrow(&self) -> &str {
-        self.as_str()
     }
 }
 
