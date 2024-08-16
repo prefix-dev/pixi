@@ -2,10 +2,10 @@ use std::{
     borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
 
-use distribution_filename::WheelFilename;
+use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use distribution_types::{
     BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
-    RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
 };
 use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
@@ -29,8 +29,8 @@ use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
 use uv_installer::{Preparer, SitePackages};
 use uv_normalize::PackageName;
+use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
-use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
 use crate::{
@@ -90,7 +90,9 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
         UrlOrPath::Url(url) if url.scheme() == "file" => distribution_types::FileLocation::Path(
             url.to_file_path().expect("cannot convert to file path"),
         ),
-        UrlOrPath::Url(url) => distribution_types::FileLocation::AbsoluteUrl(url.to_string()),
+        UrlOrPath::Url(url) => {
+            distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()))
+        }
         UrlOrPath::Path(path) => distribution_types::FileLocation::Path(path.clone()),
     };
 
@@ -161,6 +163,8 @@ enum ConvertToUvDistError {
     Uv(#[from] distribution_types::Error),
     #[error("error constructing verbatim url")]
     VerbatimUrl(#[from] VerbatimUrlError),
+    #[error("error extracting extension from {1}")]
+    Extension(#[source] ExtensionError, String),
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
@@ -226,6 +230,9 @@ fn convert_to_dist(
                     )),
                     // I don't think this really matters for the install
                     wheels: vec![],
+                    ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
+                        ConvertToUvDistError::Extension(e, filename_raw.to_string())
+                    })?,
                 }))
             }
         }
@@ -248,6 +255,9 @@ fn convert_to_dist(
                     url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
                     install_path: abs_path.clone(),
                     lock_path: path.clone(),
+                    ext: DistExtension::from_path(path).map_err(|e| {
+                        ConvertToUvDistError::Extension(e, path.display().to_string())
+                    })?,
                 })
             };
 
@@ -598,7 +608,8 @@ pub async fn update_python_distributions(
 
     let index_locations = pypi_indexes
         .map(locked_indexes_to_index_locations)
-        .unwrap_or_default();
+        .unwrap()
+        .into_diagnostic()?;
 
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
@@ -639,6 +650,7 @@ pub async fn update_python_distributions(
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
+        &[],
         venv.interpreter(),
         &index_locations,
         &flat_index,
@@ -652,6 +664,7 @@ pub async fn update_python_distributions(
         LinkMode::default(),
         &uv_context.build_options,
         None,
+        uv_context.source_strategy.clone(),
         uv_context.concurrency,
         PreviewMode::Disabled,
     )
@@ -788,6 +801,7 @@ pub async fn update_python_distributions(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
+            &uv_context.build_options,
             distribution_database,
         )
         .with_reporter(UvReporter::new(options));
@@ -886,7 +900,8 @@ pub async fn update_python_distributions(
             .with_link_mode(LinkMode::default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
-            .install(&wheels)
+            .install(wheels.clone())
+            .await
             .unwrap();
 
         let s = if wheels.len() == 1 { "" } else { "s" };

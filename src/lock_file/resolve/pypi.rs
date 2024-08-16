@@ -21,7 +21,7 @@ use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, VersionSpecifier};
+use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest};
 use pypi_types::{RequirementSource, VerbatimParsedUrl};
@@ -46,11 +46,11 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBui
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_normalize::PackageName;
+use uv_python::{Interpreter, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver,
+    Preferences, PythonRequirement, Resolver, ResolverMarkers,
 };
-use uv_toolchain::Interpreter;
 use uv_types::EmptyInstalledPackages;
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
@@ -287,7 +287,7 @@ pub async fn resolve_pypi(
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
-    let index_locations = pypi_options_to_index_locations(pypi_options);
+    let index_locations = pypi_options_to_index_locations(pypi_options).into_diagnostic()?;
 
     // TODO: create a cached registry client per index_url set?
     let registry_client = Arc::new(
@@ -323,6 +323,7 @@ pub async fn resolve_pypi(
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
+        &[],
         &interpreter,
         &index_locations,
         &flat_index,
@@ -336,6 +337,7 @@ pub async fn resolve_pypi(
         LinkMode::default(),
         &context.build_options,
         None,
+        context.source_strategy.clone(),
         context.concurrency,
         PreviewMode::Disabled,
     )
@@ -358,7 +360,7 @@ pub async fn resolve_pypi(
             pypi_types::Requirement {
                 name: p.name.as_normalized().clone(),
                 extras: vec![],
-                marker: None,
+                marker: Default::default(),
                 source,
                 origin: None,
             }
@@ -385,14 +387,25 @@ pub async fn resolve_pypi(
 
     let manifest = Manifest::new(
         requirements,
-        Constraints::from_requirements(constraints),
+        Constraints::from_requirements(constraints.iter().cloned()),
         Overrides::default(),
         Default::default(),
         Preferences::from_iter(preferences, Some(&marker_environment)),
         None,
+        None,
         uv_resolver::Exclusions::None,
         Vec::new(),
     );
+
+    let interpreter_version = interpreter.python_version();
+    let python_specifier =
+        VersionSpecifier::from_version(Operator::EqualStar, interpreter_version.clone())
+            .into_diagnostic()
+            .context("error creating version specifier for python version")?;
+    let requires_python =
+        uv_resolver::RequiresPython::from_specifiers(&VersionSpecifiers::from(python_specifier))
+            .into_diagnostic()
+            .context("error creating requires-python for solver")?;
 
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
@@ -403,7 +416,7 @@ pub async fn resolve_pypi(
         ),
         &flat_index,
         Some(&tags),
-        PythonRequirement::from_interpreter(&interpreter),
+        Some(&requires_python),
         AllowedYanks::default(),
         &context.hash_strategy,
         options.exclude_newer,
@@ -414,12 +427,14 @@ pub async fn resolve_pypi(
         conda_python_identifiers: &conda_python_packages,
     };
 
+    let python_version = PythonVersion::from_str(&interpreter_version.to_string())
+        .expect("could not get version from interpreter");
     let resolution = Resolver::new_custom_io(
         manifest,
         options,
         &context.hash_strategy,
-        Some(&marker_environment),
-        &PythonRequirement::from_interpreter(&interpreter),
+        ResolverMarkers::SpecificEnvironment(marker_environment),
+        &PythonRequirement::from_python_version(&interpreter, &python_version),
         &in_memory_index,
         &git_resolver,
         provider,
@@ -447,6 +462,9 @@ pub async fn resolve_pypi(
         })
         // Canonicalize the path
         .map(|path| {
+            let path = path
+                .as_path()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             let canonicalized_path = path.canonicalize()?;
             Ok::<_, std::io::Error>(FindLinksLocation {
                 canonicalized_path,
@@ -500,9 +518,9 @@ async fn lock_pypi_packages<'a>(
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.best_wheel().file.url {
-                            FileLocation::AbsoluteUrl(url) => {
-                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
-                            }
+                            FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
+                                Url::from_str(url.as_ref()).expect("invalid absolute url"),
+                            ),
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
                                 let flat_index =
@@ -567,9 +585,9 @@ async fn lock_pypi_packages<'a>(
                 let (url_or_path, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
                         let url_or_path = match &reg.file.url {
-                            FileLocation::AbsoluteUrl(url) => {
-                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
-                            }
+                            FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
+                                Url::from_str(url.as_ref()).expect("invalid absolute url"),
+                            ),
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
                                 let flat_index = find_links_for(&reg.index, &flat_index_locations)

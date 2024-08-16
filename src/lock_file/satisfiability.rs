@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use distribution_filename::DistExtension;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -178,19 +179,28 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                         UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
 
                     // it is actually a path
-                    let url = if let UrlOrPath::Path(path) = url_or_path {
-                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                            path.clone(),
-                            path.clone(),
-                            verbatim_url.to_url(),
-                        ));
+                    let url = match url_or_path {
+                        UrlOrPath::Path(path) => {
+                            let ext = DistExtension::from_path(path.clone()).map_err(|e| {
+                                ParsedUrlError::MissingExtensionPath(path.clone(), e)
+                            })?;
+                            let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
+                                path.clone(),
+                                path.clone(),
+                                ext,
+                                verbatim_url.to_url(),
+                            ));
 
-                        VerbatimParsedUrl {
-                            parsed_url,
-                            verbatim: verbatim_url,
+                            VerbatimParsedUrl {
+                                parsed_url,
+                                verbatim: verbatim_url,
+                            }
+                            // Can only be an archive
                         }
-                    } else {
-                        VerbatimParsedUrl::try_from(verbatim_url)?
+                        UrlOrPath::Url(u) => VerbatimParsedUrl {
+                            parsed_url: ParsedUrl::try_from(u)?,
+                            verbatim: verbatim_url,
+                        },
                     };
 
                     Some(VersionOrUrl::Url(url))

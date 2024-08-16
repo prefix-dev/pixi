@@ -2499,7 +2499,7 @@ packages:
   - psutil ; extra == 'benchmarking'
   - pytest ; extra == 'benchmarking'
   - pytest-benchmark ; extra == 'benchmarking'
-  - pre-commit~=3.0 ; extra == 'code_style'
+  - pre-commit~=3.0 ; extra == 'code-style'
   - commonmark~=0.9 ; extra == 'compare'
   - markdown~=3.4 ; extra == 'compare'
   - mistletoe~=1.0 ; extra == 'compare'
@@ -3252,7 +3252,7 @@ packages:
   name: python-library-gcp-keyring
   version: 0.1.0
   path: .
-  sha256: a74c1d4dc52857dd9f6c98189ef985ee9046ddfa31eed77d4c30760fd4b26a2f
+  sha256: fb62198e1cbecc30a99c6a18f00b8b4d2e120ca57dc354d646ec88b81a17ae77
   requires_dist:
   - rich
   requires_python: '>=3.11'
@@ -3494,7 +3494,7 @@ packages:
   - ipywidgets>=7.5.1,<9 ; extra == 'jupyter'
   - markdown-it-py>=2.2.0
   - pygments>=2.13.0,<3.0.0
-  - typing-extensions>=4.0.0,<5.0 ; python_version < '3.9'
+  - typing-extensions>=4.0.0,<5.0 ; python_full_version < '3.9'
   requires_python: '>=3.7.0'
 - kind: conda
   name: rich
