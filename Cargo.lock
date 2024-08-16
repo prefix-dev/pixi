@@ -1412,8 +1412,9 @@ dependencies = [
 
 [[package]]
 name = "file_url"
-version = "0.1.3"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c4602b5420b868957e88e55b927d67e273c764ce9fb6def7369248862928230"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -1425,8 +1426,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4602b5420b868957e88e55b927d67e273c764ce9fb6def7369248862928230"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -3614,7 +3614,7 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "file_url 0.1.4",
+ "file_url 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "insta",
  "rattler_conda_types",
  "rattler_digest",
@@ -4033,8 +4033,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.27.4"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.27.5"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "anyhow",
  "clap",
@@ -4073,8 +4073,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.1.6"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.1.7"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "anyhow",
  "digest",
@@ -4096,12 +4096,12 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.27.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.27.2"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "chrono",
  "dirs",
- "file_url 0.1.3",
+ "file_url 0.1.4 (git+https://github.com/conda/rattler?branch=main)",
  "fxhash",
  "glob",
  "hex",
@@ -4131,8 +4131,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "1.0.0"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "1.0.1"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "blake2",
  "digest",
@@ -4147,11 +4147,11 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.18"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.22.19"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "chrono",
- "file_url 0.1.3",
+ "file_url 0.1.4 (git+https://github.com/conda/rattler?branch=main)",
  "fxhash",
  "indexmap 2.4.0",
  "itertools 0.13.0",
@@ -4169,8 +4169,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "1.0.0"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "1.0.1"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "quote",
  "syn 2.0.74",
@@ -4178,8 +4178,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.21.0"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.21.1"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4205,8 +4205,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.22.2"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4232,8 +4232,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_redaction"
-version = "0.1.0"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.1.1"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -4242,8 +4242,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.5"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.21.7"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4254,7 +4254,7 @@ dependencies = [
  "chrono",
  "dashmap 6.0.1",
  "dirs",
- "file_url 0.1.3",
+ "file_url 0.1.4 (git+https://github.com/conda/rattler?branch=main)",
  "futures",
  "hex",
  "http 1.1.0",
@@ -4294,8 +4294,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.21.5"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "0.21.6"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.4.0",
@@ -4311,8 +4311,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.0.2"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "1.0.3"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "chrono",
  "futures",
@@ -4329,8 +4329,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "1.0.2"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+version = "1.0.3"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "archspec",
  "libloading",
@@ -4648,9 +4648,9 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09f13bb82d6362074f2b2d858bb316dfb2a9940c7e33a9ccd0168ba4f6a247b2"
+checksum = "014783b06e2d02bee01fe3c3247454fb34d0fc35765334e825034cdadec422fa"
 dependencies = [
  "ahash 0.8.11",
  "bitvec",
@@ -5341,7 +5341,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/nichmor/rattler?branch=feat/add-search-for-packages-for-repodata#cf1c85faf3489a549272e3ee589ed998e6621040"
+source = "git+https://github.com/conda/rattler?branch=main#66567b8d8cb544e6975e1e36f1f895b100567f47"
 dependencies = [
  "tokio",
 ]

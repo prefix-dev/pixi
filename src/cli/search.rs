@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::future::IntoFuture;
+use std::future::{Future, IntoFuture};
 use std::io::{self, Write};
 
 use clap::Parser;
@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_progress::await_in_progress;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
@@ -45,16 +46,19 @@ pub struct Args {
     limit: Option<usize>,
 }
 
+// type MatchSpecFuture = BoxFuture<'static, Result<Vec<RepoData>, GatewayError>>;
+
 /// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
-async fn search_package_by_filter<F, QF>(
+async fn search_package_by_filter<F, QF, FR>(
     package: &PackageName,
-    all_package_names: Vec<String>,
+    all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     filter_func: F,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
-    F: Fn(&str, &PackageName) -> bool,
-    QF: FnOnce(Vec<MatchSpec>) -> BoxFuture<'static, Result<Vec<RepoData>, GatewayError>>,
+    F: Fn(&PackageName, &PackageName) -> bool,
+    QF: Fn(Vec<MatchSpec>) -> FR,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
 {
     let similar_packages = all_package_names
         .iter()
@@ -64,12 +68,10 @@ where
 
     // Transform the package names into `MatchSpec`s
 
-    let specs: Vec<MatchSpec> = similar_packages
+    let specs = similar_packages
         .iter()
-        .map(|name| {
-            let package_name = PackageName::new_unchecked(name);
-            MatchSpec::from(package_name)
-        })
+        .cloned()
+        .map(MatchSpec::from)
         .collect();
 
     let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
@@ -81,12 +83,13 @@ where
         let records_of_repo: HashMap<String, RepoDataRecord> = repo
             .into_iter()
             .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
-            .rev() // Reverse the iterator so that the latest version comes first
-            .fold(HashMap::new(), |mut acc, record| {
-                acc.entry(record.package_record.name.as_normalized().to_string())
-                    .or_insert(record.clone());
-                acc
-            });
+            .map(|record| {
+                (
+                    record.package_record.name.as_normalized().to_string(),
+                    record.clone(),
+                )
+            })
+            .collect();
 
         latest_packages.extend(records_of_repo.into_values().collect_vec());
     }
@@ -118,19 +121,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fetch the all names from the repodata using gateway
     let gateway = config.gateway(auth_client.clone());
 
-    let all_names = gateway
-        .names(channels.clone(), [args.platform, Platform::NoArch])
-        .await
-        .into_diagnostic()?;
+    let all_names = await_in_progress("loading all package names", |_| async {
+        gateway
+            .names(channels.clone(), [args.platform, Platform::NoArch])
+            .await
+    })
+    .await
+    .into_diagnostic()?;
 
     // Compute the repodata query function that will be used to fetch the repodata for
     // filtered package names
 
-    let repodata_query_func = |some_specs| {
+    let repodata_query_func = |some_specs: Vec<MatchSpec>| {
         gateway
-            .query(channels, [args.platform, Platform::NoArch], some_specs)
+            .query(
+                channels.clone(),
+                [args.platform, Platform::NoArch],
+                some_specs.clone(),
+            )
             .into_future()
-            .boxed()
     };
 
     // When package name filter contains * (wildcard), it will search and display a
@@ -161,20 +170,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-async fn search_exact_package<W: Write>(
+async fn search_exact_package<W: Write, QF, FR>(
     package_name: PackageName,
-    all_repodata_names: Vec<String>,
-    repodata_query_func: impl FnOnce(
-        Vec<MatchSpec>,
-    ) -> BoxFuture<'static, Result<Vec<RepoData>, GatewayError>>,
+    all_repodata_names: Vec<PackageName>,
+    repodata_query_func: QF,
     out: W,
-) -> miette::Result<()> {
+) -> miette::Result<()>
+where
+    QF: Fn(Vec<MatchSpec>) -> FR,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
+{
     let package_name_search = package_name.clone();
     let packages = search_package_by_filter(
         &package_name_search,
         all_repodata_names,
         repodata_query_func,
-        |pn, n| pn == n.as_normalized(),
+        |pn, n| pn == n,
     )
     .await?;
 
@@ -299,27 +310,28 @@ fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Res
     Ok(())
 }
 
-async fn search_package_by_wildcard<W: Write, QF>(
+async fn search_package_by_wildcard<W: Write, QF, FR>(
     package_name: PackageName,
     package_name_filter: &str,
-    all_package_names: Vec<String>,
+    all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     limit: Option<usize>,
     out: W,
 ) -> miette::Result<()>
 where
-    QF: FnOnce(Vec<MatchSpec>) -> BoxFuture<'static, Result<Vec<RepoData>, GatewayError>>
-        + std::clone::Clone,
+    QF: Fn(Vec<MatchSpec>) -> FR + Clone,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
 {
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
+
     let mut packages = match search_package_by_filter(
         &package_name_search,
         all_package_names.clone(),
         repodata_query_func.clone(),
-        |pn, _| wildcard_pattern.is_match(pn),
+        |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
     )
     .await
     {
@@ -330,7 +342,7 @@ where
                     &package_name_search,
                     all_package_names,
                     repodata_query_func,
-                    |pn, n| jaro(pn, n.as_normalized()) > similarity,
+                    |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
                 )
                 .await?
             } else {
