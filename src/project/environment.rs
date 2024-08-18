@@ -80,6 +80,12 @@ impl<'p> Environment<'p> {
         &self.environment.name
     }
 
+    /// We store the a hash of the lockfile and all activation env variables in a file
+    /// int the cache. The current name is something like `environment.json`.
+    pub(crate) fn cache_name(&self) -> String {
+        format!("{}.json", self.name())
+    }
+
     /// Returns the solve group to which this environment belongs, or `None` if
     /// no solve group was specified.
     pub(crate) fn solve_group(&self) -> Option<SolveGroup<'p>> {

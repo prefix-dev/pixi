@@ -1,5 +1,5 @@
 use crate::common::PixiControl;
-use pixi::activation::CurrentEnvVarBehavior;
+use pixi::{activation::CurrentEnvVarBehavior, UpdateLockFileOptions};
 
 mod common;
 
@@ -17,7 +17,7 @@ async fn test_pixi_only_env_activation() {
     let default_env = project.default_environment();
 
     let pixi_only_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Exclude, None)
         .await
         .unwrap();
 

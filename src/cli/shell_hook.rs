@@ -3,6 +3,7 @@ use std::{collections::HashMap, default::Default};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCliPrompt;
+use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
@@ -15,7 +16,7 @@ use crate::project::HasProjectRef;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
-    environment::get_up_to_date_prefix,
+    environment::get_up_to_date_lock_file_and_prefix,
     project::Environment,
     Project,
 };
@@ -88,10 +89,17 @@ async fn generate_activation_script(
 
 /// Generates a JSON object describing the changes to the shell environment when
 /// activating the provided pixi environment.
-async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
+async fn generate_environment_json(
+    environment: &Environment<'_>,
+    lock_file: &LockFile,
+) -> miette::Result<String> {
     let environment_variables = environment
         .project()
-        .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(
+            environment,
+            CurrentEnvVarBehavior::Exclude,
+            Some(lock_file),
+        )
         .await?;
 
     let shell_env = ShellEnv {
@@ -107,10 +115,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(args.config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    let (lock_file, _) =
+        get_up_to_date_lock_file_and_prefix(&environment, args.lock_file_usage.into(), false)
+            .await?;
 
     let output = match args.json {
-        true => generate_environment_json(&environment).await?,
+        true => generate_environment_json(&environment, &lock_file.lock_file).await?,
         false => generate_activation_script(args.shell, &environment).await?,
     };
 
@@ -124,6 +134,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 mod tests {
     use rattler_conda_types::Platform;
     use rattler_shell::shell::{Bash, CmdExe, Fish, NuShell, PowerShell, Shell, Xonsh, Zsh};
+
+    use crate::UpdateLockFileOptions;
 
     use super::*;
 
@@ -185,7 +197,13 @@ mod tests {
         let path_var_name = default_shell.path_var(&Platform::current());
         let project = Project::discover().unwrap();
         let environment = project.default_environment();
-        let json_env = generate_environment_json(&environment).await.unwrap();
+        let lock_file = project
+            .up_to_date_lock_file(UpdateLockFileOptions::default())
+            .await
+            .unwrap();
+        let json_env = generate_environment_json(&environment, &lock_file.lock_file)
+            .await
+            .unwrap();
         assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\":\"default\""));
         assert!(json_env.contains("\"CONDA_PREFIX\":"));
         assert!(json_env.contains(&format!("\"{path_var_name}\":")));

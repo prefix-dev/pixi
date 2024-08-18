@@ -18,6 +18,7 @@ pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 pub const TASK_CACHE_DIR: &str = "task-cache-v0";
+pub const ACTIVATION_ENV_CACHE_DIR: &str = "activation-env-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_INSTALLER: &str = "conda";

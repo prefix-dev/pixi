@@ -1,5 +1,5 @@
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
+    environment::{get_up_to_date_lock_file_and_prefix, LockFileUsage},
     Project,
 };
 
@@ -12,7 +12,7 @@ pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Resul
         .add_channels(args.prioritized_channels(), &args.feature_name())?;
 
     // TODO: Update all environments touched by the features defined.
-    get_up_to_date_prefix(
+    get_up_to_date_lock_file_and_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,

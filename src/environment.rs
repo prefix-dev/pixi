@@ -25,7 +25,7 @@ use tokio::sync::Semaphore;
 
 use crate::{
     install_pypi,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+    lock_file::{LockFileDerivedData, UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
     rlimit::try_increase_rlimit_to_sensible,
@@ -255,11 +255,11 @@ impl LockFileUsage {
 /// takes up a lot of memory and takes a while to load. If `sparse_repo_data` is
 /// `None` it will be downloaded. If the lock-file is not updated, the
 /// `sparse_repo_data` is ignored.
-pub async fn get_up_to_date_prefix(
-    environment: &Environment<'_>,
+pub async fn get_up_to_date_lock_file_and_prefix<'a>(
+    environment: &'a Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
-) -> miette::Result<Prefix> {
+) -> miette::Result<(LockFileDerivedData<'a>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.project();
 
@@ -282,11 +282,12 @@ pub async fn get_up_to_date_prefix(
         .await?;
 
     // Get the locked environment from the lock-file.
-    if no_install {
-        Ok(Prefix::new(environment.dir()))
+    let prefix = if no_install {
+        Prefix::new(environment.dir())
     } else {
-        lock_file.prefix(environment).await
-    }
+        lock_file.prefix(environment).await?
+    };
+    Ok((lock_file, prefix))
 }
 
 #[allow(clippy::too_many_arguments)]

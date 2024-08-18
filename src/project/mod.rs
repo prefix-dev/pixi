@@ -32,6 +32,7 @@ use pixi_manifest::{
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{ChannelConfig, Version};
+use rattler_lock::LockFile;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -410,11 +411,13 @@ impl Project {
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
-    /// Get or initialize the activated environment variables
+    /// Get or initialize the activated environment variables. If a lock file is provided,
+    /// caching is performed for the environment variables from the activation.
     pub async fn get_activated_environment_variables(
         &self,
         environment: &Environment<'_>,
         current_env_var_behavior: CurrentEnvVarBehavior,
+        lock_file: Option<&LockFile>,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -422,30 +425,35 @@ impl Project {
                 environment.name()
             )
         })?;
-        match current_env_var_behavior {
+        let result = match current_env_var_behavior {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
+                            .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Exclude => {
                 vars.pixi_only()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
+                            .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Include => {
                 vars.full()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
+                            .await
                     })
                     .await
             }
-        }
+        };
+        result
     }
+
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -503,6 +511,10 @@ impl Project {
 
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
+
+    pub(crate) fn activation_env_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 
     /// Returns what pypi mapping configuration we should use.

@@ -1,4 +1,6 @@
 use indexmap::IndexMap;
+use rattler_lock::LockFile;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -12,8 +14,8 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 
-use crate::project::HasProjectRef;
 use crate::{project::Environment, Project};
+use crate::{project::HasProjectRef, task::EnvironmentHash};
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 
@@ -28,6 +30,14 @@ pub enum CurrentEnvVarBehavior {
     Include,
     /// Do not take any environment variables from the current shell.
     Exclude,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ActivationCache {
+    /// The hash of the environment which produced the activation's environment variables.
+    hash: EnvironmentHash,
+    /// The environment variables set by the activation.
+    environment_variables: HashMap<String, String>,
 }
 
 impl Project {
@@ -146,7 +156,29 @@ pub(crate) fn get_activator<'p>(
 pub async fn run_activation(
     environment: &Environment<'_>,
     env_var_behavior: &CurrentEnvVarBehavior,
+    lock_file: Option<&LockFile>,
 ) -> miette::Result<HashMap<String, String>> {
+    // If a lock file is provided, we can check whether there exists an environment cache.
+    if let Some(lock_file) = lock_file {
+        let cache_file = environment
+            .project()
+            .activation_env_cache_folder()
+            .join(environment.cache_name());
+        if cache_file.exists() {
+            let cache = tokio::fs::read_to_string(&cache_file)
+                .await
+                .into_diagnostic()?;
+            let cache: ActivationCache = serde_json::from_str(&cache).into_diagnostic()?;
+            let hash = EnvironmentHash::from_environment(environment, lock_file);
+
+            // If the cache's hash matches the environment hash, we can return the cached
+            // environment variables.
+            if cache.hash == hash {
+                return Ok(cache.environment_variables);
+            }
+        }
+    }
+
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
             "failed to create activator for {:?}\n{}",
@@ -209,6 +241,27 @@ pub async fn run_activation(
             }
         }
     };
+
+    // If the lock file is provided and we can compute the environment hash, let's rewrite the
+    // cache file.
+    if let Some(lock_file) = lock_file {
+        let cache_file = environment
+            .project()
+            .activation_env_cache_folder()
+            .join(environment.cache_name());
+        let cache = ActivationCache {
+            hash: EnvironmentHash::from_environment(environment, lock_file),
+            environment_variables: activator_result.clone(),
+        };
+        let cache = serde_json::to_string(&cache).into_diagnostic()?;
+
+        tokio::fs::create_dir_all(environment.project().activation_env_cache_folder())
+            .await
+            .into_diagnostic()?;
+        tokio::fs::write(&cache_file, cache)
+            .await
+            .into_diagnostic()?;
+    }
 
     Ok(activator_result)
 }
@@ -289,8 +342,9 @@ pub(crate) fn get_clean_environment_variables() -> HashMap<String, String> {
 pub(crate) async fn initialize_env_variables(
     environment: &Environment<'_>,
     env_var_behavior: CurrentEnvVarBehavior,
+    lock_file: Option<&LockFile>,
 ) -> miette::Result<HashMap<String, String>> {
-    let activation_env = run_activation(environment, &env_var_behavior).await?;
+    let activation_env = run_activation(environment, &env_var_behavior, lock_file).await?;
 
     // Get environment variables from the currently activated shell.
     let current_shell_env_vars = match env_var_behavior {

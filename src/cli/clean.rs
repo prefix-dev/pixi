@@ -94,11 +94,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         false,
                     )
                     .await?;
-                    remove_folder_with_progress(project.task_cache_folder(), false).await?;
                 }
                 remove_folder_with_progress(project.environments_dir(), true).await?;
                 remove_folder_with_progress(project.solve_group_environments_dir(), false).await?;
                 remove_folder_with_progress(project.task_cache_folder(), false).await?;
+                remove_folder_with_progress(project.activation_env_cache_folder(), false).await?;
             }
 
             Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
