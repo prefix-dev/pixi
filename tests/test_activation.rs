@@ -1,5 +1,5 @@
 use crate::common::PixiControl;
-use pixi::{activation::CurrentEnvVarBehavior, UpdateLockFileOptions};
+use pixi::activation::CurrentEnvVarBehavior;
 
 mod common;
 
@@ -40,7 +40,7 @@ async fn test_full_env_activation() {
     std::env::set_var("DIRTY_VAR", "Dookie");
 
     let full_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Include)
+        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Include, None)
         .await
         .unwrap();
     assert!(full_env.get("CONDA_PREFIX").is_some());
@@ -60,7 +60,7 @@ async fn test_clean_env_activation() {
     std::env::set_var("DIRTY_VAR", "Dookie");
 
     let clean_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Clean)
+        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Clean, None)
         .await
         .unwrap();
     assert!(clean_env.get("CONDA_PREFIX").is_some());

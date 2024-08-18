@@ -425,7 +425,7 @@ impl Project {
                 environment.name()
             )
         })?;
-        let result = match current_env_var_behavior {
+        match current_env_var_behavior {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
@@ -450,8 +450,7 @@ impl Project {
                     })
                     .await
             }
-        };
-        result
+        }
     }
 
     /// Returns all the solve groups in the project.
