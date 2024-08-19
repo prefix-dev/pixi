@@ -516,7 +516,7 @@ impl Project {
         ) -> miette::Result<MappingSource> {
             match manifest.parsed.project.conda_pypi_map.clone() {
                 Some(map) => {
-                    let new_map = map
+                    let channel_to_location_map = map
                         .into_iter()
                         .map(|(key, value)| {
                             let key = key.into_channel(&channel_config);
@@ -533,7 +533,7 @@ impl Project {
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table
-                    new_map.keys().for_each(|channel| {
+                    channel_to_location_map.keys().for_each(|channel| {
                         if !project_channels.contains(channel) {
                             tracing::warn!(
                                 "Defined custom mapping channel {} is missing from project channels",
@@ -542,7 +542,7 @@ impl Project {
                         }
                     });
 
-                    let mapping = new_map
+                    let mapping = channel_to_location_map
                         .iter()
                         .map(|(channel, mapping_location)| {
                             // let mapping_location = map.get(channel).unwrap();
