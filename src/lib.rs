@@ -2,6 +2,7 @@ pub mod activation;
 pub mod cli;
 pub(crate) mod conda_pypi_clobber;
 mod environment;
+mod global;
 mod install_pypi;
 mod install_wheel;
 mod lock_file;
