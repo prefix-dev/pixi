@@ -146,7 +146,7 @@ impl<'p> ExecutableTask<'p> {
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         if let Some(full_script) = self.as_script() {
-            tracing::info!("Parsing shell script: {}", full_script);
+            tracing::debug!("Parsing shell script: {}", full_script);
 
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
@@ -373,14 +373,14 @@ pub async fn get_task_env<'p>(
     .clone();
 
     // Add the current working directory to the environment
-    activation_env.insert(
-        "INIT_CWD".to_string(),
-        std::env::current_dir()
-            .into_diagnostic()
-            .wrap_err("failed to get current working directory")?
-            .to_string_lossy()
-            .to_string(),
-    );
+    if let Ok(init_cwd) = std::env::current_dir() {
+        activation_env.insert(
+            "INIT_CWD".to_string(),
+            init_cwd.to_string_lossy().to_string(),
+        );
+    } else {
+        tracing::warn!("Failed to get the current working directory for INIT_CWD.");
+    }
 
     // Concatenate with the system environment variables
     Ok(activation_env)
