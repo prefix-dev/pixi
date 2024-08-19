@@ -2,3 +2,5 @@
 #![allow(unused)]
 
 mod project;
+
+pub(crate) use project::Project;

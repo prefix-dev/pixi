@@ -14,24 +14,34 @@ use pixi_spec::PixiSpec;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ParsedManifest {
     /// The environments the project can create.
-    #[serde(default)]
-    envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+    #[serde(default, rename = "envs")]
+    environments: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
-    pub fn from_toml_str(source: &str) -> Result<Self, ManifestError> {
+    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestError> {
         toml_edit::de::from_str(source).map_err(ManifestError::from)
+    }
+
+    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
+        self.environments.clone()
     }
 }
 
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-struct ParsedEnvironment {
+pub(crate) struct ParsedEnvironment {
     #[serde(default, deserialize_with = "deserialize_package_map")]
     dependencies: IndexMap<PackageName, PixiSpec>,
     exposed: IndexMap<String, String>,
+}
+
+impl ParsedEnvironment {
+    pub(crate) fn dependencies(&self) -> IndexMap<PackageName, PixiSpec> {
+        self.dependencies.clone()
+    }
 }
 
 #[cfg(test)]

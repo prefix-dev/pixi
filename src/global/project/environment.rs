@@ -1,6 +1,9 @@
 use std::{fmt, str::FromStr};
 
+use indexmap::IndexMap;
 use miette::Diagnostic;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::PackageName;
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer};
 use thiserror::Error;

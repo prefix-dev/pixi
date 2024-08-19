@@ -6,8 +6,12 @@ use std::{
     sync::OnceLock,
 };
 
+use environment::EnvironmentName;
+use indexmap::IndexMap;
 use manifest::Manifest;
 use miette::IntoDiagnostic;
+use parsed_manifest::ParsedEnvironment;
+use pixi_config::Config;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
@@ -36,6 +40,8 @@ pub struct Project {
     repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
+    /// The global configuration as loaded from the config file(s)
+    config: Config,
 }
 
 impl Debug for Project {
@@ -56,16 +62,19 @@ impl Project {
             .expect("manifest path should always have a parent")
             .to_owned();
 
+        let config = Config::load(&root);
+
         Self {
             root,
             client: Default::default(),
             repodata_gateway: Default::default(),
             manifest,
+            config,
         }
     }
 
     /// Constructs a project from a manifest.
-    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+    pub(crate) fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
     }
@@ -73,7 +82,7 @@ impl Project {
     /// Discovers the project manifest file in path set by `PIXI_GLOBAL_MANIFESTS`
     /// or alternatively at `~/.pixi/manifests/pixi-global.toml`.
     /// If the manifest doesn't exist yet, and empty one will be created.
-    pub fn discover() -> miette::Result<Self> {
+    pub(crate) fn discover() -> miette::Result<Self> {
         let manifest_dir = env::var("PIXI_GLOBAL_MANIFESTS")
             .map(PathBuf::from)
             .or_else(|_| Self::default_dir())?;
@@ -89,7 +98,7 @@ impl Project {
     }
 
     /// Get default dir for the pixi global manifest
-    fn default_dir() -> miette::Result<PathBuf> {
+    pub(crate) fn default_dir() -> miette::Result<PathBuf> {
         // If environment variable is not set, use default directory
         let default_dir = dirs::home_dir()
             .ok_or_else(|| miette::miette!("Could not get home directory"))?
@@ -98,9 +107,23 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
+    pub(crate) fn from_path(manifest_path: &Path) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
         Ok(Project::from_manifest(manifest))
+    }
+
+    /// Merge config with existing config project
+    pub(crate) fn with_cli_config<C>(mut self, config: C) -> Self
+    where
+        C: Into<Config>,
+    {
+        self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Returns the environments in this project.
+    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
+        self.manifest.parsed.environments()
     }
 }
 
