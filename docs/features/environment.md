@@ -156,7 +156,7 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `PIXI_PROJECT_VERSION`: The version of the project.
 - `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
 - `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
-- `PIXI_ENVIRONMENT_PLATFORMS`: The path to the environment.
+- `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
 - `CONDA_PREFIX`: The path to the environment. (Used by multiple tools that already understand conda environments)
 - `CONDA_DEFAULT_ENV`: The name of the environment. (Used by multiple tools that already understand conda environments)
 - `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
