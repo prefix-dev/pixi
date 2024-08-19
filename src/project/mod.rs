@@ -508,7 +508,7 @@ impl Project {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
         fn build_pypi_name_mapping_source(
             manifest: &Manifest,
             channel_config: &ChannelConfig,
@@ -523,23 +523,34 @@ impl Project {
                         })
                         .collect::<miette::Result<HashMap<Channel, String>>>()?;
 
-                    let project_channels = manifest
+                    let project_channels: HashSet<_> = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .collect::<HashSet<_>>();
+                        .collect();
 
-                    // Throw a warning for each missing channel from project table
-                    channel_to_location_map.keys().for_each(|channel| {
+                    for channel in channel_to_location_map.keys() {
                         if !project_channels.contains(channel) {
-                            tracing::warn!(
-                                "Defined custom mapping channel {} is missing from project channels",
-                                channel.canonical_name()
+                            let channels = project_channels
+                                .iter()
+                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            miette::bail!(
+                                "Defined conda-pypi-map channel: {} is missing from the channels, which are: {}",
+                                console::style(
+                                    channel
+                                        .name
+                                        .clone()
+                                        .unwrap_or_else(|| channel.base_url.to_string())
+                                )
+                                .bold(),
+                                channels
                             );
                         }
-                    });
+                    }
 
                     let mapping = channel_to_location_map
                         .iter()
@@ -564,10 +575,8 @@ impl Project {
                 None => Ok(MappingSource::Prefix),
             }
         }
-
-        self.mapping_source.get_or_init(|| {
+        self.mapping_source.get_or_try_init(|| {
             build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
-                .expect("mapping source should be ok")
         })
     }
 
@@ -907,7 +916,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        let mapping = project.pypi_name_mapping_source();
+        let mapping = project.pypi_name_mapping_source().unwrap();
         let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
         let canonical_name = channel.canonical_name();
 
@@ -929,7 +938,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        let mapping = project.pypi_name_mapping_source();
+        let mapping = project.pypi_name_mapping_source().unwrap();
         assert_eq!(
             mapping
                 .custom()

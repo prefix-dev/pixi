@@ -424,7 +424,11 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
+    let mapping_map = project
+        .pypi_name_mapping_source()
+        .unwrap()
+        .custom()
+        .unwrap();
 
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
@@ -490,7 +494,7 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source();
+    let mapping_source = project.pypi_name_mapping_source().unwrap();
 
     let mapping_map = mapping_source.custom().unwrap();
 
@@ -541,7 +545,7 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source();
+    let mapping_source = project.pypi_name_mapping_source().unwrap();
 
     let mapping_map = mapping_source.custom().unwrap();
 
@@ -592,7 +596,7 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source();
+    let mapping_source = project.pypi_name_mapping_source().unwrap();
 
     let mapping_map = mapping_source.custom().unwrap();
 
