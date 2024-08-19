@@ -24,7 +24,7 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
+use crate::global::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
 use crate::{
     cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,

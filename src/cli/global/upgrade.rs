@@ -11,8 +11,9 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use tokio::task::JoinSet;
 
-use super::{common::find_installed_package, install::globally_install_package};
+use super::install::globally_install_package;
 use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
+use crate::global::find_installed_package;
 use pixi_config::Config;
 use pixi_progress::{global_multi_progress, long_running_progress_style, wrap_in_progress};
 

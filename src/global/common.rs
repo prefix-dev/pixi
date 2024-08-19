@@ -101,7 +101,7 @@ pub(crate) fn bin_env_dir() -> Option<PathBuf> {
 /// # Returns
 ///
 /// The friendly channel name of the given prefix record
-pub(super) fn channel_name_from_prefix(
+pub(crate) fn channel_name_from_prefix(
     prefix_package: &PrefixRecord,
     channel_config: &ChannelConfig,
 ) -> String {
@@ -115,7 +115,7 @@ pub(super) fn channel_name_from_prefix(
 /// # Returns
 ///
 /// The PrefixRecord of the installed package
-pub(super) async fn find_installed_package(
+pub(crate) async fn find_installed_package(
     package_name: &PackageName,
 ) -> miette::Result<PrefixRecord> {
     let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(package_name).await.or_else(|_| {
