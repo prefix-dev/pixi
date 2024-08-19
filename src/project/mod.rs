@@ -907,13 +907,13 @@ mod tests {
     #[test]
     fn test_mapping_location() {
         let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
             conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
             "#;
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-        )
-        .unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         let project = Project::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
@@ -922,20 +922,17 @@ mod tests {
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        eprintln!("our map is {:?}", mapping.custom().unwrap().mapping);
-        eprintln!("can name is {:?}", canonical_channel_name);
-
         assert_eq!(mapping.custom().unwrap().mapping.get(&canonical_channel_name.to_string()).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
 
         // Check url channel as map key
         let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["https://prefix.dev/test-channel"]
+            platforms = []
             conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
             "#;
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-        )
-        .unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         let project = Project::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
