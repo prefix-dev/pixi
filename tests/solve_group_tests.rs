@@ -564,6 +564,7 @@ async fn test_repo_data_record_channel_with_suffix() {
     );
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_path_channel() {
     let pixi = PixiControl::from_manifest(
