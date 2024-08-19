@@ -14,7 +14,6 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::{Arc, OnceLock},
 };
 
@@ -32,7 +31,7 @@ use pixi_manifest::{
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, Version};
+use rattler_conda_types::{Channel, ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -519,7 +518,7 @@ impl Project {
                     let channel_to_location_map = map
                         .into_iter()
                         .map(|(key, value)| {
-                            let key = key.into_channel(&channel_config);
+                            let key = key.into_channel(channel_config);
                             Ok((key, value))
                         })
                         .collect::<miette::Result<HashMap<Channel, String>>>()?;
@@ -529,7 +528,7 @@ impl Project {
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.clone().into_channel(&channel_config))
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
                         .collect::<HashSet<_>>();
 
                     // Throw a warning for each missing channel from project table
@@ -912,7 +911,7 @@ mod tests {
         let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
         let canonical_name = channel.canonical_name();
 
-        let canonical_channel_name = canonical_name.trim_end_matches("/");
+        let canonical_channel_name = canonical_name.trim_end_matches('/');
 
         eprintln!("our map is {:?}", mapping.custom().unwrap().mapping);
         eprintln!("can name is {:?}", canonical_channel_name);
@@ -943,7 +942,7 @@ mod tests {
                     )
                     .unwrap()
                     .canonical_name()
-                    .trim_end_matches("/")
+                    .trim_end_matches('/')
                     .to_string()
                 )
                 .unwrap(),
