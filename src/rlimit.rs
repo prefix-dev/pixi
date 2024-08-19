@@ -1,5 +1,7 @@
 /// The desired value for the RLIMIT_NOFILE resource limit. This is the number
 /// of file descriptors that pixi should be able to open.
+
+#[cfg(not(target_os = "windows"))]
 pub const DESIRED_RLIMIT_NOFILE: u64 = 1024;
 
 /// Attempt to increase the RLIMIT_NOFILE resource limit to the desired value
@@ -39,7 +41,7 @@ pub(crate) fn try_increase_rlimit_to_sensible() {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn increase_rlimit_to_desired() {
+pub(crate) fn try_increase_rlimit_to_sensible() {
     // On Windows, there is no need to increase the RLIMIT_NOFILE resource
     // limit.
 }
