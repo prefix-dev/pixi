@@ -10,7 +10,7 @@ use rattler_shell::{
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::{
-    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, environment::get_up_to_date_prefix,
+    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, environment::update_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project,
 };
@@ -215,7 +215,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    update_prefix(&environment, args.lock_file_usage.into(), false).await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
