@@ -253,9 +253,11 @@ pub async fn get_task_env<'p>(
         CurrentEnvVarBehavior::Include
     };
     let activation_env = await_in_progress("activating environment", |_| {
-        environment
-            .project()
-            .get_activated_environment_variables(environment, env_var_behavior)
+        environment.project().get_activated_environment_variables(
+            environment,
+            env_var_behavior,
+            Some(&lock_file_derived_data.lock_file),
+        )
     })
     .await
     .wrap_err("failed to activate environment")?;

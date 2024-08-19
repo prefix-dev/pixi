@@ -10,7 +10,8 @@ use rattler_shell::{
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::{
-    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, environment::get_up_to_date_prefix,
+    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs,
+    environment::get_up_to_date_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project,
 };
@@ -215,11 +216,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    let (lock_file, _) =
+        get_up_to_date_lock_file_and_prefix(&environment, args.lock_file_usage.into(), false)
+            .await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
-        .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(
+            &environment,
+            CurrentEnvVarBehavior::Exclude,
+            Some(&lock_file.lock_file),
+        )
         .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);

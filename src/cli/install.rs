@@ -1,5 +1,5 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::environment::get_up_to_date_prefix;
+use crate::environment::get_up_to_date_lock_file_and_prefix;
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -50,7 +50,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut installed_envs = Vec::with_capacity(envs.len());
     for env in envs {
         let environment = project.environment_from_name_or_env_var(Some(env))?;
-        get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+        get_up_to_date_lock_file_and_prefix(&environment, args.lock_file_usage.into(), false)
+            .await?;
         installed_envs.push(environment.name().clone());
     }
 

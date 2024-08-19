@@ -157,7 +157,11 @@ impl<'p> LockFileDerivedData<'p> {
 
         let env_variables = self
             .project
-            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            .get_activated_environment_variables(
+                environment,
+                CurrentEnvVarBehavior::Exclude,
+                Some(&self.lock_file),
+            )
             .await?;
 
         // Update the prefix with Pypi records
@@ -1057,7 +1061,11 @@ impl<'p> UpdateContext<'p> {
 
             // Get environment variables from the activation
             let env_variables = project
-                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .get_activated_environment_variables(
+                    environment,
+                    CurrentEnvVarBehavior::Exclude,
+                    None,
+                )
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available
