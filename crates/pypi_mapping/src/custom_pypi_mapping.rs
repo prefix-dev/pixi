@@ -59,20 +59,6 @@ pub async fn amend_pypi_purls(
         .cloned()
         .collect();
 
-    eprintln!("mapping url mapping {:?}", mapping_url.mapping);
-    eprintln!(
-        "conda packages channel {:?}",
-        conda_packages
-            .iter()
-            .map(|x| x.channel.clone())
-            .collect::<Vec<String>>()
-    );
-
-    eprintln!(
-        "packages_for_prefix_mapping {:?}",
-        packages_for_prefix_mapping.len()
-    );
-
     let custom_mapping = mapping_url.fetch_custom_mapping(client).await?;
 
     // When all requested channels are present in the custom_mapping, we don't have

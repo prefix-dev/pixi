@@ -545,8 +545,6 @@ impl Project {
                     let mapping = channel_to_location_map
                         .iter()
                         .map(|(channel, mapping_location)| {
-                            // let mapping_location = map.get(channel).unwrap();
-
                             let url_or_path = match Url::parse(mapping_location) {
                                 Ok(url) => MappingLocation::Url(url),
                                 Err(err) => {

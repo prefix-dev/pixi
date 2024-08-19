@@ -426,7 +426,6 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
 
-    eprintln!("ammeding purls");
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
