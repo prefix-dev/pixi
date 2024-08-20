@@ -65,7 +65,7 @@ async fn conda_solve_group_functionality() {
     .unwrap();
 
     // Get an up-to-date lockfile
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert!(
         lock_file.contains_match_spec("default", platform, "foo ==3"),
@@ -103,7 +103,7 @@ async fn test_purl_are_added_for_pypi() {
     // Add and update lockfile with this version of python
     pixi.add("boltons").with_install(true).await.unwrap();
 
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
     lock_file
@@ -126,7 +126,7 @@ async fn test_purl_are_added_for_pypi() {
         .await
         .unwrap();
 
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
     lock_file

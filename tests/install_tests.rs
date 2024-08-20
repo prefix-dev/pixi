@@ -424,7 +424,7 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 2 was selected from
     // channel `a`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
     // Switch the channel around
@@ -445,7 +445,7 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 1 was now selected
     // from channel `b`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }
 

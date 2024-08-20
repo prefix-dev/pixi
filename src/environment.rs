@@ -273,7 +273,7 @@ pub async fn update_prefix(
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage,
             no_install,
             ..UpdateLockFileOptions::default()

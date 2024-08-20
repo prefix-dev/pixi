@@ -114,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
