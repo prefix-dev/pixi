@@ -1182,17 +1182,20 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url_or_path: UrlOrPath::Path(PathBuf::from_str("C:\\Users\\username\\mypkg").unwrap()),
+            url_or_path: UrlOrPath::Path(
+                PathBuf::from_str("C:\\Users\\username\\mypkg.tar.gz").unwrap(),
+            ),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
             editable: false,
         };
 
-        let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
-            .unwrap()
-            .into_uv_requirement()
-            .unwrap();
+        let spec =
+            pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
+                .unwrap()
+                .into_uv_requirement()
+                .unwrap();
         // This should satisfy:
         assert!(pypi_satifisfies_requirement(&spec, &locked_data));
     }
