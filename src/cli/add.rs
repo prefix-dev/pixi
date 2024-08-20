@@ -130,7 +130,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         DependencyType::PypiDependency => {
             let specs = dependency_config.pypi_deps(&project)?;
             for (name, spec) in specs {
-                let added = project.manifest.add_pypi_dependency(
+                let added = project.manifest.add_pep508_dependency(
                     &spec,
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
@@ -339,7 +339,7 @@ fn update_pypi_specs_from_lock_file(
                 version_or_url: Some(VersionSpecifier(version_spec)),
                 ..req
             };
-            project.manifest.add_pypi_dependency(
+            project.manifest.add_pep508_dependency(
                 &req,
                 platforms,
                 feature_name,

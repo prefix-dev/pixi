@@ -4,7 +4,10 @@ use std::{
 };
 
 use pep508_rs::VerbatimUrl;
-use pixi_manifest::{pypi::GitRev, PyPiRequirement};
+use pixi_manifest::{
+    pypi::{pypi_requirement::ParsedGitUrl, GitRev},
+    PyPiRequirement,
+};
 use pypi_types::RequirementSource;
 use thiserror::Error;
 use url::Url;
@@ -71,11 +74,14 @@ pub fn as_uv_req(
             }
         }
         PyPiRequirement::Git {
-            git,
-            rev,
-            tag,
-            subdirectory,
-            branch,
+            url:
+                ParsedGitUrl {
+                    git,
+                    rev,
+                    tag,
+                    subdirectory,
+                    branch,
+                },
             ..
         } => RequirementSource::Git {
             repository: git.clone(),
