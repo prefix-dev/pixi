@@ -1,21 +1,68 @@
-use std::{fmt, fmt::Formatter, path::PathBuf, str::FromStr};
+use std::{
+    fmt,
+    fmt::Formatter,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
-use crate::utils::extract_directory_from_url;
+use pep440_rs::VersionSpecifiers;
 use pep508_rs::ExtraName;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
+use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
+use crate::utils::extract_directory_from_url;
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ParsedGitUrl {
+    pub git: Url,
+    pub branch: Option<String>,
+    pub tag: Option<String>,
+    pub rev: Option<GitRev>,
+    pub subdirectory: Option<String>,
+}
+
+impl TryFrom<Url> for ParsedGitUrl {
+    type Error = Pep508ToPyPiRequirementError;
+
+    fn try_from(url: Url) -> Result<Self, Self::Error> {
+        let subdirectory = extract_directory_from_url(&url);
+
+        // Strip the git+ from the url.
+        let url_without_git = url.as_str().strip_prefix("git+").unwrap_or(url.as_str());
+        let url = Url::parse(url_without_git)?;
+
+        // Split the repository url and the rev.
+        let (repository_url, rev) = if let Some((prefix, suffix)) = url
+            .path()
+            .rsplit_once('@')
+            .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
+        {
+            let mut repository_url = url.clone();
+            repository_url.set_path(&prefix);
+            (repository_url, Some(GitRev::from_str(&suffix)?))
+        } else {
+            (url, None)
+        };
+
+        Ok(ParsedGitUrl {
+            git: repository_url,
+            branch: None,
+            tag: None,
+            rev,
+            subdirectory,
+        })
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
-        git: Url,
-        branch: Option<String>,
-        tag: Option<String>,
-        rev: Option<GitRev>,
-        subdirectory: Option<String>,
+        #[serde(flatten)]
+        url: ParsedGitUrl,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -93,11 +140,14 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Git {
-                git,
-                branch,
-                tag,
-                rev,
-                subdirectory: _,
+                url:
+                    ParsedGitUrl {
+                        git,
+                        branch,
+                        tag,
+                        rev,
+                        subdirectory: _,
+                    },
                 extras,
             } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
@@ -185,6 +235,23 @@ pub enum Pep508ToPyPiRequirementError {
 
     #[error("could not convert '{0}' to a file path")]
     PathUrlIntoPath(Url),
+
+    #[error("Unsupported URL prefix `{prefix}` in Url: `{url}` ({message})")]
+    UnsupportedUrlPrefix {
+        prefix: String,
+        url: Url,
+        message: &'static str,
+    },
+}
+
+impl From<VersionSpecifiers> for VersionOrStar {
+    fn from(value: VersionSpecifiers) -> Self {
+        if value.is_empty() {
+            VersionOrStar::Star
+        } else {
+            VersionOrStar::Version(value)
+        }
+    }
 }
 
 /// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
@@ -194,58 +261,70 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
         let converted = if let Some(version_or_url) = req.version_or_url {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
-                    version: if v.is_empty() {
-                        VersionOrStar::Star
-                    } else {
-                        VersionOrStar::Version(v)
-                    },
+                    version: v.into(),
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => {
-                    // If serialization starts with `git+` then it is a git url.
-                    if let Some(stripped_url) = u.to_string().strip_prefix("git+") {
-                        if let Some((url, version)) = stripped_url.split_once('@') {
-                            let url = Url::parse(url)?;
-                            PyPiRequirement::Git {
-                                git: url,
-                                branch: None,
-                                tag: None,
-                                rev: Some(GitRev::from_str(version)?),
-                                subdirectory: None,
+                    let url = u.to_url();
+                    if let Some((prefix, ..)) = url.scheme().split_once('+') {
+                        match prefix {
+                            "git" => Self::Git {
+                                url: ParsedGitUrl::try_from(url)?,
                                 extras: req.extras,
+                            },
+                            "bzr" => {
+                                return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
+                                    prefix: prefix.to_string(),
+                                    url: u.to_url(),
+                                    message: "Bazaar is not supported",
+                                })
                             }
-                        } else {
-                            let url = Url::parse(stripped_url)?;
-                            PyPiRequirement::Git {
-                                git: url,
-                                branch: None,
-                                tag: None,
-                                rev: None,
-                                subdirectory: None,
-                                extras: req.extras,
+                            "hg" => {
+                                return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
+                                    prefix: prefix.to_string(),
+                                    url: u.to_url(),
+                                    message: "Bazaar is not supported",
+                                })
+                            }
+                            "svn" => {
+                                return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
+                                    prefix: prefix.to_string(),
+                                    url: u.to_url(),
+                                    message: "Bazaar is not supported",
+                                })
+                            }
+                            _ => {
+                                return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
+                                    prefix: prefix.to_string(),
+                                    url: u.to_url(),
+                                    message: "Unknown scheme",
+                                })
                             }
                         }
+                    } else if Path::new(url.path())
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+                    {
+                        Self::Git {
+                            url: ParsedGitUrl::try_from(url)?,
+                            extras: req.extras,
+                        }
+                    } else if url.scheme().eq_ignore_ascii_case("file") {
+                        // Convert the file url to a path.
+                        let file = url.to_file_path().map_err(|_| {
+                            Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
+                        })?;
+                        PyPiRequirement::Path {
+                            path: file,
+                            editable: None,
+                            extras: req.extras,
+                        }
                     } else {
-                        let url = u.to_url();
-                        // Have a different code path when the url is a file.
-                        // i.e. package @ file:///path/to/package
-                        if url.scheme() == "file" {
-                            // Convert the file url to a path.
-                            let file = url.to_file_path().map_err(|_| {
-                                Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
-                            })?;
-                            PyPiRequirement::Path {
-                                path: file,
-                                editable: None,
-                                extras: req.extras,
-                            }
-                        } else {
-                            let subdirectory = extract_directory_from_url(&url);
-                            PyPiRequirement::Url {
-                                url,
-                                extras: req.extras,
-                                subdirectory,
-                            }
+                        let subdirectory = extract_directory_from_url(&url);
+                        PyPiRequirement::Url {
+                            url,
+                            extras: req.extras,
+                            subdirectory,
                         }
                     }
                 }
@@ -302,11 +381,13 @@ impl PyPiRequirement {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
-    use crate::pypi::PyPiPackageName;
+    use assert_matches::assert_matches;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
+
+    use super::*;
+    use crate::pypi::PyPiPackageName;
 
     #[test]
     fn test_pypi_to_string() {
@@ -514,11 +595,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                git: Url::parse("https://test.url.git").unwrap(),
-                branch: None,
-                tag: None,
-                rev: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    branch: None,
+                    tag: None,
+                    rev: None,
+                    subdirectory: None,
+                },
                 extras: vec![],
             }
         );
@@ -535,11 +618,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                git: Url::parse("https://test.url.git").unwrap(),
-                branch: Some("main".to_string()),
-                tag: None,
-                rev: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    branch: Some("main".to_string()),
+                    tag: None,
+                    rev: None,
+                    subdirectory: None,
+                },
                 extras: vec![],
             }
         );
@@ -556,11 +641,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                git: Url::parse("https://test.url.git").unwrap(),
-                tag: Some("v.1.2.3".to_string()),
-                branch: None,
-                rev: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    tag: Some("v.1.2.3".to_string()),
+                    branch: None,
+                    rev: None,
+                    subdirectory: None,
+                },
                 extras: vec![],
             }
         );
@@ -577,11 +664,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                tag: Some("3.0.0".to_string()),
-                branch: None,
-                rev: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                    tag: Some("3.0.0".to_string()),
+                    branch: None,
+                    rev: None,
+                    subdirectory: None,
+                },
                 extras: vec![],
             },
         );
@@ -598,11 +687,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                git: Url::parse("https://test.url.git").unwrap(),
-                rev: Some(GitRev::Short("123456".to_string())),
-                tag: None,
-                branch: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    rev: Some(GitRev::Short("123456".to_string())),
+                    tag: None,
+                    branch: None,
+                    subdirectory: None,
+                },
                 extras: vec![],
             }
         );
@@ -627,11 +718,13 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                branch: None,
-                tag: None,
-                rev: None,
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
+                    branch: None,
+                    tag: None,
+                    rev: None,
+                    subdirectory: None,
+                },
                 extras: vec![]
             }
         );
@@ -641,24 +734,26 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                branch: None,
-                tag: None,
-                rev: Some(GitRev::Full(
-                    "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
-                )),
-                subdirectory: None,
+                url: ParsedGitUrl {
+                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
+                    branch: None,
+                    tag: None,
+                    rev: Some(GitRev::Full(
+                        "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
+                    )),
+                    subdirectory: None,
+                },
                 extras: vec![]
             }
         );
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![], subdirectory: None });
+        assert_eq!(as_pypi_req, PyPiRequirement::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![], subdirectory: None });
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PyPiRequirement = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()], subdirectory: None });
+        assert_eq!(as_pypi_req, PyPiRequirement::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()], subdirectory: None });
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
@@ -684,6 +779,20 @@ mod tests {
                 editable: None,
                 extras: vec![]
             }
+        );
+    }
+
+    #[test]
+    fn test_git_url() {
+        let parsed = pep508_rs::Requirement::from_str(
+            "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main",
+        )
+        .unwrap();
+        assert_matches!(
+            PyPiRequirement::try_from(parsed),
+            Err(Pep508ToPyPiRequirementError::ParseGitRev(
+                GitRevParseError::InvalidCharacters(characters)
+            )) if characters == "main"
         );
     }
 }

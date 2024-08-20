@@ -97,12 +97,15 @@ impl Manifest {
         let contents = contents.into();
         let (parsed, file_name) = match manifest_kind {
             ManifestKind::Pixi => (ParsedManifest::from_toml_str(&contents), "pixi.toml"),
-            ManifestKind::Pyproject => (
-                PyProjectManifest::from_toml_str(&contents)
+            ManifestKind::Pyproject => {
+                let manifest = match PyProjectManifest::from_toml_str(&contents)
                     .and_then(|m| m.ensure_pixi(&contents))
-                    .map(|x| x.into()),
-                "pyproject.toml",
-            ),
+                {
+                    Ok(manifest) => Ok(manifest.try_into().into_diagnostic()?),
+                    Err(e) => Err(e),
+                };
+                (manifest, "pyproject.toml")
+            }
         };
 
         let (manifest, document) = match parsed.and_then(|manifest| {
@@ -374,7 +377,7 @@ impl Manifest {
     }
 
     /// Add a pypi requirement to the manifest
-    pub fn add_pypi_dependency(
+    pub fn add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         platforms: &[Platform],
@@ -387,7 +390,7 @@ impl Manifest {
             // Add the pypi dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pypi_dependency(requirement, editable, overwrite_behavior)
+                .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
@@ -2107,5 +2110,36 @@ bar = "*"
             manifest.default_feature().channel_priority.unwrap(),
             ChannelPriority::Disabled
         );
+    }
+
+    #[test]
+    pub fn test_unsupported_pep508_errors() {
+        let manifest_error = Manifest::from_str(
+            Path::new("pyproject.toml"),
+            r#"
+        [project]
+        name = "issue-1797"
+        version = "0.1.0"
+        dependencies = [
+            "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"
+        ]
+
+        [tool.pixi.project]
+        channels = ["conda-forge"]
+        platforms = ["win-64"]
+        "#,
+        )
+        .unwrap_err();
+
+        let mut error = String::new();
+        let report_handler = NarratableReportHandler::new().with_cause_chain();
+        report_handler
+            .render_report(&mut error, manifest_error.as_ref())
+            .unwrap();
+        insta::assert_snapshot!(error, @r###"
+        Unsupported pep508 requirement: 'attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main'
+            Diagnostic severity: error
+            Caused by: Found invalid characters for git revision 'main', branches and tags are not supported yet
+        "###);
     }
 }

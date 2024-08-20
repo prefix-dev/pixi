@@ -18,6 +18,8 @@ pub enum DependencyError {
     NoDependency(String),
     #[error("No Pypi dependencies.")]
     NoPyPiDependencies,
+    #[error(transparent)]
+    Pep508ToPyPiRequirementError(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
 #[derive(Error, Debug)]
@@ -44,7 +46,7 @@ pub enum TomlError {
         table_name: String,
     },
     #[error("Could not convert pep508 to pixi pypi requirement")]
-    Conversion(#[from] Pep508ToPyPiRequirementError),
+    Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
 impl TomlError {
