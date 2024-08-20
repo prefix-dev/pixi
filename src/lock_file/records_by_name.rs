@@ -5,17 +5,20 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<PackageName, RepoDataRecord>;
-pub type PypiRecordsByName = DependencyRecordsByName<uv_normalize::PackageName, PypiRecord>;
+pub type RepoDataRecordsByName =
+    DependencyRecordsByName<PackageName, VersionWithSource, RepoDataRecord>;
+pub type PypiRecordsByName =
+    DependencyRecordsByName<uv_normalize::PackageName, pep440_rs::Version, PypiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
-pub(crate) trait HasNameVersion<N> {
+pub(crate) trait HasNameVersion<N, V: PartialOrd> {
     fn name(&self) -> &N;
-    fn version(&self) -> &impl PartialOrd;
+    fn version(&self) -> &V;
 }
 
-impl HasNameVersion<uv_normalize::PackageName> for PypiRecord {
+impl HasNameVersion<uv_normalize::PackageName, pep440_rs::Version> for PypiRecord {
     fn name(&self) -> &uv_normalize::PackageName {
         &self.0.name
     }
@@ -23,7 +26,7 @@ impl HasNameVersion<uv_normalize::PackageName> for PypiRecord {
         &self.0.version
     }
 }
-impl HasNameVersion<PackageName> for RepoDataRecord {
+impl HasNameVersion<PackageName, VersionWithSource> for RepoDataRecord {
     fn name(&self) -> &PackageName {
         &self.package_record.name
     }
@@ -34,32 +37,44 @@ impl HasNameVersion<PackageName> for RepoDataRecord {
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<N: Hash + Eq + Clone, D: HasNameVersion<N>> {
+pub struct DependencyRecordsByName<N: Hash + Eq + Clone, V: PartialOrd, D: HasNameVersion<N, V>> {
     pub records: Vec<D>,
     by_name: HashMap<N, usize>,
+    _data: PhantomData<V>,
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> Default for DependencyRecordsByName<N, D> {
+impl<N: Hash + Eq + Clone, V: PartialOrd, D: HasNameVersion<N, V>> Default
+    for DependencyRecordsByName<N, V, D>
+{
     fn default() -> Self {
         Self {
             records: Vec::new(),
             by_name: HashMap::new(),
+            _data: PhantomData,
         }
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyRecordsByName<N, D> {
+impl<N: Hash + Eq + Clone, V: PartialOrd, D: HasNameVersion<N, V>> From<Vec<D>>
+    for DependencyRecordsByName<N, V, D>
+{
     fn from(records: Vec<D>) -> Self {
         let by_name = records
             .iter()
             .enumerate()
             .map(|(idx, record)| (record.name().clone(), idx))
             .collect();
-        Self { records, by_name }
+        Self {
+            records,
+            by_name,
+            _data: PhantomData,
+        }
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
+impl<N: Hash + Eq + Clone, V: PartialOrd, D: HasNameVersion<N, V>>
+    DependencyRecordsByName<N, V, D>
+{
     /// Returns the record with the given name or `None` if no such record exists.
     pub(crate) fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&D>
     where
@@ -117,7 +132,11 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
                 }
             }
         }
-        Ok(Self { records, by_name })
+        Ok(Self {
+            records,
+            by_name,
+            _data: PhantomData,
+        })
     }
 
     /// Constructs a new instance from an iterator of repodata records. The records are
@@ -144,7 +163,11 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
             }
         }
 
-        Self { records, by_name }
+        Self {
+            records,
+            by_name,
+            _data: PhantomData,
+        }
     }
 }
 
