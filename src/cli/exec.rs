@@ -10,19 +10,17 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
-};
-use rattler_repodata_gateway::Gateway;
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::prefix::Prefix;
-use pixi_config::gateway::from_pixi_config;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
+
+use super::cli_config::ChannelsConfig;
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug, Default)]
@@ -37,9 +35,8 @@ pub struct Args {
     #[clap(long = "spec", short = 's')]
     pub specs: Vec<MatchSpec>,
 
-    /// The channel to install the packages from.
-    #[clap(long = "channel", short = 'c')]
-    pub channels: Vec<NamedChannelOrUrl>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
     /// If specified a new environment is always created even if one already
     /// exists.
@@ -58,7 +55,7 @@ pub struct EnvironmentHash {
 }
 
 impl EnvironmentHash {
-    pub fn from_args(args: &Args, channel_config: &ChannelConfig) -> Self {
+    pub(crate) fn from_args(args: &Args, config: &Config) -> Self {
         Self {
             command: args
                 .command
@@ -68,19 +65,15 @@ impl EnvironmentHash {
             specs: args.specs.clone(),
             channels: args
                 .channels
+                .resolve_from_config(config)
                 .iter()
-                .map(|c| {
-                    c.clone()
-                        .into_channel(channel_config)
-                        .base_url()
-                        .to_string()
-                })
+                .map(|c| c.base_url().to_string())
                 .collect(),
         }
     }
 
     /// Returns the name of the environment.
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
@@ -125,7 +118,7 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from_args(args, config.global_channel_config()).name();
+    let environment_name = EnvironmentHash::from_args(args, config).name();
     let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
 
     let mut guard = PrefixGuard::new(prefix.root())
@@ -154,11 +147,7 @@ pub async fn create_exec_prefix(
         .context("failed to write lock status to prefix guard")?;
 
     // Construct a gateway to get repodata.
-    let gateway = Gateway::builder()
-        .with_cache_dir(cache_dir.join("repodata"))
-        .with_client(client.clone())
-        .with_channel_config(from_pixi_config(config))
-        .finish();
+    let gateway = config.gateway(client.clone());
 
     // Determine the specs to use for the environment
     let specs = if args.specs.is_empty() {
@@ -175,21 +164,11 @@ pub async fn create_exec_prefix(
         args.specs.clone()
     };
 
-    // Parse the channels
-    let channels = if args.channels.is_empty() {
-        config.default_channels()
-    } else {
-        args.channels.clone()
-    };
-    let channels = channels
-        .into_iter()
-        .map(|channel| channel.into_channel(config.global_channel_config()));
-
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
             .query(
-                channels,
+                args.channels.resolve_from_config(config),
                 [Platform::current(), Platform::NoArch],
                 specs.clone(),
             )

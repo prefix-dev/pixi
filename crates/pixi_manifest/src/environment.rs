@@ -17,8 +17,9 @@ use crate::utils::PixiSpanned;
 
 /// The name of an environment. This is either a string or default for the
 /// default environment.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay)]
 pub enum EnvironmentName {
+    #[default]
     Default,
     Named(String),
 }
@@ -126,7 +127,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
 ///
 /// Individual features cannot be used directly, instead they are grouped
 /// together into environments. Environments are then locked and installed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Environment {
     /// The name of the environment
     pub name: EnvironmentName,
@@ -148,18 +149,6 @@ pub struct Environment {
 
     /// Whether to include the default feature in that environment
     pub no_default_feature: bool,
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Self {
-            name: EnvironmentName::Default,
-            features: Vec::new(),
-            features_source_loc: None,
-            solve_group: None,
-            no_default_feature: false,
-        }
-    }
 }
 
 /// Helper struct to deserialize the environment from TOML.

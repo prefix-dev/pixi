@@ -217,6 +217,7 @@ alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
@@ -578,6 +579,14 @@ scripts = ["env_setup.bat"]
 
 [target.linux-64.activation.env]
 ENV_VAR = "linux-value"
+
+# You can also reference existing environment variables, but this has
+# to be done separately for unix-like operating systems and Windows
+[target.unix.activation.env]
+ENV_VAR = "$OTHER_ENV_VAR/unix-value"
+
+[target.win.activation.env]
+ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 ```
 
 ## The `target` table

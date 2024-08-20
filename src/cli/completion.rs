@@ -163,7 +163,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn test_zsh_completion() {
+    pub(crate) fn test_zsh_completion() {
         let script = r#"
 (add)
 _arguments "${_arguments_options[@]}" \
@@ -205,7 +205,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_bash_completion() {
+    pub(crate) fn test_bash_completion() {
         // NOTE THIS IS FORMATTED BY HAND!
         let script = r#"
         pixi__project__help__help)
@@ -251,7 +251,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_nushell_completion() {
+    pub(crate) fn test_nushell_completion() {
         // NOTE THIS IS FORMATTED BY HAND!
         let script = r#"
   # Runs task in project
@@ -276,7 +276,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_bash_completion_working_regex() {
+    pub(crate) fn test_bash_completion_working_regex() {
         // Generate the original completion script.
         let script = get_completion_script(Shell::Bash);
         // Test if there was a replacement done on the clap generated completions
@@ -284,7 +284,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_zsh_completion_working_regex() {
+    pub(crate) fn test_zsh_completion_working_regex() {
         // Generate the original completion script.
         let script = get_completion_script(Shell::Zsh);
         // Test if there was a replacement done on the clap generated completions
@@ -292,7 +292,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_fish_completion_working_regex() {
+    pub(crate) fn test_fish_completion_working_regex() {
         // Generate the original completion script.
         let script = get_completion_script(Shell::Fish);
         let replaced_script = replace_fish_completion(&script);
@@ -301,7 +301,7 @@ _arguments "${_arguments_options[@]}" \
     }
 
     #[test]
-    pub fn test_nushell_completion_working_regex() {
+    pub(crate) fn test_nushell_completion_working_regex() {
         // Generate the original completion script.
         let script = get_completion_script(Shell::Nushell);
         // Test if there was a replacement done on the clap generated completions
