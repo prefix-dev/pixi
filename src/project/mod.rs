@@ -31,7 +31,7 @@ use pixi_manifest::{
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{ChannelConfig, Version};
+use rattler_conda_types::{Channel, ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -135,7 +135,7 @@ impl Borrow<ParsedManifest> for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         let root = manifest
@@ -508,50 +508,53 @@ impl Project {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
         fn build_pypi_name_mapping_source(
             manifest: &Manifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
             match manifest.parsed.project.conda_pypi_map.clone() {
-                Some(url) => {
-                    // transform user defined channels into rattler::Channel
-                    let channels = url
-                        .keys()
-                        .map(|channel_str| {
-                            (
-                                channel_str,
-                                channel_str
-                                    .clone()
-                                    .into_channel(channel_config)
-                                    .canonical_name(),
-                            )
+                Some(map) => {
+                    let channel_to_location_map = map
+                        .into_iter()
+                        .map(|(key, value)| {
+                            let key = key.into_channel(channel_config);
+                            Ok((key, value))
                         })
-                        .collect::<Vec<_>>();
+                        .collect::<miette::Result<HashMap<Channel, String>>>()?;
 
-                    let project_channels = manifest
+                    let project_channels: HashSet<_> = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.to_string())
-                        .collect::<HashSet<_>>();
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
 
-                    // Throw a warning for each missing channel from project table
-                    channels.iter().for_each(|(_, channel_canonical_name)| {
-                        if !project_channels.contains(channel_canonical_name) {
-                            tracing::warn!(
-                                "Defined custom mapping channel {} is missing from project channels",
-                                channel_canonical_name
+                    for channel in channel_to_location_map.keys() {
+                        if !project_channels.contains(channel) {
+                            let channels = project_channels
+                                .iter()
+                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            miette::bail!(
+                                "Defined conda-pypi-map channel: {} is missing from the channels, which are: {}",
+                                console::style(
+                                    channel
+                                        .name
+                                        .clone()
+                                        .unwrap_or_else(|| channel.base_url.to_string())
+                                )
+                                .bold(),
+                                channels
                             );
                         }
-                    });
+                    }
 
-                    let mapping = channels
+                    let mapping = channel_to_location_map
                         .iter()
-                        .map(|(channel_str, channel)| {
-                            let mapping_location = url.get(channel_str).unwrap();
-
+                        .map(|(channel, mapping_location)| {
                             let url_or_path = match Url::parse(mapping_location) {
                                 Ok(url) => MappingLocation::Url(url),
                                 Err(err) => {
@@ -563,7 +566,7 @@ impl Project {
                                 }
                             };
 
-                            Ok((channel.trim_end_matches('/').into(), url_or_path))
+                            Ok((channel.canonical_name().trim_end_matches('/').into(), url_or_path))
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
@@ -572,10 +575,8 @@ impl Project {
                 None => Ok(MappingSource::Prefix),
             }
         }
-
-        self.mapping_source.get_or_init(|| {
+        self.mapping_source.get_or_try_init(|| {
             build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
-                .expect("mapping source should be ok")
         })
     }
 
@@ -901,5 +902,53 @@ mod tests {
             .manifest
             .tasks(Some(Platform::Linux64), &FeatureName::Default)
             .unwrap());
+    }
+
+    #[test]
+    fn test_mapping_location() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        let mapping = project.pypi_name_mapping_source().unwrap();
+        let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
+        let canonical_name = channel.canonical_name();
+
+        let canonical_channel_name = canonical_name.trim_end_matches('/');
+
+        assert_eq!(mapping.custom().unwrap().mapping.get(canonical_channel_name).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+
+        // Check url channel as map key
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["https://prefix.dev/test-channel"]
+            platforms = []
+            conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        let mapping = project.pypi_name_mapping_source().unwrap();
+        assert_eq!(
+            mapping
+                .custom()
+                .unwrap()
+                .mapping
+                .get(
+                    Channel::from_str("https://prefix.dev/test-channel", &project.channel_config())
+                        .unwrap()
+                        .canonical_name()
+                        .trim_end_matches('/')
+                )
+                .unwrap(),
+            &MappingLocation::Path(PathBuf::from("mapping.json"))
+        );
     }
 }

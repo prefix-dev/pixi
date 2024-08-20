@@ -9,7 +9,7 @@ use deno_task_shell::{
     execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
 };
 use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -22,7 +22,11 @@ use crate::{
 };
 use pixi_consts::consts;
 
+use crate::activation::CurrentEnvVarBehavior;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use crate::project::HasProjectRef;
 use pixi_manifest::{Task, TaskName};
+use pixi_progress::await_in_progress;
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -111,31 +115,13 @@ impl<'p> ExecutableTask<'p> {
         self.project
     }
 
-    /// Returns a [`SequentialList`] which can be executed by deno task shell.
-    /// Returns `None` if the command is not executable like in the case of
-    /// an alias.
-    pub(crate) fn as_deno_script(
-        &self,
-    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+    /// Returns the task as script
+    fn as_script(&self) -> Option<String> {
         // Convert the task into an executable string
-        let Some(task) = self.task.as_single_command() else {
-            return Ok(None);
-        };
+        let task = self.task.as_single_command()?;
 
-        // Append the environment variables if they don't exist
-        let mut export = String::new();
-        if let Some(env) = self.task.env() {
-            for (key, value) in env {
-                if value.contains(format!("${}", key).as_str())
-                    || std::env::var(key.as_str()).is_err()
-                {
-                    tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                    export.push_str(&format!("export \"{}={}\";\n", key, value));
-                } else {
-                    tracing::info!("Environment variable {} already set", key);
-                }
-            }
-        }
+        // Get the export specific environment variables
+        let export = get_export_specific_task_env(self.task.as_ref());
 
         // Append the command line arguments verbatim
         let cli_args = self
@@ -150,13 +136,28 @@ impl<'p> ExecutableTask<'p> {
             format!("{export}\n{task} {cli_args}")
         };
 
-        // Parse the shell command
-        deno_task_shell::parser::parse(full_script.trim())
-            .map_err(|e| FailedToParseShellScript {
-                script: full_script,
-                error: e.to_string(),
-            })
-            .map(Some)
+        Some(full_script)
+    }
+
+    /// Returns a [`SequentialList`] which can be executed by deno task shell.
+    /// Returns `None` if the command is not executable like in the case of
+    /// an alias.
+    pub(crate) fn as_deno_script(
+        &self,
+    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+        if let Some(full_script) = self.as_script() {
+            tracing::debug!("Parsing shell script: {}", full_script);
+
+            // Parse the shell command
+            deno_task_shell::parser::parse(full_script.trim())
+                .map_err(|e| FailedToParseShellScript {
+                    script: full_script,
+                    error: e.to_string(),
+                })
+                .map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Returns the working directory for this task.
@@ -327,4 +328,156 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     let (reader, writer) = pipe();
     let handle = reader.pipe_to_string_handle();
     (writer, handle)
+}
+
+/// Task specific environment variables.
+fn get_export_specific_task_env(task: &Task) -> String {
+    // Append the environment variables if they don't exist
+    let mut export = String::new();
+    if let Some(env) = task.env() {
+        for (key, value) in env {
+            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
+            {
+                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
+            } else {
+                tracing::info!("Environment variable {} already set", key);
+            }
+        }
+    }
+    export
+}
+
+/// Determine the environment variables to use when executing a command. The method combines the
+/// activation environment with the system environment variables.
+pub async fn get_task_env<'p>(
+    environment: &Environment<'p>,
+    clean_env: bool,
+) -> miette::Result<HashMap<String, String>> {
+    // Make sure the system requirements are met
+    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
+
+    // Get environment variables from the activation
+    let env_var_behavior = if clean_env {
+        CurrentEnvVarBehavior::Clean
+    } else {
+        CurrentEnvVarBehavior::Include
+    };
+    let mut activation_env = await_in_progress("activating environment", |_| {
+        environment
+            .project()
+            .get_activated_environment_variables(environment, env_var_behavior)
+    })
+    .await
+    .wrap_err("failed to activate environment")?
+    .clone();
+
+    // Add the current working directory to the environment
+    if let Ok(init_cwd) = std::env::current_dir() {
+        activation_env.insert(
+            "INIT_CWD".to_string(),
+            init_cwd.to_string_lossy().to_string(),
+        );
+    } else {
+        tracing::warn!("Failed to get the current working directory for INIT_CWD.");
+    }
+
+    // Concatenate with the system environment variables
+    Ok(activation_env)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_manifest::Manifest;
+    use std::path::Path;
+
+    const PROJECT_BOILERPLATE: &str = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        # Required to run tests
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-ppc64le", "linux-aarch64"]
+        "#;
+
+    #[test]
+    fn test_export_specific_task_env() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
+            "#;
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+        .unwrap();
+
+        let project = Project::from_manifest(manifest);
+
+        let task = project
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let export = get_export_specific_task_env(task);
+
+        assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
+    }
+
+    #[test]
+    fn test_as_script() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
+            "#;
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+        .unwrap();
+
+        let project = Project::from_manifest(manifest);
+
+        let task = project
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            project: &project,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: project.default_environment(),
+            additional_args: vec![],
+        };
+
+        let script = executable_task.as_script().unwrap();
+        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+    }
+
+    #[tokio::test]
+    async fn test_get_task_env() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
+            "#;
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+        .unwrap();
+
+        let project = Project::from_manifest(manifest);
+
+        let environment = project.default_environment();
+        let env = get_task_env(&environment, false).await.unwrap();
+        assert_eq!(
+            env.get("INIT_CWD").unwrap(),
+            &std::env::current_dir()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        );
+    }
 }

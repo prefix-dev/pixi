@@ -24,6 +24,7 @@ pub(crate) trait HasNameVersion {
 impl HasNameVersion for PypiRecord {
     type N = uv_normalize::PackageName;
     type V = pep440_rs::Version;
+
     fn name(&self) -> &uv_normalize::PackageName {
         &self.0.name
     }
@@ -34,6 +35,7 @@ impl HasNameVersion for PypiRecord {
 impl HasNameVersion for RepoDataRecord {
     type N = PackageName;
     type V = VersionWithSource;
+
     fn name(&self) -> &PackageName {
         &self.package_record.name
     }
