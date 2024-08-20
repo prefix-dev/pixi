@@ -17,14 +17,14 @@ use crate::common::builders::{
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::task::{
-    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+    get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+    TaskGraphError,
 };
 use pixi::{
     cli::{
         add, init,
         install::Args,
         project, remove, run,
-        run::get_task_env,
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
@@ -367,8 +367,8 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    let env =
-                        get_task_env(&mut lock_file, &task.run_environment, args.clean_env).await?;
+                    lock_file.prefix(&task.run_environment).await?;
+                    let env = get_task_env(&task.run_environment, args.clean_env).await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,
