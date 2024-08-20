@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::lock_file::UpdateLockFileOptions;
-use crate::Project;
+use ahash::{HashSet, HashSetExt};
 use clap::Parser;
 use console::Color;
 use fancy_display::FancyDisplay;
@@ -10,9 +8,15 @@ use itertools::Itertools;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    lock_file::UpdateLockFileOptions,
+    Project,
+};
+
 /// Show a tree of project dependencies
 #[derive(Debug, Parser)]
-#[clap(arg_required_else_help = false, long_about=format!(
+#[clap(arg_required_else_help = false, long_about = format!(
     "\
     Show a tree of project dependencies\n\
     \n\
@@ -35,7 +39,8 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: ProjectConfig,
 
-    /// The environment to list packages for. Defaults to the default environment.
+    /// The environment to list packages for. Defaults to the default
+    /// environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 
@@ -100,7 +105,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Filter and print an inverted dependency tree
 fn print_inverted_dependency_tree(
     inverted_dep_map: &HashMap<String, Package>,
-    direct_deps: &Vec<String>,
+    direct_deps: &HashSet<String>,
     regex: &Option<String>,
 ) -> Result<(), miette::Error> {
     let regex = regex
@@ -118,16 +123,21 @@ fn print_inverted_dependency_tree(
         ))?;
     }
 
-    for pkg_name in root_pkg_names.iter() {
-        if let Some(pkg) = inverted_dep_map.get(*pkg_name) {
-            print_package(
-                "\n".to_string(),
-                pkg,
-                direct_deps.contains(&pkg.name),
-                false,
-            );
+    let mut visited_pkgs = HashSet::new();
+    for pkg_name in root_pkg_names {
+        if let Some(pkg) = inverted_dep_map.get(pkg_name) {
+            let visited = !visited_pkgs.insert(pkg_name.clone());
+            print_package("\n", pkg, direct_deps.contains(&pkg.name), visited);
 
-            print_inverted_leaf(pkg, String::from(""), inverted_dep_map, direct_deps);
+            if !visited {
+                print_inverted_leaf(
+                    pkg,
+                    String::from(""),
+                    inverted_dep_map,
+                    direct_deps,
+                    &mut visited_pkgs,
+                );
+            }
         }
     }
 
@@ -139,7 +149,8 @@ fn print_inverted_leaf(
     pkg: &Package,
     prefix: String,
     inverted_dep_map: &HashMap<String, Package>,
-    direct_deps: &Vec<String>,
+    direct_deps: &HashSet<String>,
+    visited_pkgs: &mut HashSet<String>,
 ) {
     let needed_count = pkg.needed_by.len();
     for (index, needed_name) in pkg.needed_by.iter().enumerate() {
@@ -151,20 +162,29 @@ fn print_inverted_leaf(
         };
 
         if let Some(needed_pkg) = inverted_dep_map.get(needed_name) {
+            let visited = !visited_pkgs.insert(needed_pkg.name.clone());
             print_package(
-                format!("{prefix}{symbol} "),
+                &format!("{prefix}{symbol} "),
                 needed_pkg,
                 direct_deps.contains(&needed_pkg.name),
-                false,
+                visited,
             );
 
-            let new_prefix = if index == needed_count - 1 {
-                format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
-            } else {
-                format!("{}{} ", prefix, UTF8_SYMBOLS.down)
-            };
+            if !visited {
+                let new_prefix = if index == needed_count - 1 {
+                    format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
+                } else {
+                    format!("{}{} ", prefix, UTF8_SYMBOLS.down)
+                };
 
-            print_inverted_leaf(needed_pkg, new_prefix, inverted_dep_map, direct_deps)
+                print_inverted_leaf(
+                    needed_pkg,
+                    new_prefix,
+                    inverted_dep_map,
+                    direct_deps,
+                    visited_pkgs,
+                )
+            }
         }
     }
 }
@@ -172,7 +192,7 @@ fn print_inverted_leaf(
 /// Print a transitive dependency tree
 fn print_transitive_dependency_tree(
     dep_map: &HashMap<String, Package>,
-    direct_deps: &Vec<String>,
+    direct_deps: &HashSet<String>,
     filtered_keys: Vec<String>,
 ) -> Result<(), miette::Error> {
     let mut visited_pkgs = Vec::new();
@@ -181,12 +201,7 @@ fn print_transitive_dependency_tree(
         visited_pkgs.push(pkg_name.clone());
 
         if let Some(pkg) = dep_map.get(pkg_name) {
-            print_package(
-                "\n".to_string(),
-                pkg,
-                direct_deps.contains(&pkg.name),
-                false,
-            );
+            print_package("\n", pkg, direct_deps.contains(&pkg.name), false);
 
             print_dependency_leaf(pkg, "".to_string(), dep_map, &mut visited_pkgs, direct_deps)
         }
@@ -197,7 +212,7 @@ fn print_transitive_dependency_tree(
 /// Filter and print a top down dependency tree
 fn print_dependency_tree(
     dep_map: &HashMap<String, Package>,
-    direct_deps: &Vec<String>,
+    direct_deps: &HashSet<String>,
     regex: &Option<String>,
 ) -> Result<(), miette::Error> {
     let mut filtered_deps = direct_deps.clone();
@@ -236,7 +251,7 @@ fn print_dependency_tree(
         };
         if let Some(pkg) = dep_map.get(pkg_name) {
             print_package(
-                format!("{symbol} "),
+                &format!("{symbol} "),
                 pkg,
                 direct_deps.contains(&pkg.name),
                 false,
@@ -265,7 +280,7 @@ fn print_dependency_leaf(
     prefix: String,
     dep_map: &HashMap<String, Package>,
     visited_pkgs: &mut Vec<String>,
-    direct_deps: &Vec<String>,
+    direct_deps: &HashSet<String>,
 ) {
     let dep_count = pkg.dependencies.len();
     for (index, dep_name) in pkg.dependencies.iter().enumerate() {
@@ -281,7 +296,7 @@ fn print_dependency_leaf(
             visited_pkgs.push(dep.name.to_owned());
 
             print_package(
-                format!("{prefix}{symbol} "),
+                &format!("{prefix}{symbol} "),
                 dep,
                 direct_deps.contains(&dep.name),
                 visited,
@@ -302,7 +317,7 @@ fn print_dependency_leaf(
             visited_pkgs.push(dep_name.to_owned());
 
             print_package(
-                format!("{prefix}{symbol} "),
+                &format!("{prefix}{symbol} "),
                 &Package {
                     name: dep_name.to_owned(),
                     version: String::from(""),
@@ -317,11 +332,11 @@ fn print_dependency_leaf(
     }
 }
 
-/// Print package and style by attributes, like if are a direct dependency (name is green and bold),
-/// or by the source of the package (yellow version string for Conda, blue for PyPI).
-/// Packages that have already been visited and will not be recursed into again are
-/// marked with a star (*).
-fn print_package(prefix: String, package: &Package, direct: bool, visited: bool) {
+/// Print package and style by attributes, like if are a direct dependency (name
+/// is green and bold), or by the source of the package (yellow version string
+/// for Conda, blue for PyPI). Packages that have already been visited and will
+/// not be recursed into again are marked with a star (*).
+fn print_package(prefix: &str, package: &Package, direct: bool, visited: bool) {
     println!(
         "{}{} {} {}",
         prefix,
@@ -343,7 +358,7 @@ fn direct_dependencies(
     environment: &crate::project::Environment<'_>,
     platform: &Platform,
     dep_map: &HashMap<String, Package>,
-) -> Vec<String> {
+) -> HashSet<String> {
     let mut project_dependency_names = environment
         .dependencies(None, Some(*platform))
         .names()
@@ -355,7 +370,7 @@ fn direct_dependencies(
             }
         })
         .map(|p| p.as_source().to_string())
-        .collect_vec();
+        .collect::<HashSet<_>>();
 
     project_dependency_names.extend(
         environment
@@ -388,7 +403,8 @@ struct Package {
     source: PackageSource,
 }
 
-/// Builds a hashmap of dependencies, with names, versions, and what they depend on
+/// Builds a hashmap of dependencies, with names, versions, and what they depend
+/// on
 fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<String, Package> {
     let mut package_dependencies_map = HashMap::new();
 
@@ -458,8 +474,8 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
     package_dependencies_map
 }
 
-/// Given a map of dependencies, invert it so that it has what a package is needed by,
-/// rather than what it depends on
+/// Given a map of dependencies, invert it so that it has what a package is
+/// needed by, rather than what it depends on
 fn invert_dep_map(dep_map: &HashMap<String, Package>) -> HashMap<String, Package> {
     let mut inverted_deps = dep_map.clone();
 
