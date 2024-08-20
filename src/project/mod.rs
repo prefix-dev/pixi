@@ -382,9 +382,9 @@ impl Project {
 
     /// Returns the environment with the given name or `None` if no such
     /// environment exists.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<Environment<'_>>
+    pub fn environment<Q>(&self, name: &Q) -> Option<Environment<'_>>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         Some(Environment::new(self, self.manifest.environment(name)?))
     }

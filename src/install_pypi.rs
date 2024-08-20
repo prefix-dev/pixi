@@ -664,7 +664,7 @@ pub async fn update_python_distributions(
         LinkMode::default(),
         &uv_context.build_options,
         None,
-        uv_context.source_strategy.clone(),
+        uv_context.source_strategy,
         uv_context.concurrency,
         PreviewMode::Disabled,
     )

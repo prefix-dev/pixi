@@ -89,6 +89,7 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 /// Given a pyproject.toml and either case:
 ///   1) dependencies = [ foo @ /home/foo ]
 ///   2) tool.pixi.pypi-dependencies.foo = { path = "/home/foo"}
+///
 /// uv has different behavior for each.
 ///
 ///   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
@@ -337,7 +338,7 @@ pub async fn resolve_pypi(
         LinkMode::default(),
         &context.build_options,
         None,
-        context.source_strategy.clone(),
+        context.source_strategy,
         context.concurrency,
         PreviewMode::Disabled,
     )

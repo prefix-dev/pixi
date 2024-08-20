@@ -295,6 +295,7 @@ pub fn verify_environment_satisfiability(
 /// This function returns a [`PlatformUnsat`] error if a verification issue
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
+#[allow(clippy::result_large_err)]
 pub fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
@@ -361,6 +362,7 @@ pub fn verify_platform_satisfiability(
     )
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Dependency {
     Input(
         rattler_conda_types::PackageName,
@@ -496,6 +498,7 @@ pub(crate) fn pypi_satifisfies_requirement(
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_conda_packages: &RepoDataRecordsByName,
@@ -843,6 +846,7 @@ enum FoundPackage {
     PyPi(usize, Vec<ExtraName>),
 }
 
+#[allow(clippy::result_large_err)]
 fn find_matching_package(
     locked_conda_packages: &RepoDataRecordsByName,
     virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,

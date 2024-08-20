@@ -1702,7 +1702,7 @@ async fn spawn_extract_environment_task(
                 for dependency in record.package_record.depends.iter() {
                     let dependency_name =
                         PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
-                            dependency.split_once(' ').unwrap_or((&dependency, "")).0,
+                            dependency.split_once(' ').unwrap_or((dependency, "")).0,
                         ));
                     if queued_names.insert(dependency_name.clone()) {
                         queue.push(dependency_name);

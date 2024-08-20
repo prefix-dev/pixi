@@ -53,12 +53,10 @@ pub fn pypi_options_to_index_locations(
 
     let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
         // Convert to list of flat indexes
-        let flat_indexes = flat_indexes
+        flat_indexes
             .into_iter()
             .map(|i| to_flat_index_location(&i))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        flat_indexes
+            .collect::<Result<Vec<_>, _>>()?
     } else {
         vec![]
     };
