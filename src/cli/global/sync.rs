@@ -1,5 +1,8 @@
 use super::install::globally_install_package;
-use crate::{cli::cli_config::ChannelsConfig, global, global::channel_name_from_prefix};
+use crate::{
+    cli::cli_config::ChannelsConfig,
+    global::{self, channel_name_from_prefix, print_executables_available},
+};
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -79,6 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .context("failed to solve environment")?;
 
     // Install the package(s)
+    let mut executables = vec![];
     for (package_name, _) in specs {
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
@@ -87,6 +91,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Platform::current(),
         )
         .await?;
+        let channel_name =
+            channel_name_from_prefix(&prefix_package, config.global_channel_config());
+        let record = &prefix_package.repodata_record.package_record;
+
+        // Warn if no executables were created for the package
+        if scripts.is_empty() {
+            eprintln!(
+                "{}No executable entrypoint found in package {}, are you sure it exists?",
+                console::style(console::Emoji("⚠️", "")).yellow().bold(),
+                console::style(record.name.as_source()).bold()
+            );
+        }
+
+        eprintln!(
+            "{}Installed package {} {} {} from {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(record.name.as_source()).bold(),
+            console::style(record.version.version()).bold(),
+            console::style(record.build.as_str()).bold(),
+            channel_name,
+        );
+
+        executables.extend(scripts);
+    }
+
+    if !executables.is_empty() {
+        print_executables_available(executables).await?;
     }
 
     Ok(())

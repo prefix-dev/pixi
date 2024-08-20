@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, PrefixRecord};
 
@@ -133,7 +134,7 @@ pub(crate) async fn find_installed_package(
 /// # Returns
 ///
 /// The PrefixRecord of the designated package
-pub async fn find_designated_package(
+pub(crate) async fn find_designated_package(
     prefix: &Prefix,
     package_name: &PackageName,
 ) -> miette::Result<PrefixRecord> {
@@ -142,4 +143,46 @@ pub async fn find_designated_package(
         .into_iter()
         .find(|r| r.repodata_record.package_record.name == *package_name)
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+}
+
+pub(crate) async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Result<()> {
+    let BinDir(bin_dir) = BinDir::from_existing().await?;
+    let whitespace = console::Emoji("  ", "").to_string();
+    let executable = executables
+        .into_iter()
+        .map(|path| {
+            path.strip_prefix(&bin_dir)
+                .expect("script paths were constructed by joining onto BinDir")
+                .to_string_lossy()
+                .to_string()
+        })
+        .join(&format!("\n{whitespace} -  "));
+
+    if is_bin_folder_on_path().await {
+        eprintln!(
+            "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
+        )
+    } else {
+        eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
+                  console::style(&bin_dir.display()).bold(),
+                  console::style("!").yellow().bold(),
+                  console::style(&bin_dir.display()).bold()
+        )
+    }
+
+    Ok(())
+}
+
+/// Returns true if the bin folder is available on the PATH.
+async fn is_bin_folder_on_path() -> bool {
+    let bin_path = match BinDir::from_existing().await.ok() {
+        Some(BinDir(bin_dir)) => bin_dir,
+        None => return false,
+    };
+
+    std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect_vec())
+        .unwrap_or_default()
+        .into_iter()
+        .contains(&bin_path)
 }
