@@ -6,10 +6,12 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
-use crate::prefix::Prefix;
+use crate::{
+    global::install::{find_and_map_executable_scripts, BinScriptMapping},
+    prefix::Prefix,
+};
 use pixi_config::home_path;
 
-use super::install::{find_and_map_executable_scripts, BinScriptMapping};
 use crate::global::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.

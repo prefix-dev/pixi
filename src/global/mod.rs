@@ -2,6 +2,7 @@
 #![allow(unused)]
 
 mod common;
+pub(crate) mod install;
 mod project;
 
 pub(crate) use common::{

@@ -1,7 +1,9 @@
-use super::install::globally_install_package;
 use crate::{
     cli::cli_config::ChannelsConfig,
-    global::{self, channel_name_from_prefix, print_executables_available},
+    global::{
+        self, channel_name_from_prefix, install::globally_install_package,
+        print_executables_available,
+    },
 };
 use clap::Parser;
 use indexmap::IndexMap;

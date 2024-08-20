@@ -1,10 +1,22 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, PackageName, PrefixRecord};
+use pixi_progress::{await_in_progress, global_multi_progress};
+use rattler::{
+    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
+    package_cache::PackageCache,
+};
+use rattler_conda_types::{
+    Channel, ChannelConfig, PackageName, Platform, PrefixRecord, RepoDataRecord,
+};
+use rattler_shell::{
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
+    shell::ShellEnum,
+};
+use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{prefix::Prefix, repodata};
+use crate::{prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible};
 use pixi_config::home_path;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
