@@ -1790,18 +1790,22 @@ This will always be slower than the pure conda solves. So for the best pixi expe
 <h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
 <p>Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.</p>
-<p>Normally the locations would be:
-Platform-specific default cache folder:
-- Linux: <code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME/.cache/rattler</code>
-- macOS: <code>$HOME/Library/Caches/rattler</code>
-- Windows: <code>%LOCALAPPDATA%\rattler</code></p>
+<p>Normally the location would be the following
+platform-specific default cache folder:</p>
+<ul>
+<li>Linux: <code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME/.cache/rattler</code></li>
+<li>macOS: <code>$HOME/Library/Caches/rattler</code></li>
+<li>Windows: <code>%LOCALAPPDATA%\rattler</code></li>
+</ul>
 <p>This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <code>RATTLER_CACHE_DIR</code> environment variable.</p>
 <p>When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.</p>
-<p>The cache contains multiple folders concerning different caches from within pixi.
-- <code>pkgs</code>: Contains the downloaded/unpacked <code>conda</code> packages.
-- <code>repodata</code>: Contains the <code>conda</code> repodata cache.
-- <code>uv-cache</code>: Contains the <code>uv</code> cache. This includes multiple caches, e.g. <code>built-wheels</code> <code>wheels</code> <code>archives</code>
-- <code>http-cache</code>: Contains the <code>conda-pypi</code> mapping cache.</p>
+<p>The cache contains multiple folders concerning different caches from within pixi.</p>
+<ul>
+<li><code>pkgs</code>: Contains the downloaded/unpacked <code>conda</code> packages.</li>
+<li><code>repodata</code>: Contains the <code>conda</code> repodata cache.</li>
+<li><code>uv-cache</code>: Contains the <code>uv</code> cache. This includes multiple caches, e.g. <code>built-wheels</code> <code>wheels</code> <code>archives</code></li>
+<li><code>http-cache</code>: Contains the <code>conda-pypi</code> mapping cache.</li>
+</ul>
 
 
 
