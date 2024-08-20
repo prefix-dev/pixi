@@ -1,24 +1,24 @@
-use std::cmp::Ordering;
-use std::io::{self, Write};
-use std::sync::Arc;
+use std::{
+    cmp::Ordering,
+    io::{self, Write},
+    sync::Arc,
+};
 
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config::default_channel_config;
+use pixi_progress::await_in_progress;
+use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::{repodata::fetch_sparse_repodata, Project};
-use pixi_config::default_channel_config;
-use pixi_progress::await_in_progress;
-use pixi_utils::reqwest::build_reqwest_clients;
-
 use super::cli_config::ChannelsConfig;
+use crate::{cli::cli_config::ProjectConfig, repodata::fetch_sparse_repodata, Project};
 
 /// Search a conda package
 ///
@@ -101,11 +101,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let package_name_filter = args.package;
 
-    let client = if let Some(project) = project.as_ref() {
-        project.authenticated_client().clone()
-    } else {
-        build_reqwest_clients(None).1
-    };
+    let client = project
+        .as_ref()
+        .map(|p| p.authenticated_client().clone())
+        .unwrap_or_else(|| build_reqwest_clients(None).1);
 
     let repo_data = Arc::new(
         fetch_sparse_repodata(
@@ -296,21 +295,17 @@ async fn search_package_by_wildcard<W: Write>(
             let packages =
                 search_package_by_filter(&package_name_search, repo_data.clone(), |pn, _| {
                     wildcard_pattern.is_match(pn)
-                });
-            match packages {
-                Ok(packages) => {
-                    if packages.is_empty() {
-                        let similarity = 0.6;
-                        return search_package_by_filter(
-                            &package_name_search,
-                            repo_data,
-                            |pn, n| jaro(pn, n.as_normalized()) > similarity,
-                        );
-                    }
-                    Ok(packages)
-                }
-                Err(e) => Err(e),
+                })?;
+
+            if !packages.is_empty() {
+                return Ok(packages);
             }
+
+            tracing::info!("No packages found with wildcard search, trying with fuzzy search.");
+            let similarity = 0.85;
+            return search_package_by_filter(&package_name_search, repo_data, |pn, n| {
+                jaro(pn, n.as_normalized()) > similarity
+            });
         })
     })
     .await
