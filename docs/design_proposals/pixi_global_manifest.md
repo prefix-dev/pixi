@@ -42,12 +42,12 @@ python = "python"
 python3 = "python3"
 "python3.11" = "python3.11"
 
-# The name of the environment is `python_3_10`
+# The name of the environment is `python3-10`
 # It will expose python3.10
-[envs.python_3_10.dependencies]
+[envs.python3-10.dependencies]
 python = "3.10.*"
 
-[envs.python_3_10.exposed]
+[envs.python3-10.exposed]
 "python3.10" = "python"
 
 ```
@@ -179,22 +179,22 @@ pixi global remove --environment python hypercorn
 
 ### Specifying which binaries to expose
 
-Make a new environment `python_3_10` with package `python=3.10` and expose the `python` executable as `python3.10`.
+Make a new environment `python3-10` with package `python=3.10` and expose the `python` executable as `python3.10`.
 ```
-pixi global install --environment python_3_10 --expose "python3.10=python" python=3.10
+pixi global install --environment python3-10 --expose "python3.10=python" python=3.10
 ```
 
 Now `python3.10` is available.
 
 
-Run the following in order to expose `python` from environment `python_3_10` as `python310` instead.
+Run the following in order to expose `python` from environment `python3-10` as `python3-10` instead.
 
 ```
-pixi global expose remove --environment python_3_10 python3.10
-pixi global expose add --environment python_3_10 "python310=python"
+pixi global expose remove --environment python3-10 python3.10
+pixi global expose add --environment python3-10 "python3-10=python"
 ```
 
-Now `python310` is available, but `python3.10` isn't anymore.
+Now `python3-10` is available, but `python3.10` isn't anymore.
 
 
 ### Syncing

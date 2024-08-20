@@ -560,6 +560,7 @@ mod tests {
         let examples = [
             format!("{PROJECT_BOILERPLATE}\n[foobar]"),
             format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]"),
+            format!("{PROJECT_BOILERPLATE}\n[environments.INVALID]"),
         ];
         assert_snapshot!(examples
             .into_iter()
