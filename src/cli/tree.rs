@@ -448,12 +448,13 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
 
             let mut dependencies = Vec::new();
             for p in pypi_package.data().package.requires_dist.iter() {
-                if let Some(markers) = &p.marker {
+                // If this is not true, it means that the marker does not hold for every environment
+                if !&p.marker.is_true() {
                     tracing::info!(
                         "Extra and environment markers currently cannot be parsed on {} which is specified by {}, skipping. {:?}",
                         p.name,
                         name,
-                        markers
+                        p.marker
                     );
                 } else {
                     dependencies.push(p.name.as_dist_info_name().into_owned())

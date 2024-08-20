@@ -84,9 +84,9 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
     }
 
     /// Removes a specific dependency
-    pub fn remove<Q: ?Sized>(&mut self, name: &Q) -> Option<(N, IndexSet<D>)>
+    pub fn remove<Q>(&mut self, name: &Q) -> Option<(N, IndexSet<D>)>
     where
-        Q: Hash + Equivalent<N>,
+        Q: ?Sized + Hash + Equivalent<N>,
     {
         self.map.shift_remove_entry(name)
     }
@@ -129,17 +129,17 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
     }
 
     /// Returns true if the dependency list contains the given package name.
-    pub fn contains_key<Q: ?Sized>(&self, name: &Q) -> bool
+    pub fn contains_key<Q>(&self, name: &Q) -> bool
     where
-        Q: Hash + Equivalent<N>,
+        Q: ?Sized + Hash + Equivalent<N>,
     {
         self.map.contains_key(name)
     }
 
     /// Returns the package specs for the specified package name.
-    pub fn get<Q: ?Sized>(&self, name: &Q) -> Option<&IndexSet<D>>
+    pub fn get<Q>(&self, name: &Q) -> Option<&IndexSet<D>>
     where
-        Q: Hash + Equivalent<N>,
+        Q: ?Sized + Hash + Equivalent<N>,
     {
         self.map.get(name)
     }

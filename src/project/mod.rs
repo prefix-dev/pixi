@@ -382,9 +382,9 @@ impl Project {
 
     /// Returns the environment with the given name or `None` if no such
     /// environment exists.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<Environment<'_>>
+    pub fn environment<Q>(&self, name: &Q) -> Option<Environment<'_>>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         Some(Environment::new(self, self.manifest.environment(name)?))
     }
@@ -922,7 +922,7 @@ mod tests {
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.custom().unwrap().mapping.get(&canonical_channel_name.to_string()).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(mapping.custom().unwrap().mapping.get(canonical_channel_name).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
 
         // Check url channel as map key
         let file_contents = r#"
@@ -942,14 +942,10 @@ mod tests {
                 .unwrap()
                 .mapping
                 .get(
-                    &Channel::from_str(
-                        "https://prefix.dev/test-channel",
-                        &project.channel_config()
-                    )
-                    .unwrap()
-                    .canonical_name()
-                    .trim_end_matches('/')
-                    .to_string()
+                    Channel::from_str("https://prefix.dev/test-channel", &project.channel_config())
+                        .unwrap()
+                        .canonical_name()
+                        .trim_end_matches('/')
                 )
                 .unwrap(),
             &MappingLocation::Path(PathBuf::from("mapping.json"))

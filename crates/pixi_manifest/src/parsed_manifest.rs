@@ -90,9 +90,9 @@ impl ParsedManifest {
 
     /// Returns the environment with the given name or `None` if it does not
     /// exist.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    pub fn environment<Q>(&self, name: &Q) -> Option<&Environment>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.environments.find(name)
     }

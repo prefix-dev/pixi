@@ -26,8 +26,8 @@ csv = "1.3.0"
 deno_task_shell = "0.16.0"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
 dunce = "1.0.4"
 fd-lock = "4.0.2"
 flate2 = "1.0.28"
@@ -40,7 +40,7 @@ ignore = "0.4.22"
 indexmap = "2.2.6"
 indicatif = "0.17.8"
 insta = "1.38.0"
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
 is_executable = "1.0.1"
 itertools = "0.13.0"
 lazy_static = "1.4.0"
@@ -53,11 +53,11 @@ parking_lot = "0.12.2"
 pep440_rs = "0.6.0"
 pep508_rs = "0.6.0"
 percent-encoding = "2.3.1"
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
 pyproject-toml = "0.11.0"
 regex = "1.10.4"
-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
 reqwest = { version = "0.12.4", default-features = false }
 reqwest-middleware = "0.3.0"
 reqwest-retry = "0.5.0"
@@ -100,19 +100,19 @@ rattler_virtual_packages = { version = "1.0.4", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.0"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-toolchain = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "0.6.6", default-features = false }
@@ -277,8 +277,8 @@ uv-distribution = { workspace = true }
 uv-git = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
+uv-python = { workspace = true }
 uv-resolver = { workspace = true }
-uv-toolchain = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
@@ -288,17 +288,6 @@ libc = { workspace = true, default-features = false }
 nix = { workspace = true, features = ["fs", "signal", "term", "poll"] }
 pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
-
-# Remove this after updating to uv >= 0.1.40
-[target.'cfg(windows)'.dependencies]
-winapi = { workspace = true, features = [
-  "fileapi",
-  "handleapi",
-  "ioapiset",
-  "winbase",
-  "winioctl",
-  "winnt",
-] }
 
 [profile.dist]
 codegen-units = 1
@@ -326,18 +315,19 @@ tokio = { workspace = true, features = ["rt"] }
 # For pyproject-toml
 # pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.37" }
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "21ceec9a5fd2e8d6f71c3ea2999078fecbd13cbe" }
 # deno_task_shell = { path = "../deno_task_shell" }
-#rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
@@ -348,6 +338,8 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.18" }
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
 #rattler = { path = "../rattler/crates/rattler" }
+
+
 # Change these lines if you want a patched version of uv
 # [patch.'https://github.com/astral-sh/uv']
 # pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }

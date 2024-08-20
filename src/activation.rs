@@ -411,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "unix")]
+    #[cfg(target_os = "linux")]
     fn test_get_linux_clean_environment_variables() {
         let env = get_clean_environment_variables();
         // Make sure that the environment variables are set.

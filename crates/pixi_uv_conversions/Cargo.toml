@@ -11,6 +11,7 @@ version = "0.1.0"
 
 
 [dependencies]
+distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
 pep508_rs = { workspace = true }
