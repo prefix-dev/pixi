@@ -340,7 +340,7 @@ impl PixiControl {
 
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
-            .up_to_date_lock_file(UpdateLockFileOptions {
+            .update_lock_file(UpdateLockFileOptions {
                 lock_file_usage: args.lock_file_usage.into(),
                 ..UpdateLockFileOptions::default()
             })
@@ -425,7 +425,7 @@ impl PixiControl {
     /// Load the current lock-file.
     ///
     /// If you want to lock-file to be up-to-date with the project call
-    /// [`Self::up_to_date_lock_file`].
+    /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
@@ -433,10 +433,10 @@ impl PixiControl {
 
     /// Load the current lock-file and makes sure that its up to date with the
     /// project.
-    pub async fn up_to_date_lock_file(&self) -> miette::Result<LockFile> {
+    pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.project()?;
         Ok(project
-            .up_to_date_lock_file(UpdateLockFileOptions::default())
+            .update_lock_file(UpdateLockFileOptions::default())
             .await?
             .lock_file)
     }

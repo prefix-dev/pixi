@@ -1,45 +1,57 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
-use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<PackageName, RepoDataRecord>;
-pub type PypiRecordsByName = DependencyRecordsByName<uv_normalize::PackageName, PypiRecord>;
+pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
+pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
-pub(crate) trait HasNameVersion<N> {
-    fn name(&self) -> &N;
-    fn version(&self) -> &impl PartialOrd;
+pub(crate) trait HasNameVersion {
+    // Name type of the dependency
+    type N: Hash + Eq + Clone;
+    // Version type of the dependency
+    type V: PartialOrd + ToString;
+
+    /// Returns the name of the dependency
+    fn name(&self) -> &Self::N;
+    /// Returns the version of the dependency
+    fn version(&self) -> &Self::V;
 }
 
-impl HasNameVersion<uv_normalize::PackageName> for PypiRecord {
+impl HasNameVersion for PypiRecord {
+    type N = uv_normalize::PackageName;
+    type V = pep440_rs::Version;
+
     fn name(&self) -> &uv_normalize::PackageName {
         &self.0.name
     }
-    fn version(&self) -> &pep440_rs::Version {
+    fn version(&self) -> &Self::V {
         &self.0.version
     }
 }
-impl HasNameVersion<PackageName> for RepoDataRecord {
+impl HasNameVersion for RepoDataRecord {
+    type N = PackageName;
+    type V = VersionWithSource;
+
     fn name(&self) -> &PackageName {
         &self.package_record.name
     }
-    fn version(&self) -> &VersionWithSource {
+    fn version(&self) -> &Self::V {
         &self.package_record.version
     }
 }
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<N: Hash + Eq + Clone, D: HasNameVersion<N>> {
+pub struct DependencyRecordsByName<D: HasNameVersion> {
     pub records: Vec<D>,
-    by_name: HashMap<N, usize>,
+    by_name: HashMap<D::N, usize>,
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> Default for DependencyRecordsByName<N, D> {
+impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
     fn default() -> Self {
         Self {
             records: Vec::new(),
@@ -48,7 +60,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> Default for DependencyRecordsBy
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyRecordsByName<N, D> {
+impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
     fn from(records: Vec<D>) -> Self {
         let by_name = records
             .iter()
@@ -59,22 +71,14 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyReco
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
+impl<D: HasNameVersion> DependencyRecordsByName<D> {
     /// Returns the record with the given name or `None` if no such record exists.
-    pub(crate) fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&D>
-    where
-        N: Borrow<Q>,
-        Q: Hash + Eq,
-    {
+    pub(crate) fn by_name(&self, key: &D::N) -> Option<&D> {
         self.by_name.get(key).map(|idx| &self.records[*idx])
     }
 
     /// Returns the index of the record with the given name or `None` if no such record exists.
-    pub(crate) fn index_by_name<Q: ?Sized>(&self, key: &Q) -> Option<usize>
-    where
-        N: Borrow<Q>,
-        Q: Hash + Eq,
-    {
+    pub(crate) fn index_by_name(&self, key: &D::N) -> Option<usize> {
         self.by_name.get(key).copied()
     }
     /// Returns true if there are no records stored in this instance
@@ -93,7 +97,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
     }
 
     /// Returns an iterator over the names of the records stored in this instance.
-    pub(crate) fn names(&self) -> impl Iterator<Item = &N> {
+    pub(crate) fn names(&self) -> impl Iterator<Item = &D::N> {
         // Iterate over the records to retain the index of the original record.
         self.records.iter().map(|r| r.name())
     }

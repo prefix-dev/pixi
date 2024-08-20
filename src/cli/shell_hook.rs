@@ -15,7 +15,7 @@ use crate::project::HasProjectRef;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::LockFileUsageArgs,
-    environment::get_up_to_date_prefix,
+    environment::update_prefix,
     project::Environment,
     Project,
 };
@@ -107,7 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(args.config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    update_prefix(&environment, args.lock_file_usage.into(), false).await?;
 
     let output = match args.json {
         true => generate_environment_json(&environment).await?,

@@ -14,7 +14,7 @@ pub(crate) trait HasSpecs {
     fn specs(&self) -> miette::Result<IndexMap<PackageName, MatchSpec>> {
         let mut map = IndexMap::with_capacity(self.packages().len());
         for package in self.packages() {
-            let spec = MatchSpec::from_str(package, ParseStrictness::Strict).into_diagnostic()?;
+            let spec = MatchSpec::from_str(package, ParseStrictness::Lenient).into_diagnostic()?;
             let name = spec.name.clone().ok_or_else(|| {
                 miette::miette!("could not find package name in MatchSpec {}", spec)
             })?;

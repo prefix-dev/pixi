@@ -18,7 +18,7 @@ use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
+    environment::{update_prefix, LockFileUsage},
     Project,
 };
 
@@ -243,7 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
+        update_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
     } else {
         let channels = if let Some(channels) = args.channels {
             channels

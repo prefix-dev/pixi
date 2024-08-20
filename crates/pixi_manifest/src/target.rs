@@ -285,14 +285,14 @@ impl TargetSelector {
     }
 }
 
-impl ToString for TargetSelector {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for TargetSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelector::Platform(p) => p.to_string(),
-            TargetSelector::Linux => "linux".to_string(),
-            TargetSelector::Unix => "unix".to_string(),
-            TargetSelector::Win => "win".to_string(),
-            TargetSelector::MacOs => "osx".to_string(),
+            TargetSelector::Platform(p) => write!(f, "{}", p),
+            TargetSelector::Linux => write!(f, "linux"),
+            TargetSelector::Unix => write!(f, "unix"),
+            TargetSelector::Win => write!(f, "win"),
+            TargetSelector::MacOs => write!(f, "osx"),
         }
     }
 }

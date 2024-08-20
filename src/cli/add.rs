@@ -64,6 +64,7 @@ use crate::{
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
 ///   `project.dependencies.aws` array
+///
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
 #[derive(Parser, Debug, Default)]

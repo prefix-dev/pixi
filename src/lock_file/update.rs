@@ -59,15 +59,15 @@ impl Project {
     ///
     /// Returns the lock-file and any potential derived data that was computed
     /// as part of this operation.
-    pub async fn up_to_date_lock_file(
+    pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update::ensure_up_to_date_lock_file(self, options).await
+        update::update_lock_file(self, options).await
     }
 }
 
-/// Options to pass to [`Project::up_to_date_lock_file`].
+/// Options to pass to [`Project::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
     /// Defines what to do if the lock-file is out of date
@@ -83,7 +83,7 @@ pub struct UpdateLockFileOptions {
 }
 
 /// A struct that holds the lock-file and any potential derived data that was
-/// computed when calling `ensure_up_to_date_lock_file`.
+/// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub project: &'p Project,
 
@@ -516,7 +516,7 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
 /// not up-to-date it will construct a task graph of all the work that needs to
 /// be done to update the lock-file. The tasks are awaited in a specific order
 /// to make sure that we can start instantiating prefixes as soon as possible.
-pub async fn ensure_up_to_date_lock_file(
+pub async fn update_lock_file(
     project: &Project,
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
@@ -1702,7 +1702,7 @@ async fn spawn_extract_environment_task(
                 for dependency in record.package_record.depends.iter() {
                     let dependency_name =
                         PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
-                            dependency.split_once(' ').unwrap_or((&dependency, "")).0,
+                            dependency.split_once(' ').unwrap_or((dependency, "")).0,
                         ));
                     if queued_names.insert(dependency_name.clone()) {
                         queue.push(dependency_name);

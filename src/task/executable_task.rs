@@ -473,7 +473,7 @@ mod tests {
         let environment = project.default_environment();
         let env = get_task_env(&environment, false).await.unwrap();
         assert_eq!(
-            env.get(&"INIT_CWD".to_string()).unwrap(),
+            env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()
                 .unwrap()
                 .to_string_lossy()

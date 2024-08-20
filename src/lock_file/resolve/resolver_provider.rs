@@ -3,9 +3,10 @@ use std::{
     future::ready,
 };
 
+use distribution_filename::SourceDistExtension;
 use distribution_types::{
     Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
-    RegistrySourceDist, SourceDist, SourceDistCompatibility,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -48,14 +49,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 requires_python: None,
                 size: None,
                 upload_time_utc_ms: None,
-                url: FileLocation::AbsoluteUrl(repodata_record.url.to_string()),
+                url: FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone())),
                 yanked: None,
             };
 
             let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
                 version: repodata_record
-                    .version()
                     .version()
                     .to_string()
                     .parse()
@@ -65,6 +65,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
                 )),
                 wheels: vec![],
+                ext: SourceDistExtension::TarGz,
             };
 
             let prioritized_dist = PrioritizedDist::from_source(

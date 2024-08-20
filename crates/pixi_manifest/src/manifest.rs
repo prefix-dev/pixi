@@ -596,9 +596,9 @@ impl Manifest {
 
     /// Returns the mutable feature with the given name or `None` if it does not
     /// exist.
-    pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> miette::Result<&mut Feature>
+    pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
-        Q: Hash + Equivalent<FeatureName> + Display,
+        Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
         self.parsed
             .features
@@ -616,9 +616,9 @@ impl Manifest {
     }
 
     /// Returns the feature with the given name or `None` if it does not exist.
-    pub fn feature<Q: ?Sized>(&self, name: &Q) -> Option<&Feature>
+    pub fn feature<Q>(&self, name: &Q) -> Option<&Feature>
     where
-        Q: Hash + Equivalent<FeatureName>,
+        Q: ?Sized + Hash + Equivalent<FeatureName>,
     {
         self.parsed.features.get(name)
     }
@@ -634,9 +634,9 @@ impl Manifest {
 
     /// Returns the environment with the given name or `None` if it does not
     /// exist.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    pub fn environment<Q>(&self, name: &Q) -> Option<&Environment>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
     }

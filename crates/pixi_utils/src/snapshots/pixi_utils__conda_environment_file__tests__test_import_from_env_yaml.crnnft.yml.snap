@@ -136,7 +136,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -145,7 +145,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 extras: [],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -154,7 +154,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 extras: [],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -163,7 +163,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 extras: [],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -172,7 +172,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 extras: [],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
         ],

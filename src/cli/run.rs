@@ -83,7 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.into(),
             ..UpdateLockFileOptions::default()
         })

@@ -16,7 +16,7 @@ use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
-use uv_toolchain::PythonEnvironment;
+use uv_python::PythonEnvironment;
 
 use crate::common::{
     builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
@@ -298,8 +298,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_toolchain::Interpreter::query(python, cache).unwrap();
-    uv_toolchain::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
+    uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -424,7 +424,7 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 2 was selected from
     // channel `a`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
     // Switch the channel around
@@ -445,7 +445,7 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 1 was now selected
     // from channel `b`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }
 
