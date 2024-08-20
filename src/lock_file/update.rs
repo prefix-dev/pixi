@@ -1480,7 +1480,7 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source()?.clone();
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
@@ -1787,7 +1787,7 @@ async fn spawn_solve_pypi_task(
 
     let environment_name = environment.name().clone();
 
-    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
+    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source()?;
 
     let mut conda_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();
