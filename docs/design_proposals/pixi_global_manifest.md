@@ -32,7 +32,7 @@ The motivation for the location is discussed [further below](#multiple-manifests
 
 ```toml title="pixi-global.toml"
 [envs.python]
-channels = ["https://fast.prefix.dev/conda-forge"] # optional, defaults to global config, which defaults to "conda-forge"
+channels = ["https://fast.prefix.dev/conda-forge"]
 platform = "osx-64"                                # optional, defaults to your current OS
 # The name of the environment is `python`
 # It will expose python, python3 and python3.11, but not pip
@@ -62,9 +62,14 @@ If `--environment` has been given, all packages will be installed in the same en
 If the environment already exists, the command will return with an error.
 `--expose` can be given if `--environment` is given as well or if only a single `PACKAGE` will be installed.
 The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+`--platform` sets the platform of the environment to `PLATFORM`
+Multiple channels can be specified by using `--channel` multiple times.
+By default, if no channel is provided, the `default-channels` key in the pixi configuration is used, which again defaults to "conda-forge".
+
+
 
 ```
-pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL] <PACKAGE>...
+pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... <PACKAGE>...
 ```
 
 Remove environments `ENV`.
