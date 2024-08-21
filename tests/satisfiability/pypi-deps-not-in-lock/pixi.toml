@@ -1,0 +1,8 @@
+[project]
+channels = ["https://fast.prefix.dev/conda-forge"]
+name = "ruff"
+platforms = ["linux-64"]
+[dependencies]
+ruff = "*"
+[pypi-dependencies]
+ruff = "*"
