@@ -1178,6 +1178,18 @@ List the environments in the manifest file.
 pixi project environment list
 ```
 
+### `project export conda_explicit_spec`
+
+Render a platform-specific conda [explicit specification file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments)
+for an environment. The file can be then used to create a conda environment using conda/mamba:
+
+```shell
+mamba create --name <env> --file <explicit spec file>
+```
+
+As the explicit specification file format does not support pypi-dependencies, use either the `--ignore-pypi-errors` option to ignore those dependencies or 
+`--write-pypi-requirements` to write a `requirements.txt` file that can then be used to install the packages into a conda env using `pip` or `uv`.
+
 ### `project platform add`
 
 Adds a platform(s) to the manifest file and updates the lock file.
