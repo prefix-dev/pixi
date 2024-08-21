@@ -2,6 +2,11 @@ mod common;
 
 use std::str::FromStr;
 
+use crate::common::{
+    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 use pixi::{DependencyType, Project};
 use pixi_consts::consts;
 use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, SpecType};
@@ -9,12 +14,6 @@ use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
 use tempfile::TempDir;
 use uv_normalize::ExtraName;
-
-use crate::common::{
-    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
-    package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
-};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
