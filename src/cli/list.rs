@@ -144,7 +144,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_project(&project)?;
             index_locations =
-                pypi_options_to_index_locations(&environment.pypi_options()).into_diagnostic()?;
+                pypi_options_to_index_locations(&environment.pypi_options(), project.root())
+                    .into_diagnostic()?;
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),
