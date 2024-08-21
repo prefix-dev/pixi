@@ -31,6 +31,9 @@ Among other things it will be written in the TOML format, be named `pixi-global.
 The motivation for the location is discussed [further below](#multiple-manifests)
 
 ```toml title="pixi-global.toml"
+[envs.python]
+channels = ["https://fast.prefix.dev/conda-forge"] # optional, defaults to "conda-forge"
+platform = "osx-64"                                # optional, defaults to your current OS
 # The name of the environment is `python`
 # It will expose python, python3 and python3.11, but not pip
 [envs.python.dependencies]
@@ -247,6 +250,7 @@ We still have to figure out which existing programs do something similar and how
 ### Multiple manifests
 
 We could go for one default manifest, but also parse other manifests in the same directory.
+The only requirement to be parsed as manifest is a `.toml` extension
 In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
 
 - pixi-global.toml: Default
@@ -257,7 +261,11 @@ It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
 
 
-### Discovery via environment variable
+### Discovery via config key
 
-In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a environment variable.
-That environment variable could be called `PIXI_GLOBAL_MANIFESTS`.
+In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a key in the [pixi configuration](https://pixi.sh/dev/reference/pixi_configuration/).
+
+
+``` title="config.toml"
+global_manifests = "/path/to/your/manifests"
+```
