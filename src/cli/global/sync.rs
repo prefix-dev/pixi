@@ -2,7 +2,7 @@ use crate::{
     cli::cli_config::ChannelsConfig,
     global::{
         self, channel_name_from_prefix, install::globally_install_package,
-        print_executables_available,
+        print_executables_available, EnvironmentName,
     },
 };
 use clap::Parser;
@@ -12,7 +12,8 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{default_channel_config, reqwest::build_reqwest_clients};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
+use pypi_mapping::prefix_pypi_name_mapping::Package;
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 
@@ -36,52 +37,53 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (_, auth_client) = build_reqwest_clients(Some(&config));
 
     let gateway = config.gateway(auth_client.clone());
-    // TODO make this more robust and support more than one environment
-    let environment = &project.environments().first().unwrap().1.clone();
-    let specs = environment
-        .dependencies()
-        .into_iter()
-        .map(|(name, spec)| {
-            let match_spec = MatchSpec::from_nameless(
-                spec.try_into_nameless_match_spec(&default_channel_config())
-                    .unwrap()
-                    .unwrap(),
-                Some(name.clone()),
-            );
-            (name, match_spec)
+
+    for (environment_name, parsed_environment) in project.environments() {
+        let specs: IndexMap<PackageName, MatchSpec> = parsed_environment
+            .dependencies()
+            .into_iter()
+            .map(|(name, spec)| {
+                let match_spec = MatchSpec::from_nameless(
+                    spec.try_into_nameless_match_spec(&default_channel_config())
+                        .unwrap()
+                        .unwrap(),
+                    Some(name.clone()),
+                );
+                (name, match_spec)
+            })
+            .collect();
+
+        let repodata = gateway
+            .query(
+                channels,
+                [Platform::current(), Platform::NoArch],
+                specs.values().cloned().collect_vec(),
+            )
+            .recursive(true)
+            .await
+            .into_diagnostic()?;
+
+        // Determine virtual packages of the current platform
+        let virtual_packages = VirtualPackage::current()
+            .into_diagnostic()
+            .context("failed to determine virtual packages")?
+            .iter()
+            .cloned()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        // Solve the environment
+        let solver_specs = specs.clone();
+        let solved_records = wrap_in_progress("solving environment", move || {
+            Solver.solve(SolverTask {
+                specs: solver_specs.values().cloned().collect_vec(),
+                virtual_packages,
+                ..SolverTask::from_iter(&repodata)
+            })
         })
-        .collect::<IndexMap<_, _>>();
-
-    let repodata = gateway
-        .query(
-            channels,
-            [Platform::current(), Platform::NoArch],
-            specs.values().cloned().collect_vec(),
-        )
-        .recursive(true)
-        .await
-        .into_diagnostic()?;
-
-    // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::current()
         .into_diagnostic()
-        .context("failed to determine virtual packages")?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
-    // Solve the environment
-    let solver_specs = specs.clone();
-    let solved_records = wrap_in_progress("solving environment", move || {
-        Solver.solve(SolverTask {
-            specs: solver_specs.values().cloned().collect_vec(),
-            virtual_packages,
-            ..SolverTask::from_iter(&repodata)
-        })
-    })
-    .into_diagnostic()
-    .context("failed to solve environment")?;
+        .context("failed to solve environment")?;
+    }
 
     // Install the package(s)
     let mut executables = vec![];

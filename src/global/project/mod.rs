@@ -6,7 +6,7 @@ use std::{
     sync::OnceLock,
 };
 
-use environment::EnvironmentName;
+pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 use manifest::Manifest;
 use miette::IntoDiagnostic;
