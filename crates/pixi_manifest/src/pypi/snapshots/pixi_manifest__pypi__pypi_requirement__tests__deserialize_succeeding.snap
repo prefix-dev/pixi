@@ -1,0 +1,70 @@
+---
+source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
+expression: snapshot
+---
+- input: "==1.2.3"
+  result: "==1.2.3"
+- input:
+    version: "==1.2.3"
+  result:
+    version: "==1.2.3"
+    extras: []
+- input: "*"
+  result: "*"
+- input:
+    path: foobar
+  result:
+    path: foobar
+    editable: ~
+    extras: []
+- input:
+    path: ~/.cache
+  result:
+    path: ~/.cache
+    editable: ~
+    extras: []
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+  result:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    subdirectory: ~
+    extras: []
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: ~
+    tag: ~
+    rev: ~
+    subdirectory: ~
+    extras: []
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: ~
+    rev: ~
+    subdirectory: ~
+    extras: []
+- input:
+    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+    tag: v1.2.3
+  result:
+    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+    branch: ~
+    tag: v1.2.3
+    rev: ~
+    subdirectory: ~
+    extras: []
+- input:
+    git: "https://github.com/prefix-dev/rattler-build"
+    rev: "123456"
+  result:
+    git: "https://github.com/prefix-dev/rattler-build"
+    branch: ~
+    tag: ~
+    rev: "123456"
+    subdirectory: ~
+    extras: []
