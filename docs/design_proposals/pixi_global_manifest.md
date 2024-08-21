@@ -32,7 +32,7 @@ The motivation for the location is discussed [further below](#multiple-manifests
 
 ```toml title="pixi-global.toml"
 [envs.python]
-channels = ["https://fast.prefix.dev/conda-forge"] # optional, defaults to "conda-forge"
+channels = ["https://fast.prefix.dev/conda-forge"] # optional, defaults to global config, which defaults to "conda-forge"
 platform = "osx-64"                                # optional, defaults to your current OS
 # The name of the environment is `python`
 # It will expose python, python3 and python3.11, but not pip
