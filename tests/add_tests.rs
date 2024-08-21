@@ -438,7 +438,7 @@ async fn add_pypi_extra_functionality() {
                 assert_eq!(
                     spec,
                     PyPiRequirement::Version {
-                        version: VersionOrStar::from_str("24.8.0").unwrap(),
+                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![ExtraName::from_str("cli").unwrap()],
                     }
                 );
