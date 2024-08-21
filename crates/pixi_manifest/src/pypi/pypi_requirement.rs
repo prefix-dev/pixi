@@ -1,21 +1,23 @@
+use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
+use crate::utils::extract_directory_from_url;
+use crate::PyPiRequirement::RawVersion;
+use pep440_rs::VersionSpecifiers;
+use pep508_rs::ExtraName;
+use serde::de::Error;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::fmt::Display;
 use std::{
     fmt,
     fmt::Formatter,
     path::{Path, PathBuf},
     str::FromStr,
 };
-
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::ExtraName;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
-use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
-use crate::utils::extract_directory_from_url;
-
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedGitUrl {
     pub git: Url,
     pub branch: Option<String>,
@@ -57,8 +59,8 @@ impl TryFrom<Url> for ParsedGitUrl {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
+#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
         #[serde(flatten)]
@@ -84,6 +86,155 @@ pub enum PyPiRequirement {
         extras: Vec<ExtraName>,
     },
     RawVersion(VersionOrStar),
+}
+
+/// Returns a more helpful message when a version requirement is used incorrectly.
+fn version_requirement_error<T: Into<String>>(input: T) -> Option<impl Display> {
+    let input = input.into();
+    if input.starts_with('/')
+        || input.starts_with('.')
+        || input.starts_with('\\')
+        || input.starts_with("~/")
+    {
+        return Some(format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"));
+    }
+
+    if input.contains("git") {
+        return Some(format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"));
+    }
+
+    if input.contains("://") {
+        return Some(format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"));
+    }
+
+    None
+}
+
+#[serde_as]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
+struct RawPyPiRequirement {
+    /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    pub version: Option<VersionOrStar>,
+
+    #[serde(default)]
+    extras: Vec<ExtraName>,
+
+    // Path Only
+    pub path: Option<PathBuf>,
+    pub editable: Option<bool>,
+
+    // Git only
+    pub git: Option<Url>,
+    pub branch: Option<String>,
+    pub tag: Option<String>,
+    pub rev: Option<GitRev>,
+
+    // Url only
+    pub url: Option<Url>,
+
+    // Git and Url only
+    pub subdirectory: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for PyPiRequirement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .map(|map| {
+                let raw_req: RawPyPiRequirement = map.deserialize()?;
+
+                if raw_req.git.is_none()
+                    && (raw_req.branch.is_some() || raw_req.rev.is_some() || raw_req.tag.is_some())
+                {
+                    return Err(serde_untagged::de::Error::custom(
+                        "`branch`, `rev`, and `tag` are only valid when `git` is specified",
+                    ));
+                }
+
+                // Only one of the git version specifiers can be used.
+                if raw_req.branch.is_some() && raw_req.tag.is_some()
+                    || raw_req.branch.is_some() && raw_req.rev.is_some()
+                    || raw_req.tag.is_some() && raw_req.rev.is_some()
+                {
+                    return Err(serde_untagged::de::Error::custom(
+                        "Only one of `branch` or `tag` or `rev` can be specified",
+                    ));
+                }
+
+                let is_git = raw_req.git.is_some();
+                let is_path = raw_req.path.is_some();
+                let is_url = raw_req.url.is_some();
+
+                let git_key = is_git.then_some("`git`");
+                let path_key = is_path.then_some("`path`");
+                let url_key = is_url.then_some("`url`");
+                let non_detailed_keys = [git_key, path_key, url_key]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                if !non_detailed_keys.is_empty() && raw_req.version.is_some() {
+                    return Err(serde_untagged::de::Error::custom(format!(
+                        "`version` cannot be used with {non_detailed_keys}"
+                    )));
+                }
+
+                let req = match (raw_req.url, raw_req.path, raw_req.git, raw_req.extras) {
+                    (Some(url), None, None, extras) => PyPiRequirement::Url {
+                        url,
+                        extras,
+                        subdirectory: raw_req.subdirectory,
+                    },
+                    (None, Some(path), None, extras) => PyPiRequirement::Path {
+                        path,
+                        editable: raw_req.editable,
+                        extras,
+                    },
+                    (None, None, Some(git), extras) => PyPiRequirement::Git {
+                        url: ParsedGitUrl {
+                            git,
+                            branch: raw_req.branch,
+                            tag: raw_req.tag,
+                            rev: raw_req.rev,
+                            subdirectory: raw_req.subdirectory,
+                        },
+                        extras,
+                    },
+                    (None, None, None, extras) => PyPiRequirement::Version {
+                        version: raw_req.version.unwrap_or(VersionOrStar::Star),
+                        extras,
+                    },
+                    (_, _, _, extras) if !extras.is_empty() => PyPiRequirement::Version {
+                        version: raw_req.version.unwrap_or(VersionOrStar::Star),
+                        extras,
+                    },
+                    _ => {
+                        return Err(serde_untagged::de::Error::custom(
+                            "Exactly one of `url`, `path`, `git`, or `version` must be specified",
+                        ));
+                    }
+                };
+
+                Ok(req)
+            })
+            .string(|s| {
+                VersionOrStar::from_str(s).map(RawVersion).map_err(|err| {
+                    if let Some(msg) = version_requirement_error(s) {
+                        serde_untagged::de::Error::custom(msg)
+                    } else {
+                        serde_untagged::de::Error::custom(err)
+                    }
+                })
+            })
+            .expecting("a version or a mapping with `family` and `version`")
+            .deserialize(deserializer)
+    }
 }
 
 impl Default for PyPiRequirement {
@@ -146,7 +297,7 @@ impl From<PyPiRequirement> for toml_edit::Value {
                         branch,
                         tag,
                         rev,
-                        subdirectory: _,
+                        subdirectory,
                     },
                 extras,
             } => {
@@ -171,6 +322,14 @@ impl From<PyPiRequirement> for toml_edit::Value {
                     table.insert(
                         "rev",
                         toml_edit::Value::String(toml_edit::Formatted::new(rev.to_string())),
+                    );
+                }
+                if let Some(subdirectory) = subdirectory {
+                    table.insert(
+                        "subdirectory",
+                        toml_edit::Value::String(toml_edit::Formatted::new(
+                            subdirectory.to_string(),
+                        )),
                     );
                 }
                 insert_extras(&mut table, extras);
@@ -305,8 +464,9 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
                     {
+                        let parsed_url = ParsedGitUrl::try_from(url)?;
                         Self::Git {
-                            url: ParsedGitUrl::try_from(url)?,
+                            url: parsed_url,
                             extras: req.extras,
                         }
                     } else if url.scheme().eq_ignore_ascii_case("file") {
@@ -381,13 +541,13 @@ impl PyPiRequirement {
 mod tests {
     use std::str::FromStr;
 
+    use super::*;
+    use crate::pypi::PyPiPackageName;
     use assert_matches::assert_matches;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
-
-    use super::*;
-    use crate::pypi::PyPiPackageName;
+    use serde_json::{json, Value};
 
     #[test]
     fn test_pypi_to_string() {
@@ -783,7 +943,7 @@ mod tests {
     }
 
     #[test]
-    fn test_git_url() {
+    fn test_pep508_git_url() {
         let parsed = pep508_rs::Requirement::from_str(
             "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main",
         )
@@ -794,5 +954,76 @@ mod tests {
                 GitRevParseError::InvalidCharacters(characters)
             )) if characters == "main"
         );
+    }
+
+    #[test]
+    fn test_deserialize_succeeding() {
+        let examples = [
+            json! { "==1.2.3" },
+            json!({ "version": "==1.2.3" }),
+            json! { "*" },
+            json!({ "path": "foobar" }),
+            json!({ "path": "~/.cache" }),
+            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            json!({ "git": "ssh://github.com/conda-forge/21cmfast-feedstock", "tag": "v1.2.3" }),
+            json!({ "git": "https://github.com/prefix-dev/rattler-build", "rev": "123456" }),
+        ];
+
+        #[derive(Serialize)]
+        struct Snapshot {
+            input: Value,
+            result: Value,
+        }
+
+        let mut snapshot = Vec::new();
+        for input in examples {
+            let req = serde_json::from_value::<PyPiRequirement>(input.clone()).unwrap();
+            let result = serde_json::to_value(&req).unwrap();
+            snapshot.push(Snapshot { input, result });
+        }
+
+        insta::assert_yaml_snapshot!(snapshot);
+    }
+
+    #[test]
+    fn test_deserialize_failing() {
+        let examples = [
+            json!({ "ver": "1.2.3" }),
+            json!({ "path": "foobar", "version": "==1.2.3" }),
+            json!({ "version": "//" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1", "rev": "123456" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "rev": "v1" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "tag": "v1", "rev": "123456" }),
+            json!({ "git": "ssh://github.com:conda-forge/21cmfast-feedstock"}),
+            json!({ "branch": "main", "tag": "v1", "rev": "123456"  }),
+            json! { "/path/style"},
+            json! { "./path/style"},
+            json! { "\\path\\style"},
+            json! { "~/path/style"},
+            json! { "https://example.com"},
+            json! { "https://github.com/conda-forge/21cmfast-feedstock"},
+        ];
+
+        #[derive(Serialize)]
+        struct Snapshot {
+            input: Value,
+            result: Value,
+        }
+
+        let mut snapshot = Vec::new();
+        for input in examples {
+            let error = serde_json::from_value::<PyPiRequirement>(input.clone()).unwrap_err();
+
+            let result = json!({
+                "error": format!("ERROR: {error}")
+            });
+
+            snapshot.push(Snapshot { input, result });
+        }
+
+        insta::assert_yaml_snapshot!(snapshot);
     }
 }
