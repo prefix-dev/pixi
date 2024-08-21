@@ -20,10 +20,7 @@ For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/
 The minimally required information in the `project` table is:
 
 ```toml
-[project]
-name = "project-name"
-channels = ["conda-forge"]
-platforms = ["linux-64"]
+--8<-- "docs/source_files/pixi_tomls/simple_pixi.toml:project"
 ```
 
 ### `name`
@@ -31,7 +28,7 @@ platforms = ["linux-64"]
 The name of the project.
 
 ```toml
-name = "project-name"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
 ```
 
 ### `channels`
@@ -40,19 +37,19 @@ This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on `anaconda.org` you only need to use the name of the channel directly.
 
 ```toml
-channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
+--8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_long"
 ```
 
 Channels situated on the file system are also supported with **absolute** file paths:
 
 ```toml
-channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
+--8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_path"
 ```
 
 To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 
 ```toml
-channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_channels"
 ```
 
 ### `platforms`
@@ -61,7 +58,7 @@ Defines the list of platforms that the project supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
@@ -79,7 +76,7 @@ This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
 ```toml
-version = "1.2.3"
+-8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
 ```
 
 ### `authors` (optional)
@@ -87,7 +84,7 @@ version = "1.2.3"
 This is a list of authors of the project.
 
 ```toml
-authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_authors"
 ```
 
 ### `description` (optional)
@@ -95,7 +92,7 @@ authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
 This should contain a short description of the project.
 
 ```toml
-description = "A simple description"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_description"
 ```
 
 ### `license` (optional)
@@ -103,7 +100,7 @@ description = "A simple description"
 The license as a valid [SPDX](https://spdx.org/licenses/) string (e.g. MIT AND Apache-2.0)
 
 ```toml
-license = "MIT"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_license"
 ```
 
 ### `license-file` (optional)
@@ -127,7 +124,7 @@ readme = "README.md"
 URL of the project homepage.
 
 ```toml
-homepage = "https://pixi.sh"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_homepage"
 ```
 
 ### `repository` (optional)
@@ -135,7 +132,7 @@ homepage = "https://pixi.sh"
 URL of the project source repository.
 
 ```toml
-repository = "https://github.com/prefix-dev/pixi"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_repository"
 ```
 
 ### `documentation` (optional)
@@ -143,7 +140,7 @@ repository = "https://github.com/prefix-dev/pixi"
 URL of the project documentation.
 
 ```toml
-documentation = "https://pixi.sh"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_documentation"
 ```
 
 ### `conda-pypi-map` (optional)

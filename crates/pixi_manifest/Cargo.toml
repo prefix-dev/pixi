@@ -41,6 +41,7 @@ rattler_virtual_packages = { workspace = true }
 # TODO: Remove these dependencies
 console = { workspace = true }
 miette = { workspace = true }
+glob = "0.3.1"
 
 [dev-dependencies]
 assert_matches = { workspace = true }
