@@ -3,8 +3,8 @@ use clap::Parser;
 
 pub mod channel;
 pub mod description;
-pub mod export;
 pub mod environment;
+pub mod export;
 pub mod platform;
 pub mod version;
 

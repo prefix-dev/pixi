@@ -170,7 +170,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     ))?;
 
     let mut conda_packages_from_lockfile: Vec<CondaPackage> = Vec::new();
-    let mut pypi_packags_from_lockfile: Vec<PypiPackage> = Vec::new();
+    let mut pypi_packages_from_lockfile: Vec<PypiPackage> = Vec::new();
 
     for package in packages {
         match package {
@@ -179,7 +179,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
                 if args.ignore_pypi_errors {
                     tracing::warn!("ignoring PyPI package since PyPI packages are not supported");
                 } else if args.write_pypi_requirements {
-                    pypi_packags_from_lockfile.push(pyp);
+                    pypi_packages_from_lockfile.push(pyp);
                 } else {
                     miette::bail!(
                         "PyPI packages are not supported. Specify `--ignore-pypi-errors` to ignore this error\
@@ -213,7 +213,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
             ))
             .into_os_string();
 
-        write_pypi_requirements(pypi_target, &pypi_packags_from_lockfile)?;
+        write_pypi_requirements(pypi_target, &pypi_packages_from_lockfile)?;
     }
 
     Ok(())

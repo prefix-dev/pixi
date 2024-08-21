@@ -1187,8 +1187,8 @@ for an environment. The file can be then used to create a conda environment usin
 mamba create --name <env> --file <explicit spec file>
 ```
 
-As the explicit specification file format does not support pypi-dependencies, use either the `--ignore-pypi-errors` option to ignore those dependencies or 
-`--write-pypi-requirements` to write a `requirements.txt` file that can then be used to install the packages into a conda env using `pip` or `uv`.
+As the explicit specification file format does not support pypi-dependencies, use either the `--ignore-pypi-errors` option to ignore those dependencies
+or `--write-pypi-requirements` to write a `requirements.txt` file that can then be used to install the packages into a conda env using `pip` or `uv`.
 
 ### `project platform add`
 
