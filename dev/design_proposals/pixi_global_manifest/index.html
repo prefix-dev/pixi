@@ -1737,7 +1737,7 @@ This manifest will stick to conventions set by <code>pixi.toml</code> where poss
 Among other things it will be written in the TOML format, be named <code>pixi-global.toml</code> and be placed at <code>~/.pixi/manifests/pixi-global.toml</code>.
 The motivation for the location is discussed <a href="#multiple-manifests">further below</a></p>
 <div class="language-toml highlight"><span class="filename">pixi-global.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[envs.python]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://fast.prefix.dev/conda-forge&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># optional, defaults to global config, which defaults to &quot;conda-forge&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://fast.prefix.dev/conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">platform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="w">                                </span><span class="c1"># optional, defaults to your current OS</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># The name of the environment is `python`</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># It will expose python, python3 and python3.11, but not pip</span>
@@ -1763,8 +1763,11 @@ The motivation for the location is discussed <a href="#multiple-manifests">furth
 If <code>--environment</code> has been given, all packages will be installed in the same environment.
 If the environment already exists, the command will return with an error.
 <code>--expose</code> can be given if <code>--environment</code> is given as well or if only a single <code>PACKAGE</code> will be installed.
-The syntax for <code>MAPPING</code> is <code>exposed_name=binary_name</code>, so for example <code>python3.10=python</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL] &lt;PACKAGE&gt;...
+The syntax for <code>MAPPING</code> is <code>exposed_name=binary_name</code>, so for example <code>python3.10=python</code>.
+<code>--platform</code> sets the platform of the environment to <code>PLATFORM</code>
+Multiple channels can be specified by using <code>--channel</code> multiple times.
+By default, if no channel is provided, the <code>default-channels</code> key in the pixi configuration is used, which again defaults to "conda-forge".</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... &lt;PACKAGE&gt;...
 </span></code></pre></div>
 <p>Remove environments <code>ENV</code>.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi global uninstall &lt;ENV&gt;...
