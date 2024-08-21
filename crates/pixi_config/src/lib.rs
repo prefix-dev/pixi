@@ -449,7 +449,7 @@ impl From<ConfigCliPrompt> for Config {
 #[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
-        config.into()
+        rattler_repodata_gateway::ChannelConfig::from(&config)
     }
 }
 

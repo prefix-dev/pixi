@@ -4,20 +4,20 @@ use std::future::{Future, IntoFuture};
 use std::io::{self, Write};
 
 use clap::Parser;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config::default_channel_config;
 use pixi_progress::await_in_progress;
-use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
+use pixi_utils::reqwest::build_reqwest_clients;
+use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;
-use pixi_config::{default_channel_config, Config};
-use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_config::Config;
 
 use super::cli_config::ChannelsConfig;
 
@@ -110,16 +110,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let package_name_filter = args.package;
 
-    let auth_client = if let Some(project) = project.as_ref() {
-        project.authenticated_client().clone()
-    } else {
-        build_reqwest_clients(None).1
-    };
+    let client = project
+        .as_ref()
+        .map(|p| p.authenticated_client().clone())
+        .unwrap_or_else(|| build_reqwest_clients(None).1);
 
     let config = Config::load_global();
 
     // Fetch the all names from the repodata using gateway
-    let gateway = config.gateway(auth_client.clone());
+    let gateway = config.gateway(client.clone());
 
     let all_names = await_in_progress("loading all package names", |_| async {
         gateway
@@ -327,31 +326,30 @@ where
 
     let package_name_search = package_name.clone();
 
-    let mut packages = match search_package_by_filter(
-        &package_name_search,
-        all_package_names.clone(),
-        repodata_query_func.clone(),
-        |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
-    )
-    .await
-    {
-        Ok(packages) => {
-            let packages = if packages.is_empty() {
-                let similarity = 0.6;
-                search_package_by_filter(
-                    &package_name_search,
-                    all_package_names,
-                    repodata_query_func,
-                    |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
-                )
-                .await?
-            } else {
-                packages
-            };
-            Ok(packages)
+    let mut packages = await_in_progress("searching packages", |_| async {
+        let packages = search_package_by_filter(
+            &package_name_search,
+            all_package_names.clone(),
+            repodata_query_func.clone(),
+            |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
+        )
+        .await?;
+
+        if !packages.is_empty() {
+            return Ok(packages);
         }
-        Err(e) => Err(e),
-    }?;
+
+        tracing::info!("No packages found with wildcard search, trying with fuzzy search.");
+        let similarity = 0.85;
+        search_package_by_filter(
+            &package_name_search,
+            all_package_names,
+            repodata_query_func,
+            |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
+        )
+        .await
+    })
+    .await?;
 
     let normalized_package_name = package_name.as_normalized();
     packages.sort_by(|a, b| {
@@ -410,14 +408,12 @@ fn print_matching_packages<W: Write>(
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel_name = if let Some(channel) = package
+
+        let channel_name = package
             .channel
             .strip_prefix(channel_config.channel_alias.as_str())
-        {
-            channel.trim_end_matches('/')
-        } else {
-            package.channel.as_str()
-        };
+            .unwrap_or(package.channel.as_str())
+            .trim_end_matches('/');
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 

@@ -1,5 +1,5 @@
-use std::cmp::PartialEq;
 use std::{
+    cmp::PartialEq,
     fs,
     io::{Error, ErrorKind, Write},
     path::{Path, PathBuf},
@@ -8,19 +8,19 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use pixi_config::{get_default_author, Config};
+use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
 };
+use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
+    environment::{update_prefix, LockFileUsage},
     Project,
 };
-use pixi_config::{get_default_author, Config};
-use pixi_consts::consts;
-use pixi_utils::conda_environment_file::CondaEnvFile;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -233,7 +233,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )?;
         }
         for requirement in pypi_deps {
-            project.manifest.add_pypi_dependency(
+            project.manifest.add_pep508_dependency(
                 &requirement,
                 &platforms,
                 &FeatureName::default(),
@@ -243,7 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
+        update_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
@@ -262,7 +262,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             && pyproject_manifest_path.is_file()
         {
             dialoguer::Confirm::new()
-                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()) )
+                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()))
                 .default(false)
                 .show_default(true)
                 .interact()

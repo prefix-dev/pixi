@@ -25,7 +25,7 @@ pub type ChannelName = String;
 pub type MappingMap = HashMap<ChannelName, MappingLocation>;
 pub type MappingByChannel = HashMap<String, HashMap<String, Option<String>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MappingLocation {
     Path(PathBuf),
     Url(Url),

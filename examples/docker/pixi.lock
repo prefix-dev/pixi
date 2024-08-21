@@ -447,7 +447,7 @@ packages:
   name: docker-project
   version: 0.1.0
   path: .
-  sha256: 7b4740713a73d68045b63f88cca158eaf847cbb2ab17b0df523e86edced36e50
+  sha256: a4bb0761bfef16995a7c0bee9f739f349dcd70f12bad207ec3a2e8b02fce393d
   requires_python: '>=3.12'
   editable: true
 - kind: conda

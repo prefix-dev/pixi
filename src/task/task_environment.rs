@@ -1,11 +1,15 @@
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
-use crate::task::error::{AmbiguousTaskError, MissingTaskError};
-use crate::Project;
 use miette::Diagnostic;
 use pixi_manifest::{Task, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
+
+use crate::{
+    project::{
+        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
+    },
+    task::error::{AmbiguousTaskError, MissingTaskError},
+    Project,
+};
 
 /// Defines where the task was defined when looking for a task.
 #[derive(Debug, Clone)]
@@ -44,6 +48,7 @@ pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> 
     pub explicit_environment: Option<Environment<'p>>,
     pub platform: Option<Platform>,
     pub disambiguate: D,
+    pub ignore_system_requirements: bool,
 }
 
 /// Information about an task that was found when searching for a task
@@ -78,10 +83,11 @@ pub enum FindTaskError {
 impl<'p> SearchEnvironments<'p, NoDisambiguation> {
     // Determine which environments we are allowed to check for tasks.
     //
-    // If the user specified an environment, look for tasks in the main environment and the
-    // user specified environment.
+    // If the user specified an environment, look for tasks in the main environment
+    // and the user specified environment.
     //
-    // If the user did not specify an environment, look for tasks in any environment.
+    // If the user did not specify an environment, look for tasks in any
+    // environment.
     pub fn from_opt_env(
         project: &'p Project,
         explicit_environment: Option<Environment<'p>>,
@@ -92,12 +98,14 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
             explicit_environment,
             platform,
             disambiguate: NoDisambiguation,
+            ignore_system_requirements: false,
         }
     }
 }
 
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
-    /// Returns a new `SearchEnvironments` with the given disambiguation function.
+    /// Returns a new `SearchEnvironments` with the given disambiguation
+    /// function.
     pub(crate) fn with_disambiguate_fn<
         F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>,
     >(
@@ -109,11 +117,21 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             explicit_environment: self.explicit_environment,
             platform: self.platform,
             disambiguate: DisambiguateFn(func),
+            ignore_system_requirements: false,
         }
     }
 
-    /// Finds the task with the given name or returns an error that explains why the task could not
-    /// be found.
+    /// Ignore system requirements when looking for tasks.
+    #[cfg(test)]
+    pub(crate) fn with_ignore_system_requirements(self, ignore: bool) -> Self {
+        Self {
+            ignore_system_requirements: ignore,
+            ..self
+        }
+    }
+
+    /// Finds the task with the given name or returns an error that explains why
+    /// the task could not be found.
     pub(crate) fn find_task(
         &self,
         name: TaskName,
@@ -124,7 +142,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(&name, self.platform) {
-                // If no other environment has the task name but a different task, return the default environment
+                // If no other environment has the task name but a different task, return the
+                // default environment
                 if !self
                     .project
                     .environments()
@@ -133,11 +152,13 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     .filter(|env| !env.name().is_default())
                     // Filter out environments that can not run on this machine.
                     .filter(|env| {
-                        verify_current_platform_has_required_virtual_packages(env).is_ok()
+                        self.ignore_system_requirements
+                            || verify_current_platform_has_required_virtual_packages(env).is_ok()
                     })
                     .any(|env| {
                         if let Ok(task) = env.task(&name, self.platform) {
-                            // If the task exists in the environment but it is not the reference to the same task, return true to make it ambiguous
+                            // If the task exists in the environment but it is not the reference to
+                            // the same task, return true to make it ambiguous
                             !std::ptr::eq(task, default_env_task)
                         } else {
                             // If the task does not exist in the environment, return false
@@ -150,8 +171,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             }
         }
 
-        // If an explicit environment was specified, only look for tasks in that environment and
-        // the default environment.
+        // If an explicit environment was specified, only look for tasks in that
+        // environment and the default environment.
         let environments = if let Some(explicit_environment) = &self.explicit_environment {
             vec![explicit_environment.clone()]
         } else {
@@ -199,8 +220,9 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_find_task_default_defined() {
@@ -267,9 +289,13 @@ mod tests {
             default = ["test"]
             test = ["test"]
             prod = ["prod"]
+
+            [system-requirements]
+            macos = "10.6"
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let search = SearchEnvironments::from_opt_env(&project, None, None)
+            .with_ignore_system_requirements(true);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
@@ -299,6 +325,9 @@ mod tests {
             default = ["test"]
             test = ["test"]
             prod = ["prod"]
+
+            [system-requirements]
+            macos = "10.6"
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
@@ -310,7 +339,8 @@ mod tests {
             &project,
             Some(project.environment("prod").unwrap()),
             None,
-        );
+        )
+        .with_ignore_system_requirements(true);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
     }
@@ -333,9 +363,11 @@ mod tests {
             other = ["other"]
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let search = SearchEnvironments::from_opt_env(&project, None, None)
+            .with_ignore_system_requirements(true);
         let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
-        // Ambiguous task because it is the same name and code but it is defined in different environments
+        // Ambiguous task because it is the same name and code but it is defined in
+        // different environments
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 }

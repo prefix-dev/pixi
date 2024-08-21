@@ -59,15 +59,15 @@ impl Project {
     ///
     /// Returns the lock-file and any potential derived data that was computed
     /// as part of this operation.
-    pub async fn up_to_date_lock_file(
+    pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update::ensure_up_to_date_lock_file(self, options).await
+        update::update_lock_file(self, options).await
     }
 }
 
-/// Options to pass to [`Project::up_to_date_lock_file`].
+/// Options to pass to [`Project::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
     /// Defines what to do if the lock-file is out of date
@@ -83,7 +83,7 @@ pub struct UpdateLockFileOptions {
 }
 
 /// A struct that holds the lock-file and any potential derived data that was
-/// computed when calling `ensure_up_to_date_lock_file`.
+/// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub project: &'p Project,
 
@@ -516,7 +516,7 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
 /// not up-to-date it will construct a task graph of all the work that needs to
 /// be done to update the lock-file. The tasks are awaited in a specific order
 /// to make sure that we can start instantiating prefixes as soon as possible.
-pub async fn ensure_up_to_date_lock_file(
+pub async fn update_lock_file(
     project: &Project,
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
@@ -1480,7 +1480,7 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source()?.clone();
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
@@ -1787,7 +1787,7 @@ async fn spawn_solve_pypi_task(
 
     let environment_name = environment.name().clone();
 
-    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
+    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source()?;
 
     let mut conda_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();

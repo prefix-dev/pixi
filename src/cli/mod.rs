@@ -243,22 +243,10 @@ pub async fn execute() -> miette::Result<()> {
         .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "console-subscriber")]
-        {
-            let console_layer = console_subscriber::spawn();
-            tracing_subscriber::registry()
-                .with(console_layer)
-                .with(env_filter)
-                .with(fmt_layer)
-                .init();
-        } else {
-            tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt_layer)
-            .init();
-        }
-    }
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .init();
 
     // Execute the command
     execute_command(args.command).await

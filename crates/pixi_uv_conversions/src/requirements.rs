@@ -3,8 +3,12 @@ use std::{
     str::FromStr,
 };
 
+use distribution_filename::DistExtension;
 use pep508_rs::VerbatimUrl;
-use pixi_manifest::{pypi::GitRev, PyPiRequirement};
+use pixi_manifest::{
+    pypi::{pypi_requirement::ParsedGitUrl, GitRev},
+    PyPiRequirement,
+};
 use pypi_types::RequirementSource;
 use thiserror::Error;
 use url::Url;
@@ -52,6 +56,8 @@ pub enum AsPep508Error {
     EditableIsNotDir { path: PathBuf },
     #[error("error while canonicalizing {0}")]
     VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
+    #[error("error in extension parsing")]
+    ExtensionError(#[from] distribution_filename::ExtensionError),
 }
 
 /// Convert into a `pypi_types::Requirement`, which is an uv extended
@@ -71,11 +77,14 @@ pub fn as_uv_req(
             }
         }
         PyPiRequirement::Git {
-            git,
-            rev,
-            tag,
-            subdirectory,
-            branch,
+            url:
+                ParsedGitUrl {
+                    git,
+                    rev,
+                    tag,
+                    subdirectory,
+                    branch,
+                },
             ..
         } => RequirementSource::Git {
             repository: git.clone(),
@@ -138,19 +147,18 @@ pub fn as_uv_req(
                     install_path: canonicalized,
                     lock_path: path.clone(),
                     url: verbatim,
+                    ext: DistExtension::from_path(path)?,
                 }
             }
         }
         PyPiRequirement::Url {
             url, subdirectory, ..
-        } => {
-            RequirementSource::Url {
-                // TODO: fill these later
-                subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
-                location: url.clone(),
-                url: VerbatimUrl::from_url(url.clone()),
-            }
-        }
+        } => RequirementSource::Url {
+            subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
+            location: url.clone(),
+            url: VerbatimUrl::from_url(url.clone()),
+            ext: DistExtension::from_path(url.path())?,
+        },
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
             specifier: version.clone().into(),
             index: None,
@@ -160,7 +168,7 @@ pub fn as_uv_req(
     Ok(pypi_types::Requirement {
         name: name.clone(),
         extras: req.extras().to_vec(),
-        marker: None,
+        marker: Default::default(),
         source,
         origin: None,
     })

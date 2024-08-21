@@ -216,31 +216,17 @@ impl Target {
     /// Adds a pypi dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(
-        &mut self,
-        requirement: &pep508_rs::Requirement,
-        editable: Option<bool>,
-    ) {
-        // TODO: add proper error handling for this
-        let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())
-            .expect("could not convert pep508 requirement");
-        if let Some(editable) = editable {
-            pypi_requirement.set_editable(editable);
-        }
-
+    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
-            .insert(
-                PyPiPackageName::from_normalized(requirement.name.clone()),
-                pypi_requirement,
-            );
+            .insert(name, requirement);
     }
 
     /// Adds a pypi dependency to a target
     ///
     /// This will return an error if the exact same dependency already exist
     /// This will overwrite any existing dependency of the same name
-    pub fn try_add_pypi_dependency(
+    pub fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
@@ -260,7 +246,15 @@ impl Target {
                 _ => {}
             }
         }
-        self.add_pypi_dependency(requirement, editable);
+
+        // Convert to an internal representation
+        let name = PyPiPackageName::from_normalized(requirement.name.clone());
+        let mut requirement = PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+        if let Some(editable) = editable {
+            requirement.set_editable(editable);
+        }
+
+        self.add_pypi_dependency(name, requirement);
         Ok(true)
     }
 }
@@ -291,14 +285,14 @@ impl TargetSelector {
     }
 }
 
-impl ToString for TargetSelector {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for TargetSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelector::Platform(p) => p.to_string(),
-            TargetSelector::Linux => "linux".to_string(),
-            TargetSelector::Unix => "unix".to_string(),
-            TargetSelector::Win => "win".to_string(),
-            TargetSelector::MacOs => "osx".to_string(),
+            TargetSelector::Platform(p) => write!(f, "{}", p),
+            TargetSelector::Linux => write!(f, "linux"),
+            TargetSelector::Unix => write!(f, "unix"),
+            TargetSelector::Win => write!(f, "win"),
+            TargetSelector::MacOs => write!(f, "osx"),
         }
     }
 }

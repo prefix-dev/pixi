@@ -52,7 +52,7 @@ toml-lint = "taplo lint --verbose **/pixi.toml"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
-rust = "~=1.80.1"
+rust = "~=1.80.0"
 [feature.build.target.linux-64.dependencies]
 compilers = ">=1.6.0"
 make = ">=4.3,<5"

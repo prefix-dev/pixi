@@ -106,7 +106,7 @@ use std::{
 
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
-use uv_toolchain::PythonEnvironment;
+use uv_python::PythonEnvironment;
 
 /// Line in a RECORD file
 /// <https://www.python.org/dev/peps/pep-0376/#record>
