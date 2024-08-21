@@ -1,9 +1,5 @@
-use crate::{
-    cli::cli_config::ChannelsConfig,
-    global::{
-        self, channel_name_from_prefix, install::globally_install_package,
-        print_executables_available, EnvironmentName,
-    },
+use crate::global::{
+    self, channel_name_from_prefix, install::globally_install_package, print_executables_available,
 };
 use clap::Parser;
 use indexmap::IndexMap;
@@ -12,7 +8,6 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{default_channel_config, reqwest::build_reqwest_clients};
-use pypi_mapping::prefix_pypi_name_mapping::Package;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
@@ -30,33 +25,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project = global::Project::discover()?.with_cli_config(config.clone());
 
-    // TODO: also expose other channels
-    let channels = ChannelsConfig::default().resolve_from_config(&config);
-
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(&config));
 
     let gateway = config.gateway(auth_client.clone());
 
-    for (environment_name, parsed_environment) in project.environments() {
-        let specs: IndexMap<PackageName, MatchSpec> = parsed_environment
+    for (environment_name, environment) in project.environments() {
+        let specs = environment
             .dependencies()
             .into_iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
-                    spec.try_into_nameless_match_spec(&default_channel_config())
-                        .unwrap()
-                        .unwrap(),
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())
+                        .into_diagnostic()?
+                        .ok_or_else(|| {
+                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                        })?,
                     Some(name.clone()),
                 );
-                (name, match_spec)
+                Ok((name, match_spec))
             })
-            .collect();
+            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
+
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| channel.clone().into_channel(config.global_channel_config()))
+            .collect_vec();
 
         let repodata = gateway
             .query(
                 channels,
-                [Platform::current(), Platform::NoArch],
+                [environment.platform(), Platform::NoArch],
                 specs.values().cloned().collect_vec(),
             )
             .recursive(true)
@@ -83,45 +84,45 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .into_diagnostic()
         .context("failed to solve environment")?;
-    }
 
-    // Install the package(s)
-    let mut executables = vec![];
-    for (package_name, _) in specs {
-        let (prefix_package, scripts, _) = globally_install_package(
-            &package_name,
-            solved_records.clone(),
-            auth_client.clone(),
-            Platform::current(),
-        )
-        .await?;
-        let channel_name =
-            channel_name_from_prefix(&prefix_package, config.global_channel_config());
-        let record = &prefix_package.repodata_record.package_record;
+        // Install the package(s)
+        let mut executables = Vec::new();
+        for (package_name, _) in specs {
+            let (prefix_package, scripts, _) = globally_install_package(
+                &package_name,
+                solved_records.clone(),
+                auth_client.clone(),
+                environment.platform(),
+            )
+            .await?;
+            let channel_name =
+                channel_name_from_prefix(&prefix_package, config.global_channel_config());
+            let record = &prefix_package.repodata_record.package_record;
 
-        // Warn if no executables were created for the package
-        if scripts.is_empty() {
+            // Warn if no executables were created for the package
+            if scripts.is_empty() {
+                eprintln!(
+                    "{}No executable entrypoint found in package {}, are you sure it exists?",
+                    console::style(console::Emoji("⚠️", "")).yellow().bold(),
+                    console::style(record.name.as_source()).bold()
+                );
+            }
+
             eprintln!(
-                "{}No executable entrypoint found in package {}, are you sure it exists?",
-                console::style(console::Emoji("⚠️", "")).yellow().bold(),
-                console::style(record.name.as_source()).bold()
+                "{}Installed package {} {} {} from {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(record.name.as_source()).bold(),
+                console::style(record.version.version()).bold(),
+                console::style(record.build.as_str()).bold(),
+                channel_name,
             );
+
+            executables.extend(scripts);
         }
 
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(record.name.as_source()).bold(),
-            console::style(record.version.version()).bold(),
-            console::style(record.build.as_str()).bold(),
-            channel_name,
-        );
-
-        executables.extend(scripts);
-    }
-
-    if !executables.is_empty() {
-        print_executables_available(executables).await?;
+        if !executables.is_empty() {
+            print_executables_available(executables).await?;
+        }
     }
 
     Ok(())

@@ -1,7 +1,7 @@
-use indexmap::IndexMap;
-use pixi_manifest::deserialize_package_map;
-use rattler_conda_types::PackageName;
+use indexmap::{IndexMap, IndexSet};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde_with::{serde_as, serde_derive::Deserialize};
+use uv_toolchain::platform;
 
 use super::environment::EnvironmentName;
 
@@ -33,7 +33,11 @@ impl ParsedManifest {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    #[serde(default, deserialize_with = "deserialize_package_map")]
+    #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
+    channels: IndexSet<pixi_manifest::PrioritizedChannel>,
+    // Platform used by the environment.
+    platform: Option<Platform>,
+    #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     dependencies: IndexMap<PackageName, PixiSpec>,
     exposed: IndexMap<String, String>,
 }
@@ -41,6 +45,30 @@ pub(crate) struct ParsedEnvironment {
 impl ParsedEnvironment {
     pub(crate) fn dependencies(&self) -> IndexMap<PackageName, PixiSpec> {
         self.dependencies.clone()
+    }
+
+    // If `self.platform` is `None` is not given, the current platform is used
+    pub(crate) fn platform(&self) -> Platform {
+        if let Some(platform) = self.platform {
+            platform
+        } else {
+            Platform::current()
+        }
+    }
+
+    /// Returns the channels associated with this collection.
+    pub(crate) fn channels(&self) -> IndexSet<NamedChannelOrUrl> {
+        // The prioritized channels contain a priority, sort on this priority.
+        // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
+        self.channels
+            .clone()
+            .sorted_by(|a, b| {
+                let a = a.priority.unwrap_or(0);
+                let b = b.priority.unwrap_or(0);
+                b.cmp(&a)
+            })
+            .map(|prioritized_channel| prioritized_channel.channel)
+            .collect()
     }
 }
 
