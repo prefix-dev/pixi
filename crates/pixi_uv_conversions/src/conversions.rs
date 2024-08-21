@@ -1,9 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use pixi_manifest::pypi::pypi_options::PypiOptions;
-use pixi_manifest::pypi::GitRev;
+use pixi_manifest::pypi::{pypi_options::PypiOptions, GitRev};
 use rattler_lock::FindLinksUrlOrPath;
 use uv_git::GitReference;
 
@@ -16,11 +15,13 @@ pub enum ConvertFlatIndexLocationError {
 /// Converts to the [`distribution_types::FlatIndexLocation`]
 pub fn to_flat_index_location(
     find_links: &FindLinksUrlOrPath,
+    base_path: &Path,
 ) -> Result<FlatIndexLocation, ConvertFlatIndexLocationError> {
     match find_links {
         FindLinksUrlOrPath::Path(path) => Ok(FlatIndexLocation::Path(
-            VerbatimUrl::from_path(path.clone())
-                .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, path.clone()))?,
+            VerbatimUrl::parse_path(path.clone(), base_path)
+                .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, path.clone()))?
+                .with_given(path.display().to_string()),
         )),
         FindLinksUrlOrPath::Url(url) => {
             Ok(FlatIndexLocation::Url(VerbatimUrl::from_url(url.clone())))
@@ -31,6 +32,7 @@ pub fn to_flat_index_location(
 /// Convert the subset of pypi-options to index locations
 pub fn pypi_options_to_index_locations(
     options: &PypiOptions,
+    base_path: &Path,
 ) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
     // Convert the index to a `IndexUrl`
     let index = options
@@ -55,7 +57,7 @@ pub fn pypi_options_to_index_locations(
         // Convert to list of flat indexes
         flat_indexes
             .into_iter()
-            .map(|i| to_flat_index_location(&i))
+            .map(|i| to_flat_index_location(&i, base_path))
             .collect::<Result<Vec<_>, _>>()?
     } else {
         vec![]
@@ -75,6 +77,7 @@ pub fn pypi_options_to_index_locations(
 /// Convert locked indexes to IndexLocations
 pub fn locked_indexes_to_index_locations(
     indexes: &rattler_lock::PypiIndexes,
+    base_path: &Path,
 ) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
     let index = indexes
         .indexes
@@ -93,7 +96,7 @@ pub fn locked_indexes_to_index_locations(
     let flat_indexes = indexes
         .find_links
         .iter()
-        .map(to_flat_index_location)
+        .map(|find_link| to_flat_index_location(find_link, base_path))
         .collect::<Result<Vec<_>, _>>()?;
 
     // we don't have support for an explicit `no_index` field in the `PypiIndexes`

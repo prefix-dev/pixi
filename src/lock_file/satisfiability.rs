@@ -258,9 +258,14 @@ pub fn verify_environment_satisfiability(
         let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
         match locked_environment.pypi_indexes() {
             None => {
+                // Mismatch when there should be an index but there is not
                 if locked_environment
                     .version()
                     .should_pypi_indexes_be_present()
+                    && locked_environment
+                        .pypi_packages()
+                        .iter()
+                        .any(|(_platform, packages)| !packages.is_empty())
                 {
                     return Err(IndexesMismatch {
                         current: indexes,
