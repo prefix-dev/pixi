@@ -19,6 +19,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use crate::{prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible};
 use pixi_config::home_path;
 
+use super::EnvironmentName;
+
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
 
@@ -54,36 +56,19 @@ impl BinDir {
 pub struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
-    /// Construct the path to the env directory for the binary package
-    /// `package_name`.
-    fn package_bin_env_dir(package_name: &PackageName) -> miette::Result<PathBuf> {
+    /// Construct the path to the env directory for the environment
+    /// `environment_name`.
+    fn package_bin_env_dir(environment_name: &EnvironmentName) -> miette::Result<PathBuf> {
         Ok(bin_env_dir()
             .ok_or(miette::miette!(
                 "could not find global binary environment directory"
             ))?
-            .join(package_name.as_normalized()))
-    }
-
-    /// Get the Binary Environment directory, erroring if it doesn't already
-    /// exist.
-    pub async fn from_existing(package_name: &PackageName) -> miette::Result<Self> {
-        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
-        if tokio::fs::try_exists(&bin_env_dir)
-            .await
-            .into_diagnostic()?
-        {
-            Ok(Self(bin_env_dir))
-        } else {
-            Err(miette::miette!(
-                "could not find environment for package {}",
-                package_name.as_source()
-            ))
-        }
+            .join(environment_name.as_str()))
     }
 
     /// Create the Binary Environment directory
-    pub async fn create(package_name: &PackageName) -> miette::Result<Self> {
-        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
+    pub async fn create(environment_name: &EnvironmentName) -> miette::Result<Self> {
+        let bin_env_dir = Self::package_bin_env_dir(environment_name)?;
         tokio::fs::create_dir_all(&bin_env_dir)
             .await
             .into_diagnostic()?;
@@ -121,24 +106,6 @@ pub(crate) fn channel_name_from_prefix(
     Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
         .map(|ch| repodata::friendly_channel_name(&ch))
         .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
-}
-
-/// Find the globally installed package with the given [`PackageName`]
-///
-/// # Returns
-///
-/// The PrefixRecord of the installed package
-pub(crate) async fn find_installed_package(
-    package_name: &PackageName,
-) -> miette::Result<PrefixRecord> {
-    let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(package_name).await.or_else(|_| {
-        miette::bail!(
-            "Package {} is not globally installed",
-            package_name.as_source()
-        )
-    })?;
-    let prefix = Prefix::new(bin_prefix);
-    find_designated_package(&prefix, package_name).await
 }
 
 /// Find the designated package in the given [`Prefix`]

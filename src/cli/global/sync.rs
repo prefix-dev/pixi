@@ -1,5 +1,7 @@
+use std::env;
+
 use crate::global::{
-    self, channel_name_from_prefix, install::globally_install_package, print_executables_available,
+    self, channel_name_from_prefix, install::sync_environment, print_executables_available,
 };
 use clap::Parser;
 use indexmap::IndexMap;
@@ -32,7 +34,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     for (environment_name, environment) in project.environments() {
         let specs = environment
-            .dependencies()
+            .dependencies
+            .clone()
             .into_iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
@@ -85,44 +88,35 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .context("failed to solve environment")?;
 
-        // Install the package(s)
-        let mut executables = Vec::new();
-        for (package_name, _) in specs {
-            let (prefix_package, scripts, _) = globally_install_package(
-                &package_name,
-                solved_records.clone(),
-                auth_client.clone(),
-                environment.platform(),
-            )
-            .await?;
-            let channel_name =
-                channel_name_from_prefix(&prefix_package, config.global_channel_config());
-            let record = &prefix_package.repodata_record.package_record;
+        sync_environment(
+            &environment_name,
+            &environment.exposed,
+            solved_records.clone(),
+            auth_client.clone(),
+            environment.platform(),
+        )
+        .await?;
 
-            // Warn if no executables were created for the package
-            if scripts.is_empty() {
-                eprintln!(
-                    "{}No executable entrypoint found in package {}, are you sure it exists?",
-                    console::style(console::Emoji("⚠️", "")).yellow().bold(),
-                    console::style(record.name.as_source()).bold()
-                );
-            }
+        // let mut executables = Vec::with_capacity(specs.len());
+        // for (package_name, _) in specs {
+        //     let record = &prefix_package.repodata_record.package_record;
 
-            eprintln!(
-                "{}Installed package {} {} {} from {}",
-                console::style(console::Emoji("✔ ", "")).green(),
-                console::style(record.name.as_source()).bold(),
-                console::style(record.version.version()).bold(),
-                console::style(record.build.as_str()).bold(),
-                channel_name,
-            );
+        //     let channel_name =
+        //         channel_name_from_prefix(&prefix_package, config.global_channel_config());
+        //     eprintln!(
+        //         "{}Installed package {} {} {} from {}",
+        //         console::style(console::Emoji("✔ ", "")).green(),
+        //         console::style(record.name.as_source()).bold(),
+        //         console::style(record.version.version()).bold(),
+        //         console::style(record.build.as_str()).bold(),
+        //         channel_name,
+        //     );
+        //     executables.extend(scripts);
+        // }
 
-            executables.extend(scripts);
-        }
-
-        if !executables.is_empty() {
-            print_executables_available(executables).await?;
-        }
+        // if !executables.is_empty() {
+        //     print_executables_available(executables).await?;
+        // }
     }
 
     Ok(())

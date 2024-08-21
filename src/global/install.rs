@@ -35,90 +35,20 @@ use crate::{
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
-/// Install given package globally, with all its dependencies
-pub(crate) async fn globally_install_package(
-    package_name: &PackageName,
-    records: Vec<RepoDataRecord>,
-    authenticated_client: ClientWithMiddleware,
-    platform: Platform,
-) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
-    try_increase_rlimit_to_sensible();
-
-    // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
-    let prefix = Prefix::new(bin_prefix);
-
-    // Install the environment
-    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
-
-    let result = await_in_progress("creating virtual environment", |pb| {
-        Installer::new()
-            .with_download_client(authenticated_client)
-            .with_io_concurrency_limit(100)
-            .with_execute_link_scripts(false)
-            .with_package_cache(package_cache)
-            .with_target_platform(platform)
-            .with_reporter(
-                IndicatifReporter::builder()
-                    .with_multi_progress(global_multi_progress())
-                    .with_placement(rattler::install::Placement::After(pb))
-                    .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
-                    .clear_when_done(true)
-                    .finish(),
-            )
-            .install(prefix.root(), records)
-    })
-    .await
-    .into_diagnostic()?;
-
-    // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, package_name).await?;
-
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-
-    // Construct the reusable activation script for the shell and generate an
-    // invocation script for each executable added by the package to the
-    // environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
-
-    let bin_dir = BinDir::create().await?;
-    let script_mapping =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
-
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
-            |BinScriptMapping {
-                 global_binary_path: path,
-                 ..
-             }| path,
-        )
-        .collect();
-
-    Ok((
-        prefix_package,
-        scripts,
-        result.transaction.operations.is_empty(),
-    ))
-}
+use super::EnvironmentName;
 
 /// Sync given global environment records with environment on the system
 pub(crate) async fn sync_environment(
-    package_name: &PackageName,
+    environment_name: &EnvironmentName,
+    exposed: &IndexMap<String, String>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
-) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+) -> miette::Result<()> {
     try_increase_rlimit_to_sensible();
 
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
+    let BinEnvDir(bin_prefix) = BinEnvDir::create(environment_name).await?;
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
@@ -144,41 +74,39 @@ pub(crate) async fn sync_environment(
     .await
     .into_diagnostic()?;
 
-    // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, package_name).await?;
+    return Ok(());
 
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
+    // // Find the installed package in the environment
+    // let prefix_package = find_designated_package(&prefix, package_name).await?;
 
-    // Construct the reusable activation script for the shell and generate an
-    // invocation script for each executable added by the package to the
-    // environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
+    // // Determine the shell to use for the invocation script
+    // let shell: ShellEnum = if cfg!(windows) {
+    //     rattler_shell::shell::CmdExe.into()
+    // } else {
+    //     rattler_shell::shell::Bash.into()
+    // };
 
-    let bin_dir = BinDir::create().await?;
-    let script_mapping =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+    // // Construct the reusable activation script for the shell and generate an
+    // // invocation script for each executable added by the package to the
+    // // environment.
+    // let activation_script = create_activation_script(&prefix, shell.clone())?;
 
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
-            |BinScriptMapping {
-                 global_binary_path: path,
-                 ..
-             }| path,
-        )
-        .collect();
+    // let bin_dir = BinDir::create().await?;
+    // let script_mapping =
+    //     find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
+    // create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
 
-    Ok((
-        prefix_package,
-        scripts,
-        result.transaction.operations.is_empty(),
-    ))
+    // let scripts: Vec<_> = script_mapping
+    //     .into_iter()
+    //     .map(
+    //         |BinScriptMapping {
+    //              global_binary_path: path,
+    //              ..
+    //          }| path,
+    //     )
+    //     .collect();
+
+    // Ok((prefix_package, scripts))
 }
 
 /// Create the environment activation script

@@ -38,15 +38,11 @@ pub(crate) struct ParsedEnvironment {
     // Platform used by the environment.
     platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
-    dependencies: IndexMap<PackageName, PixiSpec>,
-    exposed: IndexMap<String, String>,
+    pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
+    pub(crate) exposed: IndexMap<String, String>,
 }
 
 impl ParsedEnvironment {
-    pub(crate) fn dependencies(&self) -> IndexMap<PackageName, PixiSpec> {
-        self.dependencies.clone()
-    }
-
     // If `self.platform` is `None` is not given, the current platform is used
     pub(crate) fn platform(&self) -> Platform {
         if let Some(platform) = self.platform {
