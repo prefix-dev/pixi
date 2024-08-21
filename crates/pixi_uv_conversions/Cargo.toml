@@ -14,7 +14,7 @@ version = "0.1.0"
 distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
-pep508_rs = { workspace = true }
+pep508_rs = { workspace = true, features = ["non-pep508-extensions"] }
 pixi_manifest = { workspace = true }
 pypi-types = { workspace = true }
 rattler_lock = { workspace = true }

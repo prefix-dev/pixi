@@ -1,21 +1,15 @@
-use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
-use crate::uv_reporter::{UvReporter, UvReporterOptions};
-use std::collections::HashMap;
-
-use std::iter::once;
-
-use crate::lock_file::LockedPypiPackages;
-use crate::lock_file::{
-    package_identifier, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+use std::{
+    collections::HashMap,
+    iter::once,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
 };
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 use distribution_types::{
-    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, Name, Resolution, ResolvedDist,
-    SourceDist,
+    BuiltDist, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist, Name,
+    Resolution, ResolvedDist, SourceDist, Verbatim,
 };
-use distribution_types::{FileLocation, InstalledDist, InstalledRegistryDist};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
@@ -23,28 +17,26 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
-use pypi_types::{HashAlgorithm, HashDigest};
-use pypi_types::{RequirementSource, VerbatimParsedUrl};
+use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
+use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
+use pypi_modifiers::{
+    pypi_marker_env::determine_marker_environment,
+    pypi_tags::{get_pypi_tags, is_python_record},
+};
+use pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::sync::Arc;
+use url::Url;
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{
     ConfigSettings, Constraints, IndexStrategy, Overrides, PreviewMode, SetupPyStrategy,
 };
-use uv_git::GitResolver;
-
-use pixi_manifest::pypi::pypi_options::PypiOptions;
-use pixi_manifest::{PyPiRequirement, SystemRequirements};
-use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
-use url::Url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
+use uv_git::GitResolver;
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonVersion};
 use uv_resolver::{
@@ -52,6 +44,14 @@ use uv_resolver::{
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
 };
 use uv_types::EmptyInstalledPackages;
+
+use crate::{
+    lock_file::{
+        package_identifier, resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
+        PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+    },
+    uv_reporter::{UvReporter, UvReporterOptions},
+};
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -92,12 +92,14 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 ///
 /// uv has different behavior for each.
 ///
-///   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
-///        because of PEP508.
-///   2) We get our processed path as a given, which can be relative, as our lock may store relative url's.
+///   1) Because uv processes 1) during the 'source build' first we get a
+///      `file::` as a given. Which is never relative. because of PEP508.
+///   2) We get our processed path as a given, which can be relative, as our
+///      lock may store relative url's.
 ///
-/// For case 1) we can just use the original path, as it can never be relative. And should be the same
-/// For case 2) we need to use the given as it may be relative
+/// For case 1) we can just use the original path, as it can never be relative.
+/// And should be the same For case 2) we need to use the given as it may be
+/// relative
 ///
 /// I think this has to do with the order of UV processing the requirements
 fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
@@ -111,65 +113,11 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
     }
 }
 
-// Store a reference to the flat index
-#[derive(Clone)]
-struct FindLinksLocation {
-    /// Canocialized path to the flat index.
-    canonicalized_path: PathBuf,
-    /// Manifest path to flat index.
-    given_path: PathBuf,
-}
-
-/// Given a flat index url and a list of flat indexes, return the path to the flat index.
-/// for that specific index.
-fn find_links_for(
-    flat_index_url: &IndexUrl,
-    flat_indexes_paths: &[FindLinksLocation],
-) -> Option<FindLinksLocation> {
-    // Convert to file path
-    let flat_index_url_path = flat_index_url
-        .url()
-        .to_file_path()
-        .expect("invalid path-based index");
-
-    // Find the flat index in the list of flat indexes
-    // Compare with the path that we got from the `IndexUrl`
-    // which is absolute
-    flat_indexes_paths
-        .iter()
-        .find(|path| path.canonicalized_path == flat_index_url_path)
-        .cloned()
-}
-
-/// Convert an absolute path to a path relative to the flat index url.
-/// which is assumed to be a file:// url.
-fn convert_flat_index_path(
-    flat_index_url: &IndexUrl,
-    absolute_path: &Path,
-    given_flat_index_path: &Path,
-) -> PathBuf {
-    assert!(
-        absolute_path.is_absolute(),
-        "flat index package does not have an absolute path"
-    );
-    let base = flat_index_url
-        .url()
-        .to_file_path()
-        .expect("invalid path-based index");
-    // Strip the index from the path
-    // This is safe because we know the index is a prefix of the path
-    let path = absolute_path
-        .strip_prefix(&base)
-        .expect("base was not a prefix of the flat index path");
-    // Join with the given flat index path
-    given_flat_index_path.join(path)
-}
-
 type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
 
 /// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced `VerbaimParsedUrl`
-/// back to crates.io `VerbatimUrl`, for the locking
+/// We need this function because we need to convert to the introduced
+/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
 fn convert_uv_requirements_to_pep508<'req>(
     requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
 ) -> Vec<pep508_rs::Requirement> {
@@ -269,7 +217,8 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     use pixi_consts::consts::PROJECT_MANIFEST;
-    // Determine the python interpreter that is installed as part of the conda packages.
+    // Determine the python interpreter that is installed as part of the conda
+    // packages.
     let python_record = locked_conda_records
         .iter()
         .find(|r| is_python_record(r))
@@ -288,7 +237,8 @@ pub async fn resolve_pypi(
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
-    let index_locations = pypi_options_to_index_locations(pypi_options).into_diagnostic()?;
+    let index_locations =
+        pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
     // TODO: create a cached registry client per index_url set?
     let registry_client = Arc::new(
@@ -453,35 +403,11 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
-    // Create a list of canocialized flat indexes.
-    let flat_index_locations = index_locations
-        .flat_index()
-        // Take only path based flat indexes
-        .filter_map(|i| match i {
-            FlatIndexLocation::Path(path) => Some(path),
-            FlatIndexLocation::Url(_) => None,
-        })
-        // Canonicalize the path
-        .map(|path| {
-            let path = path
-                .as_path()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            let canonicalized_path = path.canonicalize()?;
-            Ok::<_, std::io::Error>(FindLinksLocation {
-                canonicalized_path,
-                given_path: path.clone(),
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()
-        .wrap_err("failed to canonicalize the find-links paths")?;
-
     // Collect resolution into locked packages
     lock_pypi_packages(
         conda_python_packages,
         &build_dispatch,
         &registry_client,
-        flat_index_locations,
         resolution,
         context.concurrency.downloads,
     )
@@ -493,7 +419,6 @@ async fn lock_pypi_packages<'a>(
     conda_python_packages: CondaPythonPackages,
     build_dispatch: &BuildDispatch<'a>,
     registry_client: &Arc<RegistryClient>,
-    flat_index_locations: Vec<FindLinksLocation>,
     resolution: Resolution,
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
@@ -518,20 +443,21 @@ async fn lock_pypi_packages<'a>(
             ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
-                        let url = match &dist.best_wheel().file.url {
+                        let best_wheel = dist.best_wheel();
+                        let url = match &best_wheel.file.url {
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
                             // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(path) => {
-                                let flat_index =
-                                    find_links_for(&dist.best_wheel().index, &flat_index_locations)
-                                        .expect("flat index does not exist for resolved ids");
-                                UrlOrPath::Path(convert_flat_index_path(
-                                    &dist.best_wheel().index,
-                                    path,
-                                    &flat_index.given_path,
-                                ))
+                            FileLocation::Path(wheel_path) => {
+                                let index_path = best_wheel.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
+                                let relative_wheel_path = wheel_path
+                                    .strip_prefix(&index_path)
+                                    .expect("the build wheel is not stored relative to the index");
+                                let verbatim_index_path = best_wheel.index.verbatim();
+                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
+                                    .join(relative_wheel_path)
+                                    .into()
                             }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
@@ -590,14 +516,15 @@ async fn lock_pypi_packages<'a>(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
                             // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(path) => {
-                                let flat_index = find_links_for(&reg.index, &flat_index_locations)
-                                    .expect("flat index does not exist for resolved ids");
-                                UrlOrPath::Path(convert_flat_index_path(
-                                    &reg.index,
-                                    path,
-                                    &flat_index.given_path,
-                                ))
+                            FileLocation::Path(source_path) => {
+                                let index_path = reg.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
+                                let relative_wheel_path = source_path
+                                    .strip_prefix(&index_path)
+                                    .expect("the build wheel is not stored relative to the index");
+                                let verbatim_index_path = reg.index.verbatim();
+                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
+                                    .join(relative_wheel_path)
+                                    .into()
                             }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {

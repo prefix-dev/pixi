@@ -12,7 +12,10 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
+use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
+use pixi_uv_conversions::locked_indexes_to_index_locations;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use pypi_types::{
     HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
     ParsedUrlError, VerbatimParsedUrl,
@@ -39,9 +42,6 @@ use crate::{
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
-use pixi_consts::consts;
-use pixi_uv_conversions::locked_indexes_to_index_locations;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -420,8 +420,8 @@ fn need_reinstall(
                         Ok(git) => {
                             // Check the repository base url
                             if git.url.repository() != &url
-                            // Check the sha from the direct_url.json and the required sha
-                            // Use the uv git url to get the sha
+                                // Check the sha from the direct_url.json and the required sha
+                                // Use the uv git url to get the sha
                                 || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
                             {
                                 return Ok(ValidateInstall::Reinstall);
@@ -607,7 +607,7 @@ pub async fn update_python_distributions(
     let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
 
     let index_locations = pypi_indexes
-        .map(locked_indexes_to_index_locations)
+        .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
         .unwrap()
         .into_diagnostic()?;
 
