@@ -313,7 +313,6 @@ impl Project {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-
                 #[cfg(not(windows))]
                 if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
                     tracing::warn!(
@@ -345,8 +344,7 @@ impl Project {
     /// Returns the default solve group environments directory, without
     /// interacting with config
     pub(crate) fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.default_environments_dir()
-            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
