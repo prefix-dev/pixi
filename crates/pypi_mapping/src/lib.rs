@@ -161,7 +161,7 @@ pub async fn amend_pypi_purls(
         manager: CACacheManager {
             path: get_cache_dir()
                 .expect("missing cache directory")
-                .join("http-cache"),
+                .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
         },
         options: HttpCacheOptions::default(),
     });

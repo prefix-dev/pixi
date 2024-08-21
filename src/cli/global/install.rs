@@ -417,7 +417,9 @@ pub(super) async fn globally_install_package(
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
-    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+    let package_cache = PackageCache::new(
+        pixi_config::get_cache_dir()?.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+    );
 
     let result = await_in_progress("creating virtual environment", |pb| {
         Installer::new()

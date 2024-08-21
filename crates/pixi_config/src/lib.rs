@@ -906,7 +906,7 @@ impl Config {
         // Construct the gateway
         Gateway::builder()
             .with_client(client)
-            .with_cache_dir(cache_dir.join("repodata"))
+            .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
             .finish()
     }
