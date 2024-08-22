@@ -4,7 +4,7 @@ use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use rattler_solve::ChannelPriority;
 
-use crate::{HasManifestRef, SpecType};
+use crate::{HasManifestRef, PrioritizedChannel, SpecType};
 
 use crate::has_features_iter::HasFeaturesIter;
 use crate::{pypi::pypi_options::PypiOptions, SystemRequirements};
@@ -35,24 +35,12 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
-        let channels: IndexSet<_> = self
-            .features()
-            .flat_map(|feature| match &feature.channels {
-                Some(channels) => channels,
-                None => &self.manifest().parsed.project.channels,
-            })
-            .collect();
+        let channels = self.features().flat_map(|feature| match &feature.channels {
+            Some(channels) => channels,
+            None => &self.manifest().parsed.project.channels,
+        });
 
-        // The prioritized channels contain a priority, sort on this priority.
-        // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
-        channels
-            .sorted_by(|a, b| {
-                let a = a.priority.unwrap_or(0);
-                let b = b.priority.unwrap_or(0);
-                b.cmp(&a)
-            })
-            .map(|prioritized_channel| &prioritized_channel.channel)
-            .collect()
+        PrioritizedChannel::sort_channels_by_priority(channels).collect()
     }
 
     /// Returns the channel priority, error on multiple values, return None if no value is set.

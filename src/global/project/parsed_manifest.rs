@@ -1,4 +1,5 @@
 use indexmap::{IndexMap, IndexSet};
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use uv_toolchain::platform;
@@ -53,18 +54,8 @@ impl ParsedEnvironment {
     }
 
     /// Returns the channels associated with this collection.
-    pub(crate) fn channels(&self) -> IndexSet<NamedChannelOrUrl> {
-        // The prioritized channels contain a priority, sort on this priority.
-        // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
-        self.channels
-            .clone()
-            .sorted_by(|a, b| {
-                let a = a.priority.unwrap_or(0);
-                let b = b.priority.unwrap_or(0);
-                b.cmp(&a)
-            })
-            .map(|prioritized_channel| prioritized_channel.channel)
-            .collect()
+    pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+        PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
     }
 }
 

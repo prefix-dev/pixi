@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use itertools::Itertools;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::serde_as;
@@ -12,6 +13,26 @@ use serde_with::serde_as;
 pub struct PrioritizedChannel {
     pub channel: NamedChannelOrUrl,
     pub priority: Option<i32>,
+}
+
+impl PrioritizedChannel {
+    /// The prioritized channels contain a priority, sort on this priority.
+    /// Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
+    pub fn sort_channels_by_priority<'a, I>(
+        channels: I,
+    ) -> impl Iterator<Item = &'a NamedChannelOrUrl>
+    where
+        I: IntoIterator<Item = &'a crate::PrioritizedChannel>,
+    {
+        channels
+            .into_iter()
+            .sorted_by(|a, b| {
+                let a = a.priority.unwrap_or(0);
+                let b = b.priority.unwrap_or(0);
+                b.cmp(&a)
+            })
+            .map(|prioritized_channel| &prioritized_channel.channel)
+    }
 }
 
 impl From<NamedChannelOrUrl> for PrioritizedChannel {
