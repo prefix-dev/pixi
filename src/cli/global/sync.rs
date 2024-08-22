@@ -16,7 +16,6 @@ use rattler_virtual_packages::VirtualPackage;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
