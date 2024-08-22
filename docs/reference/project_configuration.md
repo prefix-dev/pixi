@@ -238,7 +238,7 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Linux"
     ```toml title="default system requirements for linux"
     [system-requirements]
-    linux = "5.10"
+    linux = "4.18"
     libc = { family="glibc", version="2.28" }
     ```
 
@@ -265,7 +265,7 @@ For example, when installing environments on old versions of linux.
 You may encounter the following error:
 
 ```
-× The current system has a mismatching virtual package. The project requires '__linux' to be at least version '5.10' but the system has version '4.12.14'
+× The current system has a mismatching virtual package. The project requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
 ```
 
 This suggests that the system requirements for the project should be lowered.
