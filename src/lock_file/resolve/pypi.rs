@@ -1,14 +1,16 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     iter::once,
     path::{Path, PathBuf},
+    rc::Rc,
     str::FromStr,
     sync::Arc,
 };
 
 use distribution_types::{
-    BuiltDist, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist, Name,
-    Resolution, ResolvedDist, SourceDist, Verbatim,
+    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
+    Name, Resolution, ResolvedDist, SourceDist, Verbatim,
 };
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -373,9 +375,11 @@ pub async fn resolve_pypi(
         options.exclude_newer,
         &context.build_options,
     );
+    let package_requests = Rc::new(RefCell::new(Default::default()));
     let provider = CondaResolverProvider {
         fallback: fallback_provider,
         conda_python_identifiers: &conda_python_packages,
+        package_requests: package_requests.clone(),
     };
 
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
@@ -401,7 +405,24 @@ pub async fn resolve_pypi(
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?;
 
+    if package_requests.borrow().len() > 0 {
+        // Print package requests in form of (PackageName, NumRequest)
+        let package_requests = package_requests
+            .borrow()
+            .iter()
+            .map(|(name, value)| format!("[{name}: {value}]"))
+            .collect::<Vec<_>>()
+            .join(",");
+        tracing::info!("overridden uv PyPI package requests [name: amount]: {package_requests}");
+    } else {
+        tracing::info!("no uv PyPI package requests overridden by locked conda dependencies");
+    }
     let resolution = Resolution::from(resolution);
+
+    // Print any diagnostics
+    for diagnostic in resolution.diagnostics() {
+        tracing::warn!("{}", diagnostic.message());
+    }
 
     // Collect resolution into locked packages
     lock_pypi_packages(

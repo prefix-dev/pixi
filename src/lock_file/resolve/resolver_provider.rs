@@ -1,6 +1,8 @@
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, HashMap},
     future::ready,
+    rc::Rc,
 };
 
 use distribution_filename::SourceDistExtension;
@@ -25,6 +27,9 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+
+    /// Saves the number of requests by the uv solver per package
+    pub(super) package_requests: Rc<RefCell<HashMap<PackageName, u32>>>,
 }
 
 impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
@@ -74,10 +79,18 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
+            self.package_requests
+                .borrow_mut()
+                .entry(package_name.clone())
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
+
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
             )])))
             .right_future();
+
+            // Record that we got a request for this package so we can track the number of requests
         }
 
         // Otherwise use the default implementation
