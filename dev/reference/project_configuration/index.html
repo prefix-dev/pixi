@@ -2219,7 +2219,7 @@ System specifications are directly related to the <a href="https://conda.io/proj
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-toml highlight"><span class="filename">default system requirements for linux</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;5.10&quot;</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.18&quot;</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">libc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">family</span><span class="p">=</span><span class="s2">&quot;glibc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="p">=</span><span class="s2">&quot;2.28&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
@@ -2242,7 +2242,7 @@ System specifications are directly related to the <a href="https://conda.io/proj
 <p>Only if a project requires a different set should you define them.</p>
 <p>For example, when installing environments on old versions of linux.
 You may encounter the following error:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>× The current system has a mismatching virtual package. The project requires &#39;__linux&#39; to be at least version &#39;5.10&#39; but the system has version &#39;4.12.14&#39;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>× The current system has a mismatching virtual package. The project requires &#39;__linux&#39; to be at least version &#39;4.18&#39; but the system has version &#39;4.12.14&#39;
 </span></code></pre></div>
 <p>This suggests that the system requirements for the project should be lowered.
 To fix this, add the following table to your configuration:</p>
