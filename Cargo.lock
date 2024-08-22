@@ -3483,6 +3483,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
+ "rattler_cache",
  "url",
 ]
 
