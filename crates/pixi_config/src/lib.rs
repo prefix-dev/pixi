@@ -272,6 +272,7 @@ impl PinningStrategy {
     ) -> Option<VersionSpec> {
         let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
         let lower_bound = min_version.clone();
+        let num_segments = max_version.segment_count();
 
         let constraint = match self {
             Self::ExactVersion => VersionSpec::Group(
@@ -285,7 +286,7 @@ impl PinningStrategy {
             Self::Major => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(2)
+                    .pop_segments(num_segments.saturating_sub(1))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Major)
                     .ok()?;
@@ -300,7 +301,7 @@ impl PinningStrategy {
             Self::Minor => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(1)
+                    .pop_segments(num_segments.saturating_sub(2))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Minor)
                     .ok()?;
@@ -1293,6 +1294,7 @@ UNUSED = "unused"
             vec!["1.2"],
             vec!["1.2", "2"],
             vec!["1.2", "1!2.0"],
+            vec!["24.2"],
         ];
 
         // We could use `strum` for this, but it requires another dependency
