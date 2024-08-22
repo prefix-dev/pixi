@@ -660,6 +660,7 @@ mod tests {
 
     use super::*;
     use crate::{channel::PrioritizedChannel, manifest::Manifest};
+    use glob::glob;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -2141,5 +2142,23 @@ bar = "*"
             Diagnostic severity: error
             Caused by: Found invalid characters for git revision 'main', branches and tags are not supported yet
         "###);
+    }
+
+    #[test]
+    fn test_docs_pixi_manifests() {
+        let location = "../../docs/source_files/pixi_tomls/*.toml";
+
+        // Check that the glob is not empty
+        assert!(glob(location).unwrap().count() > 0);
+
+        for entry in glob(location).unwrap() {
+            match entry {
+                Ok(path) => {
+                    let contents = std::fs::read_to_string(path).unwrap();
+                    let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+                }
+                Err(e) => println!("{:?}", e),
+            }
+        }
     }
 }
