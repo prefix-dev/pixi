@@ -9,7 +9,8 @@ use crate::common::{
 };
 use pixi::{DependencyType, Project};
 use pixi_consts::consts;
-use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, SpecType};
+use pixi_manifest::pypi::VersionOrStar;
+use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
 use tempfile::TempDir;
@@ -357,6 +358,92 @@ async fn add_pypi_functionality() {
         Platform::Linux64,
         "pytest"
     ));
+}
+
+/// Test the `pixi add --pypi` functionality with extras
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
+async fn add_pypi_extra_functionality() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    // Add python
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("black")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Add dep with extra
+    pixi.add("black[cli]")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras are added
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(spec.extras(), &[ExtraName::from_str("cli").unwrap()]);
+            }
+        });
+
+    // Remove extras
+    pixi.add("black")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras are removed
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(spec.extras(), &[]);
+            }
+        });
+
+    // Add dep with extra and version
+    pixi.add("black[cli]==24.8.0")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras added and the version is set
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(
+                    spec,
+                    PyPiRequirement::Version {
+                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                        extras: vec![ExtraName::from_str("cli").unwrap()],
+                    }
+                );
+            }
+        });
 }
 
 /// Test the sdist support for pypi packages
