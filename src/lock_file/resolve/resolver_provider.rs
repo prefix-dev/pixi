@@ -79,6 +79,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
+            // Record that we got a request for this package so we can track the number of requests
             self.package_requests
                 .borrow_mut()
                 .entry(package_name.clone())
@@ -89,8 +90,6 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
             )])))
             .right_future();
-
-            // Record that we got a request for this package so we can track the number of requests
         }
 
         // Otherwise use the default implementation
