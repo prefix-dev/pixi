@@ -46,8 +46,6 @@ pub struct Args {
     limit: Option<usize>,
 }
 
-// type MatchSpecFuture = BoxFuture<'static, Result<Vec<RepoData>, GatewayError>>;
-
 /// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
 async fn search_package_by_filter<F, QF, FR>(
     package: &PackageName,
