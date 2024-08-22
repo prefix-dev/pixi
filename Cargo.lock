@@ -3483,6 +3483,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
+ "rattler_cache",
  "url",
 ]
 
@@ -3812,6 +3813,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_config",
+ "pixi_consts",
  "rattler_conda_types",
  "rattler_digest",
  "reqwest 0.12.5",

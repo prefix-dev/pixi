@@ -89,6 +89,7 @@ typed-path = "0.9.1"
 # Rattler crates
 file_url = "0.1.4"
 rattler = { version = "0.27.6", default-features = false }
+rattler_cache = { version = "0.1.8", default-features = false }
 rattler_conda_types = { version = "0.27.2", default-features = false }
 rattler_digest = { version = "1.0.1", default-features = false }
 rattler_lock = { version = "0.22.20", default-features = false }
