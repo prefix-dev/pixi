@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     iter::once,
+    ops::Deref,
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
@@ -158,6 +159,21 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
             origin: requirement.origin.clone(),
         })
         .collect()
+}
+
+/// Prints the number of overridden uv PyPI package requests
+fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
+    if !package_requests.is_empty() {
+        // Print package requests in form of (PackageName, NumRequest)
+        let package_requests = package_requests
+            .iter()
+            .map(|(name, value)| format!("[{name}: {value}]"))
+            .collect::<Vec<_>>()
+            .join(",");
+        tracing::debug!("overridden uv PyPI package requests [name: amount]: {package_requests}");
+    } else {
+        tracing::debug!("no uv PyPI package requests overridden by locked conda dependencies");
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -404,20 +420,10 @@ pub async fn resolve_pypi(
     .await
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?;
-
-    if package_requests.borrow().len() > 0 {
-        // Print package requests in form of (PackageName, NumRequest)
-        let package_requests = package_requests
-            .borrow()
-            .iter()
-            .map(|(name, value)| format!("[{name}: {value}]"))
-            .collect::<Vec<_>>()
-            .join(",");
-        tracing::info!("overridden uv PyPI package requests [name: amount]: {package_requests}");
-    } else {
-        tracing::info!("no uv PyPI package requests overridden by locked conda dependencies");
-    }
     let resolution = Resolution::from(resolution);
+
+    // Print the overridden package requests
+    print_overridden_requests(package_requests.borrow().deref());
 
     // Print any diagnostics
     for diagnostic in resolution.diagnostics() {
