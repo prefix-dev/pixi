@@ -2147,9 +2147,9 @@ bar = "*"
     #[test]
     fn test_docs_pixi_manifests() {
         let location = "../../docs/source_files/pixi_tomls/*.toml";
-        
+
         // Check that the glob is not empty
-        assert!(glob(location).unwrap().count()> 0);
+        assert!(glob(location).unwrap().count() > 0);
 
         for entry in glob(location).unwrap() {
             match entry {
@@ -2161,5 +2161,4 @@ bar = "*"
             }
         }
     }
-    
 }
