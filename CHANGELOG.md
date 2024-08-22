@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### [0.28.0] - 2024-08-22
 #### ✨ Highlights
-
-Big bug fix release with minor features and improvements. We've fixed a lot of bugs and added some new features.
-- Fixed many `pypi` installation issues, including an update of `uv`
-- Downgraded `__linux` default to `4.18` to make pixi more comfortable with older systems.
+- **Bug Fixes**: Major fixes in general but especially for PyPI installation issues and better error messaging.
+- **Compatibility**: Default Linux version downgraded to 4.18 for broader support.
+- **New Features**: Added INIT_CWD in pixi run, improved logging, and more cache options.
 
 #### Added
 
