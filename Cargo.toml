@@ -317,7 +317,7 @@ tokio = { workspace = true, features = ["rt"] }
 # If you change this also change the versions in the the patch section for uv
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.3.2" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.3.2" }
-reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "21ceec9a5fd2e8d6f71c3ea2999078fecbd13cbe" }
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "5e3eaf254b5bd481c75d2710eed055f95b756913" }
 # deno_task_shell = { path = "../deno_task_shell" }
 # rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }

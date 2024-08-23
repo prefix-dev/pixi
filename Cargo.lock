@@ -368,7 +368,7 @@ dependencies = [
  "itertools 0.12.1",
  "memmap2 0.9.4",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1972,7 +1972,7 @@ dependencies = [
  "http-cache",
  "http-cache-semantics",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "serde",
  "url",
 ]
@@ -3450,7 +3450,7 @@ dependencies = [
  "rattler_virtual_packages",
  "regex",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "reqwest-retry 0.5.0",
  "rlimit",
  "rstest",
@@ -3504,7 +3504,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_repodata_gateway",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "rstest",
  "serde",
  "serde_ignored",
@@ -3621,7 +3621,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_networking",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -3852,7 +3852,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "reqwest-retry 0.5.0",
  "serde",
  "serde_json",
@@ -4023,7 +4023,7 @@ dependencies = [
  "reflink-copy",
  "regex",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "simple_spawn_blocking",
  "smallvec",
  "tempfile",
@@ -4051,7 +4051,7 @@ dependencies = [
  "rattler_networking",
  "rattler_package_streaming",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "thiserror",
  "tokio",
  "tracing",
@@ -4163,7 +4163,7 @@ dependencies = [
  "keyring",
  "netrc-rs",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "retry-policies 0.4.0",
  "serde",
  "serde_json",
@@ -4187,7 +4187,7 @@ dependencies = [
  "rattler_networking",
  "rattler_redaction",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "serde_json",
  "tar",
  "tempfile",
@@ -4207,7 +4207,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b8739ebf209f017d70f4a27b2726358bade979cc3327b1765163c93a18d46f"
 dependencies = [
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "url",
 ]
 
@@ -4247,7 +4247,7 @@ dependencies = [
  "rattler_networking",
  "rattler_redaction",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -4595,20 +4595,6 @@ dependencies = [
 
 [[package]]
 name = "reqwest-middleware"
-version = "0.3.2"
-source = "git+https://github.com/astral-sh/reqwest-middleware?rev=21ceec9a5fd2e8d6f71c3ea2999078fecbd13cbe#21ceec9a5fd2e8d6f71c3ea2999078fecbd13cbe"
-dependencies = [
- "anyhow",
- "async-trait",
- "http 1.1.0",
- "reqwest 0.12.5",
- "serde",
- "thiserror",
- "tower-service",
-]
-
-[[package]]
-name = "reqwest-middleware"
 version = "0.3.3"
 source = "git+https://github.com/astral-sh/reqwest-middleware?rev=5e3eaf254b5bd481c75d2710eed055f95b756913#5e3eaf254b5bd481c75d2710eed055f95b756913"
 dependencies = [
@@ -4636,7 +4622,7 @@ dependencies = [
  "hyper 1.4.1",
  "parking_lot 0.11.2",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.2",
+ "reqwest-middleware",
  "retry-policies 0.3.0",
  "tokio",
  "tracing",
@@ -4656,7 +4642,7 @@ dependencies = [
  "hyper 1.4.1",
  "parking_lot 0.11.2",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "retry-policies 0.4.0",
  "thiserror",
  "tokio",
@@ -6166,7 +6152,7 @@ dependencies = [
  "http 1.1.0",
  "once-map",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "rust-netrc",
  "rustc-hash 2.0.0",
  "tokio",
@@ -6251,7 +6237,7 @@ dependencies = [
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "reqwest-retry 0.7.1",
  "rkyv",
  "rmp-serde",
@@ -6335,7 +6321,7 @@ dependencies = [
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "rmp-serde",
  "rustc-hash 2.0.0",
  "serde",
@@ -6416,7 +6402,7 @@ dependencies = [
  "dashmap",
  "fs-err",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "serde",
  "thiserror",
  "tokio",
@@ -6523,7 +6509,7 @@ dependencies = [
  "pypi-types",
  "regex",
  "reqwest 0.12.5",
- "reqwest-middleware 0.3.3",
+ "reqwest-middleware",
  "rmp-serde",
  "rustix",
  "same-file",

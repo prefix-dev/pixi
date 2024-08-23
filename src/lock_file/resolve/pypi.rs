@@ -34,9 +34,7 @@ use rattler_lock::{
 };
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{
-    ConfigSettings, Constraints, IndexStrategy, Overrides, PreviewMode, SetupPyStrategy,
-};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_git::GitResolver;
@@ -300,7 +298,6 @@ pub async fn resolve_pypi(
         &git_resolver,
         &context.in_flight,
         IndexStrategy::default(),
-        SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
@@ -308,7 +305,6 @@ pub async fn resolve_pypi(
         None,
         context.source_strategy,
         context.concurrency,
-        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(env_variables.iter());
 
@@ -381,7 +377,6 @@ pub async fn resolve_pypi(
             &registry_client,
             &build_dispatch,
             context.concurrency.downloads,
-            uv_configuration::PreviewMode::Disabled,
         ),
         &flat_index,
         Some(&tags),
@@ -404,7 +399,7 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        ResolverMarkers::SpecificEnvironment(marker_environment),
+        ResolverMarkers::SpecificEnvironment(marker_environment.into()),
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &in_memory_index,
         &git_resolver,
@@ -450,12 +445,7 @@ async fn lock_pypi_packages<'a>(
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(
-        registry_client,
-        build_dispatch,
-        concurrent_downloads,
-        PreviewMode::Disabled,
-    );
+    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {

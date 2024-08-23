@@ -26,7 +26,7 @@ use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, IndexStrategy, PreviewMode, SetupPyStrategy};
+use uv_configuration::{ConfigSettings, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
@@ -658,7 +658,6 @@ pub async fn update_python_distributions(
         &git_resolver,
         &uv_context.in_flight,
         IndexStrategy::default(),
-        SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
@@ -666,7 +665,6 @@ pub async fn update_python_distributions(
         None,
         uv_context.source_strategy,
         uv_context.concurrency,
-        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -787,7 +785,6 @@ pub async fn update_python_distributions(
             registry_client.as_ref(),
             &build_dispatch,
             uv_context.concurrency.downloads,
-            PreviewMode::Disabled,
         );
 
         // Before hitting the network let's make sure the credentials are available to
