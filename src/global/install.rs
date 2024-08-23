@@ -50,6 +50,7 @@ pub(crate) async fn sync_environment(
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
+    bin_dir: &BinDir,
 ) -> miette::Result<()> {
     try_increase_rlimit_to_sensible();
 
@@ -113,21 +114,6 @@ pub(crate) async fn sync_environment(
         .filter(|(name, path)| exposed.values().contains(&name))
         .collect();
 
-    let bin_dir = BinDir::create().await?;
-
-    for file in bin_dir.files().await? {
-        if !exposed
-            .keys()
-            .map(|e| bin_dir.executable_script_path(e))
-            .contains(&file)
-        {
-            tokio::fs::remove_file(&file)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
-        }
-    }
-
     let script_mapping = exposed
         .into_iter()
         .map(|(exposed_name, entry_point)| {
@@ -135,7 +121,7 @@ pub(crate) async fn sync_environment(
                 exposed_name,
                 entry_point,
                 executables.clone(),
-                &bin_dir,
+                bin_dir,
                 environment_name,
             )
         })

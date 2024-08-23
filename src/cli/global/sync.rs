@@ -1,7 +1,7 @@
 use std::env;
 
 use crate::global::{
-    self, channel_name_from_prefix, install::sync_environment, print_executables_available,
+    self, channel_name_from_prefix, install::sync_environment, print_executables_available, BinDir,
 };
 use clap::Parser;
 use indexmap::IndexMap;
@@ -30,6 +30,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (_, auth_client) = build_reqwest_clients(Some(&config));
 
     let gateway = config.gateway(auth_client.clone());
+
+    let bin_dir = BinDir::create().await?;
+
+    let exposed_paths = project
+        .environments()
+        .values()
+        .flat_map(|environment| {
+            environment
+                .exposed
+                .keys()
+                .map(|e| bin_dir.executable_script_path(e))
+        })
+        .collect_vec();
+
+    for file in bin_dir.files().await? {
+        if !exposed_paths.contains(&file) {
+            tokio::fs::remove_file(&file)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
+        }
+    }
 
     for (environment_name, environment) in project.environments() {
         let specs = environment
@@ -96,6 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             solved_records.clone(),
             auth_client.clone(),
             environment.platform(),
+            &bin_dir,
         )
         .await?;
 
