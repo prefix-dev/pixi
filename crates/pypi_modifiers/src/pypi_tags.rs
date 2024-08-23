@@ -140,6 +140,8 @@ pub fn get_pypi_tags(
         // TODO: This might not be entirely correct..
         (python_version.0 as u8, python_version.1 as u8),
         false,
+        // Should revisit this when this lands: https://github.com/conda-forge/python-feedstock/pull/679
+        false,
     )
     .into_diagnostic()
     .context("failed to determine the python wheel tags for the target platform")?;
