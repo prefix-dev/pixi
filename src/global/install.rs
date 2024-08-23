@@ -94,6 +94,13 @@ pub(crate) async fn sync_environment(
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
+    /// Processes prefix records to filter and collect executable files.
+    /// It performs the following steps:
+    /// 1. Filters records to only include direct dependencies
+    /// 2. Finds executables for each filtered record.
+    /// 3. Maps executables to a tuple of file name (as a string) and file path.
+    /// 4. Filters tuples to include only those whose names are in the `exposed` values.
+    /// 5. Collects the resulting tuples into a vector of executables.
     let executables: Vec<(String, PathBuf)> = prefix_records
         .into_iter()
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
