@@ -7,7 +7,7 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
 use crate::cli::has_specs::HasSpecs;
-use crate::global::install::{find_and_map_executable_scripts, BinScriptMapping};
+use crate::global::install::BinScriptMapping;
 use crate::prefix::Prefix;
 
 use crate::global::{find_designated_package, BinDir, BinEnvDir};

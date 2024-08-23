@@ -87,9 +87,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .context("failed to solve environment")?;
 
+        let packages = specs.keys().cloned().collect();
+
         sync_environment(
             &environment_name,
             &environment.exposed,
+            packages,
             solved_records.clone(),
             auth_client.clone(),
             environment.platform(),

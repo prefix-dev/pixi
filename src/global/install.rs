@@ -1,13 +1,15 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
+    iter,
     path::{Path, PathBuf},
 };
 
 use clap::Parser;
+use distribution_types::Diagnostic;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::{bail, Context, IntoDiagnostic};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
@@ -41,6 +43,7 @@ use super::EnvironmentName;
 pub(crate) async fn sync_environment(
     environment_name: &EnvironmentName,
     exposed: &IndexMap<String, String>,
+    packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
@@ -74,39 +77,59 @@ pub(crate) async fn sync_environment(
     .await
     .into_diagnostic()?;
 
-    return Ok(());
+    // Determine the shell to use for the invocation script
+    let shell: ShellEnum = if cfg!(windows) {
+        rattler_shell::shell::CmdExe.into()
+    } else {
+        rattler_shell::shell::Bash.into()
+    };
 
-    // // Find the installed package in the environment
-    // let prefix_package = find_designated_package(&prefix, package_name).await?;
+    // Construct the reusable activation script for the shell and generate an
+    // invocation script for each executable added by the package to the
+    // environment.
+    let activation_script = create_activation_script(&prefix, shell.clone())?;
 
-    // // Determine the shell to use for the invocation script
-    // let shell: ShellEnum = if cfg!(windows) {
-    //     rattler_shell::shell::CmdExe.into()
-    // } else {
-    //     rattler_shell::shell::Bash.into()
-    // };
+    let prefix_records = prefix.find_installed_packages(None).await?;
 
-    // // Construct the reusable activation script for the shell and generate an
-    // // invocation script for each executable added by the package to the
-    // // environment.
-    // let activation_script = create_activation_script(&prefix, shell.clone())?;
+    let executables = prefix_records
+        .into_iter()
+        .filter(|record| packages.contains(&record.repodata_record.package_record.name))
+        .flat_map(|record| find_executables(&prefix, record))
+        .collect_vec();
 
-    // let bin_dir = BinDir::create().await?;
-    // let script_mapping =
-    //     find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    // create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+    let executable_names = executables
+        .iter()
+        .filter_map(|path| path.file_name())
+        .filter_map(|name| name.to_str())
+        .collect_vec();
 
-    // let scripts: Vec<_> = script_mapping
-    //     .into_iter()
-    //     .map(
-    //         |BinScriptMapping {
-    //              global_binary_path: path,
-    //              ..
-    //          }| path,
-    //     )
-    //     .collect();
+    let binary_mapping = exposed
+        .into_iter()
+        .map(|(exposed_name, entry_point)| {
+            for (exec_name, exec) in iter::zip(&executable_names, &executables) {
+                if exec_name == &entry_point.as_str() {
+                    return Ok((exposed_name, exec));
+                }
+            }
+            bail!("Could not find {entry_point} in {environment_name}")
+        })
+        .collect::<miette::Result<IndexMap<_, _>>>()?;
 
-    // Ok((prefix_package, scripts))
+    let bin_dir = BinDir::create().await?;
+    let script_mapping = map_executables_to_global_bin_scripts(executables, &bin_dir).await?;
+    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+
+    let scripts: Vec<_> = script_mapping
+        .into_iter()
+        .map(
+            |BinScriptMapping {
+                 global_binary_path: path,
+                 ..
+             }| path,
+        )
+        .collect();
+
+    Ok(())
 }
 
 /// Create the environment activation script
@@ -131,36 +154,21 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
     Ok(script)
 }
 
-/// Find all executable scripts in a package and map them to their global
-/// install paths.
-///
-/// (Convenience wrapper around `find_executables` and
-/// `map_executables_to_global_bin_scripts` which are generally used together.)
-pub(crate) async fn find_and_map_executable_scripts<'a>(
-    prefix: &Prefix,
-    prefix_package: &'a PrefixRecord,
-    bin_dir: &BinDir,
-) -> miette::Result<Vec<BinScriptMapping<'a>>> {
-    let executables = find_executables(prefix, prefix_package);
-    map_executables_to_global_bin_scripts(&executables, bin_dir).await
-}
-
 /// Mapping from an executable in a package environment to its global binary
 /// script location.
 #[derive(Debug)]
-pub struct BinScriptMapping<'a> {
-    pub original_executable: &'a Path,
+pub struct BinScriptMapping {
+    pub original_executable: PathBuf,
     pub global_binary_path: PathBuf,
 }
 
 /// Find the executable scripts within the specified package installed in this
 /// conda prefix.
-fn find_executables<'a>(prefix: &Prefix, prefix_package: &'a PrefixRecord) -> Vec<&'a Path> {
+fn find_executables(prefix: &Prefix, prefix_package: PrefixRecord) -> Vec<PathBuf> {
     prefix_package
         .files
-        .iter()
+        .into_iter()
         .filter(|relative_path| is_executable(prefix, relative_path))
-        .map(|buf| buf.as_ref())
         .collect()
 }
 
@@ -207,10 +215,10 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 
 /// For each executable provided, map it to the installation path for its global
 /// binary script.
-async fn map_executables_to_global_bin_scripts<'a>(
-    package_executables: &[&'a Path],
+async fn map_executables_to_global_bin_scripts(
+    package_executables: impl IntoIterator<Item = PathBuf>,
     bin_dir: &BinDir,
-) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+) -> miette::Result<Vec<BinScriptMapping>> {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
         pathext.split(';').map(|s| s.to_lowercase()).collect()
@@ -239,7 +247,7 @@ async fn map_executables_to_global_bin_scripts<'a>(
     let BinDir(bin_dir) = bin_dir;
     let mut mappings = vec![];
 
-    for exec in package_executables.iter() {
+    for exec in package_executables {
         // Remove the extension of a file if it is in the list of known extensions.
         let Some(file_name) = exec
             .file_name()
@@ -269,7 +277,7 @@ async fn map_executables_to_global_bin_scripts<'a>(
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
 async fn create_executable_scripts(
-    mapped_executables: &[BinScriptMapping<'_>],
+    mapped_executables: &[BinScriptMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
