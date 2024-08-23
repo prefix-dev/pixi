@@ -41,7 +41,7 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_git::GitResolver;
 use uv_normalize::PackageName;
-use uv_python::{Interpreter, PythonVersion};
+use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
@@ -176,6 +176,17 @@ fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
     }
 }
 
+pub fn names_to_build_isolation<'a>(
+    names: Option<&'a [PackageName]>,
+    python_environment: &'a PythonEnvironment,
+) -> uv_types::BuildIsolation<'a> {
+    return if let Some(package_names) = names {
+        uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
+    } else {
+        uv_types::BuildIsolation::default()
+    };
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -287,6 +298,21 @@ pub async fn resolve_pypi(
     let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
+    let env = PythonEnvironment::from_interpreter(interpreter.clone());
+    // Figure out the build isolation strategy
+    let names = if let Some(names) = &pypi_options.no_build_isolation {
+        let names = names
+            .iter()
+            .map(|n| n.parse())
+            .collect::<Result<Vec<PackageName>, _>>()
+            .into_diagnostic()?;
+        Some(names)
+    } else {
+        None
+    };
+    let build_isolation = names_to_build_isolation(names.as_deref(), &env);
+    tracing::debug!("using build-isolation: {:?}", build_isolation);
+
     let options = Options::default();
     let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
@@ -302,7 +328,8 @@ pub async fn resolve_pypi(
         IndexStrategy::default(),
         SetupPyStrategy::default(),
         &config_settings,
-        uv_types::BuildIsolation::Isolated,
+        // BuildIsolation::Shared(&env),
+        build_isolation,
         LinkMode::default(),
         &context.build_options,
         None,
