@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
@@ -49,6 +49,41 @@ impl BinDir {
                 "binary executable directory does not exist"
             ))
         }
+    }
+
+    /// Asynchronously retrieves all files in the Binary Executable directory.
+    ///
+    /// This function reads the directory specified by `self.0` and collects all
+    /// file paths into a vector. It returns a `miette::Result` containing the
+    /// vector of file paths or an error if the directory cannot be read.
+    pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        let mut entries = tokio::fs::read_dir(&self.0)
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Could not read {}", &self.0.display()))?;
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if path.is_file() {
+                files.push(path);
+            }
+        }
+
+        Ok(files)
+    }
+
+    /// Returns the path to the executable script for the given exposed name.
+    ///
+    /// This function constructs the path to the executable script by joining the
+    /// `bin_dir` with the provided `exposed_name`. If the target platform is
+    /// Windows, it sets the file extension to `.bat`.
+    pub(crate) fn executable_script_path(&self, exposed_name: &str) -> PathBuf {
+        let mut executable_script_path = self.0.join(exposed_name);
+        if cfg!(windows) {
+            executable_script_path.set_extension("bat");
+        }
+        executable_script_path
     }
 }
 

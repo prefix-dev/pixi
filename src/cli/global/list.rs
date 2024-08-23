@@ -6,7 +6,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
-use crate::{global::install::BinScriptMapping, prefix::Prefix};
+use crate::{global::install::ScriptExecMapping, prefix::Prefix};
 use pixi_config::home_path;
 
 use crate::global::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};

@@ -26,13 +26,16 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::global::{
-    channel_name_from_prefix, find_designated_package, print_executables_available, BinDir,
-    BinEnvDir,
-};
 use crate::{
     cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
+};
+use crate::{
+    global::{
+        channel_name_from_prefix, find_designated_package, print_executables_available, BinDir,
+        BinEnvDir,
+    },
+    task::ExecutableTask,
 };
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -91,45 +94,79 @@ pub(crate) async fn sync_environment(
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
-    let executables = prefix_records
+    let executables: Vec<(String, PathBuf)> = prefix_records
         .into_iter()
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
         .flat_map(|record| find_executables(&prefix, record))
-        .collect_vec();
-
-    let executable_names = executables
-        .iter()
-        .filter_map(|path| path.file_name())
-        .filter_map(|name| name.to_str())
-        .collect_vec();
-
-    let binary_mapping = exposed
-        .into_iter()
-        .map(|(exposed_name, entry_point)| {
-            for (exec_name, exec) in iter::zip(&executable_names, &executables) {
-                if exec_name == &entry_point.as_str() {
-                    return Ok((exposed_name, exec));
-                }
-            }
-            bail!("Could not find {entry_point} in {environment_name}")
+        .filter_map(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| (name.to_string(), path.clone()))
         })
-        .collect::<miette::Result<IndexMap<_, _>>>()?;
-
-    let bin_dir = BinDir::create().await?;
-    let script_mapping = map_executables_to_global_bin_scripts(executables, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
-
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
-            |BinScriptMapping {
-                 global_binary_path: path,
-                 ..
-             }| path,
-        )
+        .filter(|(name, path)| exposed.keys().contains(&name))
         .collect();
 
+    let bin_dir = BinDir::create().await?;
+
+    for file in bin_dir.files().await? {
+        if !exposed
+            .keys()
+            .map(|e| bin_dir.executable_script_path(e))
+            .contains(&file)
+        {
+            tokio::fs::remove_file(&file)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
+        }
+    }
+
+    let script_mapping = exposed
+        .into_iter()
+        .map(|(exposed_name, entry_point)| {
+            script_exec_mapping(
+                exposed_name,
+                entry_point,
+                executables.clone(),
+                &bin_dir,
+                environment_name,
+            )
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
+
+    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+
     Ok(())
+}
+
+/// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
+///
+/// This function takes an entry point and a list of executable names and paths,
+/// and returns a `ScriptExecMapping` that contains the path to the script and
+/// the original executable.
+/// # Returns
+///
+/// A `miette::Result` containing the `ScriptExecMapping` if the entry point is found,
+/// or an error if it is not.
+///
+/// # Errors
+///
+/// Returns an error if the entry point is not found in the list of executable names.
+fn script_exec_mapping(
+    exposed_name: &str,
+    entry_point: &str,
+    executables: impl IntoIterator<Item = (String, PathBuf)>,
+    bin_dir: &BinDir,
+    environment_name: &EnvironmentName,
+) -> miette::Result<ScriptExecMapping> {
+    executables
+        .into_iter()
+        .find(|(executable_name, _)| *executable_name == entry_point)
+        .map(|(_, executable_path)| ScriptExecMapping {
+            global_script_path: bin_dir.executable_script_path(exposed_name),
+            original_executable: executable_path,
+        })
+        .ok_or_else(|| miette::miette!("Could not find {entry_point} in {environment_name}"))
 }
 
 /// Create the environment activation script
@@ -154,12 +191,11 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
     Ok(script)
 }
 
-/// Mapping from an executable in a package environment to its global binary
-/// script location.
+/// Mapping from the global script location to an executable in a package environment .
 #[derive(Debug)]
-pub struct BinScriptMapping {
+pub struct ScriptExecMapping {
+    pub global_script_path: PathBuf,
     pub original_executable: PathBuf,
-    pub global_binary_path: PathBuf,
 }
 
 /// Find the executable scripts within the specified package installed in this
@@ -218,7 +254,7 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 async fn map_executables_to_global_bin_scripts(
     package_executables: impl IntoIterator<Item = PathBuf>,
     bin_dir: &BinDir,
-) -> miette::Result<Vec<BinScriptMapping>> {
+) -> miette::Result<Vec<ScriptExecMapping>> {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
         pathext.split(';').map(|s| s.to_lowercase()).collect()
@@ -266,9 +302,9 @@ async fn map_executables_to_global_bin_scripts(
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         };
-        mappings.push(BinScriptMapping {
+        mappings.push(ScriptExecMapping {
             original_executable: exec,
-            global_binary_path: executable_script_path,
+            global_script_path: executable_script_path,
         });
     }
     Ok(mappings)
@@ -277,14 +313,14 @@ async fn map_executables_to_global_bin_scripts(
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
 async fn create_executable_scripts(
-    mapped_executables: &[BinScriptMapping],
+    mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
 ) -> miette::Result<()> {
-    for BinScriptMapping {
-        original_executable: exec,
-        global_binary_path: executable_script_path,
+    for ScriptExecMapping {
+        global_script_path,
+        original_executable,
     } in mapped_executables
     {
         let mut script = activation_script.clone();
@@ -292,7 +328,11 @@ async fn create_executable_scripts(
             .run_command(
                 &mut script,
                 [
-                    format!("\"{}\"", prefix.root().join(exec).to_string_lossy()).as_str(),
+                    format!(
+                        "\"{}\"",
+                        prefix.root().join(original_executable).to_string_lossy()
+                    )
+                    .as_str(),
                     get_catch_all_arg(shell),
                 ],
             )
@@ -305,18 +345,15 @@ async fn create_executable_scripts(
             script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
         }
 
-        tokio::fs::write(&executable_script_path, script)
+        tokio::fs::write(&global_script_path, script)
             .await
             .into_diagnostic()?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                executable_script_path,
-                std::fs::Permissions::from_mode(0o755),
-            )
-            .into_diagnostic()?;
+            std::fs::set_permissions(global_script_path, std::fs::Permissions::from_mode(0o755))
+                .into_diagnostic()?;
         }
     }
     Ok(())
