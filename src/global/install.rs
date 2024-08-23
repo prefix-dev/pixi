@@ -103,7 +103,7 @@ pub(crate) async fn sync_environment(
                 .and_then(|name| name.to_str())
                 .map(|name| (name.to_string(), path.clone()))
         })
-        .filter(|(name, path)| exposed.keys().contains(&name))
+        .filter(|(name, path)| exposed.values().contains(&name))
         .collect();
 
     let bin_dir = BinDir::create().await?;
