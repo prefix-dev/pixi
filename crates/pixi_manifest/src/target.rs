@@ -193,7 +193,12 @@ impl Target {
                 *r == PyPiRequirement::try_from(requirement.clone())
                     .expect("could not convert pep508 requirement")
             }
-            (Some(_), false) => true,
+            (Some(r), false) => {
+                if r.extras() != requirement.extras {
+                    return false;
+                }
+                true
+            }
             (None, _) => false,
         }
     }

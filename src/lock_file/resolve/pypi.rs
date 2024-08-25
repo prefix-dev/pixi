@@ -1,14 +1,17 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     iter::once,
+    ops::Deref,
     path::{Path, PathBuf},
+    rc::Rc,
     str::FromStr,
     sync::Arc,
 };
 
 use distribution_types::{
-    BuiltDist, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist, Name,
-    Resolution, ResolvedDist, SourceDist, Verbatim,
+    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
+    Name, Resolution, ResolvedDist, SourceDist, Verbatim,
 };
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -31,9 +34,7 @@ use rattler_lock::{
 };
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{
-    ConfigSettings, Constraints, IndexStrategy, Overrides, PreviewMode, SetupPyStrategy,
-};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_git::GitResolver;
@@ -156,6 +157,21 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
             origin: requirement.origin.clone(),
         })
         .collect()
+}
+
+/// Prints the number of overridden uv PyPI package requests
+fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
+    if !package_requests.is_empty() {
+        // Print package requests in form of (PackageName, NumRequest)
+        let package_requests = package_requests
+            .iter()
+            .map(|(name, value)| format!("[{name}: {value}]"))
+            .collect::<Vec<_>>()
+            .join(",");
+        tracing::debug!("overridden uv PyPI package requests [name: amount]: {package_requests}");
+    } else {
+        tracing::debug!("no uv PyPI package requests overridden by locked conda dependencies");
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -282,7 +298,6 @@ pub async fn resolve_pypi(
         &git_resolver,
         &context.in_flight,
         IndexStrategy::default(),
-        SetupPyStrategy::default(),
         &config_settings,
         uv_types::BuildIsolation::Isolated,
         LinkMode::default(),
@@ -290,7 +305,6 @@ pub async fn resolve_pypi(
         None,
         context.source_strategy,
         context.concurrency,
-        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(env_variables.iter());
 
@@ -363,7 +377,6 @@ pub async fn resolve_pypi(
             &registry_client,
             &build_dispatch,
             context.concurrency.downloads,
-            uv_configuration::PreviewMode::Disabled,
         ),
         &flat_index,
         Some(&tags),
@@ -373,9 +386,11 @@ pub async fn resolve_pypi(
         options.exclude_newer,
         &context.build_options,
     );
+    let package_requests = Rc::new(RefCell::new(Default::default()));
     let provider = CondaResolverProvider {
         fallback: fallback_provider,
         conda_python_identifiers: &conda_python_packages,
+        package_requests: package_requests.clone(),
     };
 
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
@@ -384,7 +399,7 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        ResolverMarkers::SpecificEnvironment(marker_environment),
+        ResolverMarkers::SpecificEnvironment(marker_environment.into()),
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &in_memory_index,
         &git_resolver,
@@ -400,8 +415,15 @@ pub async fn resolve_pypi(
     .await
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?;
-
     let resolution = Resolution::from(resolution);
+
+    // Print the overridden package requests
+    print_overridden_requests(package_requests.borrow().deref());
+
+    // Print any diagnostics
+    for diagnostic in resolution.diagnostics() {
+        tracing::warn!("{}", diagnostic.message());
+    }
 
     // Collect resolution into locked packages
     lock_pypi_packages(
@@ -423,12 +445,7 @@ async fn lock_pypi_packages<'a>(
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(
-        registry_client,
-        build_dispatch,
-        concurrent_downloads,
-        PreviewMode::Disabled,
-    );
+    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
