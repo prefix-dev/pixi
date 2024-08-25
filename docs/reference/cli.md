@@ -1190,6 +1190,23 @@ mamba create --name <env> --file <explicit spec file>
 As the explicit specification file format does not support pypi-dependencies, use either the `--ignore-pypi-errors` option to ignore those dependencies
 or `--write-pypi-requirements` to write a `requirements.txt` file that can then be used to install the packages into a conda env using `pip` or `uv`.
 
+##### Arguments
+
+1. `<OUTPUT_DIR>`:  Output directory for rendered explicit environment spec files.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: Environment to render. Can be repeated for multiple envs. Defaults to all environments.
+- `--platform <PLATFORM> (-p)`: The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments.
+- `--ignore-pypi-errors`: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present. Alternatively see `--write-pypi-requirements`.
+- `--write-pypi-requirements`: Write a requirements file containing all pypi dependencies.
+
+```sh
+pixi project export conda_explicit_spec output
+pixi project export conda_explicit_spec --write-pypi-requirements -e default -e test -p linux-64 output
+```
+
+
 ### `project platform add`
 
 Adds a platform(s) to the manifest file and updates the lock file.
