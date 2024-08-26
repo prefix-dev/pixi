@@ -17,10 +17,7 @@ use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
-use crate::{
-    environment::{update_prefix, LockFileUsage},
-    Project,
-};
+use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -238,7 +235,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        update_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
+        eprintln!(
+            "{}Created {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            project.manifest_path().display()
+        );
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
