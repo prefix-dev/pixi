@@ -959,6 +959,20 @@
           "examples": [
             "https://pypi.org/simple"
           ]
+        },
+        "no-build-isolation": {
+          "title": "No-Build-Isolation",
+          "description": "Packages that should not be isolated during the build process",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "numpy"
+            ]
+          ]
         }
       }
     },
