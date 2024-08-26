@@ -12,7 +12,7 @@ TOML parse error at line 1, column 15
   |
 1 | [envs.ipython.invalid]
   |               ^^^^^^^
-unknown field `invalid`, expected `dependencies` or `exposed`
+unknown field `invalid`, expected one of `channels`, `platform`, `dependencies`, `exposed`
 
 TOML parse error at line 1, column 7
   |

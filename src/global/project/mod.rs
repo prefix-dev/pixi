@@ -135,6 +135,8 @@ mod tests {
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
 
     const SIMPLE_MANIFEST: &str = r#"
+        [envs.python]
+        channels = ["conda-forge"]
         [envs.python.dependencies]
         python = "3.11.*"
         [envs.python.exposed]

@@ -1,16 +1,7 @@
-use std::collections::HashSet;
-
 use clap::Parser;
-use clap_verbosity_flag::{Level, Verbosity};
-use itertools::Itertools;
-use miette::IntoDiagnostic;
-use rattler_conda_types::PackageName;
+use clap_verbosity_flag::Verbosity;
 
 use crate::cli::has_specs::HasSpecs;
-use crate::global::install::ScriptExecMapping;
-use crate::prefix::Prefix;
-
-use crate::global::{find_designated_package, BinDir, BinEnvDir};
 
 /// Removes a package previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -30,6 +21,6 @@ impl HasSpecs for Args {
     }
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(_args: Args) -> miette::Result<()> {
     todo!()
 }

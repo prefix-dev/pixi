@@ -1,8 +1,4 @@
-use std::env;
-
-use crate::global::{
-    self, channel_name_from_prefix, install::sync_environment, print_executables_available, BinDir,
-};
+use crate::global::{self, install::sync_environment, BinDir, EnvRoot};
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -31,8 +27,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let gateway = config.gateway(auth_client.clone());
 
-    let bin_dir = BinDir::create().await?;
+    let env_root = EnvRoot::from_env().await?;
+    let bin_dir = BinDir::from_env().await?;
 
+    // Prune environments that are not listed
+    env_root
+        .prune(project.environments().keys().cloned())
+        .await?;
+
+    // Remove binaries that are not listed as exposed
     let exposed_paths = project
         .environments()
         .values()
@@ -43,7 +46,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|e| bin_dir.executable_script_path(e))
         })
         .collect_vec();
-
     for file in bin_dir.files().await? {
         if !exposed_paths.contains(&file) {
             tokio::fs::remove_file(&file)

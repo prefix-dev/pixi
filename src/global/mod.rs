@@ -6,7 +6,6 @@ pub(crate) mod install;
 mod project;
 
 pub(crate) use common::{
-    bin_dir, bin_env_dir, channel_name_from_prefix, find_designated_package,
-    print_executables_available, BinDir, BinEnvDir,
+    channel_name_from_prefix, find_designated_package, BinDir, EnvDir, EnvRoot,
 };
 pub(crate) use project::{EnvironmentName, Project};

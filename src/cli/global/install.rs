@@ -1,18 +1,8 @@
 use clap::Parser;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::Platform;
 
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
-
-use crate::global::{
-    channel_name_from_prefix, install::prompt_user_to_continue, print_executables_available,
-};
 use crate::{cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs};
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::wrap_in_progress;
+use pixi_config::{self, ConfigCli};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -39,6 +29,6 @@ impl HasSpecs for Args {
 }
 
 /// Install a global command
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(_args: Args) -> miette::Result<()> {
     todo!()
 }

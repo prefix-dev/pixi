@@ -104,6 +104,10 @@ mod tests {
     fn test_tool_deserialization() {
         let contents = r#"
         # The name of the environment is `python`
+        [envs.python]
+        channels = ["conda-forge"]
+        # optional, defaults to your current OS
+        platform = "osx-64"
         # It will expose python, python3 and python3.11, but not pip
         [envs.python.dependencies]
         python = "3.11.*"
@@ -115,6 +119,8 @@ mod tests {
         "python3.11" = "python3.11"
 
         # The name of the environment is `python3-10`
+        [envs.python3-10]
+        channels = ["https://fast.prefix.dev/conda-forge"]
         # It will expose python3.10
         [envs.python3-10.dependencies]
         python = "3.10.*"

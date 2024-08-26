@@ -31,16 +31,13 @@ use crate::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use crate::{
-    global::{
-        channel_name_from_prefix, find_designated_package, print_executables_available, BinDir,
-        BinEnvDir,
-    },
+    global::{channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
     task::ExecutableTask,
 };
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
-use super::EnvironmentName;
+use super::{common::EnvRoot, EnvironmentName};
 
 /// Sync given global environment records with environment on the system
 pub(crate) async fn sync_environment(
@@ -55,8 +52,9 @@ pub(crate) async fn sync_environment(
     try_increase_rlimit_to_sensible();
 
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(environment_name).await?;
-    let prefix = Prefix::new(bin_prefix);
+    let env_root = EnvRoot::from_env().await?;
+    let bin_env_dir = EnvDir::new(env_root, environment_name.clone()).await?;
+    let prefix = Prefix::new(bin_env_dir.path());
 
     // Install the environment
     let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
@@ -273,7 +271,6 @@ async fn map_executables_to_global_bin_scripts(
     .map(|&s| s.to_owned())
     .collect();
 
-    let BinDir(bin_dir) = bin_dir;
     let mut mappings = vec![];
 
     for exec in package_executables {
@@ -290,7 +287,7 @@ async fn map_executables_to_global_bin_scripts(
             .find_map(|ext| file_name.strip_suffix(ext))
             .unwrap_or(file_name.as_str());
 
-        let mut executable_script_path = bin_dir.join(file_name);
+        let mut executable_script_path = bin_dir.path().join(file_name);
 
         if cfg!(windows) {
             executable_script_path.set_extension("bat");

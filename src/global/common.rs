@@ -16,39 +16,28 @@ use rattler_shell::{
 };
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible};
+use crate::{
+    cli::project::environment, prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible,
+};
 use pixi_config::home_path;
 
 use super::EnvironmentName;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
-pub struct BinDir(pub PathBuf);
+pub struct BinDir(PathBuf);
 
 impl BinDir {
     /// Create the Binary Executable directory
-    pub async fn create() -> miette::Result<Self> {
-        let bin_dir = bin_dir().ok_or(miette::miette!(
-            "could not determine global binary executable directory"
-        ))?;
+    pub async fn from_env() -> miette::Result<Self> {
+        let bin_dir = home_path()
+            .map(|path| path.join("bin"))
+            .ok_or(miette::miette!(
+                "could not determine global binary executable directory"
+            ))?;
         tokio::fs::create_dir_all(&bin_dir)
             .await
             .into_diagnostic()?;
         Ok(Self(bin_dir))
-    }
-
-    /// Get the Binary Executable directory, erroring if it doesn't already
-    /// exist.
-    pub async fn from_existing() -> miette::Result<Self> {
-        let bin_dir = bin_dir().ok_or(miette::miette!(
-            "could not find global binary executable directory"
-        ))?;
-        if tokio::fs::try_exists(&bin_dir).await.into_diagnostic()? {
-            Ok(Self(bin_dir))
-        } else {
-            Err(miette::miette!(
-                "binary executable directory does not exist"
-            ))
-        }
     }
 
     /// Asynchronously retrieves all files in the Binary Executable directory.
@@ -73,6 +62,11 @@ impl BinDir {
         Ok(files)
     }
 
+    /// Returns the path to the binary directory
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
     /// Returns the path to the executable script for the given exposed name.
     ///
     /// This function constructs the path to the executable script by joining the
@@ -85,48 +79,126 @@ impl BinDir {
         }
         executable_script_path
     }
+
+    pub(crate) async fn print_executables_available(
+        &self,
+        executables: Vec<PathBuf>,
+    ) -> miette::Result<()> {
+        let whitespace = console::Emoji("  ", "").to_string();
+        let executable = executables
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(self.path())
+                    .expect("script paths were constructed by joining onto BinDir")
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .join(&format!("\n{whitespace} -  "));
+
+        if self.is_on_path() {
+            eprintln!(
+                "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
+            )
+        } else {
+            eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
+                      console::style(&self.path().display()).bold(),
+                      console::style("!").yellow().bold(),
+                      console::style(&self.path().display()).bold()
+            )
+        }
+
+        Ok(())
+    }
+
+    /// Returns true if the bin folder is available on the PATH.
+    fn is_on_path(&self) -> bool {
+        let Some(path_content) = std::env::var_os("PATH") else {
+            return false;
+        };
+        std::env::split_paths(&path_content).contains(&self.path().to_owned())
+    }
 }
 
-/// Global binary environments directory, default to `$HOME/.pixi/envs`
-pub struct BinEnvDir(pub PathBuf);
+#[derive(Debug, Clone)]
+pub struct EnvRoot(PathBuf);
 
-impl BinEnvDir {
+impl EnvRoot {
+    pub async fn new(path: PathBuf) -> miette::Result<Self> {
+        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        Ok(Self(path))
+    }
+
+    pub async fn from_env() -> miette::Result<Self> {
+        let path = home_path()
+            .map(|path| path.join("envs"))
+            .ok_or_else(|| miette::miette!("Could not get home path"))?;
+        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        Ok(Self(path))
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
+    /// Delete environments that are not listed
+    pub(crate) async fn prune(
+        &self,
+        environments: impl IntoIterator<Item = EnvironmentName>,
+    ) -> miette::Result<()> {
+        let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
+        let mut entries = tokio::fs::read_dir(&self.path())
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Could not read directory {}", self.path().display()))?;
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if path.is_dir() {
+                let Some(Ok(dir_name)) = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.parse())
+                else {
+                    continue;
+                };
+                if !env_set.contains(&dir_name) {
+                    tokio::fs::remove_dir_all(&path)
+                        .await
+                        .into_diagnostic()
+                        .wrap_err_with(|| {
+                            format!("Could not remove directory {}", path.display())
+                        })?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Global binary environments directory
+pub(crate) struct EnvDir {
+    root: EnvRoot,
+    path: PathBuf,
+}
+
+impl EnvDir {
+    /// Create the Binary Environment directory
+    pub(crate) async fn new(
+        root: EnvRoot,
+        environment_name: EnvironmentName,
+    ) -> miette::Result<Self> {
+        let path = root.path().join(environment_name.as_str());
+        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+
+        Ok(Self { root, path })
+    }
+
     /// Construct the path to the env directory for the environment
     /// `environment_name`.
-    fn package_bin_env_dir(environment_name: &EnvironmentName) -> miette::Result<PathBuf> {
-        Ok(bin_env_dir()
-            .ok_or(miette::miette!(
-                "could not find global binary environment directory"
-            ))?
-            .join(environment_name.as_str()))
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
     }
-
-    /// Create the Binary Environment directory
-    pub async fn create(environment_name: &EnvironmentName) -> miette::Result<Self> {
-        let bin_env_dir = Self::package_bin_env_dir(environment_name)?;
-        tokio::fs::create_dir_all(&bin_env_dir)
-            .await
-            .into_diagnostic()?;
-        Ok(Self(bin_env_dir))
-    }
-}
-
-/// Global binaries directory, default to `$HOME/.pixi/bin`
-///
-/// # Returns
-///
-/// The global binaries directory
-pub(crate) fn bin_dir() -> Option<PathBuf> {
-    home_path().map(|path| path.join("bin"))
-}
-
-/// Global binary environments directory, default to `$HOME/.pixi/envs`
-///
-/// # Returns
-///
-/// The global binary environments directory
-pub(crate) fn bin_env_dir() -> Option<PathBuf> {
-    home_path().map(|path| path.join("envs"))
 }
 
 /// Get the friendly channel name of a [`PrefixRecord`]
@@ -159,44 +231,61 @@ pub(crate) async fn find_designated_package(
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
 }
 
-pub(crate) async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Result<()> {
-    let BinDir(bin_dir) = BinDir::from_existing().await?;
-    let whitespace = console::Emoji("  ", "").to_string();
-    let executable = executables
-        .into_iter()
-        .map(|path| {
-            path.strip_prefix(&bin_dir)
-                .expect("script paths were constructed by joining onto BinDir")
-                .to_string_lossy()
-                .to_string()
-        })
-        .join(&format!("\n{whitespace} -  "));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use tempfile::tempdir;
 
-    if is_bin_folder_on_path().await {
-        eprintln!(
-            "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
-        )
-    } else {
-        eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
-                  console::style(&bin_dir.display()).bold(),
-                  console::style("!").yellow().bold(),
-                  console::style(&bin_dir.display()).bold()
-        )
+    #[tokio::test]
+    async fn test_create() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
+
+        // Set the env root to the temporary directory
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
+
+        // Define a test environment name
+        let environment_name = "test-env".parse().unwrap();
+
+        // Create a new binary env dir
+        let bin_env_dir = EnvDir::new(env_root, environment_name).await.unwrap();
+
+        // Verify that the directory was created
+        assert!(bin_env_dir.path().exists());
+        assert!(bin_env_dir.path().is_dir());
     }
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_prune() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
 
-/// Returns true if the bin folder is available on the PATH.
-async fn is_bin_folder_on_path() -> bool {
-    let bin_path = match BinDir::from_existing().await.ok() {
-        Some(BinDir(bin_dir)) => bin_dir,
-        None => return false,
-    };
+        // Set the env root to the temporary directory
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
 
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect_vec())
-        .unwrap_or_default()
-        .into_iter()
-        .contains(&bin_path)
+        // Create some directories in the temporary directory
+        let envs = ["env1", "env2", "env3"];
+        for env in &envs {
+            EnvDir::new(env_root.clone(), env.parse().unwrap())
+                .await
+                .unwrap();
+        }
+
+        // Call the prune method with a list of environments to keep
+        env_root
+            .prune(["env1".parse().unwrap(), "env3".parse().unwrap()])
+            .await
+            .unwrap();
+
+        // Verify that only the specified directories remain
+        let remaining_dirs = std::fs::read_dir(env_root.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().into_string().unwrap())
+            .collect_vec();
+
+        assert_eq!(remaining_dirs, vec!["env1", "env3"]);
+    }
 }
