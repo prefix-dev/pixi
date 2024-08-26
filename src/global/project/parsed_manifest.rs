@@ -83,8 +83,32 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_exposed() {
+        let contents = r#"
+        [envs.python-3-10]
+        channels = ["conda-forge"]
+        [envs.python-3-10.dependencies]
+        python = "3.10"
+        [envs.python-3-10.exposed]
+        "python" = "python"
+        [envs.python-3-11]
+        channels = ["conda-forge"]
+        [envs.python-3-11.dependencies]
+        python = "3.11"
+        [envs.python-3-11.exposed]
+        "python" = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents);
+
+        assert!(manifest.is_err());
+        assert_snapshot!(manifest.unwrap_err());
+    }
+
+    #[test]
     fn test_duplicate_dependency() {
         let contents = r#"
+        [envs.python]
+        channels = ["conda-forge"]
         [envs.python.dependencies]
         python = "*"
         PYTHON = "*"
@@ -94,10 +118,7 @@ mod tests {
         let manifest = ParsedManifest::from_toml_str(contents);
 
         assert!(manifest.is_err());
-        assert!(manifest
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate dependency"));
+        assert_snapshot!(manifest.unwrap_err());
     }
 
     #[test]
