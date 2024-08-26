@@ -60,11 +60,8 @@ make = ">=4.3,<5"
 clang = ">=18.1.8,<19.0"
 mold = ">=2.33.0,<3.0"
 
-[target.linux-64.activation.env]
-CARGO_TARGET_DIR = ".pixi/target"
-CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "clang"
-CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=$CONDA_PREFIX/bin/mold"
-
+[target.linux-64.activation]
+scripts = ["scripts/activate_linux.sh"]
 
 [feature.docs.dependencies]
 cairosvg = "2.7.1.*"
