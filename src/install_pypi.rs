@@ -4,7 +4,7 @@ use std::{
 
 use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
+    BuiltDist, CachedDist, Dist, IndexLocations, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
     RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
 };
 use install_wheel_rs::linker::LinkMode;
@@ -608,7 +608,7 @@ pub async fn update_python_distributions(
 
     let index_locations = pypi_indexes
         .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
-        .unwrap()
+        .unwrap_or_else(|| Ok(IndexLocations::default()))
         .into_diagnostic()?;
 
     let registry_client = Arc::new(
