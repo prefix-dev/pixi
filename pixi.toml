@@ -53,14 +53,12 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 rust = "~=1.80.0"
-
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"
 compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
-
-[target.linux-64.activation]
+[feature.build.target.linux-64.activation]
 scripts = ["scripts/activate_linux.sh"]
 
 [feature.docs.dependencies]
