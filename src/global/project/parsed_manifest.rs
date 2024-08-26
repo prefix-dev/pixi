@@ -1,21 +1,20 @@
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use uv_toolchain::platform;
 
 use super::environment::EnvironmentName;
 
-use super::errors::ManifestError;
+use super::error::ManifestError;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
-#[serde_as]
-#[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone)]
 pub struct ParsedManifest {
     /// The environments the project can create.
-    #[serde(default, rename = "envs")]
     environments: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
@@ -27,6 +26,44 @@ impl ParsedManifest {
 
     pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
         self.environments.clone()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ParsedManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[serde_as]
+        #[derive(Deserialize, Debug, Clone)]
+        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
+        pub struct TomlManifest {
+            /// The environments the project can create.
+            #[serde(default)]
+            envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+        }
+
+        let mut manifest = TomlManifest::deserialize(deserializer)?;
+
+        // Check for duplicate keys in the exposed fields
+        let mut exposed_keys = IndexSet::new();
+        let mut duplicates = IndexMap::new();
+        for key in manifest.envs.values().flat_map(|env| env.exposed.keys()) {
+            if !exposed_keys.insert(key) {
+                duplicates.entry(key).or_insert_with(Vec::new).push(key);
+            }
+        }
+        if !duplicates.is_empty() {
+            let duplicate_keys = duplicates.keys().map(|k| k.to_string()).collect_vec();
+            return Err(serde::de::Error::custom(format!(
+                "Duplicate exposed keys found: '{}'",
+                duplicate_keys.join(", ")
+            )));
+        }
+
+        Ok(Self {
+            environments: manifest.envs,
+        })
     }
 }
 
@@ -90,13 +127,15 @@ mod tests {
         [envs.python-3-10.dependencies]
         python = "3.10"
         [envs.python-3-10.exposed]
-        "python" = "python"
+        python = "python"
+        python3 = "python"
         [envs.python-3-11]
         channels = ["conda-forge"]
         [envs.python-3-11.dependencies]
         python = "3.11"
         [envs.python-3-11.exposed]
         "python" = "python"
+        "python3" = "python"
         "#;
         let manifest = ParsedManifest::from_toml_str(contents);
 

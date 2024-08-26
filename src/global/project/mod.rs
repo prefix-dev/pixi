@@ -18,7 +18,7 @@ use std::fmt::Debug;
 
 mod document;
 mod environment;
-mod errors;
+mod error;
 mod manifest;
 mod parsed_manifest;
 
