@@ -17,10 +17,7 @@ use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
-use crate::{
-    environment::{update_prefix, LockFileUsage},
-    Project,
-};
+use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -202,8 +199,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
-        //  - Implement it for `[pixi_manifest::ProjectManifest]` to do this for other
-        //    filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
         let rv = render_project(
             &env,
@@ -216,17 +211,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &vec![],
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
-        let platforms = platforms
-            .into_iter()
-            .map(|p| p.parse().into_diagnostic())
-            .collect::<Result<Vec<Platform>, _>>()?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
-            // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
             project.manifest.add_dependency(
                 &spec,
                 SpecType::Run,
-                &platforms,
+                // No platforms required as you can't define them in the yaml
+                &[],
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
                 &channel_config,
@@ -235,7 +226,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         for requirement in pypi_deps {
             project.manifest.add_pep508_dependency(
                 &requirement,
-                &platforms,
+                // No platforms required as you can't define them in the yaml
+                &[],
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
@@ -243,7 +235,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        update_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
+        eprintln!(
+            "{}Created {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            project.manifest_path().display()
+        );
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
