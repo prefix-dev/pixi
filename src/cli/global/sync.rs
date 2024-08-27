@@ -1,4 +1,4 @@
-use crate::global::{self, install::sync_environment, BinDir, EnvRoot};
+use crate::global::{self, sync::sync_environment, BinDir, EnvRoot};
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -123,27 +123,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &bin_dir,
         )
         .await?;
-
-        // let mut executables = Vec::with_capacity(specs.len());
-        // for (package_name, _) in specs {
-        //     let record = &prefix_package.repodata_record.package_record;
-
-        //     let channel_name =
-        //         channel_name_from_prefix(&prefix_package, config.global_channel_config());
-        //     eprintln!(
-        //         "{}Installed package {} {} {} from {}",
-        //         console::style(console::Emoji("✔ ", "")).green(),
-        //         console::style(record.name.as_source()).bold(),
-        //         console::style(record.version.version()).bold(),
-        //         console::style(record.build.as_str()).bold(),
-        //         channel_name,
-        //     );
-        //     executables.extend(scripts);
-        // }
-
-        // if !executables.is_empty() {
-        //     print_executables_available(executables).await?;
-        // }
     }
 
     Ok(())

@@ -2,8 +2,8 @@
 #![allow(unused)]
 
 mod common;
-pub(crate) mod install;
 mod project;
+pub(crate) mod sync;
 
 pub(crate) use common::{
     channel_name_from_prefix, find_designated_package, BinDir, EnvDir, EnvRoot,
