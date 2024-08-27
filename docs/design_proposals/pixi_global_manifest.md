@@ -31,10 +31,11 @@ Among other things it will be written in the TOML format, be named `pixi-global.
 The motivation for the location is discussed [further below](#multiple-manifests)
 
 ```toml title="pixi-global.toml"
-[envs.python]
-channels = ["https://fast.prefix.dev/conda-forge"]
-platform = "osx-64"                                # optional, defaults to your current OS
 # The name of the environment is `python`
+[envs.python]
+channels = ["conda-forge"]
+# optional, defaults to your current OS
+platform = "osx-64"
 # It will expose python, python3 and python3.11, but not pip
 [envs.python.dependencies]
 python = "3.11.*"
@@ -46,13 +47,14 @@ python3 = "python3"
 "python3.11" = "python3.11"
 
 # The name of the environment is `python3-10`
+[envs.python3-10]
+channels = ["https://fast.prefix.dev/conda-forge"]
 # It will expose python3.10
 [envs.python3-10.dependencies]
 python = "3.10.*"
 
 [envs.python3-10.exposed]
 "python3.10" = "python"
-
 ```
 
 ## CLI
