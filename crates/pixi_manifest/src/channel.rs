@@ -79,7 +79,7 @@ impl<'de> Deserialize<'de> for TomlPrioritizedChannelStrOrMap {
 }
 
 /// Helper so that we can deserialize
-/// [`crate::project::manifest::serde::PrioritizedChannel`] from a string or a
+/// [`crate::channel::PrioritizedChannel`] from a string or a
 /// map.
 impl<'de> serde_with::DeserializeAs<'de, PrioritizedChannel> for TomlPrioritizedChannelStrOrMap {
     fn deserialize_as<D>(deserializer: D) -> Result<PrioritizedChannel, D::Error>
