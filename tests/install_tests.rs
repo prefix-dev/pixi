@@ -11,7 +11,7 @@ use pixi::environment::LockFileUsage;
 use pixi::Project;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
-use pixi_manifest::FeatureName;
+use pixi_manifest::{FeatureName, FeaturesExt};
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use std::{
@@ -584,4 +584,85 @@ async fn test_old_lock_install() {
         lock_str,
         std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_no_build_isolation() {
+    let current_platform = Platform::current();
+    // let path_to_sdist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //     .join("tests")
+    //     .join("data")
+    //     .join("pypi")
+    //     .join("my-pkg");
+
+    let setup_py = r#"
+from setuptools import setup, find_packages
+# custom import
+import boltons
+setup(
+    name="my-pkg",
+    version="0.1.0",
+    author="Your Name",
+    author_email="your.email@example.com",
+    description="A brief description of your package",
+    url="https://github.com/yourusername/your-repo",
+    packages=find_packages(),  # Automatically find packages in your project
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.6",
+    install_requires=[
+    ],
+    entry_points={
+        'console_scripts': [
+            'your_command=your_package.module:main_function',
+        ],
+    },
+)
+    "#;
+
+    let manifest = format!(
+        r#"
+    [project]
+    name = "no-build-isolation"
+    channels = ["conda-forge"]
+    platforms = ["{platform}"]
+
+    [pypi-options]
+    no-build-isolation = ["my-pkg"]
+
+    [dependencies]
+    python = "3.12.*"
+    setuptools = ">=72,<73"
+    boltons = ">=24,<25"
+
+    [pypi-dependencies.my-pkg]
+    path = "./my-pkg"
+    "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    let project_path = pixi.project_path();
+    // Write setup.py to a my-pkg folder
+    let my_pkg = project_path.join("my-pkg");
+    std::fs::create_dir_all(&my_pkg).unwrap();
+    std::fs::write(my_pkg.join("setup.py"), setup_py).unwrap();
+
+    let has_pkg = pixi
+        .project()
+        .unwrap()
+        .default_environment()
+        .pypi_options()
+        .no_build_isolation
+        .unwrap()
+        .contains(&"my-pkg".to_string());
+
+    assert!(has_pkg, "my-pkg is not in no-build-isolation list");
+    pixi.install().await.expect("cannot install project");
 }
