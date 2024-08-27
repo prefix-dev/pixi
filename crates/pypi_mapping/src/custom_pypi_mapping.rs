@@ -1,11 +1,13 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     sync::Arc,
 };
 
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
+use serde::de::DeserializeOwned;
 use url::Url;
 
 use super::{
@@ -40,6 +42,21 @@ where
     let mapping_by_name: T = response.json().await.into_diagnostic().context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
         url
+    ))?;
+
+    Ok(mapping_by_name)
+}
+
+pub fn fetch_mapping_from_path<T: DeserializeOwned, P: AsRef<Path>>(path: &P) -> miette::Result<T> {
+    let file = std::fs::File::open(path)
+        .into_diagnostic()
+        .context(format!("failed to open file {}", path.as_ref().display()))?;
+    let reader = std::io::BufReader::new(file);
+    let mapping_by_name: T = serde_json::from_reader(reader)
+        .into_diagnostic()
+        .context(format!(
+        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
+        path.as_ref().display()
     ))?;
 
     Ok(mapping_by_name)

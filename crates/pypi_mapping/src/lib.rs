@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncCell;
+use custom_pypi_mapping::fetch_mapping_from_path;
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
-use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
@@ -62,40 +62,18 @@ impl CustomMapping {
 
                     match url {
                         MappingLocation::Url(url) => {
-                            let response = client
-                                .get(url.clone())
-                                .send()
-                                .await
-                                .into_diagnostic()
-                                .context(format!(
-                                "failed to download pypi mapping from {} location",
-                                url.as_str()
-                            ))?;
-
-                            if !response.status().is_success() {
-                                return Err(miette::miette!(
-                                    "Could not request mapping located at {:?}",
-                                    url.as_str()
-                                ));
-                            }
-
-                            let mapping_by_name = fetch_mapping_from_url(client, url).await?;
+                            let path = url.path().to_string();
+                            let mapping_by_name = match url.scheme() {
+                                "file" => fetch_mapping_from_path(&path)?,
+                                _ => fetch_mapping_from_url(client, url).await?,
+                            };
 
                             mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
                         MappingLocation::Path(path) => {
-                            let contents = std::fs::read_to_string(path)
-                                .into_diagnostic()
-                                .context(format!("mapping on {path:?} could not be loaded"))?;
-                            let data: HashMap<String, Option<String>> =
-                                serde_json::from_str(&contents).into_diagnostic().context(
-                                    format!(
-                                        "Failed to parse JSON mapping located at {}",
-                                        path.display()
-                                    ),
-                                )?;
+                            let mapping_by_name = fetch_mapping_from_path(path)?;
 
-                            mapping_url_to_name.insert(name.to_string(), data);
+                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
                     }
                 }

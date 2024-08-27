@@ -619,3 +619,73 @@ async fn test_path_channel() {
         PurlSource::ProjectDefinedMapping.as_str()
     );
 }
+
+#[tokio::test]
+async fn test_file_url_as_mapping_location() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let mapping_file = tmp_dir.path().join("custom_mapping.json");
+
+    let _ = std::fs::write(
+        &mapping_file,
+        r#"
+    {
+        "pixi-something-new": "pixi-something-old"
+    }
+    "#,
+    );
+
+    let mapping_file_path_as_url = Url::from_file_path(&mapping_file).unwrap();
+
+    let pixi = PixiControl::from_manifest(
+        format!(
+            r#"
+        [project]
+        name = "test-channel-change"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        conda-pypi-map = {{"conda-forge" = "{}"}}
+        "#,
+            mapping_file_path_as_url.as_str()
+        )
+        .as_str(),
+    )
+    .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    let client = project.authenticated_client();
+
+    let foo_bar_package = Package::build("pixi-something-new", "2").finish();
+
+    let repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "pixi-something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
+
+    let mut packages = vec![repo_data_record];
+
+    let mapping_source = project.pypi_name_mapping_source().unwrap();
+
+    let mapping_map = mapping_source.custom().unwrap();
+
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+
+    assert_eq!(
+        package
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .unwrap()
+            .qualifiers()
+            .get("source")
+            .unwrap(),
+        PurlSource::ProjectDefinedMapping.as_str()
+    );
+}
