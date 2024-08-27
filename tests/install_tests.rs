@@ -595,7 +595,11 @@ async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    pixi.add("python==3.12.*").with_install(true).await.unwrap();
+    pixi.add("python==3.12.*").await.unwrap();
     // We know that this package has many linux wheel tags for this version
-    pixi.add("gmsh==4.13.1").await.unwrap();
+    pixi.add("gmsh==4.13.1")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
 }
