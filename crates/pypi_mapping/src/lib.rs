@@ -62,9 +62,8 @@ impl CustomMapping {
 
                     match url {
                         MappingLocation::Url(url) => {
-                            let path = url.path().to_string();
                             let mapping_by_name = match url.scheme() {
-                                "file" => fetch_mapping_from_path(&path)?,
+                                "file" => fetch_mapping_from_path(&url.path().to_string())?,
                                 _ => fetch_mapping_from_url(client, url).await?,
                             };
 
