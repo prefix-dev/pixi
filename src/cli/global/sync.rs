@@ -1,14 +1,7 @@
-use crate::global::{self, sync::sync_environment, BinDir, EnvRoot};
+use crate::global::{self, BinDir, EnvRoot};
 use clap::Parser;
-use indexmap::IndexMap;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
-use pixi_progress::wrap_in_progress;
-use pixi_utils::{default_channel_config, reqwest::build_reqwest_clients};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use pixi_utils::reqwest::build_reqwest_clients;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
@@ -30,100 +23,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env_root = EnvRoot::from_env().await?;
     let bin_dir = BinDir::from_env().await?;
 
-    // Prune environments that are not listed
-    env_root
-        .prune(project.environments().keys().cloned())
-        .await?;
-
-    // Remove binaries that are not listed as exposed
-    let exposed_paths = project
-        .environments()
-        .values()
-        .flat_map(|environment| {
-            environment
-                .exposed
-                .keys()
-                .map(|e| bin_dir.executable_script_path(e))
-        })
-        .collect_vec();
-    for file in bin_dir.files().await? {
-        if !exposed_paths.contains(&file) {
-            tokio::fs::remove_file(&file)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
-        }
-    }
-
-    for (environment_name, environment) in project.environments() {
-        let specs = environment
-            .dependencies
-            .clone()
-            .into_iter()
-            .map(|(name, spec)| {
-                let match_spec = MatchSpec::from_nameless(
-                    spec.clone()
-                        .try_into_nameless_match_spec(&default_channel_config())
-                        .into_diagnostic()?
-                        .ok_or_else(|| {
-                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
-                        })?,
-                    Some(name.clone()),
-                );
-                Ok((name, match_spec))
-            })
-            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
-
-        let channels = environment
-            .channels()
-            .into_iter()
-            .map(|channel| channel.clone().into_channel(config.global_channel_config()))
-            .collect_vec();
-
-        let repodata = gateway
-            .query(
-                channels,
-                [environment.platform(), Platform::NoArch],
-                specs.values().cloned().collect_vec(),
-            )
-            .recursive(true)
-            .await
-            .into_diagnostic()?;
-
-        // Determine virtual packages of the current platform
-        let virtual_packages = VirtualPackage::current()
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .iter()
-            .cloned()
-            .map(GenericVirtualPackage::from)
-            .collect();
-
-        // Solve the environment
-        let solver_specs = specs.clone();
-        let solved_records = wrap_in_progress("solving environment", move || {
-            Solver.solve(SolverTask {
-                specs: solver_specs.values().cloned().collect_vec(),
-                virtual_packages,
-                ..SolverTask::from_iter(&repodata)
-            })
-        })
-        .into_diagnostic()
-        .context("failed to solve environment")?;
-
-        let packages = specs.keys().cloned().collect();
-
-        sync_environment(
-            &environment_name,
-            &environment.exposed,
-            packages,
-            solved_records.clone(),
-            auth_client.clone(),
-            environment.platform(),
-            &bin_dir,
-        )
-        .await?;
-    }
-
-    Ok(())
+    global::sync(env_root, project, bin_dir, config, gateway, auth_client).await
 }

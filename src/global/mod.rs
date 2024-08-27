@@ -3,9 +3,10 @@
 
 mod common;
 mod project;
-pub(crate) mod sync;
+mod sync;
 
 pub(crate) use common::{
     channel_name_from_prefix, find_designated_package, BinDir, EnvDir, EnvRoot,
 };
 pub(crate) use project::{EnvironmentName, Project};
+pub(crate) use sync::sync;
