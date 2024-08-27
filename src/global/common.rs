@@ -284,6 +284,7 @@ mod tests {
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.path().is_dir())
             .map(|entry| entry.file_name().into_string().unwrap())
+            .sorted()
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3"]);
