@@ -1,6 +1,6 @@
 import subprocess
 
-PIXI_VERSION = "0.28.1"
+PIXI_VERSION = "0.28.2"
 
 
 def verify_cli_command(
