@@ -661,13 +661,19 @@ setup(
     pixi.install().await.expect("cannot install project");
 }
 
-/// Only run this test on linux
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[cfg(target_os = "linux")]
 async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap();
+    #[cfg(not(target_os = "linux"))]
+    pixi.init_with_platforms(vec![
+        Platform::current().to_string(),
+        "linux-64".to_string(),
+    ])
+    .await
+    .unwrap();
+    #[cfg(target_os = "linux")]
     pixi.init().await.unwrap();
 
     pixi.add("python==3.12.*").await.unwrap();
