@@ -140,10 +140,10 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.28.1"
+version = "0.28.2"
 
 [features]
-default = ["native-tls"]
+default = ["rustls-tls"]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",

@@ -139,7 +139,7 @@ pub fn get_pypi_tags(
         implementation_name,
         // TODO: This might not be entirely correct..
         (python_version.0 as u8, python_version.1 as u8),
-        false,
+        true,
         // Should revisit this when this lands: https://github.com/conda-forge/python-feedstock/pull/679
         false,
     )

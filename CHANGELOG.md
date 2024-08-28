@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.28.2] - 2024-08-28
+#### Changed
+
+- Use mold on linux by @Hofer-Julian in [#1914](https://github.com/prefix-dev/pixi/pull/1914)
+
+#### Documentation
+
+- Fix global manifest by @Hofer-Julian in [#1912](https://github.com/prefix-dev/pixi/pull/1912)
+- Document azure keyring usage by @tdejager in [#1913](https://github.com/prefix-dev/pixi/pull/1913)
+
+#### Fixed
+
+- Let `init` add dependencies independent of target and don't install by @ruben-arts in [#1916](https://github.com/prefix-dev/pixi/pull/1916)
+- Enable use of manylinux wheeltags once again by @tdejager in [#1925](https://github.com/prefix-dev/pixi/pull/1925)
+- The bigger runner by @ruben-arts in [#1902](https://github.com/prefix-dev/pixi/pull/1902)
+
 ### [0.28.1] - 2024-08-26
 #### Changed
 - Uv upgrade to 0.3.2 by @tdejager in [#1900](https://github.com/prefix-dev/pixi/pull/1900)
