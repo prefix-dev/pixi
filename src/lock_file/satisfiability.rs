@@ -186,7 +186,6 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                             })?;
                             let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                                 path.clone(),
-                                path.clone(),
                                 ext,
                                 verbatim_url.to_url(),
                             ));
@@ -398,12 +397,12 @@ pub(crate) fn pypi_satifisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { lock_path, .. } => match &locked_data.url_or_path {
+        RequirementSource::Directory { install_path, .. } => match &locked_data.url_or_path {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satifsfy
             UrlOrPath::Url(_) => false,
             UrlOrPath::Path(path) => {
-                if path != lock_path {
+                if path != install_path {
                     return false;
                 }
                 true
@@ -490,10 +489,10 @@ pub(crate) fn pypi_satifisfies_requirement(
                 UrlOrPath::Path(_) => false,
             }
         }
-        RequirementSource::Path { lock_path, .. }
-        | RequirementSource::Directory { lock_path, .. } => {
+        RequirementSource::Path { install_path, .. }
+        | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
-                if locked_path != lock_path {
+                if locked_path != install_path {
                     return false;
                 }
                 return true;

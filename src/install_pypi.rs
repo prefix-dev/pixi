@@ -1,5 +1,11 @@
 use std::{
-    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
+    borrow::Cow,
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
 
 use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -10,7 +16,7 @@ use distribution_types::{
 use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use pep440_rs::Version;
+use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
@@ -21,7 +27,9 @@ use pypi_types::{
     ParsedUrlError, VerbatimParsedUrl,
 };
 use rattler_conda_types::{Platform, RepoDataRecord};
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
+use rattler_lock::{
+    PackageHashes, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
+};
 use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
@@ -85,19 +93,16 @@ struct PixiInstallPlan {
 }
 
 /// Converts our locked data to a file
-fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_types::File {
-    let url = match &pkg.url_or_path {
-        UrlOrPath::Url(url) if url.scheme() == "file" => distribution_types::FileLocation::Path(
-            url.to_file_path().expect("cannot convert to file path"),
-        ),
-        UrlOrPath::Url(url) => {
-            distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()))
-        }
-        UrlOrPath::Path(path) => distribution_types::FileLocation::Path(path.clone()),
-    };
+fn locked_data_to_file(
+    url: &Url,
+    hash: Option<&PackageHashes>,
+    filename: &str,
+    requires_python: Option<VersionSpecifiers>,
+) -> distribution_types::File {
+    let url = distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
 
     // Convert PackageHashes to uv hashes
-    let hashes = if let Some(ref hash) = pkg.hash {
+    let hashes = if let Some(hash) = hash {
         match hash {
             rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
                 algorithm: HashAlgorithm::Md5,
@@ -126,7 +131,7 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
         filename: filename.to_string(),
         dist_info_metadata: false,
         hashes,
-        requires_python: pkg.requires_python.clone(),
+        requires_python,
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
@@ -197,7 +202,12 @@ fn convert_to_dist(
 
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
-            let file = locked_data_to_file(pkg, filename_decoded.as_ref());
+            let file = locked_data_to_file(
+                url,
+                pkg.hash.as_ref(),
+                filename_decoded.as_ref(),
+                pkg.requires_python.clone(),
+            );
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
@@ -247,14 +257,12 @@ fn convert_to_dist(
                 ParsedUrl::Directory(ParsedDirectoryUrl {
                     url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
                     install_path: abs_path.clone(),
-                    lock_path: path.clone(),
                     editable: pkg.editable,
                 })
             } else {
                 ParsedUrl::Path(ParsedPathUrl {
                     url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
                     install_path: abs_path.clone(),
-                    lock_path: path.clone(),
                     ext: DistExtension::from_path(path).map_err(|e| {
                         ConvertToUvDistError::Extension(e, path.display().to_string())
                     })?,
@@ -265,7 +273,7 @@ fn convert_to_dist(
                 pkg.name.clone(),
                 VerbatimParsedUrl {
                     parsed_url,
-                    verbatim: VerbatimUrl::from_path(&abs_path)?
+                    verbatim: VerbatimUrl::from_path(&abs_path, PathBuf::new())?
                         .with_given(abs_path.display().to_string()),
                 },
             )
