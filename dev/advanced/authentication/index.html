@@ -1133,6 +1133,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#azure-devops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Azure DevOps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#netrc-file" class="md-nav__link">
     <span class="md-ellipsis">
       .netrc file
@@ -1567,6 +1576,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#azure-devops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Azure DevOps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#netrc-file" class="md-nav__link">
     <span class="md-ellipsis">
       .netrc file
@@ -1735,9 +1753,21 @@ An example of this would be:</p>
 <p>To find this URL more easily, you can use the <code>gcloud</code> command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
 </span></code></pre></div>
+<h3 id="azure-devops">Azure DevOps<a class="headerlink" href="#azure-devops" title="Permanent link">#</a></h3>
+<p>Similarly for Azure DevOps, you can use the Azure keyring backend for authentication.
+The backend, along with installation instructions can be found at <a href="https://github.com/jslorrma/keyrings.artifacts">keyring.artifacts</a>.</p>
+<p>After following the instructions and making sure that keyring works correctly, you can use the following configuration:</p>
+<h5 id="configuration_2">Configuration<a class="headerlink" href="#configuration_2" title="Permanent link">#</a></h5>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># rest of the pixi.toml</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1">#</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Adds the following options to the default feature</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+This should allow for getting packages from the Azure DevOps artifact registry.</p>
 <h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
 <p>To actually install either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
 </span></code></pre></div></p>
 <h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
 <p><code>pixi</code> allows you to access private registries securely by authenticating with credentials stored in a <code>.netrc</code> file.</p>
@@ -1748,9 +1778,9 @@ An example of this would be:</p>
   e.g <code>export NETRC=/my/custom/location/.netrc pixi install</code></li>
 </ul>
 <p>In the <code>.netrc</code> file, you store authentication details like this:</p>
-<p><div class="language-sh highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>machine<span class="w"> </span>registry-name
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>login<span class="w"> </span>admin
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>password<span class="w"> </span>admin
+<p><div class="language-sh highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>machine<span class="w"> </span>registry-name
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>login<span class="w"> </span>admin
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>password<span class="w"> </span>admin
 </span></code></pre></div>
 For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip">.netrc docs</a>.</p>
 
