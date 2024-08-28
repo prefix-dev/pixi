@@ -585,3 +585,21 @@ async fn test_old_lock_install() {
         std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap()
     );
 }
+
+/// Only run this test on linux
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg(target_os = "linux")]
+async fn test_many_linux_wheel_tag() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    pixi.add("python==3.12.*").await.unwrap();
+    // We know that this package has many linux wheel tags for this version
+    pixi.add("gmsh==4.13.1")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+}
