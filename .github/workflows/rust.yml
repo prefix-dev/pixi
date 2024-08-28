@@ -225,7 +225,7 @@ jobs:
         id: build-options
         if: contains(matrix.target, '-musl')
         run: |
-          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS} --no-default-features --features rustls-tls" >> $GITHUB_OUTPUT
+          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Build on Linux / Mac
         if: runner.os != 'Windows'
