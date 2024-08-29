@@ -483,6 +483,7 @@ async fn lock_pypi_packages<'a>(
                         let url = dist.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
                             .expect("could not create direct-url");
+
                         (UrlOrPath::Url(direct_url), None)
                     }
                     BuiltDist::Path(dist) => {

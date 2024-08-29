@@ -176,7 +176,12 @@ impl<'p> LockFileDerivedData<'p> {
             environment.best_platform(),
         )
         .await
-        .with_context(|| "error updating pypi prefix")?;
+        .with_context(|| {
+            format!(
+                "{}: error installing/updating PyPI dependencies",
+                environment.name()
+            )
+        })?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes

@@ -157,7 +157,7 @@ fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
 enum ConvertToUvDistError {
     #[error("error creating ParsedUrl")]
     ParseUrl(#[from] Box<ParsedUrlError>),
-    #[error("uv conversion error")]
+    #[error("error creating uv Dist from url")]
     Uv(#[from] distribution_types::Error),
     #[error("error constructing verbatim url")]
     VerbatimUrl(#[from] VerbatimUrlError),
