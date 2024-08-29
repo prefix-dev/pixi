@@ -26,7 +26,8 @@ def run_test_in_subfolders(
     results = Results([], [], [], [])
     folders = [folder for folder in base_path.iterdir() if folder.is_dir()]
 
-    for folder in folders:
+    tests = len(folders)
+    for i, folder in enumerate(folders):
         pixi_toml = folder / "pixi.toml"
         pyproject_toml = folder / "pyproject.toml"
 
@@ -70,12 +71,13 @@ def run_test_in_subfolders(
             continue
 
         if do_install:
-            print(f"\033[93m 🚀 {folder} (pixi install only)\033[0m")
+            print(f"\033[93m 🚀 {folder}\033[0m")
             results.installed.append(str(folder))
         else:
-            print(f"\033[92m ✅ {folder}\033[0m (pixi install & test)")
+            print(f"\033[92m ✅ {folder}\033[0m")
             results.succeeded.append(str(folder))
 
+        print(f"Done: {i+1}/{tests}")
         print("")
     return results
 
@@ -91,7 +93,7 @@ def print_summary(results: Results, pixi_exec: Path):
     summary_box_sep = "╟" + "─" * line_length + "╢"
 
     print("\n")
-    print("✅ succeeded 🚀 installed ❌ failed 🤷 skipped")
+    print("✅ pixi install & test 🚀 pixi install ❌ failed 🤷 skipped")
     print(summary_box_top)
     print(f"║ Summary: {' ' * (line_length - len(' Summary: '))}║")
     print(summary_box_sep)
