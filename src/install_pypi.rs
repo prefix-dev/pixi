@@ -1,11 +1,5 @@
 use std::{
-    borrow::Cow,
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
+    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
 
 use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -23,8 +17,7 @@ use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
 use pixi_uv_conversions::locked_indexes_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use pypi_types::{
-    HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
-    ParsedUrlError, VerbatimParsedUrl,
+    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
 };
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{
@@ -253,31 +246,19 @@ fn convert_to_dist(
                 lock_file_dir.join(path)
             };
 
-            let parsed_url = if abs_path.is_dir() {
-                ParsedUrl::Directory(ParsedDirectoryUrl {
-                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
-                    install_path: abs_path.clone(),
-                    editable: pkg.editable,
-                })
+            let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
+            if abs_path.is_dir() {
+                Dist::from_directory_url(pkg.name.clone(), absolute_url, &abs_path, pkg.editable)?
             } else {
-                ParsedUrl::Path(ParsedPathUrl {
-                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
-                    install_path: abs_path.clone(),
-                    ext: DistExtension::from_path(path).map_err(|e| {
-                        ConvertToUvDistError::Extension(e, path.display().to_string())
+                Dist::from_file_url(
+                    pkg.name.clone(),
+                    absolute_url,
+                    &abs_path,
+                    DistExtension::from_path(&abs_path).map_err(|e| {
+                        ConvertToUvDistError::Extension(e, abs_path.to_string_lossy().to_string())
                     })?,
-                })
-            };
-
-            Dist::from_url(
-                pkg.name.clone(),
-                VerbatimParsedUrl {
-                    parsed_url,
-                    verbatim: VerbatimUrl::from_path(&abs_path, PathBuf::new())?
-                        .with_given(abs_path.display().to_string()),
-                },
-            )
-            .expect("could not convert path into uv dist")
+                )?
+            }
         }
     };
 
