@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
-use pep508_rs::{VerbatimUrl, VerbatimUrlError};
+use pep508_rs::{UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError};
 use pixi_manifest::pypi::{pypi_options::PypiOptions, GitRev};
 use rattler_lock::FindLinksUrlOrPath;
 use uv_git::GitReference;

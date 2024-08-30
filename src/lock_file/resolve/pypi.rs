@@ -11,7 +11,7 @@ use std::{
 
 use distribution_types::{
     BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist, Verbatim,
+    Name, Resolution, ResolvedDist, SourceDist,
 };
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -382,7 +382,10 @@ pub async fn resolve_pypi(
         Constraints::from_requirements(constraints.iter().cloned()),
         Overrides::default(),
         Default::default(),
-        Preferences::from_iter(preferences, Some(&marker_environment)),
+        Preferences::from_iter(
+            preferences,
+            &ResolverMarkers::SpecificEnvironment(marker_environment.clone().into()),
+        ),
         None,
         None,
         uv_resolver::Exclusions::None,
@@ -492,17 +495,6 @@ async fn lock_pypi_packages<'a>(
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
-                            // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(wheel_path) => {
-                                let index_path = best_wheel.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
-                                let relative_wheel_path = wheel_path
-                                    .strip_prefix(&index_path)
-                                    .expect("the build wheel is not stored relative to the index");
-                                let verbatim_index_path = best_wheel.index.verbatim();
-                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
-                                    .join(relative_wheel_path)
-                                    .into()
-                            }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
                                 let base = Url::from_str(base).expect("invalid base url");
@@ -518,6 +510,7 @@ async fn lock_pypi_packages<'a>(
                         let url = dist.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
                             .expect("could not create direct-url");
+
                         (UrlOrPath::Url(direct_url), None)
                     }
                     BuiltDist::Path(dist) => {
@@ -559,17 +552,6 @@ async fn lock_pypi_packages<'a>(
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
-                            // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(source_path) => {
-                                let index_path = reg.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
-                                let relative_wheel_path = source_path
-                                    .strip_prefix(&index_path)
-                                    .expect("the build wheel is not stored relative to the index");
-                                let verbatim_index_path = reg.index.verbatim();
-                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
-                                    .join(relative_wheel_path)
-                                    .into()
-                            }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
                                 let base = Url::from_str(base).expect("invalid base url");
