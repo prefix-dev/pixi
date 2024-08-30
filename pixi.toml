@@ -25,8 +25,8 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 
 [feature.pytest.dependencies]
-pytest = ">=8.0.2,<9"
 mypy = ">=1.11,<1.12"
+pytest = ">=8.0.2,<9"
 
 [feature.pytest.tasks]
 test-integration = "pytest tests/integration"
