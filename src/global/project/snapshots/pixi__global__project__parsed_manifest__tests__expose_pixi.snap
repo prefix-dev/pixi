@@ -1,0 +1,9 @@
+---
+source: src/global/project/parsed_manifest.rs
+expression: manifest.unwrap_err()
+---
+TOML parse error at line 7, column 9
+  |
+7 |         pixi = "python"
+  |         ^^^^
+The key 'pixi' is not allowed in the exposed map

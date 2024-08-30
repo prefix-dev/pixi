@@ -23,5 +23,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env_root = EnvRoot::from_env().await?;
     let bin_dir = BinDir::from_env().await?;
 
-    global::sync(env_root, project, bin_dir, config, gateway, auth_client).await
+    global::sync(
+        &env_root,
+        &project,
+        &bin_dir,
+        &config,
+        &gateway,
+        &auth_client,
+    )
+    .await
 }

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_manifest::PrioritizedChannel;
@@ -77,7 +79,7 @@ pub(crate) struct ParsedEnvironment {
     platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
-    pub(crate) exposed: IndexMap<String, String>,
+    pub(crate) exposed: IndexMap<ExposedKey, String>,
 }
 
 impl ParsedEnvironment {
@@ -93,6 +95,46 @@ impl ParsedEnvironment {
     /// Returns the channels associated with this collection.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ExposedKey(String);
+
+impl fmt::Display for ExposedKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for ExposedKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ExposedKeyVisitor;
+
+        impl<'de> Visitor<'de> for ExposedKeyVisitor {
+            type Value = ExposedKey;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string that is not 'pixi'")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if value == "pixi" {
+                    return Err(serde::de::Error::custom(
+                        "The key 'pixi' is not allowed in the exposed map",
+                    ));
+                }
+                Ok(ExposedKey(value.to_string()))
+            }
+        }
+
+        deserializer.deserialize_str(ExposedKeyVisitor)
     }
 }
 
@@ -153,6 +195,22 @@ mod tests {
         PYTHON = "*"
         [envs.python.exposed]
         python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents);
+
+        assert!(manifest.is_err());
+        assert_snapshot!(manifest.unwrap_err());
+    }
+
+    #[test]
+    fn test_expose_pixi() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        pixi = "python"
         "#;
         let manifest = ParsedManifest::from_toml_str(contents);
 

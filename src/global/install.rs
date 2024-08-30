@@ -1,3 +1,4 @@
+use crate::global;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -38,12 +39,12 @@ use crate::{
 use pixi_config::{self, default_channel_config, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
-use super::{common::EnvRoot, EnvironmentName};
+use super::{common::EnvRoot, EnvironmentName, ExposedKey};
 
-/// Sync given global environment records with environment on the system
-pub(crate) async fn sync_environment(
+/// Installs global environment records
+pub(crate) async fn install_environment(
     environment_name: &EnvironmentName,
-    exposed: &IndexMap<String, String>,
+    exposed: &IndexMap<ExposedKey, String>,
     packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
@@ -145,7 +146,7 @@ pub(crate) async fn sync_environment(
 ///
 /// Returns an error if the entry point is not found in the list of executable names.
 fn script_exec_mapping(
-    exposed_name: &str,
+    exposed_name: &ExposedKey,
     entry_point: &str,
     executables: impl IntoIterator<Item = (String, PathBuf)>,
     bin_dir: &BinDir,
@@ -383,12 +384,12 @@ pub(crate) fn prompt_user_to_continue(
 }
 
 pub(crate) async fn sync(
-    env_root: EnvRoot,
-    project: super::Project,
-    bin_dir: BinDir,
-    config: Config,
-    gateway: rattler_repodata_gateway::Gateway,
-    auth_client: reqwest_middleware::ClientWithMiddleware,
+    env_root: &EnvRoot,
+    project: &global::Project,
+    bin_dir: &BinDir,
+    config: &Config,
+    gateway: &rattler_repodata_gateway::Gateway,
+    auth_client: &reqwest_middleware::ClientWithMiddleware,
 ) -> Result<(), miette::Error> {
     // Prune environments that are not listed
     env_root
@@ -407,7 +408,10 @@ pub(crate) async fn sync(
         })
         .collect_vec();
     for file in bin_dir.files().await? {
-        if !exposed_paths.contains(&file) {
+        let file_name = file
+            .file_stem()
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
+        if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio::fs::remove_file(&file)
                 .await
                 .into_diagnostic()
@@ -477,14 +481,14 @@ pub(crate) async fn sync(
 
         let packages = specs.keys().cloned().collect();
 
-        sync_environment(
+        install_environment(
             &environment_name,
             &environment.exposed,
             packages,
             solved_records.clone(),
             auth_client.clone(),
             environment.platform(),
-            &bin_dir,
+            bin_dir,
         )
         .await?;
     }

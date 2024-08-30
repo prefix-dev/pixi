@@ -21,7 +21,7 @@ use crate::{
 };
 use pixi_config::home_path;
 
-use super::EnvironmentName;
+use super::{EnvironmentName, ExposedKey};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(PathBuf);
@@ -72,8 +72,8 @@ impl BinDir {
     /// This function constructs the path to the executable script by joining the
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.bat`.
-    pub(crate) fn executable_script_path(&self, exposed_name: &str) -> PathBuf {
-        let mut executable_script_path = self.0.join(exposed_name);
+    pub(crate) fn executable_script_path(&self, exposed_name: &ExposedKey) -> PathBuf {
+        let mut executable_script_path = self.0.join(exposed_name.to_string());
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         }
