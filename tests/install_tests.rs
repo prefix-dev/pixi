@@ -500,7 +500,7 @@ async fn minimal_lockfile_update_pypi() {
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+        pep508_rs::Requirement::from_str("click>7.1.2").unwrap()
     ));
 }
 
