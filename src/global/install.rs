@@ -1,3 +1,4 @@
+use crate::global;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -382,12 +383,12 @@ pub(crate) fn prompt_user_to_continue(
 }
 
 pub(crate) async fn sync(
-    env_root: EnvRoot,
-    project: super::Project,
-    bin_dir: BinDir,
-    config: Config,
-    gateway: rattler_repodata_gateway::Gateway,
-    auth_client: reqwest_middleware::ClientWithMiddleware,
+    env_root: &EnvRoot,
+    project: &global::Project,
+    bin_dir: &BinDir,
+    config: &Config,
+    gateway: &rattler_repodata_gateway::Gateway,
+    auth_client: &reqwest_middleware::ClientWithMiddleware,
 ) -> Result<(), miette::Error> {
     // Prune environments that are not listed
     env_root
@@ -482,7 +483,7 @@ pub(crate) async fn sync(
             solved_records.clone(),
             auth_client.clone(),
             environment.platform(),
-            &bin_dir,
+            bin_dir,
         )
         .await?;
     }
