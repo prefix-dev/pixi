@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use crate::global::{self, BinDir, EnvRoot};
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
@@ -19,17 +17,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Check if the certain file is present
     let certain_file_path = global::Project::manifest_dir()?.join(global::MANIFEST_DEFAULT_NAME);
     if !certain_file_path.exists() {
-        println!(
+        eprintln!(
             "This will remove your existing global installation. Do you want to continue? (y/N): "
         );
-        std::io::stdout().flush().unwrap();
 
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
         let input = input.trim().to_lowercase();
 
         if input != "y" {
-            println!("Operation aborted.");
+            eprintln!("Operation aborted.");
             return Ok(());
         }
     }
