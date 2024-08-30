@@ -154,20 +154,24 @@ impl EnvRoot {
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             if path.is_dir() {
-                let Some(Ok(dir_name)) = path
+                let Some(Ok(env_name)) = path
                     .file_name()
                     .and_then(|name| name.to_str())
                     .map(|name| name.parse())
                 else {
                     continue;
                 };
-                if !env_set.contains(&dir_name) {
+                if !env_set.contains(&env_name) {
                     tokio::fs::remove_dir_all(&path)
                         .await
                         .into_diagnostic()
                         .wrap_err_with(|| {
                             format!("Could not remove directory {}", path.display())
                         })?;
+                    eprintln!(
+                        "{}Remove environment '{env_name}'",
+                        console::style(console::Emoji("✔", " ")).green()
+                    );
                 }
             }
         }

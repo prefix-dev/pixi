@@ -410,12 +410,17 @@ pub(crate) async fn sync(
     for file in bin_dir.files().await? {
         let file_name = file
             .file_stem()
+            .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
         if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio::fs::remove_file(&file)
                 .await
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
+            eprintln!(
+                "{}Remove binary '{file_name}'.",
+                console::style(console::Emoji("✔", " ")).green()
+            );
         }
     }
 
