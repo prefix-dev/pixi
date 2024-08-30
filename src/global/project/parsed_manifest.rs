@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -107,6 +108,18 @@ impl fmt::Display for ExposedKey {
     }
 }
 
+impl FromStr for ExposedKey {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value == "pixi" {
+            Err("The key 'pixi' is not allowed in the exposed map".to_string())
+        } else {
+            Ok(ExposedKey(value.to_string()))
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for ExposedKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -125,12 +138,7 @@ impl<'de> Deserialize<'de> for ExposedKey {
             where
                 E: serde::de::Error,
             {
-                if value == "pixi" {
-                    return Err(serde::de::Error::custom(
-                        "The key 'pixi' is not allowed in the exposed map",
-                    ));
-                }
-                Ok(ExposedKey(value.to_string()))
+                ExposedKey::from_str(value).map_err(serde::de::Error::custom)
             }
         }
 
