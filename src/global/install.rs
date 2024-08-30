@@ -4,6 +4,7 @@ use std::{
     ffi::OsStr,
     iter,
     path::{Path, PathBuf},
+    time,
 };
 
 use clap::Parser;
@@ -464,15 +465,19 @@ pub(crate) async fn sync(
 
         // Solve the environment
         let solver_specs = specs.clone();
-        let solved_records = wrap_in_progress("solving environment", move || {
-            Solver.solve(SolverTask {
-                specs: solver_specs.values().cloned().collect_vec(),
-                virtual_packages,
-                ..SolverTask::from_iter(&repodata)
+        let solved_records = tokio::task::spawn_blocking(move || {
+            wrap_in_progress("solving environment", move || {
+                Solver.solve(SolverTask {
+                    specs: solver_specs.values().cloned().collect_vec(),
+                    virtual_packages,
+                    ..SolverTask::from_iter(&repodata)
+                })
             })
+            .into_diagnostic()
+            .context("failed to solve environment")
         })
-        .into_diagnostic()
-        .context("failed to solve environment")?;
+        .await
+        .into_diagnostic()??;
 
         let packages = specs.keys().cloned().collect();
 
