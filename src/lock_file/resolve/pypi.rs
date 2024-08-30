@@ -21,7 +21,10 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
-use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
+use pixi_uv_conversions::{
+    as_uv_req, isolated_names_to_packages, names_to_build_isolation,
+    pypi_options_to_index_locations,
+};
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -174,17 +177,6 @@ fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
     }
 }
 
-pub fn names_to_build_isolation<'a>(
-    names: Option<&'a [PackageName]>,
-    python_environment: &'a PythonEnvironment,
-) -> uv_types::BuildIsolation<'a> {
-    return if let Some(package_names) = names {
-        uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
-    } else {
-        uv_types::BuildIsolation::default()
-    };
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -297,18 +289,9 @@ pub async fn resolve_pypi(
     let config_settings = ConfigSettings::default();
 
     let env = PythonEnvironment::from_interpreter(interpreter.clone());
-    // Figure out the build isolation strategy
-    let names = if let Some(names) = &pypi_options.no_build_isolation {
-        let names = names
-            .iter()
-            .map(|n| n.parse())
-            .collect::<Result<Vec<PackageName>, _>>()
-            .into_diagnostic()?;
-        Some(names)
-    } else {
-        None
-    };
-    let build_isolation = names_to_build_isolation(names.as_deref(), &env);
+    let non_isolated_packages =
+        isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
+    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
     tracing::debug!("using build-isolation: {:?}", build_isolation);
 
     let options = Options::default();
