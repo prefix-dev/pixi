@@ -37,12 +37,12 @@ use crate::{
 use pixi_config::{self, default_channel_config, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
-use super::{common::EnvRoot, EnvironmentName};
+use super::{common::EnvRoot, EnvironmentName, ExposedKey};
 
 /// Sync given global environment records with environment on the system
 pub(crate) async fn sync_environment(
     environment_name: &EnvironmentName,
-    exposed: &IndexMap<String, String>,
+    exposed: &IndexMap<ExposedKey, String>,
     packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
@@ -144,7 +144,7 @@ pub(crate) async fn sync_environment(
 ///
 /// Returns an error if the entry point is not found in the list of executable names.
 fn script_exec_mapping(
-    exposed_name: &str,
+    exposed_name: &ExposedKey,
     entry_point: &str,
     executables: impl IntoIterator<Item = (String, PathBuf)>,
     bin_dir: &BinDir,
@@ -406,7 +406,10 @@ pub(crate) async fn sync(
         })
         .collect_vec();
     for file in bin_dir.files().await? {
-        if !exposed_paths.contains(&file) {
+        let file_name = file
+            .file_stem()
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
+        if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio::fs::remove_file(&file)
                 .await
                 .into_diagnostic()

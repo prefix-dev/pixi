@@ -8,5 +8,5 @@ mod sync;
 pub(crate) use common::{
     channel_name_from_prefix, find_designated_package, BinDir, EnvDir, EnvRoot,
 };
-pub(crate) use project::{EnvironmentName, Project};
+pub(crate) use project::{EnvironmentName, ExposedKey, Project};
 pub(crate) use sync::sync;
