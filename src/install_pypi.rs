@@ -248,7 +248,13 @@ fn convert_to_dist(
 
             let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
             if abs_path.is_dir() {
-                Dist::from_directory_url(pkg.name.clone(), absolute_url, &abs_path, pkg.editable)?
+                Dist::from_directory_url(
+                    pkg.name.clone(),
+                    absolute_url,
+                    &abs_path,
+                    pkg.editable,
+                    false,
+                )?
             } else {
                 Dist::from_file_url(
                     pkg.name.clone(),
