@@ -39,8 +39,8 @@ use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
 use super::{common::EnvRoot, EnvironmentName, ExposedKey};
 
-/// Sync given global environment records with environment on the system
-pub(crate) async fn sync_environment(
+/// Installs global environment records
+pub(crate) async fn install_environment(
     environment_name: &EnvironmentName,
     exposed: &IndexMap<ExposedKey, String>,
     packages: Vec<PackageName>,
@@ -475,7 +475,7 @@ pub(crate) async fn sync(
 
         let packages = specs.keys().cloned().collect();
 
-        sync_environment(
+        install_environment(
             &environment_name,
             &environment.exposed,
             packages,
