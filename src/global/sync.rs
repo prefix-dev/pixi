@@ -391,9 +391,9 @@ pub(crate) async fn sync(
     auth_client: reqwest_middleware::ClientWithMiddleware,
 ) -> Result<(), miette::Error> {
     // // Prune environments that are not listed
-    // env_root
-    //     .prune(project.environments().keys().cloned())
-    //     .await?;
+    env_root
+        .prune(project.environments().keys().cloned())
+        .await?;
 
     // Remove binaries that are not listed as exposed
     let exposed_paths = project
