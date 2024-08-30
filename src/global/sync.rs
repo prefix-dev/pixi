@@ -390,7 +390,7 @@ pub(crate) async fn sync(
     gateway: rattler_repodata_gateway::Gateway,
     auth_client: reqwest_middleware::ClientWithMiddleware,
 ) -> Result<(), miette::Error> {
-    // // Prune environments that are not listed
+    // Prune environments that are not listed
     env_root
         .prune(project.environments().keys().cloned())
         .await?;
