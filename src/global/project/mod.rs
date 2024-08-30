@@ -23,7 +23,7 @@ mod error;
 mod manifest;
 mod parsed_manifest;
 
-const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
+pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 
 /// The pixi global project, this main struct to interact with the pixi global project.
 /// This struct holds the `Manifest` and has functions to modify
@@ -84,9 +84,7 @@ impl Project {
     /// or alternatively at `~/.pixi/manifests/pixi-global.toml`.
     /// If the manifest doesn't exist yet, and empty one will be created.
     pub(crate) fn discover() -> miette::Result<Self> {
-        let manifest_dir = env::var("PIXI_GLOBAL_MANIFESTS")
-            .map(PathBuf::from)
-            .or_else(|_| Self::default_dir())?;
+        let manifest_dir = Self::manifest_dir()?;
 
         fs::create_dir_all(&manifest_dir).into_diagnostic()?;
 
@@ -99,12 +97,14 @@ impl Project {
     }
 
     /// Get default dir for the pixi global manifest
-    pub(crate) fn default_dir() -> miette::Result<PathBuf> {
-        // If environment variable is not set, use default directory
-        let default_dir = dirs::home_dir()
-            .ok_or_else(|| miette::miette!("Could not get home directory"))?
-            .join(".pixi/manifests");
-        Ok(default_dir)
+    pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
+        env::var("PIXI_GLOBAL_MANIFESTS")
+            .map(PathBuf::from)
+            .or_else(|_| {
+                dirs::home_dir()
+                    .map(|dir| dir.join(".pixi/manifests"))
+                    .ok_or_else(|| miette::miette!("Could not get home directory"))
+            })
     }
 
     /// Loads a project from manifest file.
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_project_default_dir() {
-        Project::default_dir().unwrap();
+    fn test_project_manifest_dir() {
+        Project::manifest_dir().unwrap();
     }
 }

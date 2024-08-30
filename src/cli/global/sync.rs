@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::global::{self, BinDir, EnvRoot};
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
@@ -13,6 +15,25 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
+
+    // Check if the certain file is present
+    let certain_file_path = global::Project::manifest_dir()?.join(global::MANIFEST_DEFAULT_NAME);
+    if !certain_file_path.exists() {
+        println!(
+            "This will remove your existing global installation. Do you want to continue? (y/N): "
+        );
+        std::io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim().to_lowercase();
+
+        if input != "y" {
+            println!("Operation aborted.");
+            return Ok(());
+        }
+    }
+
     let project = global::Project::discover()?.with_cli_config(config.clone());
 
     // Fetch the repodata

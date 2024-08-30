@@ -418,7 +418,7 @@ pub(crate) async fn sync(
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
             eprintln!(
-                "{}Remove binary '{file_name}'.",
+                "{} Remove binary '{file_name}'.",
                 console::style(console::Emoji("✔", " ")).green()
             );
         }

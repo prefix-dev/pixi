@@ -169,7 +169,7 @@ impl EnvRoot {
                             format!("Could not remove directory {}", path.display())
                         })?;
                     eprintln!(
-                        "{}Remove environment '{env_name}'",
+                        "{} Remove environment '{env_name}'",
                         console::style(console::Emoji("✔", " ")).green()
                     );
                 }
