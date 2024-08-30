@@ -21,7 +21,10 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
-use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
+use pixi_uv_conversions::{
+    as_uv_req, isolated_names_to_packages, names_to_build_isolation,
+    pypi_options_to_index_locations,
+};
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -39,7 +42,7 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_git::GitResolver;
 use uv_normalize::PackageName;
-use uv_python::{Interpreter, PythonVersion};
+use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
@@ -285,6 +288,12 @@ pub async fn resolve_pypi(
     let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
+    let env = PythonEnvironment::from_interpreter(interpreter.clone());
+    let non_isolated_packages =
+        isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
+    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
+    tracing::debug!("using build-isolation: {:?}", build_isolation);
+
     let options = Options::default();
     let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
@@ -299,7 +308,8 @@ pub async fn resolve_pypi(
         &context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        uv_types::BuildIsolation::Isolated,
+        // BuildIsolation::Shared(&env),
+        build_isolation,
         LinkMode::default(),
         &context.build_options,
         None,

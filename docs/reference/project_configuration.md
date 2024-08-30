@@ -292,6 +292,12 @@ This informs the solver that cuda is going to be available, so it can lock it in
 The `pypi-options` table is used to define options that are specific to PyPI registries.
 These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
 
+The options that can be defined are:
+  - `index-url`: replaces the main index url.
+  - `extra-index-urls`: adds an extra index url.
+  - `find-links`: similar to `--find-links` option in `pip`.
+  - `no-build-isolation`: disables build isolation, can only be set per package.
+
 ### Alternative registries
 
 Currently the main reason to use this table is to define alternative registries.
@@ -318,6 +324,20 @@ To read about existing authentication methods, please check the [PyPI Authentica
 !!! info "Strict Index Priority"
     Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
     The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [UV Readme](https://github.com/astral-sh/uv/blob/main/PIP_COMPATIBILITY.md#packages-that-exist-on-multiple-indexes)
+
+### No Build Isolation
+Even though build isolation is a good default.
+One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
+This is convenient if you want to use `torch` or something similar for your build-process.
+
+
+```toml
+[pypi-options]
+no-build-isolation = ["detectron2"]
+
+[pypi-dependencies]
+detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
+```
 
 ## The `dependencies` table(s)
 
@@ -388,7 +408,6 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitation**: Currently, pixi doesn't support private PyPI repositories
 
 #### Version specification:
 

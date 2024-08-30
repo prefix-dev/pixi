@@ -3615,6 +3615,8 @@ dependencies = [
  "url",
  "uv-git",
  "uv-normalize",
+ "uv-python",
+ "uv-types",
 ]
 
 [[package]]

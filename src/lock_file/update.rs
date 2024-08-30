@@ -160,6 +160,7 @@ impl<'p> LockFileDerivedData<'p> {
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
             .await?;
 
+        let non_isolated_packages = environment.pypi_options().no_build_isolation;
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -174,6 +175,7 @@ impl<'p> LockFileDerivedData<'p> {
             env_variables,
             self.project.root(),
             environment.best_platform(),
+            non_isolated_packages,
         )
         .await
         .with_context(|| {
