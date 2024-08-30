@@ -134,6 +134,9 @@ pub fn as_uv_req(
                     install_path: canonicalized,
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
+                    // TODO: we could see if we ever need this
+                    // AFAICS it would be useful for constrainging dependencies
+                    r#virtual: false,
                 }
             } else if *editable == Some(true) {
                 {
