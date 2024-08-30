@@ -4,7 +4,7 @@ dependencies = [
   "detectron2 @ git+https://github.com/facebookresearch/detectron2.git@bcfd464d0c810f0442d91a349c0f6df945467143",
 ]
 description = "Build detectron2 from source and installs into pypi environment"
-name = "no-build-isolation"
+name = "detectron2-from-source"
 requires-python = ">= 3.11"
 version = "0.1.0"
 
