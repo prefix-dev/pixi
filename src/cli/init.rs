@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{Parser, ValueEnum};
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
 use pixi_config::{get_default_author, Config};
 use pixi_consts::consts;
@@ -349,6 +349,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )
                 .unwrap();
             save_manifest_file(&pyproject_manifest_path, rv)?;
+            let src_dir = dir.join("src").join(default_name);
+            tokio::fs::create_dir_all(&src_dir)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not create {}.", src_dir.display()))?;
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to

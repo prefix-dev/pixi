@@ -234,3 +234,11 @@ def test_simple_project_setup(tmp_path: Path) -> None:
         ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
+
+
+def test_pixi_init_pyproject(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "pyproject.toml"
+    # Create a new project
+    verify_cli_command(f"pixi init {tmp_path} --pyproject-toml", ExitCode.SUCCESS)
+    # Verify that install works
+    verify_cli_command(f"pixi install --manifest-path {manifest_path}", ExitCode.SUCCESS)
