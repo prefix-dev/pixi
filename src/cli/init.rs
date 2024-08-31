@@ -353,7 +353,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             tokio::fs::create_dir_all(&src_dir)
                 .await
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Could not create {}.", src_dir.display()))?;
+                .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
+
+            let init_file = src_dir.join("__init__.py");
+            tokio::fs::File::create(&init_file)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not create file {}.", init_file.display()))?;
+
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to
