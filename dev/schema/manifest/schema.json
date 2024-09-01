@@ -877,7 +877,7 @@
         },
         "rev": {
           "title": "Rev",
-          "description": "A `git` SHA revision to sue",
+          "description": "A `git` SHA revision to use",
           "type": "string",
           "minLength": 1
         }
