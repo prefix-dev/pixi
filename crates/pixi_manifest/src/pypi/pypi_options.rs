@@ -19,6 +19,8 @@ pub struct PypiOptions {
     /// Flat indexes also called `--find-links` in pip
     /// These are flat listings of distributions
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
+    /// Disable isolated builds
+    pub no_build_isolation: Option<Vec<String>>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -39,11 +41,13 @@ impl PypiOptions {
         index: Option<Url>,
         extra_indexes: Option<Vec<Url>>,
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
+        no_build_isolation: Option<Vec<String>>,
     ) -> Self {
         Self {
             index_url: index,
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
+            no_build_isolation,
         }
     }
 
@@ -114,10 +118,23 @@ impl PypiOptions {
             })
             .or_else(|| other.find_links.clone());
 
+        // Merge all the no build isolation packages
+        let no_build_isolation = self
+            .no_build_isolation
+            .as_ref()
+            .map(|no_build_isolation| {
+                clone_and_deduplicate(
+                    no_build_isolation.iter(),
+                    other.no_build_isolation.clone().unwrap_or_default().iter(),
+                )
+            })
+            .or_else(|| other.no_build_isolation.clone());
+
         Ok(PypiOptions {
             index_url: index,
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
+            no_build_isolation,
         })
     }
 }
@@ -161,6 +178,7 @@ mod tests {
         let toml_str = r#"
                  index-url = "https://example.com/pypi"
                  extra-index-urls = ["https://example.com/extra"]
+                 no-build-isolation = ["pkg1", "pkg2"]
 
                  [[find-links]]
                  path = "/path/to/flat/index"
@@ -177,7 +195,8 @@ mod tests {
                 find_links: Some(vec![
                     FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                     FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
-                ])
+                ]),
+                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()])
             },
         );
     }
@@ -192,6 +211,7 @@ mod tests {
                 FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap()),
             ]),
+            no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
         };
 
         // Create the second set of options
@@ -202,9 +222,11 @@ mod tests {
                 FindLinksUrlOrPath::Path("/path/to/flat/index2".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index2").unwrap()),
             ]),
+            no_build_isolation: Some(vec!["foo".to_string()]),
         };
 
         // Merge the two options
+        // This should succeed and values should be merged
         let merged_opts = opts.union(&opts2).unwrap();
         insta::assert_yaml_snapshot!(merged_opts);
     }
@@ -216,6 +238,7 @@ mod tests {
             index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
             extra_index_urls: None,
             find_links: None,
+            no_build_isolation: None,
         };
 
         // Create the second set of options
@@ -223,9 +246,11 @@ mod tests {
             index_url: Some(Url::parse("https://example.com/pypi2").unwrap()),
             extra_index_urls: None,
             find_links: None,
+            no_build_isolation: None,
         };
 
         // Merge the two options
+        // This should error because there are two primary indexes
         let merged_opts = opts.union(&opts2);
         insta::assert_snapshot!(merged_opts.err().unwrap());
     }

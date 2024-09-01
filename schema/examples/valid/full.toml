@@ -40,6 +40,9 @@ sha256 = { url = "https://example.com/package-1.2.3-asdf2.conda", sha256 = "a948
 #path = { path = "~/path/to/package" }
 #path2 = { path = "path/to/package" }
 
+[pypi-options]
+no-build-isolation = ["requests"]
+
 [pypi-dependencies]
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
   "security",

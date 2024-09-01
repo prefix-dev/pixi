@@ -117,7 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     spec_type,
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
-                    DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    DependencyOverwriteBehavior::Overwrite,
                     &channel_config,
                 )?;
                 if added {
@@ -136,7 +136,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
                     Some(args.editable),
-                    DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    DependencyOverwriteBehavior::Overwrite,
                 )?;
                 if added {
                     if spec.version_or_url.is_none() {

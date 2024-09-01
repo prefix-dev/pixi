@@ -160,6 +160,7 @@ impl<'p> LockFileDerivedData<'p> {
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
             .await?;
 
+        let non_isolated_packages = environment.pypi_options().no_build_isolation;
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -174,9 +175,15 @@ impl<'p> LockFileDerivedData<'p> {
             env_variables,
             self.project.root(),
             environment.best_platform(),
+            non_isolated_packages,
         )
         .await
-        .with_context(|| "error updating pypi prefix")?;
+        .with_context(|| {
+            format!(
+                "{}: error installing/updating PyPI dependencies",
+                environment.name()
+            )
+        })?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
