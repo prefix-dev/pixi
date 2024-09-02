@@ -47,7 +47,6 @@ miette = { workspace = true }
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
-pixi_consts = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
