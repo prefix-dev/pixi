@@ -41,13 +41,13 @@ impl HasSpecs for Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
     let specs = args.specs()?;
-    upgrade_packages(specs, config, &args.channels, args.platform).await
+    upgrade_packages(specs, config, args.channels, args.platform).await
 }
 
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
-    cli_channels: &ChannelsConfig,
+    cli_channels: ChannelsConfig,
     platform: Platform,
 ) -> miette::Result<()> {
     let channel_cli = cli_channels.resolve_from_config(&config);
