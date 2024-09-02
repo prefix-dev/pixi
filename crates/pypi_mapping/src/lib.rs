@@ -3,13 +3,13 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 use async_once_cell::OnceCell as AsyncCell;
 use custom_pypi_mapping::fetch_mapping_from_path;
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use pixi_config::get_cache_dir;
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
 
 use crate::custom_pypi_mapping::fetch_mapping_from_url;
-use pixi_config::get_cache_dir;
 
 pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
@@ -63,7 +63,12 @@ impl CustomMapping {
                     match url {
                         MappingLocation::Url(url) => {
                             let mapping_by_name = match url.scheme() {
-                                "file" => fetch_mapping_from_path(&url.path().to_string())?,
+                                "file" => {
+                                    let file_path = url.to_file_path().map_err(|_| {
+                                        miette::miette!("{} is not a valid file url", url)
+                                    })?;
+                                    fetch_mapping_from_path(&file_path)?
+                                }
                                 _ => fetch_mapping_from_url(client, url).await?,
                             };
 

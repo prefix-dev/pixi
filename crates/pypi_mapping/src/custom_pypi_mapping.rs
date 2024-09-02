@@ -45,16 +45,16 @@ pub async fn fetch_mapping_from_url(
     Ok(mapping_by_name)
 }
 
-pub fn fetch_mapping_from_path<P: AsRef<Path>>(path: &P) -> miette::Result<CompressedMapping> {
+pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     let file = std::fs::File::open(path)
         .into_diagnostic()
-        .context(format!("failed to open file {}", path.as_ref().display()))?;
+        .context(format!("failed to open file {}", path.display()))?;
     let reader = std::io::BufReader::new(file);
     let mapping_by_name = serde_json::from_reader(reader)
         .into_diagnostic()
         .context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
-        path.as_ref().display()
+        path.display()
     ))?;
 
     Ok(mapping_by_name)

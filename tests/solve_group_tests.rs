@@ -673,7 +673,6 @@ async fn test_file_url_as_mapping_location() {
     let mapping_source = project.pypi_name_mapping_source().unwrap();
 
     let mapping_map = mapping_source.custom().unwrap();
-
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
