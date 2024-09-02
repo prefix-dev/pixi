@@ -877,7 +877,7 @@
         },
         "rev": {
           "title": "Rev",
-          "description": "A `git` SHA revision to sue",
+          "description": "A `git` SHA revision to use",
           "type": "string",
           "minLength": 1
         }
@@ -958,6 +958,20 @@
           "minLength": 1,
           "examples": [
             "https://pypi.org/simple"
+          ]
+        },
+        "no-build-isolation": {
+          "title": "No-Build-Isolation",
+          "description": "Packages that should not be isolated during the build process",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "numpy"
+            ]
           ]
         }
       }

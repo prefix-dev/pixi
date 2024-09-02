@@ -197,7 +197,7 @@ class _PyPiGitRequirement(_PyPIRequirement):
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to sue")
+    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
@@ -496,6 +496,12 @@ class PyPIOptions(StrictBaseModel):
         alias="find-links",
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
+    )
+    no_build_isolation: list[PyPIPackageName] = Field(
+        None,
+        alias="no-build-isolation",
+        description="Packages that should not be isolated during the build process",
+        examples=[["numpy"]],
     )
 
 

@@ -23,10 +23,14 @@ run-all-examples = "python ./tests/run_all_examples.py"
 run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
 test = "cargo test"
 test-all = "cargo test --all-features"
-test-integration = "pytest -s tests/integration"
 
 [feature.pytest.dependencies]
+mypy = ">=1.11,<1.12"
 pytest = ">=8.0.2,<9"
+
+[feature.pytest.tasks]
+test-integration = "pytest tests/integration"
+typecheck-integration = " mypy --strict tests/integration"
 
 [feature.dev.dependencies]
 # Needed for the citation

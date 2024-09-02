@@ -14,7 +14,7 @@ use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
-use pixi_uv_conversions::locked_indexes_to_index_locations;
+use pixi_uv_conversions::{isolated_names_to_packages, locked_indexes_to_index_locations};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use pypi_types::{
     HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
@@ -36,6 +36,8 @@ use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_types::HashStrategy;
+
+use pixi_uv_conversions::names_to_build_isolation;
 
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
@@ -248,7 +250,13 @@ fn convert_to_dist(
 
             let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
             if abs_path.is_dir() {
-                Dist::from_directory_url(pkg.name.clone(), absolute_url, &abs_path, pkg.editable)?
+                Dist::from_directory_url(
+                    pkg.name.clone(),
+                    absolute_url,
+                    &abs_path,
+                    pkg.editable,
+                    false,
+                )?
             } else {
                 Dist::from_file_url(
                     pkg.name.clone(),
@@ -585,6 +593,7 @@ pub async fn update_python_distributions(
     pypi_indexes: Option<&PypiIndexes>,
     environment_variables: &HashMap<String, String>,
     platform: Platform,
+    non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
     use pixi_consts::consts::PROJECT_MANIFEST;
@@ -633,6 +642,9 @@ pub async fn update_python_distributions(
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
     let venv = PythonEnvironment::from_interpreter(interpreter);
+    let non_isolated_packages =
+        isolated_names_to_packages(non_isolated_packages.as_deref()).into_diagnostic()?;
+    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
     let git_resolver = GitResolver::default();
     // Prep the build context.
@@ -648,7 +660,7 @@ pub async fn update_python_distributions(
         &uv_context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        uv_types::BuildIsolation::Isolated,
+        build_isolation,
         LinkMode::default(),
         &uv_context.build_options,
         None,
