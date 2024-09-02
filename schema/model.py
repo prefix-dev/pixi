@@ -197,7 +197,7 @@ class _PyPiGitRequirement(_PyPIRequirement):
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to sue")
+    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
