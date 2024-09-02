@@ -130,6 +130,7 @@ jobs:
       - name: Setup unix binary, add to github path
         if: inputs.os != 'windows-latest'
         run: |
+          mkdir .pixi/target/release
           mv pixi_bin/pixi-${{ inputs.target }} .pixi/target/release/pixi
           chmod a+x .pixi/target/release/pixi
       - name: Create Directory and Move Executable
