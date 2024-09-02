@@ -18,6 +18,7 @@ miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

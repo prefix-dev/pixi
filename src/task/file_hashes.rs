@@ -196,11 +196,11 @@ mod test {
                 .unwrap();
 
         assert!(
-            hashes.files.get(Path::new("build.rs")).is_none(),
+            !hashes.files.contains_key(Path::new("build.rs")),
             "build.rs should not be included"
         );
         assert!(
-            hashes.files.get(Path::new("src/lib.rs")).is_none(),
+            !hashes.files.contains_key(Path::new("src/lib.rs")),
             "lib.rs should not be included"
         );
         assert_matches!(

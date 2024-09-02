@@ -1,11 +1,14 @@
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, HashMap},
     future::ready,
+    rc::Rc,
 };
 
+use distribution_filename::SourceDistExtension;
 use distribution_types::{
     Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
-    RegistrySourceDist, SourceDist, SourceDistCompatibility,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -24,6 +27,9 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+
+    /// Saves the number of requests by the uv solver per package
+    pub(super) package_requests: Rc<RefCell<HashMap<PackageName, u32>>>,
 }
 
 impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
@@ -48,14 +54,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 requires_python: None,
                 size: None,
                 upload_time_utc_ms: None,
-                url: FileLocation::AbsoluteUrl(repodata_record.url.to_string()),
+                url: FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone())),
                 yanked: None,
             };
 
             let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
                 version: repodata_record
-                    .version()
                     .version()
                     .to_string()
                     .parse()
@@ -65,6 +70,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
                 )),
                 wheels: vec![],
+                ext: SourceDistExtension::TarGz,
             };
 
             let prioritized_dist = PrioritizedDist::from_source(
@@ -72,6 +78,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 Vec::new(),
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
+
+            // Record that we got a request for this package so we can track the number of requests
+            self.package_requests
+                .borrow_mut()
+                .entry(package_name.clone())
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
 
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),

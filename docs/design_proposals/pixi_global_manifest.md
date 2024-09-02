@@ -32,6 +32,10 @@ The motivation for the location is discussed [further below](#multiple-manifests
 
 ```toml title="pixi-global.toml"
 # The name of the environment is `python`
+[envs.python]
+channels = ["conda-forge"]
+# optional, defaults to your current OS
+platform = "osx-64"
 # It will expose python, python3 and python3.11, but not pip
 [envs.python.dependencies]
 python = "3.11.*"
@@ -43,13 +47,14 @@ python3 = "python3"
 "python3.11" = "python3.11"
 
 # The name of the environment is `python3-10`
+[envs.python3-10]
+channels = ["https://fast.prefix.dev/conda-forge"]
 # It will expose python3.10
 [envs.python3-10.dependencies]
 python = "3.10.*"
 
 [envs.python3-10.exposed]
 "python3.10" = "python"
-
 ```
 
 ## CLI
@@ -59,9 +64,14 @@ If `--environment` has been given, all packages will be installed in the same en
 If the environment already exists, the command will return with an error.
 `--expose` can be given if `--environment` is given as well or if only a single `PACKAGE` will be installed.
 The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+`--platform` sets the platform of the environment to `PLATFORM`
+Multiple channels can be specified by using `--channel` multiple times.
+By default, if no channel is provided, the `default-channels` key in the pixi configuration is used, which again defaults to "conda-forge".
+
+
 
 ```
-pixi global install [--expose MAPPING] [--environment ENV] <PACKAGE>...
+pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... <PACKAGE>...
 ```
 
 Remove environments `ENV`.
@@ -69,13 +79,23 @@ Remove environments `ENV`.
 pixi global uninstall <ENV>...
 ```
 
-Update `PACKAGE` if `--package` is given. If not, all packages in environments `ENV` will be updated.
+Update `PACKAGE_NAME` if `--package` is given. If not, all packages in environments `ENV` will be updated.
 If the update leads to binaries being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
 If the update leads to binaries being added, it will offer for each binary individually to expose it.
 `--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
 ```
-pixi global update [--package PACKAGE] [--assume-yes] <ENV>...
+pixi global update [--package PACKAGE_NAME] [--assume-yes] <ENV>...
+```
+
+Updates all packages in all environments.
+If the update leads to binaries being removed, it will offer to remove the mappings.
+If the user declines the update process will stop.
+If the update leads to binaries being added, it will offer for each binary individually to expose it.
+`--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
+
+```
+pixi global update-all [--assume-yes]
 ```
 
 Add one or more packages `PACKAGE` into an existing environment `ENV`.
@@ -88,12 +108,12 @@ The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.
 pixi global add --environment ENV [--expose MAPPING] <PACKAGE>...
 ```
 
-Remove package `PACKAGE` from environment `ENV`.
+Remove package `PACKAGE_NAME` from environment `ENV`.
 If that was the last package remove the whole environment and print that information in the console.
 If this leads to binaries being removed, it will offer to remove the mappings.
 If the user declines the remove process will stop.
 ```
-pixi global remove --environment ENV PACKAGE
+pixi global remove --environment ENV PACKAGE_NAME
 ```
 
 Add one or more `MAPPING` for environment `ENV` which describe which binaries are exposed.
@@ -119,6 +139,16 @@ pixi global sync
 List all environments, their specs and exposed binaries
 ```
 pixi global list
+```
+
+Set the channels `CHANNEL` for a certain environment `ENV` in the pixi global manifest.
+```
+pixi global channel set --environment ENV <CHANNEL>...
+```
+
+Set the platform `PLATFORM` for a certain environment `ENV` in the pixi global manifest.
+```
+pixi global platform set --environment ENV PLATFORM
 ```
 
 
@@ -247,6 +277,7 @@ We still have to figure out which existing programs do something similar and how
 ### Multiple manifests
 
 We could go for one default manifest, but also parse other manifests in the same directory.
+The only requirement to be parsed as manifest is a `.toml` extension
 In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
 
 - pixi-global.toml: Default
@@ -257,7 +288,11 @@ It is unclear whether the first implementation already needs to support this.
 At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
 
 
-### Discovery via environment variable
+### Discovery via config key
 
-In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a environment variable.
-That environment variable could be called `PIXI_GLOBAL_MANIFESTS`.
+In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a key in the [pixi configuration](https://pixi.sh/dev/reference/pixi_configuration/).
+
+
+``` title="config.toml"
+global_manifests = "/path/to/your/manifests"
+```
