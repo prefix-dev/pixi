@@ -49,7 +49,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         &dependency_config.platform,
                         &dependency_config.feature_name(),
                     )
-                    .context("failed to remove pypi dependency")?;
+                    .wrap_err(format!(
+                        "failed to remove PyPI dependency: '{}'",
+                        name.as_source()
+                    ))?;
             }
         }
         DependencyType::CondaDependency(spec_type) => {
@@ -62,7 +65,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         &dependency_config.platform,
                         &dependency_config.feature_name(),
                     )
-                    .context("failed to remove dependency")?;
+                    .wrap_err(format!(
+                        "failed to remove dependency: '{}'",
+                        name.as_source()
+                    ))?;
             }
         }
     };
