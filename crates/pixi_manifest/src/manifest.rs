@@ -421,7 +421,11 @@ impl Manifest {
             match self
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
-                    Self::handle_target_missing(platform.as_ref(), feature_name, "dependencies")
+                    Self::handle_target_missing(
+                        platform.as_ref(),
+                        feature_name,
+                        consts::DEPENDENCIES,
+                    )
                 })?
                 .remove_dependency(dep, spec_type)
             {
@@ -453,7 +457,7 @@ impl Manifest {
                     Self::handle_target_missing(
                         platform.as_ref(),
                         feature_name,
-                        "pypi-dependencies",
+                        consts::PYPI_DEPENDENCIES,
                     )
                 })?
                 .remove_pypi_dependency(dep)
