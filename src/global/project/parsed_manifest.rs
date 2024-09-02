@@ -7,7 +7,6 @@ use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
 use serde_with::{serde_as, serde_derive::Deserialize};
-use uv_toolchain::platform;
 
 use super::environment::EnvironmentName;
 

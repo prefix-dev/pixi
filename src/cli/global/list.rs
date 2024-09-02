@@ -4,9 +4,6 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 pub struct Args {}
 
-#[derive(Debug)]
-struct InstalledPackageInfo {}
-
 pub async fn execute(_args: Args) -> miette::Result<()> {
     todo!()
 }
