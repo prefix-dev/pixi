@@ -420,7 +420,9 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
-                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
+                .ok_or_else(|| {
+                    Self::handle_target_missing(platform.as_ref(), feature_name, "dependencies")
+                })?
                 .remove_dependency(dep, spec_type)
             {
                 Ok(_) => (),
@@ -447,7 +449,13 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
-                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
+                .ok_or_else(|| {
+                    Self::handle_target_missing(
+                        platform.as_ref(),
+                        feature_name,
+                        "pypi-dependencies",
+                    )
+                })?
                 .remove_pypi_dependency(dep)
             {
                 Ok(_) => (),
@@ -463,22 +471,35 @@ impl Manifest {
         Ok(())
     }
 
+    /// Handles the target missing error cases
     fn handle_target_missing(
         platform: Option<&Platform>,
         feature_name: &FeatureName,
+        section: &str,
     ) -> miette::Report {
-        match platform {
-            None => {
-                miette!("No target for feature `{}`", feature_name)
-            }
-            Some(platform) => {
-                miette!(
-                    "No target for feature `{}` on platform `{}`",
-                    feature_name,
-                    platform
-                )
-            }
-        }
+        let platform = platform.copied().unwrap_or_else(Platform::current);
+
+        let help = if feature_name.is_default() {
+            format!(
+                r#"Expected target for `{name}`, e.g.: `[target.{platform}.{section}]`"#,
+                name = feature_name,
+                platform = platform,
+                section = section
+            )
+        } else {
+            format!(
+                r#"Expected target for `{name}`, e.g.: `[feature.{name}.target.{platform}.{section}]`"#,
+                name = feature_name,
+                platform = platform,
+                section = section
+            )
+        };
+        miette!(
+            help = &help,
+            "No target for feature `{name}` found on platform `{platform}`",
+            name = feature_name,
+            platform = platform
+        )
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
