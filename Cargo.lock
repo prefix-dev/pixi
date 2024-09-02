@@ -3513,6 +3513,7 @@ dependencies = [
  "miette 7.2.0",
  "pep440_rs",
  "pep508_rs",
+ "pixi_config",
  "pixi_consts",
  "pixi_spec",
  "pyproject-toml",

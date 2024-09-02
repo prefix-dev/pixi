@@ -373,6 +373,7 @@ mod tests {
     use std::path::Path;
 
     use insta::assert_snapshot;
+    use pixi_config::default_channel_config;
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
     use rstest::rstest;
 
@@ -386,12 +387,6 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
-
-    fn default_channel_config() -> rattler_conda_types::ChannelConfig {
-        rattler_conda_types::ChannelConfig::default_with_root_dir(
-            std::env::current_dir().expect("Could not retrieve the current directory"),
-        )
-    }
 
     #[test]
     fn test_nameless_to_toml() {
