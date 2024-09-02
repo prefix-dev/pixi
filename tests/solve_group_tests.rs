@@ -635,9 +635,8 @@ async fn test_file_url_as_mapping_location() {
     );
 
     let mapping_file_path_as_url = Url::from_file_path(
-        mapping_file
-            .canonicalize()
-            .expect("should be canonicalized"),
+        mapping_file, // .canonicalize()
+                      // .expect("should be canonicalized"),
     )
     .unwrap();
 
