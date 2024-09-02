@@ -3542,7 +3542,6 @@ version = "0.1.0"
 dependencies = [
  "console",
  "indicatif",
- "once_cell",
  "tokio",
 ]
 
