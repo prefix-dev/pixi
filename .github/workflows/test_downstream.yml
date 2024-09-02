@@ -117,7 +117,7 @@ jobs:
     name: Integration test on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
       - name: Download binary from build
         uses: actions/download-artifact@v4
@@ -130,26 +130,15 @@ jobs:
       - name: Setup unix binary, add to github path
         if: inputs.os != 'windows-latest'
         run: |
-          mv pixi_bin/pixi-${{ inputs.target }} pixi_bin/pixi
-          chmod a+x pixi_bin/pixi
-          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+          mv pixi_bin/pixi-${{ inputs.target }} .pixi/target/release/pixi
+          chmod a+x .pixi/target/release/pixi
       - name: Create Directory and Move Executable
         if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
         run: |
-          New-Item -ItemType Directory -Force -Path "D:\.pixi"
-          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "D:\.pixi\pixi.exe"
-        shell: pwsh
-      - name: Add to PATH
-        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
-        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
-        shell: pwsh
-      - name: Verify and Use Executable
-        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
-        run: |
-          echo "Current PATH: $env:PATH"
-          pixi --version
+          New-Item -ItemType Directory -Force -Path ".pixi/target/release/"
+          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination ".pixi/target/release/pixi.exe"
         shell: pwsh
       - name: Typecheck integration tests
-        run: pixi run typecheck-integration
+        run: ./.pixi/target/release/pixi run typecheck-integration
       - name: Run integration tests
-        run: pixi run test-integration
+        run: ./.pixi/target/release/pixi run test-integration
