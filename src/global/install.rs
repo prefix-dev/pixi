@@ -449,15 +449,18 @@ pub(crate) async fn sync(
             .map(|channel| channel.clone().into_channel(config.global_channel_config()))
             .collect_vec();
 
-        let repodata = gateway
-            .query(
-                channels,
-                [environment.platform(), Platform::NoArch],
-                specs.values().cloned().collect_vec(),
-            )
-            .recursive(true)
-            .await
-            .into_diagnostic()?;
+        let repodata = await_in_progress("querying repodata ", |_| async {
+            gateway
+                .query(
+                    channels,
+                    [environment.platform(), Platform::NoArch],
+                    specs.values().cloned().collect_vec(),
+                )
+                .recursive(true)
+                .await
+                .into_diagnostic()
+        })
+        .await?;
 
         // Determine virtual packages of the current platform
         let virtual_packages = VirtualPackage::current()
