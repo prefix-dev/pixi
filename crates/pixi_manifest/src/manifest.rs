@@ -420,6 +420,7 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
+                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
                 .remove_dependency(dep, spec_type)
             {
                 Ok(_) => (),
@@ -446,6 +447,7 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
+                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
                 .remove_pypi_dependency(dep)
             {
                 Ok(_) => (),
@@ -459,6 +461,24 @@ impl Manifest {
                 .remove_pypi_dependency(dep, platform, feature_name)?;
         }
         Ok(())
+    }
+
+    fn handle_target_missing(
+        platform: Option<&Platform>,
+        feature_name: &FeatureName,
+    ) -> miette::Report {
+        match platform {
+            None => {
+                miette!("No target for feature `{}`", feature_name)
+            }
+            Some(platform) => {
+                miette!(
+                    "No target for feature `{}` on platform `{}`",
+                    feature_name,
+                    platform
+                )
+            }
+        }
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -573,12 +593,15 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to a target
-    pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
+    pub fn target_mut(
+        &mut self,
+        platform: Option<Platform>,
+        name: &FeatureName,
+    ) -> Option<&mut Target> {
         self.feature_mut(name)
             .unwrap()
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
     }
 
     /// Returns the default feature.
