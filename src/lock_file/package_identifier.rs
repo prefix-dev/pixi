@@ -1,7 +1,6 @@
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
-use url::Url;
 
 use pixi_manifest::pypi::PyPiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
@@ -12,7 +11,6 @@ use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
     pub version: pep440_rs::Version,
-    pub url: Url,
     pub extras: HashSet<ExtraName>,
 }
 
@@ -68,7 +66,6 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
-                    url: record.url.clone(),
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
                 })
@@ -112,7 +109,6 @@ impl PypiPackageIdentifier {
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(name),
-            url: Url::parse(&package_url.to_string()).expect("cannot parse purl -> url"),
             version,
             extras,
         })

@@ -1,20 +1,21 @@
 use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
 use indexmap::IndexMap;
-use miette::{IntoDiagnostic, Report, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
 use pyproject_toml::{self, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
+use thiserror::Error;
 use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    Feature, ParsedManifest, SpecType,
+    DependencyOverwriteBehavior, Feature, ParsedManifest, SpecType,
 };
-use crate::FeatureName;
+use crate::{error::DependencyError, FeatureName};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
@@ -221,8 +222,16 @@ impl PyProjectManifest {
     }
 }
 
-impl From<PyProjectManifest> for ParsedManifest {
-    fn from(item: PyProjectManifest) -> Self {
+#[derive(Debug, Error, Diagnostic)]
+pub enum PyProjectToManifestError {
+    #[error("Unsupported pep508 requirement: '{0}'")]
+    DependencyError(Requirement, #[source] DependencyError),
+}
+
+impl TryFrom<PyProjectManifest> for ParsedManifest {
+    type Error = PyProjectToManifestError;
+
+    fn try_from(item: PyProjectManifest) -> Result<Self, Self::Error> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let mut manifest = item
             .pixi()
@@ -268,7 +277,15 @@ impl From<PyProjectManifest> for ParsedManifest {
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = item.project().and_then(|p| p.dependencies.clone()) {
             for requirement in deps.iter() {
-                target.add_pypi_dependency(requirement, None);
+                target
+                    .try_add_pep508_dependency(
+                        requirement,
+                        None,
+                        DependencyOverwriteBehavior::Error,
+                    )
+                    .map_err(|err| {
+                        PyProjectToManifestError::DependencyError(requirement.clone(), err)
+                    })?;
             }
         }
 
@@ -288,13 +305,21 @@ impl From<PyProjectManifest> for ParsedManifest {
                 for requirement in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
                     if project_name.as_ref() != Some(&requirement.name) {
-                        target.add_pypi_dependency(requirement, None);
+                        target
+                            .try_add_pep508_dependency(
+                                requirement,
+                                None,
+                                DependencyOverwriteBehavior::Error,
+                            )
+                            .map_err(|err| {
+                                PyProjectToManifestError::DependencyError(requirement.clone(), err)
+                            })?;
                     }
                 }
             }
         }
 
-        manifest
+        Ok(manifest)
     }
 }
 
@@ -502,7 +527,7 @@ mod tests {
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(
+            .add_pep508_dependency(
                 &requirement,
                 &[],
                 &FeatureName::Default,
@@ -525,7 +550,7 @@ mod tests {
         // Add numpy to feature in pyproject
         let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(
+            .add_pep508_dependency(
                 &requirement,
                 &[],
                 &FeatureName::Named("test".to_string()),

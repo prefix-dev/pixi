@@ -119,7 +119,11 @@ pub async fn create_exec_prefix(
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
     let environment_name = EnvironmentHash::from_args(args, config).name();
-    let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
+    let prefix = Prefix::new(
+        cache_dir
+            .join(pixi_consts::consts::CACHED_ENVS_DIR)
+            .join(environment_name),
+    );
 
     let mut guard = PrefixGuard::new(prefix.root())
         .into_diagnostic()
@@ -216,7 +220,9 @@ pub async fn create_exec_prefix(
                 .clear_when_done(true)
                 .finish(),
         )
-        .with_package_cache(PackageCache::new(cache_dir.join("pkgs")))
+        .with_package_cache(PackageCache::new(
+            cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+        ))
         .install(prefix.root(), solved_records)
         .await
         .into_diagnostic()

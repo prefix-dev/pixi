@@ -156,10 +156,11 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `PIXI_PROJECT_VERSION`: The version of the project.
 - `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
 - `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
-- `PIXI_ENVIRONMENT_PLATFORMS`: The path to the environment.
+- `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
 - `CONDA_PREFIX`: The path to the environment. (Used by multiple tools that already understand conda environments)
 - `CONDA_DEFAULT_ENV`: The name of the environment. (Used by multiple tools that already understand conda environments)
 - `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
+- `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
 
 !!! note
     Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
@@ -189,8 +190,9 @@ This will always be slower than the pure conda solves. So for the best pixi expe
 Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.
 
-Normally the locations would be:
-Platform-specific default cache folder:
+Normally the location would be the following
+platform-specific default cache folder:
+
 - Linux: `$XDG_CACHE_HOME/rattler` or `$HOME/.cache/rattler`
 - macOS: `$HOME/Library/Caches/rattler`
 - Windows: `%LOCALAPPDATA%\rattler`
@@ -200,6 +202,7 @@ This location is configurable by setting the `PIXI_CACHE_DIR` or `RATTLER_CACHE_
 When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.
 
 The cache contains multiple folders concerning different caches from within pixi.
+
 - `pkgs`: Contains the downloaded/unpacked `conda` packages.
 - `repodata`: Contains the `conda` repodata cache.
 - `uv-cache`: Contains the `uv` cache. This includes multiple caches, e.g. `built-wheels` `wheels` `archives`

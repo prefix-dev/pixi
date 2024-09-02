@@ -47,6 +47,18 @@ pub struct CacheArgs {
     #[arg(long)]
     pub conda: bool,
 
+    /// Clean only the mapping cache.
+    #[arg(long)]
+    pub mapping: bool,
+
+    /// Clean only `exec` cache
+    #[arg(long)]
+    pub exec: bool,
+
+    /// Clean only the repodata cache.
+    #[arg(long)]
+    pub repodata: bool,
+
     /// Answer yes to all questions.
     #[arg(long)]
     pub yes: bool,
@@ -116,7 +128,16 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
     }
     if args.conda {
-        dirs.push(cache_dir.join("pkgs"));
+        dirs.push(cache_dir.join(consts::CONDA_PACKAGE_CACHE_DIR));
+    }
+    if args.repodata {
+        dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
+    }
+    if args.mapping {
+        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+    }
+    if args.exec {
+        dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
     }
     if dirs.is_empty() && (args.yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")

@@ -18,7 +18,7 @@ serde = { workspace = true }
 serde-untagged = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
-toml_edit = { workspace = true, optional = true }
+toml_edit = { workspace = true, features = ["serde"] }
 typed-path = { workspace = true }
 url = { workspace = true }
 

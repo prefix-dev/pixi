@@ -147,7 +147,9 @@ impl GitRev {
 pub enum GitRevParseError {
     #[error("Invalid length must be less than 40, actual size: {0}")]
     InvalidLength(usize),
-    #[error("Found invalid characters for git revision {0}")]
+    #[error(
+        "Found invalid characters for git revision '{0}', branches and tags are not supported yet"
+    )]
     InvalidCharacters(String),
 }
 

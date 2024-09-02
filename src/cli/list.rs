@@ -5,6 +5,7 @@ use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
@@ -114,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
@@ -142,7 +143,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_project(&project)?;
-            index_locations = pypi_options_to_index_locations(&environment.pypi_options());
+            index_locations =
+                pypi_options_to_index_locations(&environment.pypi_options(), project.root())
+                    .into_diagnostic()?;
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),

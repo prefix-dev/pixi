@@ -5,6 +5,105 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.28.2] - 2024-08-28
+#### Changed
+
+- Use mold on linux by @Hofer-Julian in [#1914](https://github.com/prefix-dev/pixi/pull/1914)
+
+#### Documentation
+
+- Fix global manifest by @Hofer-Julian in [#1912](https://github.com/prefix-dev/pixi/pull/1912)
+- Document azure keyring usage by @tdejager in [#1913](https://github.com/prefix-dev/pixi/pull/1913)
+
+#### Fixed
+
+- Let `init` add dependencies independent of target and don't install by @ruben-arts in [#1916](https://github.com/prefix-dev/pixi/pull/1916)
+- Enable use of manylinux wheeltags once again by @tdejager in [#1925](https://github.com/prefix-dev/pixi/pull/1925)
+- The bigger runner by @ruben-arts in [#1902](https://github.com/prefix-dev/pixi/pull/1902)
+
+### [0.28.1] - 2024-08-26
+#### Changed
+- Uv upgrade to 0.3.2 by @tdejager in [#1900](https://github.com/prefix-dev/pixi/pull/1900)
+
+#### Documentation
+- Add `keyrings.artifacts` to the list of project built with `pixi` by @jslorrma in [#1908](https://github.com/prefix-dev/pixi/pull/1908)
+
+#### Fixed
+- Use default indexes if non where given by the lockfile by @ruben-arts in [#1910](https://github.com/prefix-dev/pixi/pull/1910)
+
+#### New Contributors
+* @jslorrma made their first contribution in [#1908](https://github.com/prefix-dev/pixi/pull/1908)
+
+### [0.28.0] - 2024-08-22
+#### ✨ Highlights
+- **Bug Fixes**: Major fixes in general but especially for PyPI installation issues and better error messaging.
+- **Compatibility**: Default Linux version downgraded to 4.18 for broader support.
+- **New Features**: Added INIT_CWD in pixi run, improved logging, and more cache options.
+
+#### Added
+
+- Add `INIT_CWD` to activated env `pixi run` by @ruben-arts in [#1798](https://github.com/prefix-dev/pixi/pull/1798)
+- Add context to error when parsing conda-meta files by @baszalmstra in [#1854](https://github.com/prefix-dev/pixi/pull/1854)
+- Add some logging for when packages are actually overridden by conda by @tdejager in [#1874](https://github.com/prefix-dev/pixi/pull/1874)
+- Add package when extra is added by @ruben-arts in [#1856](https://github.com/prefix-dev/pixi/pull/1856)
+
+#### Changed
+
+- Use new gateway to get the repodata for global install by @nichmor in [#1767](https://github.com/prefix-dev/pixi/pull/1767)
+- Pixi global proposal by @Hofer-Julian in [#1757](https://github.com/prefix-dev/pixi/pull/1757)
+- Upgrade to new uv 0.2.37 by @tdejager in [#1829](https://github.com/prefix-dev/pixi/pull/1829)
+- Use new gateway for pixi search by @nichmor in [#1819](https://github.com/prefix-dev/pixi/pull/1819)
+- Extend pixi clean cache with more cache options by @ruben-arts in [#1872](https://github.com/prefix-dev/pixi/pull/1872)
+- Downgrade `__linux` default to `4.18` by @ruben-arts in [#1887](https://github.com/prefix-dev/pixi/pull/1887)
+
+#### Documentation
+
+- Fix instructions for update github actions by @Hofer-Julian in [#1774](https://github.com/prefix-dev/pixi/pull/1774)
+- Fix fish completion script by @dennis-wey in [#1789](https://github.com/prefix-dev/pixi/pull/1789)
+- Expands the environment variable examples in the reference section by @travishathaway in [#1779](https://github.com/prefix-dev/pixi/pull/1779)
+- Community feedback `pixi global` by @Hofer-Julian in [#1800](https://github.com/prefix-dev/pixi/pull/1800)
+- Additions to the pixi global proposal by @Hofer-Julian in [#1803](https://github.com/prefix-dev/pixi/pull/1803)
+- Stop using invalid environment name in pixi global proposal by @Hofer-Julian in [#1826](https://github.com/prefix-dev/pixi/pull/1826)
+- Extend `pixi global` proposal by @Hofer-Julian in [#1861](https://github.com/prefix-dev/pixi/pull/1861)
+- Make `channels` required in `pixi global` manifest by @Hofer-Julian in [#1868](https://github.com/prefix-dev/pixi/pull/1868)
+- Fix linux minimum version in project_configuration docs by @traversaro in [#1888](https://github.com/prefix-dev/pixi/pull/1888)
+
+#### Fixed
+
+- Try to increase `rlimit` by @baszalmstra in [#1766](https://github.com/prefix-dev/pixi/pull/1766)
+- Add test for invalid environment names by @Hofer-Julian in [#1825](https://github.com/prefix-dev/pixi/pull/1825)
+- Show global config in info command by @ruben-arts in [#1807](https://github.com/prefix-dev/pixi/pull/1807)
+- Correct documentation of PIXI_ENVIRONMENT_PLATFORMS by @traversaro in [#1842](https://github.com/prefix-dev/pixi/pull/1842)
+- Format in docs/features/environment.md by @cdeil in [#1846](https://github.com/prefix-dev/pixi/pull/1846)
+- Make proper use of `NamedChannelOrUrl` by @ruben-arts in [#1820](https://github.com/prefix-dev/pixi/pull/1820)
+- Trait impl override by @baszalmstra in [#1848](https://github.com/prefix-dev/pixi/pull/1848)
+- Tame `pixi search` by @baszalmstra in [#1849](https://github.com/prefix-dev/pixi/pull/1849)
+- Fix `pixi tree -i` duplicate output by @baszalmstra in [#1847](https://github.com/prefix-dev/pixi/pull/1847)
+- Improve spec parsing error messages by @baszalmstra in [#1786](https://github.com/prefix-dev/pixi/pull/1786)
+- Parse matchspec from CLI Lenient by @baszalmstra in [#1852](https://github.com/prefix-dev/pixi/pull/1852)
+- Improve parsing of pypi-dependencies by @baszalmstra in [#1851](https://github.com/prefix-dev/pixi/pull/1851)
+- Don't enforce system requirements for task tests by @baszalmstra in [#1855](https://github.com/prefix-dev/pixi/pull/1855)
+- Satisfy when there are no pypi packages in the lockfile by @ruben-arts in [#1862](https://github.com/prefix-dev/pixi/pull/1862)
+- Ssh url should not contain colon by @baszalmstra in [#1865](https://github.com/prefix-dev/pixi/pull/1865)
+- `find-links` with manifest-path by @baszalmstra in [#1864](https://github.com/prefix-dev/pixi/pull/1864)
+- Increase stack size in debug mode on windows by @baszalmstra in [#1867](https://github.com/prefix-dev/pixi/pull/1867)
+- Solve-group-envs should reside in `.pixi` folder by @baszalmstra in [#1866](https://github.com/prefix-dev/pixi/pull/1866)
+- Move package-override logging by @tdejager in [#1883](https://github.com/prefix-dev/pixi/pull/1883)
+- Pinning logic for minor and major by @baszalmstra in [#1885](https://github.com/prefix-dev/pixi/pull/1885)
+- Docs manifest tests by @ruben-arts in [#1879](https://github.com/prefix-dev/pixi/pull/1879)
+
+
+#### Refactor
+- Encapsulate channel resolution logic for CLI by @olivier-lacroix in [#1781](https://github.com/prefix-dev/pixi/pull/1781)
+- Move to `pub(crate) fn` in order to detect and remove unused functions by @Hofer-Julian in [#1805](https://github.com/prefix-dev/pixi/pull/1805)
+- Only compile `TaskNode::full_command` for tests by @Hofer-Julian in [#1809](https://github.com/prefix-dev/pixi/pull/1809)
+- Derive `Default` for more structs by @Hofer-Julian in [#1824](https://github.com/prefix-dev/pixi/pull/1824)
+- Rename `get_up_to_date_prefix` to `update_prefix` by @Hofer-Julian in [#1837](https://github.com/prefix-dev/pixi/pull/1837)
+- Make `HasSpecs` implementation more functional by @Hofer-Julian in [#1863](https://github.com/prefix-dev/pixi/pull/1863)
+
+#### New Contributors
+* @cdeil made their first contribution in [#1846](https://github.com/prefix-dev/pixi/pull/1846)
+
 ### [0.27.1] - 2024-08-09
 #### Documentation
 

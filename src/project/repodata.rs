@@ -16,7 +16,7 @@ impl Project {
             // Construct the gateway
             Gateway::builder()
                 .with_client(self.authenticated_client().clone())
-                .with_cache_dir(cache_dir.join("repodata"))
+                .with_cache_dir(cache_dir.join(pixi_consts::consts::CONDA_REPODATA_CACHE_DIR))
                 .with_channel_config(self.config().into())
                 .finish()
         })

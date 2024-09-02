@@ -59,15 +59,15 @@ impl Project {
     ///
     /// Returns the lock-file and any potential derived data that was computed
     /// as part of this operation.
-    pub async fn up_to_date_lock_file(
+    pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update::ensure_up_to_date_lock_file(self, options).await
+        update::update_lock_file(self, options).await
     }
 }
 
-/// Options to pass to [`Project::up_to_date_lock_file`].
+/// Options to pass to [`Project::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
     /// Defines what to do if the lock-file is out of date
@@ -83,7 +83,7 @@ pub struct UpdateLockFileOptions {
 }
 
 /// A struct that holds the lock-file and any potential derived data that was
-/// computed when calling `ensure_up_to_date_lock_file`.
+/// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub project: &'p Project,
 
@@ -160,6 +160,7 @@ impl<'p> LockFileDerivedData<'p> {
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
             .await?;
 
+        let non_isolated_packages = environment.pypi_options().no_build_isolation;
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -174,9 +175,15 @@ impl<'p> LockFileDerivedData<'p> {
             env_variables,
             self.project.root(),
             environment.best_platform(),
+            non_isolated_packages,
         )
         .await
-        .with_context(|| "error updating pypi prefix")?;
+        .with_context(|| {
+            format!(
+                "{}: error installing/updating PyPI dependencies",
+                environment.name()
+            )
+        })?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_pypi_prefixes
@@ -516,12 +523,13 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
 /// not up-to-date it will construct a task graph of all the work that needs to
 /// be done to update the lock-file. The tasks are awaited in a specific order
 /// to make sure that we can start instantiating prefixes as soon as possible.
-pub async fn ensure_up_to_date_lock_file(
+pub async fn update_lock_file(
     project: &Project,
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
-    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+    let package_cache =
+        PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -668,7 +676,9 @@ impl<'p> UpdateContextBuilder<'p> {
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
-            None => PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs")),
+            None => PackageCache::new(
+                pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR),
+            ),
         };
         let lock_file = self.lock_file;
         let outdated = self.outdated_environments.unwrap_or_else(|| {
@@ -1480,7 +1490,7 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source().clone();
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source()?.clone();
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
@@ -1702,7 +1712,7 @@ async fn spawn_extract_environment_task(
                 for dependency in record.package_record.depends.iter() {
                     let dependency_name =
                         PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
-                            dependency.split_once(' ').unwrap_or((&dependency, "")).0,
+                            dependency.split_once(' ').unwrap_or((dependency, "")).0,
                         ));
                     if queued_names.insert(dependency_name.clone()) {
                         queue.push(dependency_name);
@@ -1787,7 +1797,7 @@ async fn spawn_solve_pypi_task(
 
     let environment_name = environment.name().clone();
 
-    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
+    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source()?;
 
     let mut conda_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();

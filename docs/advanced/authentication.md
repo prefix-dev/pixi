@@ -190,6 +190,23 @@ To find this URL more easily, you can use the `gcloud` command:
 gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
 ```
 
+### Azure DevOps
+Similarly for Azure DevOps, you can use the Azure keyring backend for authentication.
+The backend, along with installation instructions can be found at [keyring.artifacts](https://github.com/jslorrma/keyrings.artifacts).
+
+After following the instructions and making sure that keyring works correctly, you can use the following configuration:
+
+##### Configuration
+```toml
+# rest of the pixi.toml
+#
+# Adds the following options to the default feature
+[pypi-options]
+extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
+```
+This should allow for getting packages from the Azure DevOps artifact registry.
+
+
 #### Installing your environment
 To actually install either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag:
 ```shell
