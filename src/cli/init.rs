@@ -15,6 +15,7 @@ use pixi_manifest::{
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use tokio::fs::OpenOptions;
 use url::Url;
 
 use crate::Project;
@@ -356,10 +357,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
 
             let init_file = src_dir.join("__init__.py");
-            tokio::fs::File::create(&init_file)
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&init_file)
                 .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not create file {}.", init_file.display()))?;
+            {
+                Ok(_) => (),
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    // If the file already exists, do nothing
+                }
+                Err(e) => {
+                    return Err(e).into_diagnostic().wrap_err_with(|| {
+                        format!("Could not create file {}.", init_file.display())
+                    });
+                }
+            };
 
         // Create a 'pixi.toml' manifest
         } else {
