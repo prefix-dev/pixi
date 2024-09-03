@@ -32,9 +32,6 @@ pytest = ">=8.0.2,<9"
 
 [feature.pytest.tasks]
 test-integration = "pytest tests/integration"
-test-integration-dev = { cmd = "pytest tests/integration", depends-on = [
-  "build",
-], env = { PIXI_PATH = "$PIXI_PROJECT_ROOT/.pixi/target/release/pixi" } }
 typecheck-integration = "mypy --strict tests/integration"
 
 [feature.dev.dependencies]
