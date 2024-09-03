@@ -385,17 +385,9 @@ pub async fn resolve_pypi(
             .into_diagnostic()
             .context("error creating requires-python for solver")?;
 
-    let registry_client2 = Arc::new(
-        RegistryClientBuilder::new(context.cache.clone())
-            .client(context.client.clone())
-            .index_urls(index_locations.index_urls())
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .build(),
-    );
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
-            &registry_client2,
+            &registry_client,
             &build_dispatch,
             context.concurrency.downloads,
         ),
