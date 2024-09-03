@@ -219,36 +219,13 @@ def test_project_commands(tmp_path: Path, pixi: Path) -> None:
     )
 
 
+@pytest.mark.xfail(reason="`pixi global install` is not yet implemented", strict=True)
 def test_global_install(pixi: Path) -> None:
     # Install
     verify_cli_command(
         [pixi, "global", "install", "rattler-build"],
         ExitCode.SUCCESS,
-        stdout_excludes="rattler-build",
     )
-
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "rattler-build",
-            "-c",
-            "https://fast.prefix.dev/conda-forge",
-        ],
-        ExitCode.SUCCESS,
-        stdout_excludes="rattler-build",
-    )
-
-    # Upgrade
-    verify_cli_command([pixi, "global", "upgrade", "rattler-build"], ExitCode.SUCCESS)
-
-    # List
-    verify_cli_command([pixi, "global", "list"], ExitCode.SUCCESS, stderr_contains="rattler-build")
-
-    # Remove
-    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.SUCCESS)
-    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.FAILURE)
 
 
 def test_search(pixi: Path) -> None:
