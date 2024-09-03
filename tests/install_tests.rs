@@ -675,7 +675,6 @@ async fn test_setuptools_override_failure() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap();
