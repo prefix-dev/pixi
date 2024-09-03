@@ -4,8 +4,8 @@ services:
     build:
       context: .
       target: install
-    command: pixi run dev -h 0.0.0.0
+    command: pixi run dev -h 0.0.0.0 -p 8000
     ports:
-      - 5000:5000
+      - 8000:8000
     volumes:
       - ./docker_project:/app/docker_project:ro
