@@ -169,7 +169,7 @@ pub async fn amend_pypi_purls(
         }
         MappingSource::Disabled => {
             for record in conda_packages.iter_mut() {
-                if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(&None, record) {
+                if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
                     record
                         .package_record
                         .purls

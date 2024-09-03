@@ -363,7 +363,7 @@ async fn test_dont_record_not_present_package_as_purl() {
         .unwrap();
 
     // we verify that even if this name is not present in our mapping
-    // we anyway record a purl because we make an assumption
+    // we record a purl anyways. Because we make the assumption
     // that it's a pypi package
     assert_eq!(first_purl.name(), "pixi-something-new-for-test");
 
@@ -463,7 +463,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         .unwrap();
 
     // we verify that even if this name is not present in our mapping
-    // we anyway record a purl because we make an assumption
+    // we record a purl anyways. Because we make the assumption
     // that it's a pypi package
     assert_eq!(first_purl.name(), "pixi-something-new");
     assert!(first_purl.qualifiers().is_empty());
@@ -748,7 +748,7 @@ async fn test_disabled_mapping() {
         .unwrap();
 
     // we verify that even if this name is not present in our mapping
-    // we anyway record a purl because we make an assumption
+    // we record a purl anyways. Because we make the assumption
     // that it's a pypi package
     assert_eq!(boltons_first_purl.name(), "boltons");
     assert!(boltons_first_purl.qualifiers().is_empty());
