@@ -6,12 +6,14 @@ use std::{
 use pypi_mapping::{self, PurlSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
+use reqwest_middleware::ClientBuilder;
 use serial_test::serial;
 use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
     builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    client::OfflineMiddleware,
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
@@ -618,4 +620,63 @@ async fn test_path_channel() {
             .unwrap(),
         PurlSource::ProjectDefinedMapping.as_str()
     );
+}
+
+#[tokio::test]
+async fn test_disabled_mapping() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    let client = project.authenticated_client();
+
+    let blocking_middleware = OfflineMiddleware;
+
+    let blocked_client = ClientBuilder::from_client(client.clone())
+        .with(blocking_middleware)
+        .build();
+
+    let boltons_package = Package::build("boltons", "2").finish();
+
+    let boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "boltons".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
+
+    let mut packages = vec![boltons_repo_data_record];
+
+    pypi_mapping::amend_pypi_purls(
+        blocked_client,
+        project.pypi_name_mapping_source().unwrap(),
+        &mut packages,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let boltons_package = packages.pop().unwrap();
+
+    let boltons_first_purl = boltons_package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+
+    // we verify that even if this name is not present in our mapping
+    // we anyway record a purl because we make an assumption
+    // that it's a pypi package
+    assert_eq!(boltons_first_purl.name(), "boltons");
+    assert!(boltons_first_purl.qualifiers().is_empty());
 }

@@ -521,6 +521,11 @@ impl Project {
                         })
                         .collect::<miette::Result<HashMap<Channel, String>>>()?;
 
+                    // User can disable the mapping by providing an empty map
+                    if channel_to_location_map.is_empty() {
+                        return Ok(MappingSource::Disabled);
+                    }
+
                     let project_channels: HashSet<_> = manifest
                         .parsed
                         .project
