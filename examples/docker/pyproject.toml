@@ -33,7 +33,7 @@ pytest = "*"
 # Used for installing into production, as a post-process step
 # we would like make better integration for this in the future.
 [tool.pixi.feature.prod.host-dependencies]
-uv = "0.4.2"
+uv = "0.4.3"
 
 # We use dependencies from conda to use it to build the wheel
 [tool.pixi.feature.build.dependencies]
