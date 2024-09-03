@@ -19,6 +19,7 @@ build = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
+release = "python scripts/release.py"
 run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec .pixi/target/release/pixi", depends-on = [
   "build",
 ] }
