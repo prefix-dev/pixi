@@ -13,7 +13,6 @@ use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use rattler_conda_types::Platform;
-use serial_test::serial;
 use std::{
     fs::{create_dir_all, File},
     io::Write,
@@ -26,7 +25,6 @@ use uv_python::PythonEnvironment;
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
@@ -153,7 +151,6 @@ async fn test_incremental_lock_file() {
 
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
     let pixi = PixiControl::new().unwrap();
@@ -249,7 +246,6 @@ async fn install_locked_with_config() {
 
 /// Test `pixi install/run --frozen` functionality
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen() {
     let pixi = PixiControl::new().unwrap();
@@ -303,7 +299,6 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
     let pixi = PixiControl::new().unwrap();
@@ -359,7 +354,6 @@ async fn pypi_reinstall_python() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
@@ -450,7 +444,6 @@ async fn test_channels_changed() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
@@ -464,7 +457,6 @@ async fn install_conda_meta_history() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn minimal_lockfile_update_pypi() {
     let pixi = PixiControl::new().unwrap();
@@ -509,7 +501,6 @@ async fn minimal_lockfile_update_pypi() {
 /// then change the installer back and see if it reinstalls the package
 /// with a new version
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_installer_name() {
     let pixi = PixiControl::new().unwrap();
@@ -567,7 +558,6 @@ async fn test_installer_name() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// Test full prefix install for an old lock file to see if it still works.
 /// Makes sure the lockfile isn't touched and the environment is still installed.
@@ -587,7 +577,6 @@ async fn test_old_lock_install() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_no_build_isolation() {
     let current_platform = Platform::current();
@@ -662,7 +651,30 @@ setup(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_setuptools_override_failure() {
+    // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
+    let manifest = format!(
+        r#"
+        [project]
+        channels = ["conda-forge"]
+        name = "pixi-source-problem"
+        platforms = ["{platform}"]
+
+        [dependencies]
+        pip = ">=24.0,<25"
+
+        # The transitive dependencies of viser were causing issues
+        [pypi-dependencies]
+        viser = "==0.2.7"
+        "#,
+        platform = Platform::current()
+    );
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    pixi.install().await.expect("cannot install project");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap();

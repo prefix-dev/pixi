@@ -26,6 +26,7 @@ use rattler_shell::{
 };
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::VirtualPackageOverrides;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
@@ -463,7 +464,7 @@ pub(crate) async fn sync(
         .await?;
 
         // Determine virtual packages of the current platform
-        let virtual_packages = VirtualPackage::current()
+        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
             .into_diagnostic()
             .context("failed to determine virtual packages")?
             .iter()
