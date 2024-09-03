@@ -144,4 +144,4 @@ jobs:
       - name: Typecheck integration tests
         run: ${{ env.TARGET_RELEASE }}/pixi run typecheck-integration
       - name: Run integration tests
-        run: ${{ env.TARGET_RELEASE }}/pixi run test-integration
+        run: ${{ env.TARGET_RELEASE }}/pixi run test-integration-ci
