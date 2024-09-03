@@ -97,7 +97,6 @@ async fn conda_solve_group_functionality() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-
 async fn test_purl_are_added_for_pypi() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
