@@ -1,4 +1,9 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 
 use async_once_cell::OnceCell as AsyncCell;
 use custom_pypi_mapping::fetch_mapping_from_path;
@@ -96,6 +101,7 @@ impl CustomMapping {
 pub enum MappingSource {
     Custom(Arc<CustomMapping>),
     Prefix,
+    Disabled,
 }
 
 impl MappingSource {
@@ -130,7 +136,7 @@ impl PurlSource {
 }
 
 pub async fn amend_pypi_purls(
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     mapping_source: &MappingSource,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
@@ -148,7 +154,7 @@ pub async fn amend_pypi_purls(
         options: HttpCacheOptions::default(),
     });
 
-    let client = ClientBuilder::new(client)
+    let client = ClientBuilder::from_client(client)
         .with(cache_strategy)
         .with(retry_strategy)
         .build();
@@ -160,6 +166,17 @@ pub async fn amend_pypi_purls(
         }
         MappingSource::Prefix => {
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
+        }
+        MappingSource::Disabled => {
+            for record in conda_packages.iter_mut() {
+                if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
+                    record
+                        .package_record
+                        .purls
+                        .get_or_insert_with(BTreeSet::new)
+                        .insert(purl);
+                }
+            }
         }
     }
 
