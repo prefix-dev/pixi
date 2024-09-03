@@ -1,10 +1,11 @@
 import subprocess
 import re
 import os
+from pathlib import Path
 
 
 def run_command(command: list[str], capture_stdout=False) -> str | None:
-    print(f"Running command: {' '.join(command)}")
+    print(f"Running command: {' '.join([str(c) for c in command])}")
     result = subprocess.run(
         command, stdout=subprocess.PIPE if capture_stdout else None, stderr=None, text=True
     )
@@ -28,11 +29,20 @@ def get_release_version():
             )
 
 
+def get_pixi() -> Path:
+    pixi_bin = Path().home().joinpath(".pixi/bin/pixi").resolve()
+
+    if pixi_bin.is_file() and pixi_bin.exists():
+        return pixi_bin
+    else:
+        raise ValueError(f"The path {pixi_bin} doesn't exist.")
+
+
 def main():
     print("Making a release of pixi")
+    pixi = get_pixi()
 
     # Prep
-    print("\nPrep")
     input("Make sure main is up-to-date and CI passes. Press Enter to continue...")
 
     release_version = get_release_version()
@@ -49,10 +59,10 @@ def main():
     run_command(["git", "switch", "--create", branch])
 
     print("\nBumping all versions...")
-    run_command(["pixi", "run", "bump"])
+    run_command([pixi, "run", "bump"])
 
     print("\nUpdating the changelog...")
-    run_command(["pixi", "run", "bump-changelog"])
+    run_command([pixi, "run", "bump-changelog"])
     input(
         "Don't forget to update the 'Highlights' section in `CHANGELOG.md`. Press Enter to continue..."
     )
@@ -81,18 +91,17 @@ def main():
     run_command(["git", "push", "upstream", f"v{release_version}"])
 
     # Publishing the release
-    print("\nPublishing the release")
     input(
-        "After that, update the Release which has CI created for you (after the first build) and add the changelog to the release notes. Press Enter to continue..."
+        "Update the Release which has CI created for you (after the first build) and add the changelog to the release notes. Press Enter to continue..."
     )
     input("Make sure all the artifacts are there and the CI is green!!! Press Enter to continue...")
     input("Publish the release and make sure it is set as latest. Press Enter to continue...")
 
     # Test the release using the install script
     print("Testing the release using `pixi self-update`...")
-    run_command(["pixi", "self-update"])
+    run_command([pixi, "self-update"])
 
-    version_output = run_command(["pixi", "--version"], capture_stdout=True)
+    version_output = run_command([pixi, "--version"], capture_stdout=True)
     expected_version_output = f"pixi {release_version}"
     if version_output == expected_version_output:
         print(f"Version check passed: {version_output}")
