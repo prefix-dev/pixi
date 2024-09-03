@@ -33,7 +33,7 @@ pytest = "*"
 # Used for installing into production, as a post-process step
 # we would like make better integration for this in the future.
 [tool.pixi.feature.prod.host-dependencies]
-pip = "*"
+uv = "0.4.2"
 
 # We use dependencies from conda to use it to build the wheel
 [tool.pixi.feature.build.dependencies]
@@ -45,10 +45,10 @@ build-wheel = "hatch build -t wheel"
 
 [tool.pixi.feature.prod.tasks]
 # Install into the production environment
-postinstall-production = "pip install --no-deps --disable-pip-version-check --no-cache-dir dist/docker_project-*.whl"
+install-wheel = "uv pip install --no-deps --disable-pip-version-check --no-cache-dir dist/docker_project-*.whl"
 
 [tool.pixi.tasks]
-dev = "flask --app docker_project:app run"
+dev = "flask --app docker_project:app run --debug"
 start = "gunicorn -w 4 docker_project:app --bind :8000"
 
 [tool.pixi.feature.test.tasks]
