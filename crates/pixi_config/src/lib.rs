@@ -22,7 +22,6 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-/// TODO: maybe remove this duplicate from `src/util.rs` at some point
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),

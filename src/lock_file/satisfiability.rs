@@ -409,7 +409,7 @@ pub(crate) fn pypi_satifisfies_editable(
             // satifsfy
             UrlOrPath::Url(url) => Err(PlatformUnsat::EditablePackageIsUrl(
                 spec.name.clone(),
-                url.clone().to_string(),
+                url.to_string(),
             )),
             UrlOrPath::Path(path) => {
                 let absolute_path = project_root.join(path);
