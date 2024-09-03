@@ -1569,7 +1569,7 @@ async fn spawn_solve_conda_environment_task(
             if has_pypi_dependencies {
                 pb.set_message("extracting pypi packages");
                 pypi_mapping::amend_pypi_purls(
-                    client,
+                    client.into(),
                     &pypi_name_mapping_location,
                     &mut records,
                     Some(pb.purl_amend_reporter()),
@@ -1803,7 +1803,7 @@ async fn spawn_solve_pypi_task(
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
-        environment.project().client().clone(),
+        environment.project().client().clone().into(),
         pypi_name_mapping_location,
         &mut conda_records,
         None,
