@@ -23,6 +23,7 @@ run-all-examples = "python ./tests/run_all_examples.py"
 run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
 test = "cargo test"
 test-all = "cargo test --all-features"
+release = "python scripts/release.py"
 
 [feature.pytest.dependencies]
 mypy = ">=1.11,<1.12"
