@@ -664,6 +664,31 @@ setup(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_setuptools_override_failure() {
+    // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
+    let manifest = format!(
+        r#"
+        [project]
+        channels = ["conda-forge"]
+        name = "pixi-source-problem"
+        platforms = ["{platform}"]
+
+        [dependencies]
+        pip = ">=24.0,<25"
+
+        # The transitive dependency of viser was causing issues
+        [pypi-dependencies]
+        viser = "==0.2.7"
+        "#,
+        platform = Platform::current()
+    );
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    pixi.install().await.expect("cannot install project");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap();
     #[cfg(not(target_os = "linux"))]
