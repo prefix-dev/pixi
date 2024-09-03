@@ -29,10 +29,10 @@ def get_release_version():
 
 
 def main():
-    print("# Making a release of pixi")
+    print("Making a release of pixi")
 
     # Prep
-    print("\n## Prep")
+    print("\nPrep")
     input("Make sure main is up-to-date and CI passes. Press Enter to continue...")
 
     release_version = get_release_version()
@@ -64,12 +64,12 @@ def main():
     run_command(["git", "push", "origin"])
 
     # Release prep PR
-    print("\n## Release prep PR")
+    print("\nRelease prep PR")
     input("Create a PR to check off the change with the peers. Press Enter to continue...")
     input("Merge that PR. Press Enter to continue...")
 
     # Tagging the release
-    print("\n## Tagging the release")
+    print("\nTagging the release")
     print("\nChecking out main...")
     run_command(["git", "fetch"])
     run_command(["git", "checkout", "upstream/main"])
@@ -81,7 +81,7 @@ def main():
     run_command(["git", "push", "upstream", f"v{release_version}"])
 
     # Publishing the release
-    print("\n## Publishing the release")
+    print("\nPublishing the release")
     input(
         "After that, update the Release which has CI created for you (after the first build) and add the changelog to the release notes. Press Enter to continue..."
     )
