@@ -7,6 +7,7 @@ use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{
     Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
+    VirtualPackageOverrides,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -128,7 +129,7 @@ pub(crate) fn verify_current_platform_has_required_virtual_packages(
         )));
     }
 
-    let system_virtual_packages = VirtualPackage::current()?
+    let system_virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
         .iter()
         .cloned()
         .map(GenericVirtualPackage::from)
