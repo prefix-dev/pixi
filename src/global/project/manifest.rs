@@ -4,7 +4,7 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, PackageName};
 use toml_edit::DocumentMut;
 
-use super::errors::ManifestError;
+use super::error::ManifestError;
 
 use super::MANIFEST_DEFAULT_NAME;
 use super::{document::ManifestSource, parsed_manifest::ParsedManifest};

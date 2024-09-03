@@ -2295,7 +2295,7 @@ dependencies = [
  "pypi-types",
  "reflink-copy",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "sha2",
@@ -2380,7 +2380,7 @@ checksum = "db2b7379a75544c94b3da32821b0bf41f9062e9970e23b78cc577d0d89676d16"
 dependencies = [
  "jiff-tzdb-platform",
  "serde",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3245,7 +3245,7 @@ dependencies = [
  "pep440_rs",
  "pubgrub",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "schemars",
  "serde",
  "smallvec",
@@ -3663,7 +3663,7 @@ name = "platform-tags"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.4.0#d9bd3bc7a536037ea8645fb70f1d35c0bb62b68e"
 dependencies = [
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "thiserror",
 ]
@@ -3787,7 +3787,7 @@ dependencies = [
  "indexmap 2.3.0",
  "log",
  "priority-queue",
- "rustc-hash 1.1.0",
+ "rustc-hash",
  "thiserror",
 ]
 
@@ -3898,7 +3898,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "rustls 0.23.12",
  "socket2",
  "thiserror",
@@ -3915,7 +3915,7 @@ dependencies = [
  "bytes",
  "rand",
  "ring",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "rustls 0.23.12",
  "slab",
  "thiserror",
@@ -4798,12 +4798,6 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
-
-[[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
@@ -6167,7 +6161,7 @@ dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
  "rust-netrc",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "tokio",
  "tracing",
  "url",
@@ -6188,7 +6182,7 @@ dependencies = [
  "pep508_rs",
  "pypi-types",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",
@@ -6216,7 +6210,7 @@ dependencies = [
  "nanoid",
  "pypi-types",
  "rmp-serde",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "tempfile",
  "tracing",
@@ -6283,7 +6277,7 @@ dependencies = [
  "pep508_rs",
  "platform-tags",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "thiserror",
@@ -6305,7 +6299,7 @@ dependencies = [
  "install-wheel-rs",
  "itertools 0.13.0",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "tracing",
  "uv-build",
  "uv-cache",
@@ -6338,7 +6332,7 @@ dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
  "rmp-serde",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "tempfile",
  "thiserror",
@@ -6373,7 +6367,7 @@ dependencies = [
  "pypi-types",
  "rayon",
  "reqwest 0.12.5",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "sha2",
  "thiserror",
  "tokio",
@@ -6444,7 +6438,7 @@ dependencies = [
  "platform-tags",
  "pypi-types",
  "rayon",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "same-file",
  "tempfile",
  "thiserror",
@@ -6575,7 +6569,7 @@ dependencies = [
  "pypi-types",
  "requirements-txt",
  "rkyv",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "same-file",
  "serde",
  "textwrap",
@@ -6621,7 +6615,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "thiserror",
  "url",
  "uv-cache",
@@ -6660,7 +6654,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.4.0#d9bd3bc7a536037ea8645fb7
 dependencies = [
  "anstream",
  "owo-colors",
- "rustc-hash 2.0.0",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -6674,7 +6668,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "thiserror",
  "tokio",
