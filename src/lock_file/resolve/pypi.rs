@@ -385,9 +385,17 @@ pub async fn resolve_pypi(
             .into_diagnostic()
             .context("error creating requires-python for solver")?;
 
+    let registry_client2 = Arc::new(
+        RegistryClientBuilder::new(context.cache.clone())
+            .client(context.client.clone())
+            .index_urls(index_locations.index_urls())
+            .keyring(context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .build(),
+    );
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
-            &registry_client,
+            &registry_client2,
             &build_dispatch,
             context.concurrency.downloads,
         ),
@@ -406,6 +414,7 @@ pub async fn resolve_pypi(
         package_requests: package_requests.clone(),
     };
 
+    let in_memory_index2 = InMemoryIndex::default();
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
         .expect("could not get version from interpreter");
     let resolution = Resolver::new_custom_io(
@@ -414,7 +423,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
         ResolverMarkers::SpecificEnvironment(marker_environment.into()),
         &PythonRequirement::from_python_version(&interpreter, &python_version),
-        &in_memory_index,
+        &in_memory_index2,
         &git_resolver,
         provider,
         EmptyInstalledPackages,
