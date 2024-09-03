@@ -19,8 +19,9 @@ build = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
-run-all-examples = "python ./tests/run_all_examples.py"
-run-all-examples-dev = "python ./tests/run_all_examples.py --pixi-exec ./target/debug/pixi"
+run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec .pixi/target/release/pixi", depends-on = [
+  "build",
+] }
 test = "cargo test"
 test-all = "cargo test --all-features"
 
@@ -29,8 +30,11 @@ mypy = ">=1.11,<1.12"
 pytest = ">=8.0.2,<9"
 
 [feature.pytest.tasks]
-test-integration = "pytest tests/integration"
-typecheck-integration = " mypy --strict tests/integration"
+test-integration-ci = "pytest tests/integration"
+test-integration-dev = { cmd = "pytest tests/integration", depends-on = [
+  "build",
+] }
+typecheck-integration = "mypy --strict tests/integration"
 
 [feature.dev.dependencies]
 # Needed for the citation
