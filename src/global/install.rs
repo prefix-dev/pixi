@@ -384,14 +384,23 @@ pub(crate) fn prompt_user_to_continue(
     Ok(true)
 }
 
-pub(crate) async fn sync(
-    env_root: &EnvRoot,
-    project: &global::Project,
-    bin_dir: &BinDir,
-    config: &Config,
-    gateway: &rattler_repodata_gateway::Gateway,
-    auth_client: &reqwest_middleware::ClientWithMiddleware,
-) -> Result<(), miette::Error> {
+pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
+    // If manifest doesn't exist, offer user to create manifest from existing environment
+    let certain_file_path = global::Project::manifest_dir()?.join(global::MANIFEST_DEFAULT_NAME);
+    if !certain_file_path.exists() {
+        todo!("Migrate from existing setup")
+    }
+
+    let project = global::Project::discover()?.with_cli_config(config.clone());
+
+    // Fetch the repodata
+    let (_, auth_client) = build_reqwest_clients(Some(config));
+
+    let gateway = config.gateway(auth_client.clone());
+
+    let env_root = EnvRoot::from_env().await?;
+    let bin_dir = BinDir::from_env().await?;
+
     // Prune environments that are not listed
     env_root
         .prune(project.environments().keys().cloned())
@@ -497,7 +506,7 @@ pub(crate) async fn sync(
             solved_records.clone(),
             auth_client.clone(),
             environment.platform(),
-            bin_dir,
+            &bin_dir,
         )
         .await?;
     }
