@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod builders;
+pub mod client;
 pub mod package_database;
 
 use std::{
