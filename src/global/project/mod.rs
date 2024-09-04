@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 use manifest::Manifest;
 use miette::IntoDiagnostic;
 pub(crate) use parsed_manifest::ExposedKey;
-use parsed_manifest::ParsedEnvironment;
+pub(crate) use parsed_manifest::ParsedEnvironment;
 use pixi_config::Config;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;

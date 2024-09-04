@@ -1,5 +1,6 @@
 use crate::global;
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     ffi::OsStr,
     iter,
@@ -40,23 +41,22 @@ use crate::{
 use pixi_config::{self, default_channel_config, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
-use super::{common::EnvRoot, EnvironmentName, ExposedKey};
+use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 
 /// Installs global environment records
 pub(crate) async fn install_environment(
     environment_name: &EnvironmentName,
-    exposed: &IndexMap<ExposedKey, String>,
+    parsed_environment: &ParsedEnvironment,
     packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
-    platform: Platform,
     bin_dir: &BinDir,
+    env_root: &EnvRoot,
 ) -> miette::Result<()> {
     try_increase_rlimit_to_sensible();
 
     // Create the binary environment prefix where we install or update the package
-    let env_root = EnvRoot::from_env().await?;
-    let bin_env_dir = EnvDir::new(env_root, environment_name.clone()).await?;
+    let bin_env_dir = EnvDir::new(env_root.clone(), environment_name.clone()).await?;
     let prefix = Prefix::new(bin_env_dir.path());
 
     // Install the environment
@@ -68,7 +68,7 @@ pub(crate) async fn install_environment(
             .with_io_concurrency_limit(100)
             .with_execute_link_scripts(false)
             .with_package_cache(package_cache)
-            .with_target_platform(platform)
+            .with_target_platform(parsed_environment.platform())
             .with_reporter(
                 IndicatifReporter::builder()
                     .with_multi_progress(global_multi_progress())
@@ -112,11 +112,12 @@ pub(crate) async fn install_environment(
                 .and_then(|name| name.to_str())
                 .map(|name| (name.to_string(), path.clone()))
         })
-        .filter(|(name, path)| exposed.values().contains(&name))
+        .filter(|(name, path)| parsed_environment.exposed.values().contains(&name))
         .collect();
 
-    let script_mapping = exposed
-        .into_iter()
+    let script_mapping = parsed_environment
+        .exposed
+        .iter()
         .map(|(exposed_name, entry_point)| {
             script_exec_mapping(
                 exposed_name,
@@ -501,12 +502,12 @@ pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
 
         install_environment(
             &environment_name,
-            &environment.exposed,
+            &environment,
             packages,
             solved_records.clone(),
             auth_client.clone(),
-            environment.platform(),
             &bin_dir,
+            &env_root,
         )
         .await?;
     }
