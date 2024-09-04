@@ -17,6 +17,10 @@ use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
+use crate::{global::EnvDir, prefix::Prefix};
+
+use super::{BinDir, EnvRoot};
+
 mod document;
 mod environment;
 mod error;
@@ -82,8 +86,9 @@ impl Project {
 
     /// Discovers the project manifest file in path set by `PIXI_GLOBAL_MANIFESTS`
     /// or alternatively at `~/.pixi/manifests/pixi-global.toml`.
-    /// If the manifest doesn't exist yet, and empty one will be created.
-    pub(crate) fn discover() -> miette::Result<Self> {
+    /// If the manifest doesn't exist yet, and the function will try to create one from the existing installation.
+    /// If that one fails, an empty one will be created.
+    pub(crate) async fn discover(bin_dir: &BinDir, env_root: &EnvRoot) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
 
         fs::create_dir_all(&manifest_dir).into_diagnostic()?;
@@ -91,9 +96,48 @@ impl Project {
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
         if !manifest_path.exists() {
-            fs::File::create(&manifest_path).into_diagnostic()?;
+            if let Some(project) = Self::from_existing_installation(bin_dir, env_root).await? {
+                return Ok(project);
+            } else {
+                tokio::fs::File::create(&manifest_path)
+                    .await
+                    .into_diagnostic()?;
+            }
         }
+
         Self::from_path(&manifest_path)
+    }
+
+    async fn from_existing_installation(
+        bin_dir: &BinDir,
+        env_root: &EnvRoot,
+    ) -> miette::Result<Option<Self>> {
+        let exposed_scripts = bin_dir.files().await?;
+        todo!("Extract binary that is called by the script");
+        for env_path in env_root.directories().await? {
+            let env_name = env_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Failed to get file name as str for path: {}",
+                        env_path.display()
+                    )
+                })
+                .and_then(|name_str| {
+                    name_str.parse().map_err(|_| {
+                        miette::miette!(
+                            "Failed to parse file name as EnvironmentName for path: {}",
+                            env_path.display()
+                        )
+                    })
+                })?;
+            let bin_env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
+            let prefix = Prefix::new(bin_env_dir.path());
+            let prefix_records = prefix.find_installed_packages(None).await?;
+            todo!();
+        }
+        Ok(None)
     }
 
     /// Get default dir for the pixi global manifest
@@ -169,12 +213,14 @@ mod tests {
         assert_eq!(canonical_root, canonical_manifest_parent);
     }
 
-    #[test]
-    fn test_project_discover() {
+    #[tokio::test]
+    async fn test_project_discover() {
         let tempdir = tempfile::tempdir().unwrap();
         let manifest_dir = tempdir.path();
+        let bin_dir = BinDir::from_env().await.unwrap();
+        let env_root = EnvRoot::from_env().await.unwrap();
         env::set_var("PIXI_GLOBAL_MANIFESTS", manifest_dir);
-        let project = Project::discover().unwrap();
+        let project = Project::discover(&bin_dir, &env_root).await.unwrap();
         assert!(project.manifest.path.exists());
         let expected_manifest_path =
             dunce::canonicalize(manifest_dir.join(MANIFEST_DEFAULT_NAME)).unwrap();

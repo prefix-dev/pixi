@@ -387,48 +387,12 @@ pub(crate) fn prompt_user_to_continue(
 
 pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
     // Create directories
-    let env_root = EnvRoot::from_env().await?;
     let bin_dir = BinDir::from_env().await?;
+    let env_root = EnvRoot::from_env().await?;
 
-    // If manifest doesn't exist, offer user to create manifest from existing environment
-    let certain_file_path = global::Project::manifest_dir()?.join(global::MANIFEST_DEFAULT_NAME);
-    if !certain_file_path.exists() {
-        let exposed_binaries = bin_dir
-            .files()
-            .await?
-            .into_iter()
-            .filter_map(|path| {
-                path.file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .map(|stem_str| stem_str.to_string())
-            })
-            .collect_vec();
-        for env_path in env_root.directories().await? {
-            let env_name = env_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| {
-                    miette::miette!(
-                        "Failed to get file name as str for path: {}",
-                        env_path.display()
-                    )
-                })
-                .and_then(|name_str| {
-                    name_str.parse().map_err(|_| {
-                        miette::miette!(
-                            "Failed to parse file name as EnvironmentName for path: {}",
-                            env_path.display()
-                        )
-                    })
-                })?;
-            let bin_env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
-            let prefix = Prefix::new(bin_env_dir.path());
-            let prefix_records = prefix.find_installed_packages(None).await?;
-            todo!();
-        }
-    }
-
-    let project = global::Project::discover()?.with_cli_config(config.clone());
+    let project = global::Project::discover(&bin_dir, &env_root)
+        .await?
+        .with_cli_config(config.clone());
 
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(config));
