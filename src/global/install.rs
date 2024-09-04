@@ -45,7 +45,7 @@ use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, Expose
 
 /// Installs global environment records
 pub(crate) async fn install_environment(
-    environment_name: &EnvironmentName,
+    env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
     packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
@@ -56,7 +56,7 @@ pub(crate) async fn install_environment(
     try_increase_rlimit_to_sensible();
 
     // Create the binary environment prefix where we install or update the package
-    let bin_env_dir = EnvDir::new(env_root.clone(), environment_name.clone()).await?;
+    let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
     let prefix = Prefix::new(bin_env_dir.path());
 
     // Install the environment
@@ -124,7 +124,7 @@ pub(crate) async fn install_environment(
                 entry_point,
                 executables.clone(),
                 bin_dir,
-                environment_name,
+                env_name,
             )
         })
         .collect::<miette::Result<Vec<_>>>()?;
@@ -393,7 +393,37 @@ pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
     // If manifest doesn't exist, offer user to create manifest from existing environment
     let certain_file_path = global::Project::manifest_dir()?.join(global::MANIFEST_DEFAULT_NAME);
     if !certain_file_path.exists() {
+        let exposed_binaries = bin_dir
+            .files()
+            .await?
+            .into_iter()
+            .filter_map(|path| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .map(|stem_str| stem_str.to_string())
+            })
+            .collect_vec();
         for env_path in env_root.directories().await? {
+            let env_name = env_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Failed to get file name as str for path: {}",
+                        env_path.display()
+                    )
+                })
+                .and_then(|name_str| {
+                    name_str.parse().map_err(|_| {
+                        miette::miette!(
+                            "Failed to parse file name as EnvironmentName for path: {}",
+                            env_path.display()
+                        )
+                    })
+                })?;
+            let bin_env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
+            let prefix = Prefix::new(bin_env_dir.path());
+            let prefix_records = prefix.find_installed_packages(None).await?;
             todo!();
         }
     }
@@ -438,7 +468,7 @@ pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
         }
     }
 
-    for (environment_name, environment) in project.environments() {
+    for (env_name, environment) in project.environments() {
         let specs = environment
             .dependencies
             .clone()
@@ -504,7 +534,7 @@ pub(crate) async fn sync(config: &Config) -> Result<(), miette::Error> {
         let packages = specs.keys().cloned().collect();
 
         install_environment(
-            &environment_name,
+            &env_name,
             &environment,
             packages,
             solved_records.clone(),

@@ -209,6 +209,22 @@ impl EnvDir {
         Ok(Self { root, path })
     }
 
+    /// Initialize the Binary Environment directory from an existing path
+    pub(crate) async fn from_existing(
+        root: EnvRoot,
+        environment_name: EnvironmentName,
+    ) -> miette::Result<Self> {
+        let path = root.path().join(environment_name.as_str());
+        if !path.exists() {
+            return Err(miette::miette!(
+                "Directory does not exist: {}",
+                path.display()
+            ));
+        }
+
+        Ok(Self { root, path })
+    }
+
     /// Construct the path to the env directory for the environment
     /// `environment_name`.
     pub(crate) fn path(&self) -> &Path {
