@@ -20,12 +20,13 @@ def pixi() -> Path:
 def verify_cli_command(
     command: list[Path | str],
     expected_exit_code: ExitCode,
+    env: dict[str, str] | None = None,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
 ) -> None:
-    process = subprocess.run(command, capture_output=True, text=True)
+    process = subprocess.run(command, capture_output=True, text=True, env=env)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
@@ -65,7 +66,7 @@ def test_pixi(pixi: Path) -> None:
     verify_cli_command([pixi, "--version"], ExitCode.SUCCESS, stdout_contains=PIXI_VERSION)
 
 
-def test_project_commands(tmp_path: Path, pixi: Path) -> None:
+def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
@@ -219,13 +220,26 @@ def test_project_commands(tmp_path: Path, pixi: Path) -> None:
     )
 
 
-@pytest.mark.xfail(reason="`pixi global install` is not yet implemented", strict=True)
-def test_global_install(pixi: Path) -> None:
-    # Install
-    verify_cli_command(
-        [pixi, "global", "install", "rattler-build"],
-        ExitCode.SUCCESS,
-    )
+def test_global_install(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": tmp_path}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = """
+    [envs.test]
+    channels = ["conda-forge"]
+    [envs.test.dependencies]
+    python = "*"
+    numpy = "*"
+
+    [envs.test.exposed]
+    "python-injected" = "python"
+    """
+    manifest.write_text(toml)
+    python_injected = tmp_path / "bin" / "python-injected"
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_injected, "--version"], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.SUCCESS, env=env)
 
 
 def test_search(pixi: Path) -> None:
@@ -241,7 +255,7 @@ def test_search(pixi: Path) -> None:
     )
 
 
-def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
+def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
@@ -343,7 +357,7 @@ def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
     )
 
 
-def test_pixi_init_pyproject(tmp_path: Path, pixi: Path) -> None:
+def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pyproject.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)

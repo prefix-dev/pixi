@@ -12,7 +12,7 @@ use manifest::Manifest;
 use miette::IntoDiagnostic;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
-use pixi_config::Config;
+use pixi_config::{home_path, Config};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
@@ -101,8 +101,8 @@ impl Project {
         env::var("PIXI_GLOBAL_MANIFESTS")
             .map(PathBuf::from)
             .or_else(|_| {
-                dirs::home_dir()
-                    .map(|dir| dir.join(".pixi/manifests"))
+                home_path()
+                    .map(|dir| dir.join("manifests"))
                     .ok_or_else(|| miette::miette!("Could not get home directory"))
             })
     }
