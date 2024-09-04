@@ -164,10 +164,9 @@ impl EnvRoot {
         environments: impl IntoIterator<Item = EnvironmentName>,
     ) -> miette::Result<()> {
         let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
-        let directories = self.directories().await?;
 
-        for path in directories {
-            let Some(Ok(env_name)) = path
+        for env_path in self.directories().await? {
+            let Some(Ok(env_name)) = env_path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .map(|name| name.parse())
@@ -175,10 +174,12 @@ impl EnvRoot {
                 continue;
             };
             if !env_set.contains(&env_name) {
-                tokio::fs::remove_dir_all(&path)
+                tokio::fs::remove_dir_all(&env_path)
                     .await
                     .into_diagnostic()
-                    .wrap_err_with(|| format!("Could not remove directory {}", path.display()))?;
+                    .wrap_err_with(|| {
+                        format!("Could not remove directory {}", env_path.display())
+                    })?;
                 eprintln!(
                     "{} Remove environment '{env_name}'",
                     console::style(console::Emoji("✔", " ")).green()
