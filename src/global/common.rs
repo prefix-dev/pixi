@@ -140,12 +140,9 @@ impl EnvRoot {
         &self.0
     }
 
-    /// Delete environments that are not listed
-    pub(crate) async fn prune(
-        &self,
-        environments: impl IntoIterator<Item = EnvironmentName>,
-    ) -> miette::Result<()> {
-        let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
+    /// Get all directories in the env root
+    pub(crate) async fn directories(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut directories = Vec::new();
         let mut entries = tokio::fs::read_dir(&self.path())
             .await
             .into_diagnostic()
@@ -154,25 +151,38 @@ impl EnvRoot {
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             if path.is_dir() {
-                let Some(Ok(env_name)) = path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.parse())
-                else {
-                    continue;
-                };
-                if !env_set.contains(&env_name) {
-                    tokio::fs::remove_dir_all(&path)
-                        .await
-                        .into_diagnostic()
-                        .wrap_err_with(|| {
-                            format!("Could not remove directory {}", path.display())
-                        })?;
-                    eprintln!(
-                        "{} Remove environment '{env_name}'",
-                        console::style(console::Emoji("✔", " ")).green()
-                    );
-                }
+                directories.push(path);
+            }
+        }
+
+        Ok(directories)
+    }
+
+    /// Delete environments that are not listed
+    pub(crate) async fn prune(
+        &self,
+        environments: impl IntoIterator<Item = EnvironmentName>,
+    ) -> miette::Result<()> {
+        let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
+        let directories = self.directories().await?;
+
+        for path in directories {
+            let Some(Ok(env_name)) = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.parse())
+            else {
+                continue;
+            };
+            if !env_set.contains(&env_name) {
+                tokio::fs::remove_dir_all(&path)
+                    .await
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Could not remove directory {}", path.display()))?;
+                eprintln!(
+                    "{} Remove environment '{env_name}'",
+                    console::style(console::Emoji("✔", " ")).green()
+                );
             }
         }
 
