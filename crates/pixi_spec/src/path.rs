@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
@@ -88,8 +88,66 @@ pub struct PathSourceSpec {
     pub path: Utf8TypedPathBuf,
 }
 
+impl PathSourceSpec {
+    /// Resolves the source path to a full path.
+    ///
+    /// This function does not check if the path exists and also does not follow symlinks.
+    pub fn resolve(&self, root_dir: &Path) -> Result<PathBuf, std::io::Error> {
+        if self.path.is_absolute() {
+            Ok(Path::new(self.path.as_str()).to_path_buf())
+        } else if let Ok(user_path) = self.path.strip_prefix("~/") {
+            let home_dir = dirs::home_dir()
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "could not determine home directory"))?;
+            debug_assert!(home_dir.is_absolute());
+            normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
+        } else {
+            let native_path = Path::new(self.path.as_str());
+            debug_assert!(root_dir.is_absolute());
+            normalize_absolute_path(&root_dir.join(native_path))
+        }
+    }
+}
+
 impl From<PathSourceSpec> for PathSpec {
     fn from(value: PathSourceSpec) -> Self {
         Self { path: value.path }
     }
+}
+
+/// Normalize a path, removing things like `.` and `..`.
+///
+/// Source: <https://github.com/rust-lang/cargo/blob/b48c41aedbd69ee3990d62a0e2006edbb506a480/crates/cargo-util/src/paths.rs#L76C1-L109C2>
+fn normalize_absolute_path(path: &Path) -> Result<PathBuf, std::io::Error> {
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().copied() {
+        components.next();
+        PathBuf::from(c.as_os_str())
+    } else {
+        PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Component::Prefix(..) => unreachable!(),
+            Component::RootDir => {
+                ret.push(component.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !ret.pop() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
+                            "cannot normalize a relative path beyond the base directory: {}",
+                            path.display()
+                        ),
+                    ));
+                }
+            }
+            Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    Ok(ret)
 }

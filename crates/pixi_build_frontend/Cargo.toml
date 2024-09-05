@@ -26,7 +26,6 @@ jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy"] }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
-pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_solve = { workspace = true }

@@ -1,10 +1,10 @@
 use std::{path::PathBuf, sync::OnceLock};
 
-use crate::{tool::Tool, CondaMetadata, CondaPackageMetadata};
 use miette::{Context, IntoDiagnostic};
-use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
-use pixi_manifest::Dependencies;
-use pixi_spec::PixiSpec;
+use pixi_build_types::{
+    procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+    CondaPackageMetadata,
+};
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, NoArchType, PackageName, ParseStrictness::Lenient, Platform,
     VersionWithSource,
@@ -13,6 +13,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sha1::{Digest, Sha1};
+
+use crate::tool::Tool;
 
 pub struct Protocol {
     pub(super) channel_config: ChannelConfig,
@@ -26,7 +28,7 @@ impl Protocol {
     pub fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
-    ) -> miette::Result<CondaMetadata> {
+    ) -> miette::Result<CondaMetadataResult> {
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
         let conda_render_executable = self.tool.executable().with_file_name("conda-render");
@@ -76,7 +78,7 @@ impl Protocol {
         // Parse the output of conda-render.
         let rendered_recipes = extract_rendered_recipes(&stdout)?;
 
-        let metadata = CondaMetadata {
+        let metadata = CondaMetadataResult {
             packages: rendered_recipes
                 .into_iter()
                 .map(|(recipe, meta_yaml)| {
@@ -135,23 +137,14 @@ fn extract_rendered_recipes(
 /// Convert a list of matchspecs into a map of [`PixiSpec`].
 fn dependencies_from_depends_vec(
     depends: Vec<String>,
-    channel_config: &ChannelConfig,
-) -> miette::Result<Dependencies<PackageName, PixiSpec>> {
+    _channel_config: &ChannelConfig,
+) -> miette::Result<Vec<MatchSpec>> {
     depends
         .into_iter()
-        .filter_map(|dep| {
-            let spec = MatchSpec::from_str(&dep, Lenient);
-            spec.map(|spec| {
-                let (name, spec) = spec.into_nameless();
-                name.map(|name| {
-                    (
-                        name,
-                        PixiSpec::from_nameless_matchspec(spec, channel_config),
-                    )
-                })
-            })
-            .into_diagnostic()
-            .transpose()
+        .map(|dep| {
+            MatchSpec::from_str(&dep, Lenient)
+                .into_diagnostic()
+                .with_context(|| "failed to parse matchspec: {dep}")
         })
         .collect()
 }
@@ -164,7 +157,7 @@ fn convert_conda_render_output(
     Ok(CondaPackageMetadata {
         build: recipe.hash(),
         name: recipe.recipe.package.name,
-        version: recipe.recipe.package.version,
+        version: recipe.recipe.package.version.into(),
         build_number: recipe.recipe.build.number.unwrap_or(0),
         subdir: if recipe.recipe.build.noarch.is_none() {
             Platform::current()

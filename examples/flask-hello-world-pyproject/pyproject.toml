@@ -20,6 +20,9 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 [tool.pixi.pypi-dependencies]
 flask-hello-world-pyproject = { path = ".", editable = true }
 
+[tool.pixi.dependencies]
+flask = "2.*"
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }

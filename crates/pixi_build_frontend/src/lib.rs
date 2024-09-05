@@ -13,9 +13,7 @@ use std::path::PathBuf;
 
 pub use crate::protocol::Protocol;
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-use pixi_manifest::Dependencies;
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{MatchSpec};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
@@ -41,45 +39,6 @@ pub struct SetupRequest {
 pub struct BuildOutput {
     /// Paths to the built artifacts.
     pub artifacts: Vec<PathBuf>,
-}
-
-#[derive(Debug)]
-pub struct CondaMetadata {
-    /// Metadata of all the package that can be built from the source directory.
-    pub packages: Vec<CondaPackageMetadata>,
-}
-
-#[derive(Debug)]
-pub struct CondaPackageMetadata {
-    /// The name of the package
-    pub name: PackageName,
-
-    /// The version of the package
-    pub version: VersionWithSource,
-
-    /// The build hash of the package
-    pub build: String,
-
-    /// The build number of the package
-    pub build_number: u64,
-
-    /// The subdirectory the package would be placed in
-    pub subdir: Platform,
-
-    /// The dependencies of the package
-    pub depends: Dependencies<PackageName, PixiSpec>,
-
-    /// Constraints of the package
-    pub constraints: Dependencies<PackageName, PixiSpec>,
-
-    /// The license of the package
-    pub license: Option<String>,
-
-    /// The license family of the package
-    pub license_family: Option<String>,
-
-    /// Whether this is a noarch package
-    pub noarch: NoArchType,
 }
 
 #[derive(Debug)]

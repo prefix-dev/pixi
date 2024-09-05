@@ -3646,6 +3646,8 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
+ "pixi_build_frontend",
+ "pixi_build_types",
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
@@ -3725,7 +3727,6 @@ dependencies = [
  "pixi_build_types",
  "pixi_consts",
  "pixi_manifest",
- "pixi_spec",
  "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_solve",
@@ -3856,6 +3857,7 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "dunce",
  "file_url",
  "insta",
  "rattler_conda_types",

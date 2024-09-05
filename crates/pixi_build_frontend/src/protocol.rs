@@ -1,5 +1,5 @@
 use crate::{conda_build_protocol, pixi_protocol};
-use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
+use pixi_build_types::procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error)]
@@ -69,7 +69,7 @@ impl Protocol {
     pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
-    ) -> miette::Result<crate::CondaMetadata> {
+    ) -> miette::Result<CondaMetadataResult> {
         match self {
             Self::Pixi(protocol) => protocol.get_conda_metadata(request).await,
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),

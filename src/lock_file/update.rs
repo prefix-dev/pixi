@@ -37,6 +37,7 @@ use uv_normalize::ExtraName;
 
 use crate::{
     activation::CurrentEnvVarBehavior,
+    build::BuildContext,
     environment::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
@@ -341,6 +342,9 @@ pub struct UpdateContext<'p> {
     /// An io concurrency semaphore to limit the number of active filesystem
     /// operations.
     io_concurrency_limit: IoConcurrencyLimit,
+
+    /// The build context to use for building source packages
+    build_context: BuildContext,
 
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
@@ -849,6 +853,7 @@ impl<'p> UpdateContextBuilder<'p> {
             conda_solve_semaphore: Arc::new(Semaphore::new(max_concurrent_solves)),
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
+            build_context: BuildContext::default(),
 
             no_install: self.no_install,
         })
@@ -944,6 +949,7 @@ impl<'p> UpdateContext<'p> {
                     self.conda_solve_semaphore.clone(),
                     project.client().clone(),
                     channel_priority,
+                    self.build_context.clone(),
                 )
                 .boxed_local();
 
@@ -1463,6 +1469,7 @@ async fn spawn_solve_conda_environment_task(
     concurrency_semaphore: Arc<Semaphore>,
     client: reqwest::Client,
     channel_priority: ChannelPriority,
+    build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.dependencies(None, Some(platform));
@@ -1487,6 +1494,7 @@ async fn spawn_solve_conda_environment_task(
 
     tokio::spawn(
         async move {
+            // Acquire a permit before we are allowed to solve the environment.
             let _permit = concurrency_semaphore
                 .acquire()
                 .await
@@ -1498,24 +1506,44 @@ async fn spawn_solve_conda_environment_task(
                 group_name.clone(),
             ));
             pb.start();
+            pb.set_message("loading repodata");
 
             let start = Instant::now();
 
-            // Convert the dependencies into match specs
-            let match_specs = dependencies
-                .iter_specs()
-                .map(|(name, constraint)| {
-                    let nameless = constraint
-                        .clone()
-                        .try_into_nameless_match_spec(&channel_config)
-                        .unwrap()
-                        .expect("only binaries are supported at the moment");
-                    MatchSpec::from_nameless(nameless, Some(name.clone()))
-                })
-                .collect_vec();
+            // Convert the dependencies into match specs and source dependencies
+            let (source_specs, match_specs): (Vec<_>, Vec<_>) = dependencies
+                .into_specs()
+                .partition_map(
+                    |(name, constraint)| match constraint.try_into_source_spec() {
+                        Ok(source_spec) => itertools::Either::Left((name, source_spec)),
+                        Err(spec) => {
+                            let nameless_spec = spec
+                                .try_into_nameless_match_spec(&channel_config)
+                                .expect("failed to convert dependency into match spec")
+                                .expect(
+                                    "if the spec is not a source spec it should be a nameless spec",
+                                );
+                            itertools::Either::Right(MatchSpec::from_nameless(
+                                nameless_spec,
+                                Some(name.clone()),
+                            ))
+                        }
+                    },
+                );
+
+            // Fetch the repodata of the source specs.
+            let channel_urls = channels
+                .iter()
+                .cloned()
+                .map(|c| c.into_base_url(&channel_config))
+                .collect::<Vec<_>>();
+            for (name, source_spec) in source_specs {
+                let repodata = build_context
+                    .extract_source_metadata(&source_spec, &channel_urls, platform)
+                    .await?;
+            }
 
             // Extract the repo data records needed to solve the environment.
-            pb.set_message("loading repodata");
             let fetch_repodata_start = Instant::now();
             let available_packages = repodata_gateway
                 .query(
