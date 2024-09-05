@@ -220,8 +220,8 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_global_install(pixi: Path, tmp_path: Path) -> None:
-    env = {"PIXI_HOME": tmp_path}
+def test_global_sync(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
