@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -15,6 +18,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use reqwest_middleware::ClientWithMiddleware;
+use tokio::io::AsyncReadExt;
 
 use crate::{
     cli::project::environment, prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible,
@@ -260,6 +264,18 @@ pub(crate) async fn find_designated_package(
         .into_iter()
         .find(|r| r.repodata_record.package_record.name == *package_name)
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+}
+
+pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> std::io::Result<bool> {
+    let mut file = std::fs::File::open(file_path)?;
+    let mut buffer = [0; 1024];
+    let bytes_read = file.read(&mut buffer)?;
+
+    Ok(buffer[..bytes_read].contains(&0))
+}
+
+pub(crate) fn is_text(file_path: impl AsRef<Path>) -> std::io::Result<bool> {
+    Ok(!is_binary(file_path)?)
 }
 
 #[cfg(test)]

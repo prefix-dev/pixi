@@ -8,6 +8,7 @@ use std::{
 
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use manifest::Manifest;
 use miette::IntoDiagnostic;
 pub(crate) use parsed_manifest::ExposedKey;
@@ -17,7 +18,10 @@ use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
-use crate::{global::EnvDir, prefix::Prefix};
+use crate::{
+    global::{common::is_text, EnvDir},
+    prefix::Prefix,
+};
 
 use super::{BinDir, EnvRoot};
 
@@ -111,7 +115,12 @@ impl Project {
         bin_dir: &BinDir,
         env_root: &EnvRoot,
     ) -> miette::Result<Option<Self>> {
-        let exposed_scripts = bin_dir.files().await?;
+        let exposed_scripts = bin_dir
+            .files()
+            .await?
+            .into_iter()
+            .filter(|file| is_text(file).unwrap_or(false))
+            .collect_vec();
         todo!("Extract binary that is called by the script");
         for env_path in env_root.directories().await? {
             let env_name = env_path
