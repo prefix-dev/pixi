@@ -7,8 +7,16 @@ In the docker container, we only copy the `prod` environment into the final laye
 Also, `pixi` itself is not included in the final image and we activate the environment using `pixi -e prod shell-hook`.
 
 ## Usage
-To build and run the docker container you require [`docker`](https://docs.docker.com/engine/install/)
-When you have `docker` use the following commands:
+
+To build and run the docker container you require [`docker`](https://docs.docker.com/engine/install/) or [`podman`](https://podman.io) and [`docker-compose`](https://docs.docker.com/compose/install/).
+
+### Run a development server
+
+```shell
+docker compose up --build
+```
+
+### Build for production and run
 
 ```shell
 docker build -t pixi-docker .

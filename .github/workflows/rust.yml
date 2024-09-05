@@ -103,10 +103,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: 8core_ubuntu_latest_runner }
           - { name: "macOS",       target: x86_64-apple-darwin,        os: macos-13 }
           - { name: "macOS-arm",   target: aarch64-apple-darwin,       os: macos-14 }
-          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: 16core_windows_latest_runner }
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/setup-cross-toolchain-action@v1

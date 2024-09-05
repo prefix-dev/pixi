@@ -26,6 +26,7 @@ use rattler_shell::{
 };
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::VirtualPackageOverrides;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
@@ -456,18 +457,22 @@ pub(crate) async fn sync(
             .map(|channel| channel.clone().into_channel(config.global_channel_config()))
             .collect_vec();
 
-        let repodata = gateway
-            .query(
-                channels,
-                [environment.platform(), Platform::NoArch],
-                specs.values().cloned().collect_vec(),
-            )
-            .recursive(true)
-            .await
-            .into_diagnostic()?;
+
+        let repodata = await_in_progress("querying repodata ", |_| async {
+            gateway
+                .query(
+                    channels,
+                    [environment.platform(), Platform::NoArch],
+                    specs.values().cloned().collect_vec(),
+                )
+                .recursive(true)
+                .await
+                .into_diagnostic()
+        })
+        .await?;
 
         // Determine virtual packages of the current platform
-        let virtual_packages = VirtualPackage::current()
+        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
             .into_diagnostic()
             .context("failed to determine virtual packages")?
             .iter()

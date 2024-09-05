@@ -1,9 +1,9 @@
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
-use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::fmt::Write;
 use std::future::Future;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Sender};
 
@@ -13,7 +13,7 @@ use tokio::sync::mpsc::{channel, Sender};
 /// progressbars. To fix this issue, logging has been configured in such a way to it will not
 /// interfere if you use the [`indicatif::MultiProgress`] returning by this function.
 pub fn global_multi_progress() -> MultiProgress {
-    static GLOBAL_MP: Lazy<MultiProgress> = Lazy::new(|| {
+    static GLOBAL_MP: LazyLock<MultiProgress> = LazyLock::new(|| {
         let mp = MultiProgress::new();
         mp.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
         mp
