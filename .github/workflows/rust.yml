@@ -103,16 +103,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "macOS",       target: x86_64-apple-darwin,        os: macos-13 }
-          - { name: "macOS-arm",   target: aarch64-apple-darwin,       os: macos-14 }
-          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - {
+              name: "Linux",
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-20.04,
+            }
+          - { name: "macOS", target: x86_64-apple-darwin, os: macos-13 }
+          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
+          - {
+              name: "Windows",
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+            }
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
-#      - uses: Swatinem/rust-cache@v2
+      #      - uses: Swatinem/rust-cache@v2
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
@@ -145,19 +153,35 @@ jobs:
   build:
     name: Build Binary | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [ crate_metadata ]
+    needs: [crate_metadata]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: 8core_ubuntu_latest_runner }
-          - { name: "Linux-aarch64",  target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+          - {
+              name: "Linux-x86_64",
+              target: x86_64-unknown-linux-musl,
+              os: 8core_ubuntu_latest_runner,
+            }
+          - {
+              name: "Linux-aarch64",
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-latest,
+            }
 
-          - { name: "macOS-x86",      target: x86_64-apple-darwin,        os: macos-13 }
-          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macos-14 }  # macOS-14 is the ARM chipset
+          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
+          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
 
-          - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: 16core_windows_latest_runner }
-          - { name: "Windows-arm",    target: aarch64-pc-windows-msvc,    os: windows-latest }
+          - {
+              name: "Windows",
+              target: x86_64-pc-windows-msvc,
+              os: 16core_windows_latest_runner,
+            }
+          - {
+              name: "Windows-arm",
+              target: aarch64-pc-windows-msvc,
+              os: windows-latest,
+            }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
@@ -187,7 +211,7 @@ jobs:
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
-#      - uses: Swatinem/rust-cache@v2
+      #      - uses: Swatinem/rust-cache@v2
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
 
@@ -328,7 +352,6 @@ jobs:
           # notarize binary
           xcrun notarytool submit pixi.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
 
-
       - name: Create tarball
         id: package
         shell: bash
@@ -394,19 +417,5 @@ jobs:
 
   downstream_tests:
     needs:
-        - build
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-
-          - { target: x86_64-apple-darwin,        os: macos-13 }
-          - { target: aarch64-apple-darwin,       os: macos-14 } # macOS-14 is the ARM chipset
-
-          - { target: x86_64-pc-windows-msvc,     os: windows-latest , extension: .exe }
+      - build
     uses: ./.github/workflows/test_downstream.yml
-    with:
-      os: ${{ matrix.os }}
-      target: ${{ matrix.target }}
-      extension: ${{ matrix.extension }}
