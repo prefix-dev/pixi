@@ -12,5 +12,4 @@ version = "0.1.0"
 [dependencies]
 console = { workspace = true }
 indicatif = { workspace = true }
-once_cell = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }

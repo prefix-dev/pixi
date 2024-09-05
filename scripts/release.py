@@ -81,7 +81,7 @@ def main():
     # Tagging the release
     print("\nTagging the release")
     print("\nChecking out main...")
-    run_command(["git", "fetch"])
+    run_command(["git", "fetch", "upstream"])
     run_command(["git", "checkout", "upstream/main"])
 
     print("\nTagging the release...")

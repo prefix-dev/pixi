@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import pytest
 
-PIXI_VERSION = "0.28.2"
+PIXI_VERSION = "0.29.0"
 
 
 class ExitCode(IntEnum):
@@ -366,9 +366,9 @@ def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
     )
 
 
-def test_pixi_init_pyproject(tmp_path: Path) -> None:
+def test_pixi_init_pyproject(tmp_path: Path, pixi: Path) -> None:
     manifest_path = tmp_path / "pyproject.toml"
     # Create a new project
-    verify_cli_command(f"pixi init {tmp_path} --pyproject-toml", ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)
     # Verify that install works
-    verify_cli_command(f"pixi install --manifest-path {manifest_path}", ExitCode.SUCCESS)
+    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)

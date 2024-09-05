@@ -256,11 +256,5 @@ fn is_pixi_binary_default_location() -> bool {
 
     std::env::current_exe()
         .expect("Failed to retrieve the current pixi binary path")
-        .to_str()
-        .expect("Could not convert the current pixi binary path to a string")
-        .starts_with(
-            default_binary_path
-                .to_str()
-                .expect("Could not convert the default pixi binary path to a string"),
-        )
+        .starts_with(default_binary_path)
 }

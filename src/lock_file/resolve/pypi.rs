@@ -285,7 +285,13 @@ pub async fn resolve_pypi(
     };
 
     // Create a shared in-memory index.
-    let in_memory_index = InMemoryIndex::default();
+    // We need two in-memory indexes, one for the build dispatch and one for the resolver.
+    // because we manually override requests for the resolver,
+    // but we don't want to override requests for the build dispatch.
+    //
+    // The BuildDispatch might resolve or install when building wheels which will be mostly
+    // with build isolation. In that case we want to use fresh non-tampered requests.
+    let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
     let env = PythonEnvironment::from_interpreter(interpreter.clone());
@@ -303,7 +309,7 @@ pub async fn resolve_pypi(
         &interpreter,
         &index_locations,
         &flat_index,
-        &in_memory_index,
+        &build_dispatch_in_memory_index,
         &git_resolver,
         &context.in_flight,
         IndexStrategy::default(),
@@ -406,6 +412,9 @@ pub async fn resolve_pypi(
         package_requests: package_requests.clone(),
     };
 
+    // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
+    // one. As we have noted in the comment above.
+    let resolver_in_memory_index = InMemoryIndex::default();
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
         .expect("could not get version from interpreter");
     let resolution = Resolver::new_custom_io(
@@ -414,7 +423,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
         ResolverMarkers::SpecificEnvironment(marker_environment.into()),
         &PythonRequirement::from_python_version(&interpreter, &python_version),
-        &in_memory_index,
+        &resolver_in_memory_index,
         &git_resolver,
         provider,
         EmptyInstalledPackages,
