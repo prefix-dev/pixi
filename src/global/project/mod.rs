@@ -1,7 +1,7 @@
 use std::{
     env,
+    ffi::OsStr,
     fmt::Formatter,
-    fs,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
@@ -10,7 +10,7 @@ pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use manifest::Manifest;
-use miette::IntoDiagnostic;
+use miette::{miette, IntoDiagnostic};
 use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
@@ -64,6 +64,13 @@ impl Debug for Project {
     }
 }
 
+struct ExposedData {
+    exposed: String,
+    binary: String,
+    env: String,
+    package: String,
+}
+
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     fn from_manifest(manifest: Manifest) -> Self {
@@ -96,7 +103,9 @@ impl Project {
     pub(crate) async fn discover(bin_dir: &BinDir, env_root: &EnvRoot) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
 
-        fs::create_dir_all(&manifest_dir).into_diagnostic()?;
+        tokio::fs::create_dir_all(&manifest_dir)
+            .await
+            .into_diagnostic()?;
 
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
@@ -117,17 +126,17 @@ impl Project {
         bin_dir: &BinDir,
         env_root: &EnvRoot,
     ) -> miette::Result<Option<Self>> {
-        let exposed_binaries = bin_dir
+        let exposed_binaries: Vec<ExposedData> = bin_dir
             .files()
             .await?
             .into_iter()
             .filter_map(|path| match is_text(&path) {
-                Ok(true) => Some(Ok(path)),
-                Ok(false) => None,
-                Err(e) => Some(Err(e)),
+                Ok(true) => Some(Ok(path)), // Success and is text, continue with path
+                Ok(false) => None,          // Success a isn't text, filter out
+                Err(e) => Some(Err(e)),     // Failure, continue with error
             })
-            .map(|result| result.and_then(|path| Self::extract_bin_from_script(&path)))
-            .collect::<miette::Result<Vec<_>>>()?;
+            .map(|result| result.and_then(Self::exposed_data_from_binary_path))
+            .collect::<miette::Result<_>>()?;
         for env_path in env_root.directories().await? {
             let env_name = env_path
                 .file_name()
@@ -152,15 +161,102 @@ impl Project {
         Ok(None)
     }
 
+    fn exposed_data_from_binary_path(path: PathBuf) -> miette::Result<ExposedData> {
+        let exposed = path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .map(String::from)
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
+        let binary_path = Self::extract_bin_from_script(&path)?;
+
+        let binary = binary_path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .map(String::from)
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
+
+        let env_path = binary_path
+            .parent()
+            .ok_or_else(|| {
+                miette::miette!("binary_path '{}' has no parent", binary_path.display())
+            })?
+            .parent()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "binary_path's parent '{}' has no parent",
+                    binary_path.display()
+                )
+            })?;
+
+        let env = env_path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| {
+                miette::miette!(
+                    "binary_path's grandparent '{}' has no file name",
+                    binary_path.display()
+                )
+            })?
+            .to_string();
+
+        let conda_meta = env_path.join("conda_meta");
+
+        let package = Self::package_from_conda_meta(&conda_meta, &binary)?;
+
+        Ok(ExposedData {
+            exposed,
+            binary,
+            env,
+            package,
+        })
+    }
+
+    fn package_from_conda_meta(conda_meta: &Path, binary: &str) -> miette::Result<String> {
+        for entry in std::fs::read_dir(conda_meta).into_diagnostic()? {
+            let path = entry.into_diagnostic()?.path();
+
+            // Check if the entry is a file and has a .json extension
+            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                let content = std::fs::read_to_string(&path).into_diagnostic()?;
+                let json: serde_json::Value = serde_json::from_str(&content).into_diagnostic()?;
+
+                // Check if the JSON contains the specified structure
+                if let Some(paths) = json.pointer("/paths_data/paths") {
+                    if let Some(array) = paths.as_array() {
+                        for item in array {
+                            if let Some(path_value) = item.get("_path") {
+                                if let Some(path_str) = path_value.as_str() {
+                                    if path_str == format!("bin/{binary}") {
+                                        return json
+                                            .pointer(&format!("/{binary}"))
+                                            .map(|p| p.to_string())
+                                            .ok_or_else(|| {
+                                                miette!(
+                                                    "Could not find {binary} in {}",
+                                                    conda_meta.display()
+                                                )
+                                            });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        miette::bail!("Could not find {binary} in {}", conda_meta.display())
+    }
+
     fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
         // Read the script file into a string
-        let script_content = fs::read_to_string(script).into_diagnostic()?;
+        let script_content = std::fs::read_to_string(script).into_diagnostic()?;
 
         // Compile the regex pattern
         #[cfg(unix)]
-        const PATTERN: &str = r#""([^"]+)" "$@""#;
+        const PATTERN: &str = r#""([^"]+)" "\$@""#;
         #[cfg(windows)]
-        const PATTERN: &str = r#"^"([^"]+)"\s.*$"#;
+        const PATTERN: &str = r#"^"([^"]+)"\s.*\$"#;
         static RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
@@ -236,7 +332,7 @@ mod tests {
         let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
 
         // Create and write global manifest
-        let mut file = fs::File::create(&manifest_path).unwrap();
+        let mut file = std::fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path).unwrap();
 
