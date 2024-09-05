@@ -18,7 +18,7 @@ on:
 jobs:
   test-downstream:
     name: Downstream test ${{ matrix.repository }} on ${{ matrix.os }}
-    if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
     runs-on: ${{ inputs.os }}
     strategy:
       fail-fast: false
