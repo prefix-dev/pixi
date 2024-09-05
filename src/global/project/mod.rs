@@ -84,8 +84,7 @@ impl Project {
         Ok(Self::from_manifest(manifest))
     }
 
-    /// Discovers the project manifest file in path set by `PIXI_GLOBAL_MANIFESTS`
-    /// or alternatively at `~/.pixi/manifests/pixi-global.toml`.
+    /// Discovers the project manifest file in path at `~/.pixi/manifests/pixi-global.toml`.
     /// If the manifest doesn't exist yet, and the function will try to create one from the existing installation.
     /// If that one fails, an empty one will be created.
     pub(crate) async fn discover(bin_dir: &BinDir, env_root: &EnvRoot) -> miette::Result<Self> {
@@ -142,13 +141,9 @@ impl Project {
 
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
-        env::var("PIXI_GLOBAL_MANIFESTS")
-            .map(PathBuf::from)
-            .or_else(|_| {
-                home_path()
-                    .map(|dir| dir.join("manifests"))
-                    .ok_or_else(|| miette::miette!("Could not get home directory"))
-            })
+        home_path()
+            .map(|dir| dir.join("manifests"))
+            .ok_or_else(|| miette::miette!("Could not get home directory"))
     }
 
     /// Loads a project from manifest file.
@@ -211,20 +206,6 @@ mod tests {
         let canonical_manifest_parent = manifest_path.parent().unwrap().canonicalize().unwrap();
 
         assert_eq!(canonical_root, canonical_manifest_parent);
-    }
-
-    #[tokio::test]
-    async fn test_project_discover() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let manifest_dir = tempdir.path();
-        let bin_dir = BinDir::from_env().await.unwrap();
-        let env_root = EnvRoot::from_env().await.unwrap();
-        env::set_var("PIXI_GLOBAL_MANIFESTS", manifest_dir);
-        let project = Project::discover(&bin_dir, &env_root).await.unwrap();
-        assert!(project.manifest.path.exists());
-        let expected_manifest_path =
-            dunce::canonicalize(manifest_dir.join(MANIFEST_DEFAULT_NAME)).unwrap();
-        assert_eq!(project.manifest.path, expected_manifest_path)
     }
 
     #[test]
