@@ -11,7 +11,7 @@ use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
@@ -360,7 +360,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unwrap_or_default();
 
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .iter()
         .cloned()

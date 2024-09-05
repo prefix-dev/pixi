@@ -39,6 +39,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
+            let version = repodata_record.version().to_string();
+
+            tracing::debug!(
+                "overriding PyPI package version request {}=={}",
+                package_name,
+                version
+            );
             // If we encounter a package that was installed by conda we simply return a single
             // available version in the form of a source distribution with the URL of the
             // conda package.
@@ -60,11 +67,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
 
             let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
-                version: repodata_record
-                    .version()
-                    .to_string()
-                    .parse()
-                    .expect("could not convert to pypi version"),
+                version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(VerbatimUrl::from_url(
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
@@ -104,6 +107,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
         if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
+                tracing::debug!("overriding PyPI package metadata request {}", name);
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
