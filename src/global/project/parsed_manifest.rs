@@ -119,6 +119,18 @@ impl FromStr for ExposedKey {
     }
 }
 
+impl TryFrom<String> for ExposedKey {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value == "pixi" {
+            Err("The key 'pixi' is not allowed in the exposed map".to_string())
+        } else {
+            Ok(ExposedKey(value))
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for ExposedKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

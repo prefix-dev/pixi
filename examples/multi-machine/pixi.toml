@@ -6,9 +6,20 @@ name = "multi-machine"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
-start = { depends-on = ["train", "test"] }
-test = "python test.py"
-train = "python train.py"
+# This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
+download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = [
+  "data.csv",
+] }
+# This task will run only if `data.csv` changed.
+test = { cmd = "python train.py", depends-on = [
+  "download_data",
+], inputs = [
+  "data.csv",
+] }
+train = "python test.py"
+
+start = { depends-on = ["train", "test"], cmd = "python main.py" }
+
 
 [dependencies]
 ipykernel = ">=6.28.0,<6.29"

@@ -2,6 +2,7 @@ use std::{
     env,
     fmt::Formatter,
     fs,
+    hash::Hash,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
@@ -125,6 +126,15 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
         self.manifest.parsed.environments()
+    }
+
+    /// Returns the specific environment by name.
+    pub(crate) fn environment(
+        &self,
+        name: impl Into<EnvironmentName>,
+    ) -> Option<ParsedEnvironment> {
+        let name = name.into();
+        self.manifest.parsed.environments().get(&name).cloned()
     }
 }
 

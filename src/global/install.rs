@@ -102,8 +102,8 @@ pub(crate) async fn install_environment(
     /// 3. Maps executables to a tuple of file name (as a string) and file path.
     /// 4. Filters tuples to include only those whose names are in the `exposed` values.
     /// 5. Collects the resulting tuples into a vector of executables.
-    let executables: Vec<(String, PathBuf)> = prefix_records
-        .into_iter()
+    let all_executables: Vec<(String, PathBuf)> = prefix_records
+        .iter()
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
         .flat_map(|record| find_executables(&prefix, record))
         .filter_map(|path| {
@@ -111,7 +111,13 @@ pub(crate) async fn install_environment(
                 .and_then(|name| name.to_str())
                 .map(|name| (name.to_string(), path.clone()))
         })
-        .filter(|(name, path)| exposed.values().contains(&name))
+        // .filter(|(name, path)| exposed.values().contains(&name))
+        .collect();
+
+    let exposed_executables: Vec<_> = all_executables
+        .into_iter()
+        .filter(|(name, _)| exposed.values().contains(name))
+        // .cloned()
         .collect();
 
     let script_mapping = exposed
@@ -120,7 +126,7 @@ pub(crate) async fn install_environment(
             script_exec_mapping(
                 exposed_name,
                 entry_point,
-                executables.clone(),
+                exposed_executables.clone(),
                 bin_dir,
                 environment_name,
             )
@@ -145,7 +151,7 @@ pub(crate) async fn install_environment(
 /// # Errors
 ///
 /// Returns an error if the entry point is not found in the list of executable names.
-fn script_exec_mapping(
+pub(crate) fn script_exec_mapping(
     exposed_name: &ExposedKey,
     entry_point: &str,
     executables: impl IntoIterator<Item = (String, PathBuf)>,
@@ -193,11 +199,12 @@ pub struct ScriptExecMapping {
 
 /// Find the executable scripts within the specified package installed in this
 /// conda prefix.
-fn find_executables(prefix: &Prefix, prefix_package: PrefixRecord) -> Vec<PathBuf> {
+fn find_executables(prefix: &Prefix, prefix_package: &PrefixRecord) -> Vec<PathBuf> {
     prefix_package
         .files
-        .into_iter()
+        .iter()
         .filter(|relative_path| is_executable(prefix, relative_path))
+        .cloned()
         .collect()
 }
 
@@ -304,7 +311,7 @@ async fn map_executables_to_global_bin_scripts(
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
-async fn create_executable_scripts(
+pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,

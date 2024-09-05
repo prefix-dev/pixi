@@ -12,6 +12,12 @@ use thiserror::Error;
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct EnvironmentName(String);
 
+impl From<String> for EnvironmentName {
+    fn from(name: String) -> Self {
+        EnvironmentName(name)
+    }
+}
+
 impl EnvironmentName {
     /// Returns the name of the environment.
     pub fn as_str(&self) -> &str {

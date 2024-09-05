@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
@@ -105,4 +105,81 @@ impl Prefix {
 
         Ok(result)
     }
+
+    /// Find the executable scripts within the specified package installed in this
+    /// conda prefix.
+    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<(String, PathBuf)> {
+        prefix_packages
+            .iter()
+            .flat_map(|record| {
+                record
+                    .files
+                    .iter()
+                    .filter(|relative_path| is_executable(self, relative_path))
+                    .filter_map(|path| {
+                        path.file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| (name.to_string(), path.clone()))
+                    })
+            })
+            // .filter(|(name, path)| exposed.values().contains(&name))
+            .collect()
+    }
+}
+
+pub(crate) fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
+    // Check if the file is in a known executable directory.
+    let binary_folders = if cfg!(windows) {
+        &([
+            "",
+            "Library/mingw-w64/bin/",
+            "Library/usr/bin/",
+            "Library/bin/",
+            "Scripts/",
+            "bin/",
+        ][..])
+    } else {
+        &(["bin"][..])
+    };
+
+    let parent_folder = match relative_path.parent() {
+        Some(dir) => dir,
+        None => return false,
+    };
+
+    if !binary_folders
+        .iter()
+        .any(|bin_path| Path::new(bin_path) == parent_folder)
+    {
+        return false;
+    }
+
+    // Check if the file is executable
+    let absolute_path = prefix.root().join(relative_path);
+    is_executable::is_executable(absolute_path)
+}
+
+/// Create the environment activation script
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
+    let activator =
+        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
+    let result = activator
+        .activation(ActivationVariables {
+            conda_prefix: None,
+            path: None,
+            path_modification_behavior: PathModificationBehavior::Prepend,
+        })
+        .into_diagnostic()?;
+
+    // Add a shebang on unix based platforms
+    let script = if cfg!(unix) {
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
+    } else {
+        result.script.contents().into_diagnostic()?
+    };
+
+    Ok(script)
 }

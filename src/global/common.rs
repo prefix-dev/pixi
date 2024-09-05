@@ -188,10 +188,11 @@ pub(crate) struct EnvDir {
 
 impl EnvDir {
     /// Create the Binary Environment directory
-    pub(crate) async fn new(
+    pub(crate) async fn new<T: Into<EnvironmentName>>(
         root: EnvRoot,
-        environment_name: EnvironmentName,
+        environment_name: T,
     ) -> miette::Result<Self> {
+        let environment_name = environment_name.into();
         let path = root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
