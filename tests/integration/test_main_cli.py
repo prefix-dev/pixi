@@ -1,7 +1,9 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
+from typing import Any
 import pytest
+import tomli
 
 PIXI_VERSION = "0.29.0"
 
@@ -20,13 +22,14 @@ def pixi() -> Path:
 def verify_cli_command(
     command: list[Path | str],
     expected_exit_code: ExitCode,
-    env: dict[str, str] | None = None,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
+    env: dict[str, str] | None = None,
+    input: str | None = None,
 ) -> None:
-    process = subprocess.run(command, capture_output=True, text=True, env=env)
+    process = subprocess.run(command, capture_output=True, text=True, env=env, input=input)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
@@ -237,9 +240,18 @@ def test_global_sync(pixi: Path, tmp_path: Path) -> None:
     """
     manifest.write_text(toml)
     python_injected = tmp_path / "bin" / "python-injected"
+
+    # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "--version"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.SUCCESS, env=env)
+
+    # Test migration from existing environments
+    original_manifest = tomli.loads(manifest.read_text())
+    manifest.unlink()
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env, input="y")
+    migrated_manifest = tomli.loads(manifest.read_text())
+    assert original_manifest == migrated_manifest
 
 
 def test_search(pixi: Path) -> None:
