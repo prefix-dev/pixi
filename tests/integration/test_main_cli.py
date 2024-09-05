@@ -1,7 +1,6 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
-from typing import Any
 import pytest
 import tomli
 

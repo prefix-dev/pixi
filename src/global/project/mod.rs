@@ -11,10 +11,12 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use manifest::Manifest;
 use miette::IntoDiagnostic;
+use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use pixi_config::{home_path, Config};
 use rattler_repodata_gateway::Gateway;
+use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
@@ -115,13 +117,17 @@ impl Project {
         bin_dir: &BinDir,
         env_root: &EnvRoot,
     ) -> miette::Result<Option<Self>> {
-        let exposed_scripts = bin_dir
+        let exposed_binaries = bin_dir
             .files()
             .await?
             .into_iter()
-            .filter(|file| is_text(file).unwrap_or(false))
-            .collect_vec();
-        todo!("Extract binary that is called by the script");
+            .filter_map(|path| match is_text(&path) {
+                Ok(true) => Some(Ok(path)),
+                Ok(false) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .map(|result| result.and_then(|path| Self::extract_bin_from_script(&path)))
+            .collect::<miette::Result<Vec<_>>>()?;
         for env_path in env_root.directories().await? {
             let env_name = env_path
                 .file_name()
@@ -140,12 +146,36 @@ impl Project {
                         )
                     })
                 })?;
-            let bin_env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
-            let prefix = Prefix::new(bin_env_dir.path());
-            let prefix_records = prefix.find_installed_packages(None).await?;
+            let env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
             todo!();
         }
         Ok(None)
+    }
+
+    fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
+        // Read the script file into a string
+        let script_content = fs::read_to_string(script).into_diagnostic()?;
+
+        // Compile the regex pattern
+        #[cfg(unix)]
+        const PATTERN: &str = r#""([^"]+)" "$@""#;
+        #[cfg(windows)]
+        const PATTERN: &str = r#"^"([^"]+)"\s.*$"#;
+        static RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+
+        // Apply the regex to the script content
+        if let Some(caps) = RE.captures(&script_content) {
+            if let Some(matched) = caps.get(1) {
+                return Ok(PathBuf::from(matched.as_str()));
+            }
+        }
+
+        // Return an error if the binary path could not be extracted
+        miette::bail!(
+            "Failed to extract binary path from script {}",
+            script.display()
+        )
     }
 
     /// Get default dir for the pixi global manifest

@@ -266,15 +266,15 @@ pub(crate) async fn find_designated_package(
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
 }
 
-pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> std::io::Result<bool> {
-    let mut file = std::fs::File::open(file_path)?;
+pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
+    let mut file = std::fs::File::open(file_path).into_diagnostic()?;
     let mut buffer = [0; 1024];
-    let bytes_read = file.read(&mut buffer)?;
+    let bytes_read = file.read(&mut buffer).into_diagnostic()?;
 
     Ok(buffer[..bytes_read].contains(&0))
 }
 
-pub(crate) fn is_text(file_path: impl AsRef<Path>) -> std::io::Result<bool> {
+pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
 }
 
