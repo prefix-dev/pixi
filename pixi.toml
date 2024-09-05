@@ -52,7 +52,8 @@ typos = ">=1.23.1,<2"
 [feature.lint.tasks]
 lint = { depends-on = ["pre-commit-run"] }
 pre-commit-install = "pre-commit install"
-pre-commit-run = "pre-commit run --all"
+pre-commit-install-minimal = "pre-commit install -t=pre-commit"
+pre-commit-run = "pre-commit run --all-files"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 
