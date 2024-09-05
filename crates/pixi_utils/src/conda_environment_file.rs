@@ -145,7 +145,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 let match_spec = MatchSpec::from_str(&d, Lenient)
                     .into_diagnostic()
                     .wrap_err(format!("Can't parse '{}' as conda dependency", d))?;
-                if let Some(channel) = match_spec.clone().channel {
+                if let Some(channel) = &match_spec.channel {
                     // TODO: This is a bit hacky, we should probably have a better way to handle this.
                     picked_up_channels.push(
                         NamedChannelOrUrl::from_str(channel.name())

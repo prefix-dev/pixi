@@ -3388,7 +3388,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.28.2"
+version = "0.29.0"
 dependencies = [
  "ahash 0.8.11",
  "assert_matches",
@@ -3497,7 +3497,7 @@ dependencies = [
  "uv-resolver",
  "uv-types",
  "xxhash-rust",
- "zip 0.6.6",
+ "zip 2.2.0",
 ]
 
 [[package]]
@@ -3585,7 +3585,6 @@ version = "0.1.0"
 dependencies = [
  "console",
  "indicatif",
- "once_cell",
  "tokio",
 ]
 
@@ -4016,9 +4015,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.27.8"
+version = "0.27.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e25f40b548bffc452dad3e4664ae9c7fa20a33bd8f9889a7b0d93984bda9416"
+checksum = "d303d2a031b01e327f6d0bf360a511cec3e3a5f2c17d6a95a19656a146cd29c0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4057,9 +4056,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ac5df432234cae7f70160ac221f94519cb9d9ad0896cc146db37dbec29fe566"
+checksum = "e590ca575f48acee45c0ad12fabccc1c9a0dd58e5200f9e536aabdfc033ce15d"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4221,7 +4220,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
- "zip 2.1.6",
+ "zip 2.2.0",
  "zstd",
 ]
 
@@ -4238,9 +4237,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.10"
+version = "0.21.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a7bd0f0cf9418211588133da0590933789550b8b6fb47a8c9c594df258014b8"
+checksum = "b8410d7703a82330c90ed825ce1846bb8ebbc64a130f23c61ba6e7de6f1b82c2"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -7325,14 +7324,13 @@ dependencies = [
  "crc32fast",
  "crossbeam-utils",
  "flate2",
- "time",
 ]
 
 [[package]]
 name = "zip"
-version = "2.1.6"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40dd8c92efc296286ce1fbd16657c5dbefff44f1b4ca01cc5f517d8b7b3d3e2e"
+checksum = "dc5e4288ea4057ae23afc69a4472434a87a2495cafce6632fd1c4ec9f5cf3494"
 dependencies = [
  "arbitrary",
  "crc32fast",
