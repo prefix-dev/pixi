@@ -267,9 +267,14 @@ pub(crate) async fn find_designated_package(
 }
 
 pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    let mut file = std::fs::File::open(file_path).into_diagnostic()?;
+    let mut file = std::fs::File::open(&file_path)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not open {}", &file_path.as_ref().display()))?;
     let mut buffer = [0; 1024];
-    let bytes_read = file.read(&mut buffer).into_diagnostic()?;
+    let bytes_read = file
+        .read(&mut buffer)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not read {}", &file_path.as_ref().display()))?;
 
     Ok(buffer[..bytes_read].contains(&0))
 }

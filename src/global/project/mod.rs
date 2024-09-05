@@ -10,7 +10,7 @@ pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use manifest::Manifest;
-use miette::{miette, IntoDiagnostic};
+use miette::{miette, Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
@@ -212,13 +212,26 @@ impl Project {
     }
 
     fn package_from_conda_meta(conda_meta: &Path, binary: &str) -> miette::Result<String> {
-        for entry in std::fs::read_dir(conda_meta).into_diagnostic()? {
-            let path = entry.into_diagnostic()?.path();
+        for entry in std::fs::read_dir(conda_meta)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn not read directory {}", conda_meta.display()))?
+        {
+            let path = entry
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!(
+                        "Couldn not read file from directory {}",
+                        conda_meta.display()
+                    )
+                })?
+                .path();
 
             // Check if the entry is a file and has a .json extension
             if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json") {
                 let content = std::fs::read_to_string(&path).into_diagnostic()?;
-                let json: serde_json::Value = serde_json::from_str(&content).into_diagnostic()?;
+                let json: serde_json::Value = serde_json::from_str(&content)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
 
                 // Check if the JSON contains the specified structure
                 if let Some(paths) = json.pointer("/paths_data/paths") {
@@ -250,7 +263,9 @@ impl Project {
 
     fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
         // Read the script file into a string
-        let script_content = std::fs::read_to_string(script).into_diagnostic()?;
+        let script_content = std::fs::read_to_string(script)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Could not read {}", script.display()))?;
 
         // Compile the regex pattern
         #[cfg(unix)]
