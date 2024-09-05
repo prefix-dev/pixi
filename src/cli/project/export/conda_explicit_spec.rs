@@ -9,9 +9,7 @@ use crate::cli::LockFileUsageArgs;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
 use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
-use rattler_lock::{
-    CondaPackage, Environment, Package, PackageHashes, PypiPackage, PypiPackageData, UrlOrPath,
-};
+use rattler_lock::{CondaPackage, Environment, Package};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -30,13 +28,8 @@ pub struct Args {
 
     /// PyPI dependencies are not supported in the conda explicit spec file.
     /// This flag allows creating the spec file even if PyPI dependencies are present.
-    /// Alternatively see --write-pypi-requirements
     #[arg(long, default_value = "false")]
     pub ignore_pypi_errors: bool,
-
-    /// Write a requirements file containing all pypi dependencies
-    #[arg(long, default_value = "false", conflicts_with = "ignore_pypi_errors")]
-    pub write_pypi_requirements: bool,
 
     #[clap(flatten)]
     pub lock_file_usage: LockFileUsageArgs,
@@ -90,70 +83,12 @@ fn render_explicit_spec(
     Ok(())
 }
 
-fn get_pypi_hash_str(package_data: &PypiPackageData) -> Option<String> {
-    if let Some(hashes) = &package_data.hash {
-        let h = match hashes {
-            PackageHashes::Sha256(h) => format!("--hash=sha256:{:x}", h).to_string(),
-            PackageHashes::Md5Sha256(_, h) => format!("--hash=sha256:{:x}", h).to_string(),
-            PackageHashes::Md5(h) => format!("--hash=md5:{:x}", h).to_string(),
-        };
-        Some(h)
-    } else {
-        None
-    }
-}
-
-fn render_pypi_requirements(
-    target: impl AsRef<Path>,
-    packages: &[PypiPackage],
-) -> miette::Result<()> {
-    if packages.is_empty() {
-        return Ok(());
-    }
-
-    let mut reqs = String::new();
-
-    for p in packages {
-        // pip --verify-hashes does not accept hashes for local files
-        let (s, include_hash) = match p.url() {
-            UrlOrPath::Url(url) => (url.as_str(), true),
-            UrlOrPath::Path(path) => (
-                path.as_os_str()
-                    .to_str()
-                    .unwrap_or_else(|| panic!("Could not convert {:?} to str", path)),
-                false,
-            ),
-        };
-
-        // remove "direct+ since not valid for pip urls"
-        let s = s.trim_start_matches("direct+");
-
-        let hash = match (include_hash, get_pypi_hash_str(p.data().package)) {
-            (true, Some(h)) => format!(" {}", h),
-            (false, _) => "".to_string(),
-            (_, None) => "".to_string(),
-        };
-
-        if p.is_editable() {
-            reqs.push_str(&format!("-e {}{}\n", s, hash));
-        } else {
-            reqs.push_str(&format!("{}{}\n", s, hash));
-        }
-    }
-
-    fs::write(target, reqs)
-        .map_err(|e| miette::miette!("Could not write requirements file: {}", e))?;
-
-    Ok(())
-}
-
 fn render_env_platform(
     output_dir: &Path,
     env_name: &str,
     env: &Environment,
     platform: &Platform,
     ignore_pypi_errors: bool,
-    write_pypi_requirements: bool,
 ) -> miette::Result<()> {
     let packages = env.packages(*platform).ok_or(miette::miette!(
         "platform '{platform}' not found for env {}",
@@ -161,16 +96,16 @@ fn render_env_platform(
     ))?;
 
     let mut conda_packages_from_lockfile: Vec<CondaPackage> = Vec::new();
-    let mut pypi_packages_from_lockfile: Vec<PypiPackage> = Vec::new();
 
     for package in packages {
         match package {
             Package::Conda(p) => conda_packages_from_lockfile.push(p),
             Package::Pypi(pyp) => {
                 if ignore_pypi_errors {
-                    tracing::warn!("ignoring PyPI package since PyPI packages are not supported");
-                } else if write_pypi_requirements {
-                    pypi_packages_from_lockfile.push(pyp);
+                    tracing::warn!(
+                        "ignoring PyPI package {} since PyPI packages are not supported",
+                        pyp.data().package.name
+                    );
                 } else {
                     miette::bail!(
                         "PyPI packages are not supported. Specify `--ignore-pypi-errors` to ignore this error \
@@ -185,19 +120,10 @@ fn render_env_platform(
 
     tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform}");
     let target = output_dir
-        .join(format!("{}-{}-conda_spec.txt", env_name, platform))
+        .join(format!("{}_{}_conda_spec.txt", env_name, platform))
         .into_os_string();
 
     render_explicit_spec(target, &ees)?;
-
-    if write_pypi_requirements {
-        tracing::info!("Creating pypi requirements file for env: {env_name} platform: {platform}");
-        let pypi_target = output_dir
-            .join(format!("{}-{}-requirements.txt", env_name, platform))
-            .into_os_string();
-
-        render_pypi_requirements(pypi_target, &pypi_packages_from_lockfile)?;
-    }
 
     Ok(())
 }
@@ -261,9 +187,46 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
             &env,
             &plat,
             args.ignore_pypi_errors,
-            args.write_pypi_requirements,
         )?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use rattler_lock::LockFile;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_render_conda_explicit_spec() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/cli/project/export/test-data/testenv/pixi.lock");
+        let lockfile = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lockfile.environments() {
+            for platform in env.platforms() {
+                // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
+                // false.
+                assert!(
+                    render_env_platform(output_dir.path(), env_name, &env, &platform, false)
+                        .is_err()
+                );
+                render_env_platform(output_dir.path(), env_name, &env, &platform, true).unwrap();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{}_{}_conda_spec.txt", env_name, platform));
+                insta::assert_snapshot!(
+                    format!("test_render_conda_explicit_spec_{}_{}", env_name, platform),
+                    fs::read_to_string(file_path).unwrap()
+                );
+            }
+        }
+    }
 }
