@@ -23,7 +23,7 @@ use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_uv_conversions::{
     as_uv_req, isolated_names_to_packages, names_to_build_isolation,
-    pypi_options_to_index_locations,
+    pypi_options_to_index_locations, to_index_strategy,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -264,6 +264,7 @@ pub async fn resolve_pypi(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
+            .index_strategy(to_index_strategy(pypi_options.index_strategy.as_ref()))
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
