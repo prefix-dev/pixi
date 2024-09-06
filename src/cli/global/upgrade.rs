@@ -8,7 +8,7 @@ use miette::{Context, IntoDiagnostic, Report};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use tokio::task::JoinSet;
 
 use super::{common::find_installed_package, install::globally_install_package};
@@ -41,13 +41,13 @@ impl HasSpecs for Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
     let specs = args.specs()?;
-    upgrade_packages(specs, config, &args.channels, args.platform).await
+    upgrade_packages(specs, config, args.channels, args.platform).await
 }
 
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
-    cli_channels: &ChannelsConfig,
+    cli_channels: ChannelsConfig,
     platform: Platform,
 ) -> miette::Result<()> {
     let channel_cli = cli_channels.resolve_from_config(&config);
@@ -134,7 +134,7 @@ pub(super) async fn upgrade_packages(
                 .collect();
 
             // Determine virtual packages of the current platform
-            let virtual_packages = VirtualPackage::current()
+            let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
                 .into_diagnostic()
                 .context("failed to determine virtual packages")?
                 .iter()

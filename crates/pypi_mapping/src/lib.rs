@@ -1,15 +1,20 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 
 use async_once_cell::OnceCell as AsyncCell;
+use custom_pypi_mapping::fetch_mapping_from_path;
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
-use miette::{Context, IntoDiagnostic};
+use pixi_config::get_cache_dir;
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
 
 use crate::custom_pypi_mapping::fetch_mapping_from_url;
-use pixi_config::get_cache_dir;
 
 pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
@@ -62,40 +67,22 @@ impl CustomMapping {
 
                     match url {
                         MappingLocation::Url(url) => {
-                            let response = client
-                                .get(url.clone())
-                                .send()
-                                .await
-                                .into_diagnostic()
-                                .context(format!(
-                                "failed to download pypi mapping from {} location",
-                                url.as_str()
-                            ))?;
-
-                            if !response.status().is_success() {
-                                return Err(miette::miette!(
-                                    "Could not request mapping located at {:?}",
-                                    url.as_str()
-                                ));
-                            }
-
-                            let mapping_by_name = fetch_mapping_from_url(client, url).await?;
+                            let mapping_by_name = match url.scheme() {
+                                "file" => {
+                                    let file_path = url.to_file_path().map_err(|_| {
+                                        miette::miette!("{} is not a valid file url", url)
+                                    })?;
+                                    fetch_mapping_from_path(&file_path)?
+                                }
+                                _ => fetch_mapping_from_url(client, url).await?,
+                            };
 
                             mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
                         MappingLocation::Path(path) => {
-                            let contents = std::fs::read_to_string(path)
-                                .into_diagnostic()
-                                .context(format!("mapping on {path:?} could not be loaded"))?;
-                            let data: HashMap<String, Option<String>> =
-                                serde_json::from_str(&contents).into_diagnostic().context(
-                                    format!(
-                                        "Failed to parse JSON mapping located at {}",
-                                        path.display()
-                                    ),
-                                )?;
+                            let mapping_by_name = fetch_mapping_from_path(path)?;
 
-                            mapping_url_to_name.insert(name.to_string(), data);
+                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
                     }
                 }
@@ -114,6 +101,7 @@ impl CustomMapping {
 pub enum MappingSource {
     Custom(Arc<CustomMapping>),
     Prefix,
+    Disabled,
 }
 
 impl MappingSource {
@@ -148,7 +136,7 @@ impl PurlSource {
 }
 
 pub async fn amend_pypi_purls(
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     mapping_source: &MappingSource,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
@@ -166,7 +154,7 @@ pub async fn amend_pypi_purls(
         options: HttpCacheOptions::default(),
     });
 
-    let client = ClientBuilder::new(client)
+    let client = ClientBuilder::from_client(client)
         .with(cache_strategy)
         .with(retry_strategy)
         .build();
@@ -178,6 +166,17 @@ pub async fn amend_pypi_purls(
         }
         MappingSource::Prefix => {
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
+        }
+        MappingSource::Disabled => {
+            for record in conda_packages.iter_mut() {
+                if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
+                    record
+                        .package_record
+                        .purls
+                        .get_or_insert_with(BTreeSet::new)
+                        .insert(purl);
+                }
+            }
         }
     }
 

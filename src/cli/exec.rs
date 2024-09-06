@@ -12,7 +12,7 @@ use rattler::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::prefix::Prefix;
@@ -185,7 +185,7 @@ pub async fn create_exec_prefix(
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()
         .context("failed to determine virtual packages")?
         .iter()

@@ -40,14 +40,13 @@ rattler_virtual_packages = { workspace = true }
 
 # TODO: Remove these dependencies
 console = { workspace = true }
-glob = "0.3.1"
 miette = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
+glob = "0.3.1"
 insta = { workspace = true, features = ["yaml"] }
-pixi_consts = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     sync::Arc,
 };
 
@@ -13,13 +14,12 @@ use super::{
     CustomMapping, PurlSource, Reporter,
 };
 
-pub async fn fetch_mapping_from_url<T>(
+pub type CompressedMapping = HashMap<String, Option<String>>;
+
+pub async fn fetch_mapping_from_url(
     client: &ClientWithMiddleware,
     url: &Url,
-) -> miette::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
+) -> miette::Result<CompressedMapping> {
     let response = client
         .get(url.clone())
         .send()
@@ -37,9 +37,24 @@ where
         ));
     }
 
-    let mapping_by_name: T = response.json().await.into_diagnostic().context(format!(
+    let mapping_by_name = response.json().await.into_diagnostic().context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
         url
+    ))?;
+
+    Ok(mapping_by_name)
+}
+
+pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
+    let file = std::fs::File::open(path)
+        .into_diagnostic()
+        .context(format!("failed to open file {}", path.display()))?;
+    let reader = std::io::BufReader::new(file);
+    let mapping_by_name = serde_json::from_reader(reader)
+        .into_diagnostic()
+        .context(format!(
+        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
+        path.display()
     ))?;
 
     Ok(mapping_by_name)
@@ -99,7 +114,7 @@ pub async fn amend_pypi_purls(
 /// the record refers to a conda-forge package.
 fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
-    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
+    custom_mapping: &HashMap<String, CompressedMapping>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -151,7 +166,7 @@ fn amend_pypi_purls_for_record(
 
 pub fn _amend_only_custom_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
-    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
+    custom_mapping: &HashMap<String, CompressedMapping>,
 ) -> miette::Result<()> {
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, custom_mapping)?;

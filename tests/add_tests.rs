@@ -12,7 +12,6 @@ use pixi_consts::consts;
 use pixi_manifest::pypi::VersionOrStar;
 use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
-use serial_test::serial;
 use tempfile::TempDir;
 use uv_normalize::ExtraName;
 
@@ -240,7 +239,6 @@ async fn add_functionality_os() {
 /// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[serial]
 async fn add_pypi_functionality() {
     let pixi = PixiControl::new().unwrap();
 
@@ -363,7 +361,6 @@ async fn add_pypi_functionality() {
 /// Test the `pixi add --pypi` functionality with extras
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[serial]
 async fn add_pypi_extra_functionality() {
     let pixi = PixiControl::new().unwrap();
 
@@ -449,7 +446,6 @@ async fn add_pypi_extra_functionality() {
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[serial]
 async fn add_sdist_functionality() {
     let pixi = PixiControl::new().unwrap();
 

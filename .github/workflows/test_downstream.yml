@@ -116,8 +116,10 @@ jobs:
   test-integration:
     name: Integration test on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
+    env:
+      TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
       - name: Download binary from build
         uses: actions/download-artifact@v4
@@ -130,26 +132,16 @@ jobs:
       - name: Setup unix binary, add to github path
         if: inputs.os != 'windows-latest'
         run: |
-          mv pixi_bin/pixi-${{ inputs.target }} pixi_bin/pixi
-          chmod a+x pixi_bin/pixi
-          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+          mkdir -p ${{ env.TARGET_RELEASE }}
+          mv pixi_bin/pixi-${{ inputs.target }} ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
       - name: Create Directory and Move Executable
         if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
         run: |
-          New-Item -ItemType Directory -Force -Path "D:\.pixi"
-          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "D:\.pixi\pixi.exe"
-        shell: pwsh
-      - name: Add to PATH
-        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
-        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
-        shell: pwsh
-      - name: Verify and Use Executable
-        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
-        run: |
-          echo "Current PATH: $env:PATH"
-          pixi --version
+          New-Item -ItemType Directory -Force -Path "${{ env.TARGET_RELEASE }}"
+          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
         shell: pwsh
       - name: Typecheck integration tests
-        run: pixi run typecheck-integration
+        run: ${{ env.TARGET_RELEASE }}/pixi run typecheck-integration
       - name: Run integration tests
-        run: pixi run test-integration
+        run: ${{ env.TARGET_RELEASE }}/pixi run test-integration-ci
