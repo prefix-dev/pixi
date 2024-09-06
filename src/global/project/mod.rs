@@ -105,7 +105,8 @@ impl Project {
 
         tokio::fs::create_dir_all(&manifest_dir)
             .await
-            .into_diagnostic()?;
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't create directory {}", manifest_dir.display()))?;
 
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
@@ -115,7 +116,10 @@ impl Project {
             } else {
                 tokio::fs::File::create(&manifest_path)
                     .await
-                    .into_diagnostic()?;
+                    .into_diagnostic()
+                    .wrap_err_with(|| {
+                        format!("Couldn't create file {}", manifest_path.display())
+                    })?;
             }
         }
 
