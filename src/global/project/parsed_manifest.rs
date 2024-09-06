@@ -30,9 +30,11 @@ impl TryFrom<Vec<ExposedData>> for ParsedManifest {
         for data in value {
             let ExposedData {
                 env,
-                exposed,
-                binary,
+                platform,
+                channel,
                 package,
+                binary,
+                exposed,
             } = data;
             let mut parsed_environment = env_temp.entry(env.parse()?).or_default();
             todo!("Add channels and platform");

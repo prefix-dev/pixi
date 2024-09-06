@@ -16,6 +16,7 @@ pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
+use rattler_conda_types::Platform;
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
@@ -67,9 +68,11 @@ impl Debug for Project {
 
 struct ExposedData {
     env: String,
+    platform: Option<String>,
+    channel: String,
+    package: String,
     exposed: String,
     binary: String,
-    package: String,
 }
 
 impl Project {
@@ -183,17 +186,22 @@ impl Project {
 
         let conda_meta = env_path.join("conda-meta");
 
-        let package = Self::package_from_conda_meta(&conda_meta, &binary)?;
+        let (platform, channel, package) = Self::package_from_conda_meta(&conda_meta, &binary)?;
 
         Ok(ExposedData {
             env,
-            exposed,
-            binary,
+            platform,
+            channel,
             package,
+            binary,
+            exposed,
         })
     }
 
-    fn package_from_conda_meta(conda_meta: &Path, binary: &str) -> miette::Result<String> {
+    fn package_from_conda_meta(
+        conda_meta: &Path,
+        binary: &str,
+    ) -> miette::Result<(Option<String>, String, String)> {
         for entry in std::fs::read_dir(conda_meta)
             .into_diagnostic()
             .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
@@ -219,15 +227,54 @@ impl Project {
                             if let Some(path_value) = item.get("_path") {
                                 if let Some(path_str) = path_value.as_str() {
                                     if path_str == format!("bin/{binary}") {
-                                        return json
+                                        let platform = json
+                                            .pointer("/subdir")
+                                            .map(|p| p.to_string())
+                                            .map(|p| match p.as_str() {
+                                                "noarch" => None,
+                                                platform
+                                                    if platform
+                                                        == Platform::current().to_string() =>
+                                                {
+                                                    None
+                                                }
+                                                _ => Some(p),
+                                            })
+                                            .ok_or_else(|| {
+                                                miette!(
+                                                    "Could not find platform in {}",
+                                                    conda_meta.display()
+                                                )
+                                            })?;
+                                        let channel = json
+                                            .pointer("/channel")
+                                            .map(|c| c.to_string())
+                                            .map(|channel| {
+                                                if let Some(c) = channel
+                                                    .strip_prefix("https://conda.anaconda.org")
+                                                {
+                                                    c.to_string()
+                                                } else {
+                                                    channel
+                                                }
+                                            })
+                                            .map(|s| s.trim_end_matches('/').to_string())
+                                            .ok_or_else(|| {
+                                                miette!(
+                                                    "Could not find channel in {}",
+                                                    conda_meta.display()
+                                                )
+                                            })?;
+                                        let package = json
                                             .pointer("/name")
                                             .map(|p| p.to_string())
                                             .ok_or_else(|| {
                                                 miette!(
-                                                    "Could not find {binary} in {}",
+                                                    "Could not find package name in {}",
                                                     conda_meta.display()
                                                 )
-                                            });
+                                            })?;
+                                        return Ok((platform, channel, package));
                                     }
                                 }
                             }
