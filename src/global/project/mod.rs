@@ -137,28 +137,7 @@ impl Project {
             })
             .map(|result| result.and_then(Self::exposed_data_from_binary_path))
             .collect::<miette::Result<_>>()?;
-        for env_path in env_root.directories().await? {
-            let env_name = env_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| {
-                    miette::miette!(
-                        "Failed to get file name as str for path: {}",
-                        env_path.display()
-                    )
-                })
-                .and_then(|name_str| {
-                    name_str.parse().map_err(|_| {
-                        miette::miette!(
-                            "Failed to parse file name as EnvironmentName for path: {}",
-                            env_path.display()
-                        )
-                    })
-                })?;
-            let env_dir = EnvDir::from_existing(env_root.clone(), env_name).await?;
-            todo!();
-        }
-        Ok(None)
+        todo!();
     }
 
     fn exposed_data_from_binary_path(path: PathBuf) -> miette::Result<ExposedData> {

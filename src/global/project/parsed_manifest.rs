@@ -6,6 +6,7 @@ use itertools::Itertools;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::Serialize;
 use serde_with::{serde_as, serde_derive::Deserialize};
 
 use super::environment::EnvironmentName;
@@ -14,7 +15,7 @@ use super::error::ManifestError;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ParsedManifest {
     /// The environments the project can create.
     environments: IndexMap<EnvironmentName, ParsedEnvironment>,
@@ -70,7 +71,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
     #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
@@ -98,7 +99,7 @@ impl ParsedEnvironment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub(crate) struct ExposedKey(String);
 
 impl fmt::Display for ExposedKey {

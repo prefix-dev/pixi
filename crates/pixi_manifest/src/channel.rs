@@ -2,14 +2,14 @@ use std::str::FromStr;
 
 use itertools::Itertools;
 use rattler_conda_types::NamedChannelOrUrl;
-use serde::{de::Error, Deserialize, Deserializer};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 
 /// A channel with an optional priority.
 /// If the priority is not specified, it is assumed to be 0.
 /// The higher the priority, the more important the channel is.
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct PrioritizedChannel {
     pub channel: NamedChannelOrUrl,
     pub priority: Option<i32>,
@@ -44,6 +44,7 @@ impl From<NamedChannelOrUrl> for PrioritizedChannel {
     }
 }
 
+#[derive(Serialize)]
 pub enum TomlPrioritizedChannelStrOrMap {
     Map(PrioritizedChannel),
     Str(NamedChannelOrUrl),
@@ -57,6 +58,17 @@ impl TomlPrioritizedChannelStrOrMap {
                 channel,
                 priority: None,
             },
+        }
+    }
+
+    pub fn from_prioritized_channel(channel: &PrioritizedChannel) -> Self {
+        if let Some(priority) = channel.priority {
+            TomlPrioritizedChannelStrOrMap::Map(PrioritizedChannel {
+                channel: channel.channel.clone(),
+                priority: Some(priority),
+            })
+        } else {
+            TomlPrioritizedChannelStrOrMap::Str(channel.channel.clone())
         }
     }
 }
@@ -88,5 +100,19 @@ impl<'de> serde_with::DeserializeAs<'de, PrioritizedChannel> for TomlPrioritized
     {
         let prioritized_channel = TomlPrioritizedChannelStrOrMap::deserialize(deserializer)?;
         Ok(prioritized_channel.into_prioritized_channel())
+    }
+}
+
+/// Helper so that we can serialize
+/// [`crate::channel::PrioritizedChannel`] to a string or a
+/// map.
+impl serde_with::SerializeAs<PrioritizedChannel> for TomlPrioritizedChannelStrOrMap {
+    fn serialize_as<S>(source: &PrioritizedChannel, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let toml_prioritized_channel =
+            TomlPrioritizedChannelStrOrMap::from_prioritized_channel(source);
+        toml_prioritized_channel.serialize(serializer)
     }
 }
