@@ -214,15 +214,12 @@ impl Project {
     fn package_from_conda_meta(conda_meta: &Path, binary: &str) -> miette::Result<String> {
         for entry in std::fs::read_dir(conda_meta)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn not read directory {}", conda_meta.display()))?
+            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
         {
             let path = entry
                 .into_diagnostic()
                 .wrap_err_with(|| {
-                    format!(
-                        "Couldn not read file from directory {}",
-                        conda_meta.display()
-                    )
+                    format!("Couldn't read file from directory {}", conda_meta.display())
                 })?
                 .path();
 
