@@ -1,7 +1,10 @@
+name: "Test examples and Downstream projects"
+
 on:
   workflow_call:
 
 jobs:
+  # Install a couple of projects that we know use pixi
   test-downstream:
     name: Downstream test ${{ matrix.repository }} on ${{ matrix.os }}
     # if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
@@ -67,6 +70,7 @@ jobs:
       - name: Check lockfile didn't change
         run: git diff --exit-code pixi.lock
 
+  # Test all of the examples
   test-examples:
     name: Test examples on ${{ matrix.arch.os }}
     runs-on: ${{ matrix.arch.os }}
@@ -128,6 +132,8 @@ jobs:
         shell: bash
         run: bash tests/test_examples.sh
 
+  # Run integration tests that test the command line
+  # pixi interface
   test-integration:
     name: Integration test on ${{ matrix.arch.os }}
     runs-on: ${{ matrix.arch.os }}
