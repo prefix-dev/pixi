@@ -12,9 +12,9 @@ pub mod task;
 
 mod uv_reporter;
 
+mod build;
 mod repodata;
 mod rlimit;
-mod build;
 
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;

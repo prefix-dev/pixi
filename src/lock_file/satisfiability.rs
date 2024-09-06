@@ -146,6 +146,9 @@ pub enum PlatformUnsat {
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
+
+    #[error("source dependencies are currently always considered out of date")]
+    SourceDependency,
 }
 
 impl PlatformUnsat {
@@ -623,7 +626,10 @@ pub(crate) fn verify_package_platform_satisfiability(
             Dependency::Input(name, spec, source) => {
                 let spec = match spec.try_into_nameless_match_spec(&channel_config) {
                     Ok(Some(spec)) => MatchSpec::from_nameless(spec, Some(name)),
-                    Ok(None) => unimplemented!("source dependencies are not yet implemented"),
+                    Ok(None) => {
+                        // TODO(baszalmstra): Add support for checking the source dependencies
+                        return Err(PlatformUnsat::SourceDependency);
+                    }
                     Err(e) => {
                         let parse_channel_err: ParseMatchSpecError = match e {
                             SpecConversionError::NonAbsoluteRootDir(p) => {

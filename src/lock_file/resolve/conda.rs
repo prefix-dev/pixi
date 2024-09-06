@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
@@ -13,16 +14,25 @@ pub async fn resolve_conda(
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
     available_packages: Vec<RepoData>,
+    source_packages: Vec<Vec<RepoDataRecord>>,
     channel_priority: ChannelPriority,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
+        let mut all_packages = Vec::with_capacity(available_packages.len() + 1);
+        for repo_data in &source_packages {
+            all_packages.push(repo_data.iter().collect_vec());
+        }
+        for repo_data in &available_packages {
+            all_packages.push(repo_data.iter().collect_vec());
+        }
+
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs,
             locked_packages,
             virtual_packages,
             channel_priority,
-            ..rattler_solve::SolverTask::from_iter(&available_packages)
+            ..rattler_solve::SolverTask::from_iter(all_packages)
         };
 
         // Solve the task

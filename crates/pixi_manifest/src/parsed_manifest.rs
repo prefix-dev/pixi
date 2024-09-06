@@ -306,12 +306,6 @@ where
             while let Some((package_name, spec)) =
                 map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<PixiSpec>)?
             {
-                if spec.is_source() {
-                    return Err(serde::de::Error::custom(
-                        "source dependencies are not allowed yet",
-                    ));
-                }
-
                 result.insert(package_name, spec);
             }
 

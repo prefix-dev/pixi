@@ -13,7 +13,7 @@ use pixi_build_types::{
     },
     BackendCapabilities, FrontendCapabilities,
 };
-use rattler_conda_types::{ChannelConfig};
+use rattler_conda_types::ChannelConfig;
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
@@ -100,8 +100,7 @@ impl Protocol {
         &self,
         request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadataResult> {
-        self
-            .client
+        self.client
             .request(
                 procedures::conda_metadata::METHOD_NAME,
                 RpcParams::from(request),

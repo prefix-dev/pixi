@@ -96,8 +96,12 @@ impl PathSourceSpec {
         if self.path.is_absolute() {
             Ok(Path::new(self.path.as_str()).to_path_buf())
         } else if let Ok(user_path) = self.path.strip_prefix("~/") {
-            let home_dir = dirs::home_dir()
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "could not determine home directory"))?;
+            let home_dir = dirs::home_dir().ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "could not determine home directory",
+                )
+            })?;
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {

@@ -26,33 +26,47 @@ pub enum BuildError {
     BuildFrontendSetup(#[source] pixi_build_frontend::BuildFrontendError),
 
     #[error("failed to retrieve package metadata")]
-    ExtractMetadata(#[source] pixi_build_frontend::BuildFrontendError),
+    ExtractMetadata(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
 }
 
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
-#[derive(Default)]
+#[derive(Debug)]
 pub struct SourceCheckout {
     pub path: PathBuf,
     // TODO(baszalmstra): Add source pinning information, e.g. the commit hash for git, the sha
     //  hash for a url, etc.
 }
 
+/// The metadata of a source checkout.
+#[derive(Debug)]
+pub struct SourceMetadata {
+    pub source: SourceCheckout,
+    pub metadata: Vec<RepoDataRecord>,
+}
+
 impl BuildContext {
+    pub fn new(channel_config: ChannelConfig) -> Self {
+        Self { channel_config }
+    }
+
     /// Extracts the metadata for a package from the given source specification.
     pub async fn extract_source_metadata(
         &self,
         source_spec: &SourceSpec,
         channels: &[Url],
         target_platform: Platform,
-    ) -> Result<Vec<RepoDataRecord>, BuildError> {
+    ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
 
         // TODO: Add caching of this information based on the source.
 
-        self.extract_metadata(&source, channels, target_platform)
-            .await
+        let metadata = self
+            .extract_metadata(&source, channels, target_platform)
+            .await?;
+
+        Ok(SourceMetadata { source, metadata })
     }
 
     /// Acquires the source from the given source specification. A source
@@ -111,7 +125,7 @@ impl BuildContext {
                 },
             })
             .await
-            .map_err(|e| BuildError::ExtractMetadata(e))?;
+            .map_err(|e| BuildError::ExtractMetadata(e.into()))?;
 
         // Convert the metadata to repodata
         Ok(metadata

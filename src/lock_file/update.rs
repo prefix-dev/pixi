@@ -14,7 +14,9 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use futures::{
+    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
 use indexmap::IndexSet;
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
@@ -26,7 +28,7 @@ use pixi_progress::global_multi_progress;
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
@@ -844,6 +846,8 @@ impl<'p> UpdateContextBuilder<'p> {
             .max_concurrent_solves
             .unwrap_or_else(default_max_concurrent_solves);
 
+        let build_context = BuildContext::new(project.channel_config());
+
         Ok(UpdateContext {
             project,
 
@@ -863,7 +867,7 @@ impl<'p> UpdateContextBuilder<'p> {
             conda_solve_semaphore: Arc::new(Semaphore::new(max_concurrent_solves)),
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
-            build_context: BuildContext::default(),
+            build_context,
 
             no_install: self.no_install,
         })
@@ -1547,10 +1551,33 @@ async fn spawn_solve_conda_environment_task(
                 .cloned()
                 .map(|c| c.into_base_url(&channel_config))
                 .collect::<Vec<_>>();
-            for (name, source_spec) in source_specs {
-                let repodata = build_context
-                    .extract_source_metadata(&source_spec, &channel_urls, platform)
-                    .await?;
+            let source_futures = FuturesUnordered::new();
+            let mut source_match_specs = Vec::new();
+            for (name, source_spec) in source_specs.iter() {
+                source_futures.push(build_context.extract_source_metadata(
+                    source_spec,
+                    &channel_urls,
+                    platform,
+                ));
+                // TODO: We also need to make sure that only the source package is used.
+                source_match_specs.push(MatchSpec {
+                    name: Some(name.clone()),
+                    ..MatchSpec::default()
+                })
+            }
+            let source_repodata: Vec<_> = source_futures.try_collect().await?;
+
+            // Extract the match spec requirements from the metadata of the source packages.
+            let mut query_match_specs = match_specs.clone();
+            for source_repodata in source_repodata
+                .iter()
+                .flat_map(|r| r.metadata.iter())
+                .flat_map(|r| &r.package_record.depends)
+            {
+                dbg!(source_repodata);
+                if let Ok(spec) = MatchSpec::from_str(source_repodata, ParseStrictness::Lenient) {
+                    query_match_specs.push(spec);
+                }
             }
 
             // Extract the repo data records needed to solve the environment.
@@ -1561,7 +1588,7 @@ async fn spawn_solve_conda_environment_task(
                         .into_iter()
                         .map(|c| c.into_channel(&channel_config)),
                     [platform, Platform::NoArch],
-                    match_specs.clone(),
+                    query_match_specs,
                 )
                 .recursive(true)
                 .with_reporter(GatewayProgressReporter::new(pb.clone()))
@@ -1576,11 +1603,19 @@ async fn spawn_solve_conda_environment_task(
             // Solve conda packages
             pb.reset_style();
             pb.set_message("resolving conda");
+
+            let mut all_specs = match_specs;
+            all_specs.extend(source_match_specs);
+
             let mut records = lock_file::resolve_conda(
-                match_specs,
+                all_specs,
                 virtual_packages,
                 existing_repodata_records.records.clone(),
                 available_packages,
+                source_repodata
+                    .into_iter()
+                    .map(|metadata| metadata.metadata)
+                    .collect(),
                 channel_priority,
             )
             .await

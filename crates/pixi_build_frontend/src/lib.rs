@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 pub use crate::protocol::Protocol;
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-use rattler_conda_types::{MatchSpec};
+use rattler_conda_types::MatchSpec;
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
