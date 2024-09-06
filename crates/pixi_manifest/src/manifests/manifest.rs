@@ -17,8 +17,8 @@ use toml_edit::DocumentMut;
 
 use crate::{
     consts,
-    document::ManifestSource,
     error::{DependencyError, TomlError, UnknownFeature},
+    manifests::{ManifestSource, TomlManifest},
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
     to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
@@ -122,8 +122,8 @@ impl Manifest {
         manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
 
         let source = match manifest_kind {
-            ManifestKind::Pixi => ManifestSource::PixiToml(document),
-            ManifestKind::Pyproject => ManifestSource::PyProjectToml(document),
+            ManifestKind::Pixi => ManifestSource::PixiToml(TomlManifest::new(document)),
+            ManifestKind::Pyproject => ManifestSource::PyProjectToml(TomlManifest::new(document)),
         };
 
         Ok(Self {
@@ -682,7 +682,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{channel::PrioritizedChannel, manifest::Manifest};
+    use crate::channel::PrioritizedChannel;
     use glob::glob;
 
     const PROJECT_BOILERPLATE: &str = r#"

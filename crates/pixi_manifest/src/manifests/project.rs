@@ -2,23 +2,111 @@ use std::fmt;
 
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
+use serde_with::with_prefix;
 use toml_edit::{value, Array, Item, Table, Value};
 
-use super::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
+use super::TomlManifest;
+use crate::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
+
+pub struct TableName<'a> {
+    prefix: Option<&'static str>,
+    platform: Option<Platform>,
+    feature_name: Option<FeatureName>,
+    table: Option<&'a str>,
+}
+
+impl ToString for TableName<'_> {
+    fn to_string(&self) -> String {
+        self.to_toml_table_name()
+    }
+}
+
+pub struct GlobalTableName<'a> {
+    env_name: Option<Platform>,
+    table: Option<&'a str>,
+}
+
+impl TableName<'_> {
+    pub fn new() -> Self {
+        Self {
+            prefix: None,
+            platform: None,
+            feature_name: None,
+            table: None,
+        }
+    }
+
+    pub fn with_prefix(mut self, prefix: Option<&'static str>) -> Self {
+        self.prefix = prefix;
+        self
+    }
+
+    pub fn with_platform(mut self, platform: Option<Platform>) -> Self {
+        self.platform = platform;
+        self
+    }
+
+    pub fn with_feature_name(mut self, feature_name: Option<FeatureName>) -> Self {
+        self.feature_name = feature_name;
+        self
+    }
+
+    pub fn with_table(mut self, table: Option<&'static str>) -> Self {
+        self.table = table;
+        self
+    }
+}
+
+/// [env.python-310.dependencies]
+///
+/// [env.python-310.exposed]
+///
+
+impl TableName<'_> {
+    fn to_toml_table_name(&self) -> String {
+        let mut parts = Vec::new();
+
+        if self.prefix.is_some() {
+            parts.push(self.prefix.unwrap());
+        }
+
+        if self
+            .feature_name
+            .as_ref()
+            .is_some_and(|feature_name| !feature_name.is_default())
+        {
+            parts.push("feature");
+            parts.push(
+                self.feature_name
+                    .as_ref()
+                    .expect("we already verified")
+                    .as_str(),
+            );
+        }
+        if let Some(platform) = self.platform {
+            parts.push("target");
+            parts.push(platform.as_str());
+        }
+        if let Some(table) = self.table {
+            parts.push(table);
+        }
+        parts.join(".")
+    }
+}
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest
 #[derive(Debug, Clone)]
 pub enum ManifestSource {
-    PyProjectToml(toml_edit::DocumentMut),
-    PixiToml(toml_edit::DocumentMut),
+    PyProjectToml(TomlManifest),
+    PixiToml(TomlManifest),
 }
 
 impl fmt::Display for ManifestSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ManifestSource::PyProjectToml(document) => write!(f, "{}", document),
-            ManifestSource::PixiToml(document) => write!(f, "{}", document),
+            ManifestSource::PyProjectToml(document) => write!(f, "{}", document.0),
+            ManifestSource::PixiToml(document) => write!(f, "{}", document.0),
         }
     }
 }
@@ -27,13 +115,13 @@ impl ManifestSource {
     /// Returns a new empty pixi manifest.
     #[cfg(test)]
     fn empty_pixi() -> Self {
-        ManifestSource::PixiToml(toml_edit::DocumentMut::new())
+        ManifestSource::PixiToml(TomlManifest::default())
     }
 
     /// Returns a new empty pyproject manifest.
     #[cfg(test)]
     fn empty_pyproject() -> Self {
-        ManifestSource::PyProjectToml(toml_edit::DocumentMut::new())
+        ManifestSource::PyProjectToml(TomlManifest::default())
     }
 
     /// Returns the file name of the manifest
@@ -45,103 +133,62 @@ impl ManifestSource {
         }
     }
 
+    fn table_prefix(&self) -> Option<&'static str> {
+        match self {
+            ManifestSource::PyProjectToml(_) => Some(PYPROJECT_PIXI_PREFIX),
+            ManifestSource::PixiToml(_) => None,
+        }
+    }
+
+    fn manifest(&mut self) -> &mut TomlManifest {
+        match self {
+            ManifestSource::PyProjectToml(document) => document,
+            ManifestSource::PixiToml(document) => document,
+        }
+    }
+
     /// Returns the a nested path. It is composed of
     /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
     /// - the feature if it is not the default feature
     /// - the platform if it is not `None`
     /// - the name of a nested TOML table if it is not `None`
-    fn get_nested_toml_table_name(
-        &self,
-        feature_name: &FeatureName,
-        platform: Option<Platform>,
-        table: Option<&str>,
-    ) -> String {
-        let mut parts = Vec::new();
-        if let ManifestSource::PyProjectToml(_) = self {
-            parts.push(PYPROJECT_PIXI_PREFIX);
-        }
-        if !feature_name.is_default() {
-            parts.push("feature");
-            parts.push(feature_name.as_str());
-        }
-        if let Some(platform) = platform {
-            parts.push("target");
-            parts.push(platform.as_str());
-        }
-        if let Some(table) = table {
-            parts.push(table);
-        }
-        parts.join(".")
-    }
+    // fn get_nested_toml_table_name(
+    //     &self,
+    //     feature_name: &FeatureName,
+    //     platform: Option<Platform>,
+    //     table: Option<&str>,
+    // ) -> String {
+    //     let mut parts = Vec::new();
+    //     if let ManifestSource::PyProjectToml(_) = self {
+    //         parts.push(PYPROJECT_PIXI_PREFIX);
+    //     }
+    //     if !feature_name.is_default() {
+    //         parts.push("feature");
+    //         parts.push(feature_name.as_str());
+    //     }
+    //     if let Some(platform) = platform {
+    //         parts.push("target");
+    //         parts.push(platform.as_str());
+    //     }
+    //     if let Some(table) = table {
+    //         parts.push(table);
+    //     }
+    //     parts.join(".")
+    // }
 
     /// Retrieve a mutable reference to a target table `table_name`
     /// for a specific platform and feature.
     /// If the table is not found, it is inserted into the document.
-    fn get_or_insert_toml_table<'a>(
-        &'a mut self,
-        platform: Option<Platform>,
-        feature: &FeatureName,
-        table_name: &str,
-    ) -> Result<&'a mut Table, TomlError> {
-        let table_name: String =
-            self.get_nested_toml_table_name(feature, platform, Some(table_name));
-        self.get_or_insert_nested_table(&table_name)
-    }
-
-    /// Retrieve a mutable reference to a target table `table_name`
-    /// in dotted form (e.g. `table1.table2`) from the root of the document.
-    /// If the table is not found, it is inserted into the document.
-    fn get_or_insert_nested_table<'a>(
-        &'a mut self,
-        table_name: &str,
-    ) -> Result<&'a mut Table, TomlError> {
-        let parts: Vec<&str> = table_name.split('.').collect();
-
-        let mut current_table = self.as_table_mut();
-
-        for part in parts {
-            let entry = current_table.entry(part);
-            let item = entry.or_insert(Item::Table(Table::new()));
-            current_table = item
-                .as_table_mut()
-                .ok_or_else(|| TomlError::table_error(part, table_name))?;
-            // Avoid creating empty tables
-            current_table.set_implicit(true);
-        }
-        Ok(current_table)
-    }
-
-    /// Retrieves a mutable reference to a target array `array_name`
-    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
-    ///
-    /// If the array is not found, it is inserted into the document.
-    fn get_or_insert_toml_array<'a>(
-        &'a mut self,
-        table_name: &str,
-        array_name: &str,
-    ) -> Result<&'a mut Array, TomlError> {
-        self.get_or_insert_nested_table(table_name)?
-            .entry(array_name)
-            .or_insert(Item::Value(Value::Array(Array::new())))
-            .as_array_mut()
-            .ok_or_else(|| TomlError::array_error(array_name, table_name))
-    }
-
-    /// Retrieves a mutable reference to a target array `array_name`
-    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
-    ///
-    /// If the array is not found, returns None.
-    fn get_toml_array<'a>(
-        &'a mut self,
-        table_name: &str,
-        array_name: &str,
-    ) -> Result<Option<&'a mut Array>, TomlError> {
-        let array = self
-            .get_or_insert_nested_table(table_name)?
-            .get_mut(array_name)
-            .and_then(|a| a.as_array_mut());
-        Ok(array)
-    }
+    // fn get_or_insert_toml_table<'a>(
+    //     &'a mut self,
+    //     platform: Option<Platform>,
+    //     feature: &FeatureName,
+    //     table_name: &str,
+    // ) -> Result<&'a mut Table, TomlError> {
+    //     let table_name: String =
+    //         self.get_nested_toml_table_name(feature, platform, Some(table_name));
+    //     self.get_or_insert_nested_table(&table_name)
+    // }
 
     /// Returns a mutable reference to the specified array either in project or
     /// feature.
@@ -154,14 +201,21 @@ impl ManifestSource {
             FeatureName::Default => Some("project"),
             FeatureName::Named(_) => None,
         };
-        let table_name = self.get_nested_toml_table_name(feature_name, None, table);
-        self.get_or_insert_toml_array(&table_name, array_name)
+
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name.clone()))
+            .with_table(table);
+
+        // let table_name = self.get_nested_toml_table_name(feature_name, None, table);
+        self.manifest()
+            .get_or_insert_toml_array(table_name.to_string().as_str(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
         match self {
-            ManifestSource::PyProjectToml(document) => document.as_table_mut(),
-            ManifestSource::PixiToml(document) => document.as_table_mut(),
+            ManifestSource::PyProjectToml(document) => document.0.as_table_mut(),
+            ManifestSource::PixiToml(document) => document.0.as_table_mut(),
         }
     }
 
@@ -179,11 +233,11 @@ impl ManifestSource {
         // arrays
         let array = match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                self.get_toml_array("project", "dependencies")?
+                self.manifest().get_toml_array("project", "dependencies")?
             }
-            ManifestSource::PyProjectToml(_) => {
-                self.get_toml_array("project.optional-dependencies", &feature_name.to_string())?
-            }
+            ManifestSource::PyProjectToml(_) => self
+                .manifest()
+                .get_toml_array("project.optional-dependencies", &feature_name.to_string())?,
             _ => None,
         };
         if let Some(array) = array {
@@ -200,7 +254,15 @@ impl ManifestSource {
 
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
         // try and remove the dependency from pixi native tables
-        self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)
+
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name.clone()))
+            .with_platform(platform)
+            .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+        self.manifest()
+            .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -216,7 +278,14 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
-        self.get_or_insert_toml_table(platform, feature_name, spec_type.name())
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name.clone()))
+            .with_platform(platform)
+            .with_table(Some(spec_type.name()));
+
+        self.manifest()
+            .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -232,9 +301,20 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
-        let dependency_table =
-            self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-        dependency_table.insert(name.as_normalized(), Item::Value(spec.to_toml_value()));
+        // let dependency_table =
+        //     self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
+
+        let dependency_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_platform(platform)
+            .with_feature_name(Some(feature_name.clone()))
+            .with_table(Some(spec_type.name()));
+
+        self.manifest()
+            .get_or_insert_nested_table(dependency_table.to_string().as_str())
+            .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
+
+        // dependency_table.insert(name.as_normalized(), Item::Value(spec.to_toml_value()));
         Ok(())
     }
 
@@ -259,10 +339,12 @@ impl ManifestSource {
                     feature_name,
                 )?;
                 if let FeatureName::Named(name) = feature_name {
-                    self.get_or_insert_toml_array("project.optional-dependencies", name)?
+                    self.manifest()
+                        .get_or_insert_toml_array("project.optional-dependencies", name)?
                         .push(requirement.to_string())
                 } else {
-                    self.get_or_insert_toml_array("project", "dependencies")?
+                    self.manifest()
+                        .get_or_insert_toml_array("project", "dependencies")?
                         .push(requirement.to_string())
                 }
             }
@@ -273,7 +355,14 @@ impl ManifestSource {
                     pypi_requirement.set_editable(editable);
                 }
 
-                self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
+                let dependency_table = TableName::new()
+                    .with_prefix(self.table_prefix())
+                    .with_platform(platform)
+                    .with_feature_name(Some(feature_name.clone()))
+                    .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+                self.manifest()
+                    .get_or_insert_nested_table(dependency_table.to_string().as_str())?
                     .insert(
                         requirement.name.as_ref(),
                         Item::Value(pypi_requirement.into()),
@@ -293,7 +382,14 @@ impl ManifestSource {
         // Get the task table either from the target platform or the default tasks.
         // If it does not exist in TOML, consider this ok as we want to remove it
         // anyways
-        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
+        let task_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_platform(platform)
+            .with_feature_name(Some(feature_name.clone()))
+            .with_table(Some("tasks"));
+
+        self.manifest()
+            .get_or_insert_nested_table(task_table.to_string().as_str())?
             .remove(name);
 
         Ok(())
@@ -308,7 +404,14 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
-        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
+        let task_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_platform(platform)
+            .with_feature_name(Some(feature_name.clone()))
+            .with_table(Some("tasks"));
+
+        self.manifest()
+            .get_or_insert_nested_table(task_table.to_string().as_str())?
             .insert(name, task.into());
 
         Ok(())
@@ -341,8 +444,14 @@ impl ManifestSource {
             )))
         };
 
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(FeatureName::Default))
+            .with_table(Some("environments"));
+
         // Get the environment table
-        self.get_or_insert_toml_table(None, &FeatureName::Default, "environments")?
+        self.manifest()
+            .get_or_insert_nested_table(env_table.to_string().as_str())?
             .insert(&name.into(), item);
 
         Ok(())
@@ -351,8 +460,14 @@ impl ManifestSource {
     /// Removes an environment from the manifest. Returns `true` if the
     /// environment was removed.
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(FeatureName::Default))
+            .with_table(Some("environments"));
+
         Ok(self
-            .get_or_insert_toml_table(None, &FeatureName::Default, "environments")?
+            .manifest()
+            .get_or_insert_nested_table(env_table.to_string().as_str())?
             .remove(name)
             .is_some())
     }
@@ -377,7 +492,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::manifest::Manifest;
+    use crate::manifests::manifest::Manifest;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -419,25 +534,46 @@ mod tests {
     #[test]
     fn test_get_or_insert_toml_table() {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
+        let task_table = TableName::new()
+            .with_feature_name(Some(FeatureName::Default))
+            .with_table(Some("tasks"));
+
         let _ = manifest
             .document
-            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks")
+            .manifest()
+            .get_or_insert_nested_table(task_table.to_string().as_str())
             .map(|t| t.set_implicit(false));
+
+        let linux_task_table = TableName::new()
+            .with_feature_name(Some(FeatureName::Default))
+            .with_platform(Some(Platform::Linux64))
+            .with_table(Some("tasks"));
+
         let _ = manifest
             .document
-            .get_or_insert_toml_table(Some(Platform::Linux64), &FeatureName::Default, "tasks")
+            .manifest()
+            .get_or_insert_nested_table(linux_task_table.to_string().as_str())
             .map(|t| t.set_implicit(false));
+
+        let named_feature_task = TableName::new()
+            .with_feature_name(Some(FeatureName::Named("test".to_string())))
+            .with_table(Some("tasks"));
+
         let _ = manifest
             .document
-            .get_or_insert_toml_table(None, &FeatureName::Named("test".to_string()), "tasks")
+            .manifest()
+            .get_or_insert_nested_table(named_feature_task.to_string().as_str())
             .map(|t| t.set_implicit(false));
+
+        let named_feature_linux_task = TableName::new()
+            .with_feature_name(Some(FeatureName::Named("test".to_string())))
+            .with_platform(Some(Platform::Linux64))
+            .with_table(Some("tasks"));
+
         let _ = manifest
             .document
-            .get_or_insert_toml_table(
-                Some(Platform::Linux64),
-                &FeatureName::Named("test".to_string()),
-                "tasks",
-            )
+            .manifest()
+            .get_or_insert_nested_table(named_feature_linux_task.to_string().as_str())
             .map(|t| t.set_implicit(false));
         assert_snapshot!(manifest.document.to_string());
     }
@@ -458,35 +594,36 @@ platforms = ["linux-64", "win-64"]
         // Test all different options for the feature name and platform
         assert_eq!(
             "dependencies".to_string(),
-            manifest.document.get_nested_toml_table_name(
-                &FeatureName::Default,
-                None,
-                Some("dependencies")
-            )
+            TableName::new()
+                .with_feature_name(Some(FeatureName::Default))
+                .with_table(Some("dependencies"))
+                .to_string()
         );
+
         assert_eq!(
             "target.linux-64.dependencies".to_string(),
-            manifest.document.get_nested_toml_table_name(
-                &FeatureName::Default,
-                Some(Platform::Linux64),
-                Some("dependencies")
-            )
+            TableName::new()
+                .with_feature_name(Some(FeatureName::Default))
+                .with_platform(Some(Platform::Linux64))
+                .with_table(Some("dependencies"))
+                .to_string()
         );
+
         assert_eq!(
             "feature.test.dependencies".to_string(),
-            manifest.document.get_nested_toml_table_name(
-                &FeatureName::Named("test".to_string()),
-                None,
-                Some("dependencies")
-            )
+            TableName::new()
+                .with_feature_name(Some(FeatureName::Named("test".to_string())))
+                .with_table(Some("dependencies"))
+                .to_string()
         );
+
         assert_eq!(
             "feature.test.target.linux-64.dependencies".to_string(),
-            manifest.document.get_nested_toml_table_name(
-                &FeatureName::Named("test".to_string()),
-                Some(Platform::Linux64),
-                Some("dependencies")
-            )
+            TableName::new()
+                .with_feature_name(Some(FeatureName::Named("test".to_string())))
+                .with_platform(Some(Platform::Linux64))
+                .with_table(Some("dependencies"))
+                .to_string()
         );
     }
 
