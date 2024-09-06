@@ -6,7 +6,7 @@ on:
 jobs:
   # Install a couple of projects that we know use pixi
   test-downstream:
-    name: Downstream test ${{ matrix.repository }} on ${{ matrix.os }}
+    name: ${{ matrix.repository }} on ${{ matrix.os }}
     # if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
     runs-on: ${{ matrix.arch.os }}
     strategy:
@@ -24,19 +24,22 @@ jobs:
               os: windows-latest,
               extension: .exe,
             }
-        repository:
-          - Deltares/Ribasim
-          - quantco/polarify
+        project:
+          - { ref: Deltares/Ribasim, lock_file_may_change: false }
+          - { ref: quantco/polarify, lock_file_may_change: false }
         include:
+          # Include specific nerfstudio test
+          # is using a v4 lockfile so we need to allow it to change
           - arch: { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
-            repository: nerfstudio-project/nerfstudio
+            project:
+              { ref: nerfstudio-project/nerfstudio, lock_file_may_change: true }
     env:
       CONDA_OVERRIDE_CUDA: "11.8"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.repository }}
+          repository: ${{ matrix.project.ref }}
       # Setup pixi binary
       - name: Download binary from build
         uses: actions/download-artifact@v4
@@ -73,6 +76,7 @@ jobs:
       - name: Install repository
         run: pixi install -v
       - name: Check lockfile didn't change
+        if: matrix.lock_file_may_change != true
         run: git diff --exit-code pixi.lock
 
   # Test all of the examples
