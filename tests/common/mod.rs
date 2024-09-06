@@ -15,6 +15,7 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
+use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::task::{
@@ -34,6 +35,7 @@ use pixi::{
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};
 use tempfile::TempDir;
@@ -47,6 +49,11 @@ pub struct PixiControl {
 
 pub struct RunResult {
     output: Output,
+}
+
+/// Hides the progress bars for the tests
+fn hide_progress_bars() {
+    global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
 }
 
 impl RunResult {
@@ -156,6 +163,9 @@ impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> miette::Result<PixiControl> {
         let tempdir = tempfile::tempdir().into_diagnostic()?;
+        // Hide the progress bars for the tests
+        // Otherwise the override the test output
+        hide_progress_bars();
         Ok(PixiControl { tmpdir: tempdir })
     }
 
