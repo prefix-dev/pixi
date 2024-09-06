@@ -236,7 +236,7 @@ impl Project {
                                 if let Some(path_str) = path_value.as_str() {
                                     if path_str == format!("bin/{binary}") {
                                         return json
-                                            .pointer(&format!("/{binary}"))
+                                            .pointer("/name")
                                             .map(|p| p.to_string())
                                             .ok_or_else(|| {
                                                 miette!(
