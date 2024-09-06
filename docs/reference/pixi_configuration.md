@@ -42,7 +42,7 @@ The configuration is loaded in the following order:
 
 !!! note
     To find the locations where `pixi` looks for configuration files, run
-    `pixi` with `-v` or `--verbose`.
+    `pixi` with `-vv`.
 
 ## Reference
 

@@ -22,7 +22,6 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-/// TODO: maybe remove this duplicate from `src/util.rs` at some point
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
@@ -272,6 +271,7 @@ impl PinningStrategy {
     ) -> Option<VersionSpec> {
         let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
         let lower_bound = min_version.clone();
+        let num_segments = max_version.segment_count();
 
         let constraint = match self {
             Self::ExactVersion => VersionSpec::Group(
@@ -285,7 +285,7 @@ impl PinningStrategy {
             Self::Major => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(2)
+                    .pop_segments(num_segments.saturating_sub(1))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Major)
                     .ok()?;
@@ -300,7 +300,7 @@ impl PinningStrategy {
             Self::Minor => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(1)
+                    .pop_segments(num_segments.saturating_sub(2))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Minor)
                     .ok()?;
@@ -449,7 +449,7 @@ impl From<ConfigCliPrompt> for Config {
 #[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
-        config.into()
+        rattler_repodata_gateway::ChannelConfig::from(&config)
     }
 }
 
@@ -906,7 +906,7 @@ impl Config {
         // Construct the gateway
         Gateway::builder()
             .with_client(client)
-            .with_cache_dir(cache_dir.join("repodata"))
+            .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
             .finish()
     }
@@ -968,7 +968,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
-        assert!(unused.contains(&"UNUSED".to_string()));
+        assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml).unwrap();
@@ -1293,6 +1293,7 @@ UNUSED = "unused"
             vec!["1.2"],
             vec!["1.2", "2"],
             vec!["1.2", "1!2.0"],
+            vec!["24.2"],
         ];
 
         // We could use `strum` for this, but it requires another dependency

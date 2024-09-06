@@ -11,7 +11,7 @@ use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
@@ -46,7 +46,6 @@ pub struct ProjectInfo {
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
     version: Option<String>,
-    configuration: Vec<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -171,6 +170,7 @@ pub struct Info {
     auth_dir: PathBuf,
     project_info: Option<ProjectInfo>,
     environments_info: Vec<EnvironmentInfo>,
+    config_locations: Vec<PathBuf>,
 }
 impl Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -213,6 +213,23 @@ impl Display for Info {
             self.auth_dir.to_string_lossy()
         )?;
 
+        let config_locations = self
+            .config_locations
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .join(" ");
+
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Config locations"),
+            if config_locations.is_empty() {
+                "No config files found"
+            } else {
+                &config_locations
+            }
+        )?;
+
         if let Some(pi) = self.project_info.as_ref() {
             writeln!(f, "\n{}", bold.apply_to("Project\n------------"))?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
@@ -224,19 +241,6 @@ impl Display for Info {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Manifest file"),
                 pi.manifest_path.to_string_lossy()
-            )?;
-
-            let config_locations = pi
-                .configuration
-                .iter()
-                .map(|p| p.to_string_lossy())
-                .join(", ");
-
-            writeln!(
-                f,
-                "{:>WIDTH$}: {}",
-                bold.apply_to("Config locations"),
-                config_locations
             )?;
 
             if let Some(update_time) = &pi.last_updated {
@@ -314,7 +318,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest_path: p.manifest_path(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
-        configuration: p.config().loaded_from.clone(),
         version: p.version().clone().map(|v| v.to_string()),
     });
 
@@ -357,7 +360,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unwrap_or_default();
 
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .iter()
         .cloned()
@@ -386,6 +389,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         auth_dir: auth_file,
         project_info,
         environments_info,
+        config_locations: config.loaded_from.clone(),
     };
 
     if args.json {

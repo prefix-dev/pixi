@@ -1,2 +1,9 @@
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
+
+[target.'cfg(all(windows, debug_assertions))']
+rustflags = [
+  # increase the stack size to prevent overflowing the stack in debug
+  "-C",
+  "link-arg=/STACK:8000000",
+]

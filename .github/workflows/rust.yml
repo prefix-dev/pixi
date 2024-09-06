@@ -98,14 +98,15 @@ jobs:
   cargo-test:
     name: Cargo Test | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: 8core_ubuntu_latest_runner }
           - { name: "macOS",       target: x86_64-apple-darwin,        os: macos-13 }
           - { name: "macOS-arm",   target: aarch64-apple-darwin,       os: macos-14 }
-          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: 16core_windows_latest_runner }
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/setup-cross-toolchain-action@v1
@@ -149,13 +150,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: 8core_ubuntu_latest_runner }
           - { name: "Linux-aarch64",  target: aarch64-unknown-linux-musl, os: ubuntu-latest }
 
           - { name: "macOS-x86",      target: x86_64-apple-darwin,        os: macos-13 }
           - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macos-14 }  # macOS-14 is the ARM chipset
 
-          - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: 16core_windows_latest_runner }
           - { name: "Windows-arm",    target: aarch64-pc-windows-msvc,    os: windows-latest }
     env:
       #
@@ -224,7 +225,7 @@ jobs:
         id: build-options
         if: contains(matrix.target, '-musl')
         run: |
-          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS} --no-default-features --features rustls-tls" >> $GITHUB_OUTPUT
+          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Build on Linux / Mac
         if: runner.os != 'Windows'

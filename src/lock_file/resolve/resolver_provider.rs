@@ -1,11 +1,14 @@
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, HashMap},
     future::ready,
+    rc::Rc,
 };
 
+use distribution_filename::SourceDistExtension;
 use distribution_types::{
     Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
-    RegistrySourceDist, SourceDist, SourceDistCompatibility,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -24,6 +27,9 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
         &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+
+    /// Saves the number of requests by the uv solver per package
+    pub(super) package_requests: Rc<RefCell<HashMap<PackageName, u32>>>,
 }
 
 impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
@@ -33,6 +39,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
+            let version = repodata_record.version().to_string();
+
+            tracing::debug!(
+                "overriding PyPI package version request {}=={}",
+                package_name,
+                version
+            );
             // If we encounter a package that was installed by conda we simply return a single
             // available version in the form of a source distribution with the URL of the
             // conda package.
@@ -48,23 +61,19 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 requires_python: None,
                 size: None,
                 upload_time_utc_ms: None,
-                url: FileLocation::AbsoluteUrl(repodata_record.url.to_string()),
+                url: FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone())),
                 yanked: None,
             };
 
             let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
-                version: repodata_record
-                    .version()
-                    .version()
-                    .to_string()
-                    .parse()
-                    .expect("could not convert to pypi version"),
+                version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(VerbatimUrl::from_url(
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
                 )),
                 wheels: vec![],
+                ext: SourceDistExtension::TarGz,
             };
 
             let prioritized_dist = PrioritizedDist::from_source(
@@ -72,6 +81,13 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 Vec::new(),
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
+
+            // Record that we got a request for this package so we can track the number of requests
+            self.package_requests
+                .borrow_mut()
+                .entry(package_name.clone())
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
 
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
@@ -91,6 +107,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
         if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
+                tracing::debug!("overriding PyPI package metadata request {}", name);
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.

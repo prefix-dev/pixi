@@ -172,7 +172,7 @@ pub(crate) struct EnvironmentFile {
 /// Write information about the environment to a file in the environment
 /// directory. This can be useful for other tools that only know the environment
 /// directory to find the original project.
-pub fn write_environment_file(
+pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
@@ -231,7 +231,7 @@ pub enum LockFileUsage {
 
 impl LockFileUsage {
     /// Returns true if the lock-file should be updated if it is out of date.
-    pub fn allows_lock_file_updates(self) -> bool {
+    pub(crate) fn allows_lock_file_updates(self) -> bool {
         match self {
             LockFileUsage::Update => true,
             LockFileUsage::Locked | LockFileUsage::Frozen => false,
@@ -239,7 +239,7 @@ impl LockFileUsage {
     }
 
     /// Returns true if the lock-file should be checked if it is out of date.
-    pub fn should_check_if_out_of_date(self) -> bool {
+    pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked => true,
             LockFileUsage::Frozen => false,
@@ -247,19 +247,18 @@ impl LockFileUsage {
     }
 }
 
-/// Returns the prefix associated with the given environment. If the prefix
-/// doesn't exist or is not up-to-date it is updated.
+/// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
 /// The `sparse_repo_data` is used when the lock-file is update. We pass it into
 /// this function to make sure the data is not loaded twice since the repodata
 /// takes up a lot of memory and takes a while to load. If `sparse_repo_data` is
 /// `None` it will be downloaded. If the lock-file is not updated, the
 /// `sparse_repo_data` is ignored.
-pub async fn get_up_to_date_prefix(
+pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
-) -> miette::Result<Prefix> {
+) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
 
@@ -274,7 +273,7 @@ pub async fn get_up_to_date_prefix(
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage,
             no_install,
             ..UpdateLockFileOptions::default()
@@ -282,11 +281,10 @@ pub async fn get_up_to_date_prefix(
         .await?;
 
     // Get the locked environment from the lock-file.
-    if no_install {
-        Ok(Prefix::new(environment.dir()))
-    } else {
-        lock_file.prefix(environment).await
+    if !no_install {
+        lock_file.prefix(environment).await?;
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -304,6 +302,7 @@ pub async fn update_prefix_pypi(
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
     platform: Platform,
+    non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
     // If we have changed interpreter, we need to uninstall all site-packages from
     // the old interpreter We need to do this before the pypi prefix update,
@@ -368,6 +367,7 @@ pub async fn update_prefix_pypi(
                 pypi_indexes,
                 environment_variables,
                 platform,
+                non_isolated_packages,
             )
         },
     )
@@ -444,7 +444,9 @@ pub enum PythonStatus {
 
 impl PythonStatus {
     /// Determine the [`PythonStatus`] from a [`Transaction`].
-    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
+    pub(crate) fn from_transaction(
+        transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    ) -> Self {
         match (
             transaction.current_python_info.as_ref(),
             transaction.python_info.as_ref(),
@@ -464,7 +466,7 @@ impl PythonStatus {
 
     /// Returns the info of the current situation (e.g. after the transaction
     /// completed).
-    pub fn current_info(&self) -> Option<&PythonInfo> {
+    pub(crate) fn current_info(&self) -> Option<&PythonInfo> {
         match self {
             PythonStatus::Changed { new, .. }
             | PythonStatus::Unchanged(new)
@@ -475,7 +477,7 @@ impl PythonStatus {
 
     /// Returns the location of the python interpreter relative to the root of
     /// the prefix.
-    pub fn location(&self) -> Option<&Path> {
+    pub(crate) fn location(&self) -> Option<&Path> {
         Some(&self.current_info()?.path)
     }
 }

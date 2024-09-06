@@ -41,7 +41,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.27.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.29.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -243,22 +243,10 @@ pub async fn execute() -> miette::Result<()> {
         .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "console-subscriber")]
-        {
-            let console_layer = console_subscriber::spawn();
-            tracing_subscriber::registry()
-                .with(console_layer)
-                .with(env_filter)
-                .with(fmt_layer)
-                .init();
-        } else {
-            tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt_layer)
-            .init();
-        }
-    }
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .init();
 
     // Execute the command
     execute_command(args.command).await

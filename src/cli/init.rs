@@ -1,26 +1,24 @@
-use std::cmp::PartialEq;
 use std::{
+    cmp::PartialEq,
     fs,
     io::{Error, ErrorKind, Write},
     path::{Path, PathBuf},
 };
 
 use clap::{Parser, ValueEnum};
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
+use pixi_config::{get_default_author, Config};
+use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
 };
+use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use tokio::fs::OpenOptions;
 use url::Url;
 
-use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
-    Project,
-};
-use pixi_config::{get_default_author, Config};
-use pixi_consts::consts;
-use pixi_utils::conda_environment_file::CondaEnvFile;
+use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -202,8 +200,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // TODO: Improve this:
         //  - Use .condarc as channel config
-        //  - Implement it for `[pixi_manifest::ProjectManifest]` to do this for other
-        //    filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
         let rv = render_project(
             &env,
@@ -216,26 +212,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &vec![],
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
-        let platforms = platforms
-            .into_iter()
-            .map(|p| p.parse().into_diagnostic())
-            .collect::<Result<Vec<Platform>, _>>()?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
-            // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
             project.manifest.add_dependency(
                 &spec,
                 SpecType::Run,
-                &platforms,
+                // No platforms required as you can't define them in the yaml
+                &[],
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
                 &channel_config,
             )?;
         }
         for requirement in pypi_deps {
-            project.manifest.add_pypi_dependency(
+            project.manifest.add_pep508_dependency(
                 &requirement,
-                &platforms,
+                // No platforms required as you can't define them in the yaml
+                &[],
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
@@ -243,7 +236,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
+        eprintln!(
+            "{}Created {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            project.manifest_path().display()
+        );
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
@@ -262,7 +260,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             && pyproject_manifest_path.is_file()
         {
             dialoguer::Confirm::new()
-                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()) )
+                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()))
                 .default(false)
                 .show_default(true)
                 .interact()
@@ -352,6 +350,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )
                 .unwrap();
             save_manifest_file(&pyproject_manifest_path, rv)?;
+            let src_dir = dir.join("src").join(default_name);
+            tokio::fs::create_dir_all(&src_dir)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
+
+            let init_file = src_dir.join("__init__.py");
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&init_file)
+                .await
+            {
+                Ok(_) => (),
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    // If the file already exists, do nothing
+                }
+                Err(e) => {
+                    return Err(e).into_diagnostic().wrap_err_with(|| {
+                        format!("Could not create file {}.", init_file.display())
+                    });
+                }
+            };
+
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to

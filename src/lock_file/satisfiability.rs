@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use distribution_filename::DistExtension;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -82,10 +83,10 @@ pub enum PlatformUnsat {
     FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(pypi_types::Requirement, String),
+    UnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(pypi_types::Requirement, String),
+    CondaUnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -131,6 +132,12 @@ pub enum PlatformUnsat {
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
+    #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'")]
+    EditablePackageIsUrl(PackageName, String),
+
+    #[error("the editable package path '{0}', lock does not equal spec path '{1}' == '{2}'")]
+    EditablePackagePathMismatch(PackageName, PathBuf, PathBuf),
+
     #[error("failed to determine pypi source tree hash for {0}")]
     FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
 
@@ -144,7 +151,7 @@ pub enum PlatformUnsat {
 impl PlatformUnsat {
     /// Returns true if this is a problem with pypi packages only. This means
     /// the conda packages are still considered valid.
-    pub fn is_pypi_only(&self) -> bool {
+    pub(crate) fn is_pypi_only(&self) -> bool {
         matches!(
             self,
             PlatformUnsat::UnsatisfiableRequirement(_, _)
@@ -178,19 +185,27 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                         UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
 
                     // it is actually a path
-                    let url = if let UrlOrPath::Path(path) = url_or_path {
-                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                            path.clone(),
-                            path.clone(),
-                            verbatim_url.to_url(),
-                        ));
+                    let url = match url_or_path {
+                        UrlOrPath::Path(path) => {
+                            let ext = DistExtension::from_path(path.clone()).map_err(|e| {
+                                ParsedUrlError::MissingExtensionPath(path.clone(), e)
+                            })?;
+                            let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
+                                path.clone(),
+                                ext,
+                                verbatim_url.to_url(),
+                            ));
 
-                        VerbatimParsedUrl {
-                            parsed_url,
-                            verbatim: verbatim_url,
+                            VerbatimParsedUrl {
+                                parsed_url,
+                                verbatim: verbatim_url,
+                            }
+                            // Can only be an archive
                         }
-                    } else {
-                        VerbatimParsedUrl::try_from(verbatim_url)?
+                        UrlOrPath::Url(u) => VerbatimParsedUrl {
+                            parsed_url: ParsedUrl::try_from(u)?,
+                            verbatim: verbatim_url,
+                        },
                     };
 
                     Some(VersionOrUrl::Url(url))
@@ -248,9 +263,14 @@ pub fn verify_environment_satisfiability(
         let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
         match locked_environment.pypi_indexes() {
             None => {
+                // Mismatch when there should be an index but there is not
                 if locked_environment
                     .version()
                     .should_pypi_indexes_be_present()
+                    && locked_environment
+                        .pypi_packages()
+                        .iter()
+                        .any(|(_platform, packages)| !packages.is_empty())
                 {
                     return Err(IndexesMismatch {
                         current: indexes,
@@ -285,6 +305,7 @@ pub fn verify_environment_satisfiability(
 /// This function returns a [`PlatformUnsat`] error if a verification issue
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
+#[allow(clippy::result_large_err)]
 pub fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
@@ -351,6 +372,7 @@ pub fn verify_platform_satisfiability(
     )
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Dependency {
     Input(
         rattler_conda_types::PackageName,
@@ -364,10 +386,11 @@ enum Dependency {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub fn pypi_satifisfies_editable(
+pub(crate) fn pypi_satifisfies_editable(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
-) -> bool {
+    project_root: &Path,
+) -> Result<(), PlatformUnsat> {
     // We dont match on spec.is_editable() != locked_data.editable
     // as it will happen later in verify_package_platform_satisfiability
     // TODO: could be a potential refactoring opportunity
@@ -381,15 +404,24 @@ pub fn pypi_satifisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { lock_path, .. } => match &locked_data.url_or_path {
+        RequirementSource::Directory { install_path, .. } => match &locked_data.url_or_path {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satifsfy
-            UrlOrPath::Url(_) => false,
+            UrlOrPath::Url(url) => Err(PlatformUnsat::EditablePackageIsUrl(
+                spec.name.clone(),
+                url.to_string(),
+            )),
             UrlOrPath::Path(path) => {
-                if path != lock_path {
-                    return false;
+                let absolute_path = project_root.join(path);
+                // sometimes the path is relative, so we need to join it with the project root
+                if &absolute_path != install_path {
+                    return Err(PlatformUnsat::EditablePackagePathMismatch(
+                        spec.name.clone(),
+                        absolute_path.clone(),
+                        install_path.clone(),
+                    ));
                 }
-                true
+                Ok(())
             }
         },
     }
@@ -403,9 +435,10 @@ fn seems_like_commit_sha(s: &str) -> bool {
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub fn pypi_satifisfies_requirement(
+pub(crate) fn pypi_satifisfies_requirement(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
+    project_root: &Path,
 ) -> bool {
     if spec.name != locked_data.name {
         return false;
@@ -473,10 +506,11 @@ pub fn pypi_satifisfies_requirement(
                 UrlOrPath::Path(_) => false,
             }
         }
-        RequirementSource::Path { lock_path, .. }
-        | RequirementSource::Directory { lock_path, .. } => {
+        RequirementSource::Path { install_path, .. }
+        | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
-                if locked_path != lock_path {
+                // sometimes the path is relative, so we need to join it with the project root
+                if &project_root.join(locked_path) != install_path {
                     return false;
                 }
                 return true;
@@ -486,7 +520,8 @@ pub fn pypi_satifisfies_requirement(
     }
 }
 
-pub fn verify_package_platform_satisfiability(
+#[allow(clippy::result_large_err)]
+pub(crate) fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_conda_packages: &RepoDataRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
@@ -647,7 +682,7 @@ pub fn verify_package_platform_satisfiability(
                     if !identifier.satisfies(&requirement) {
                         // The record does not match the spec, the lock-file is inconsistent.
                         return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
-                            requirement.clone(),
+                            Box::new(requirement.clone()),
                             source.into_owned(),
                         ));
                     }
@@ -655,13 +690,7 @@ pub fn verify_package_platform_satisfiability(
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
-                        if !pypi_satifisfies_editable(&requirement, &record.0) {
-                            eprintln!("error on pypi_satifisfies_editable");
-                            return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                requirement,
-                                source.into_owned(),
-                            ));
-                        }
+                        pypi_satifisfies_editable(&requirement, &record.0, project_root)?;
 
                         // Record that we want this package to be editable. This is used to
                         // check at the end if packages that should be editable are actually
@@ -670,9 +699,9 @@ pub fn verify_package_platform_satisfiability(
 
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
-                        if !pypi_satifisfies_requirement(&requirement, &record.0) {
+                        if !pypi_satifisfies_requirement(&requirement, &record.0, project_root) {
                             return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                requirement,
+                                Box::new(requirement),
                                 source.into_owned(),
                             ));
                         }
@@ -681,7 +710,7 @@ pub fn verify_package_platform_satisfiability(
                 } else {
                     // The record does not match the spec, the lock-file is inconsistent.
                     return Err(PlatformUnsat::UnsatisfiableRequirement(
-                        requirement,
+                        Box::new(requirement),
                         source.into_owned(),
                     ));
                 }
@@ -833,6 +862,7 @@ enum FoundPackage {
     PyPi(usize, Vec<ExtraName>),
 }
 
+#[allow(clippy::result_large_err)]
 fn find_matching_package(
     locked_conda_packages: &RepoDataRecordsByName,
     virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
@@ -1140,8 +1170,13 @@ mod tests {
             .unwrap()
             .into_uv_requirement()
             .unwrap();
+        let project_root = PathBuf::from_str("/").unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
+        assert!(pypi_satifisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root
+        ));
         let non_matching_spec =
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
                 .unwrap()
@@ -1151,13 +1186,18 @@ mod tests {
         assert!(!pypi_satifisfies_requirement(
             &non_matching_spec,
             &locked_data,
+            &project_root
         ));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
-        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
+        assert!(pypi_satifisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root
+        ));
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the
@@ -1168,18 +1208,25 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url_or_path: UrlOrPath::Path(PathBuf::from_str("C:\\Users\\username\\mypkg").unwrap()),
+            url_or_path: UrlOrPath::Path(
+                PathBuf::from_str("C:\\Users\\username\\mypkg.tar.gz").unwrap(),
+            ),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
             editable: false,
         };
 
-        let spec = pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg")
-            .unwrap()
-            .into_uv_requirement()
-            .unwrap();
+        let spec =
+            pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
+                .unwrap()
+                .into_uv_requirement()
+                .unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(&spec, &locked_data));
+        assert!(pypi_satifisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new("")
+        ));
     }
 }

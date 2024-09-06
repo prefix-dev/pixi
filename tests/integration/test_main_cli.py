@@ -1,31 +1,37 @@
+from enum import IntEnum
+from pathlib import Path
 import subprocess
+import pytest
 
-PIXI_VERSION = "0.27.1"
+PIXI_VERSION = "0.29.0"
+
+
+class ExitCode(IntEnum):
+    SUCCESS = 0
+    FAILURE = 1
+    INCORRECT_USAGE = 2
+
+
+@pytest.fixture
+def pixi() -> Path:
+    return Path(__file__).parent.joinpath("../../.pixi/target/release/pixi")
 
 
 def verify_cli_command(
-    command: str,
-    expected_exit_code: int | None = None,
-    stdout_contains: str | list | None = None,
-    stdout_excludes: str | list | None = None,
-    stderr_contains: str | list | None = None,
-    stderr_excludes: str | list | None = None,
-):
-    process = subprocess.Popen(
-        command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
-    stdout, stderr = process.communicate()
-    print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {process.returncode}")
-
-    if expected_exit_code is not None:
-        assert int(process.returncode) == int(
-            expected_exit_code
-        ), f"Return code was {process.returncode}, stderr: {stderr}"
-
+    command: list[Path | str],
+    expected_exit_code: ExitCode,
+    stdout_contains: str | list[str] | None = None,
+    stdout_excludes: str | list[str] | None = None,
+    stderr_contains: str | list[str] | None = None,
+    stderr_excludes: str | list[str] | None = None,
+) -> None:
+    process = subprocess.run(command, capture_output=True, text=True)
+    stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
+    print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
         assert (
-            process.returncode == expected_exit_code
-        ), f"Return code was {process.returncode}, expected {expected_exit_code}, stderr: {stderr}"
+            returncode == expected_exit_code
+        ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
 
     if stdout_contains:
         if isinstance(stdout_contains, str):
@@ -52,132 +58,317 @@ def verify_cli_command(
             assert substring not in stderr, f"'{substring}' unexpectedly found in stderr: {stderr}"
 
 
-def test_pixi():
-    verify_cli_command("pixi", 2, None, f"[version {PIXI_VERSION}]")
-    verify_cli_command("pixi --version", 0, PIXI_VERSION, None)
+def test_pixi(pixi: Path) -> None:
+    verify_cli_command(
+        [pixi], ExitCode.INCORRECT_USAGE, stdout_excludes=f"[version {PIXI_VERSION}]"
+    )
+    verify_cli_command([pixi, "--version"], ExitCode.SUCCESS, stdout_contains=PIXI_VERSION)
 
 
-def test_project_commands(tmp_path):
+def test_project_commands(tmp_path: Path, pixi: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
-    verify_cli_command(f"pixi init {tmp_path}", 0)
+    verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
 
     # Channel commands
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} channel add bioconda", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} channel list", 0, stdout_contains="bioconda"
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "channel",
+            "add",
+            "bioconda",
+        ],
+        ExitCode.SUCCESS,
     )
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} channel remove bioconda", 0)
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "channel", "list"],
+        ExitCode.SUCCESS,
+        stdout_contains="bioconda",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "channel",
+            "remove",
+            "bioconda",
+        ],
+        ExitCode.SUCCESS,
+    )
 
     # Description commands
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} description set blabla", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} description get", 0, stdout_contains="blabla"
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "description",
+            "set",
+            "blabla",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
     )
 
     # Environment commands
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} environment add test", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} environment list", 0, stdout_contains="test"
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "environment",
+            "add",
+            "test",
+        ],
+        ExitCode.SUCCESS,
     )
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} environment remove test", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} environment list", 0, stdout_excludes="test"
+        [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
+        ExitCode.SUCCESS,
+        stdout_contains="test",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "environment",
+            "remove",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
+        ExitCode.SUCCESS,
+        stdout_excludes="test",
     )
 
     # Platform commands
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} platform add linux-64", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} platform list", 0, stdout_contains="linux-64"
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "platform",
+            "add",
+            "linux-64",
+        ],
+        ExitCode.SUCCESS,
     )
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} platform remove linux-64", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} platform list", 0, stdout_excludes="linux-64"
+        [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
+        ExitCode.SUCCESS,
+        stdout_contains="linux-64",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "platform",
+            "remove",
+            "linux-64",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
+        ExitCode.SUCCESS,
+        stdout_excludes="linux-64",
     )
 
     # Version commands
-    verify_cli_command(f"pixi project --manifest-path {manifest_path} version set 1.2.3", 0)
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} version get", 0, stdout_contains="1.2.3"
+        [pixi, "project", "--manifest-path", manifest_path, "version", "set", "1.2.3"],
+        ExitCode.SUCCESS,
     )
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} version major", 0, stderr_contains="2.2.3"
+        [pixi, "project", "--manifest-path", manifest_path, "version", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="1.2.3",
     )
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} version minor", 0, stderr_contains="2.3.3"
+        [pixi, "project", "--manifest-path", manifest_path, "version", "major"],
+        ExitCode.SUCCESS,
+        stderr_contains="2.2.3",
     )
     verify_cli_command(
-        f"pixi project --manifest-path {manifest_path} version patch", 0, stderr_contains="2.3.4"
+        [pixi, "project", "--manifest-path", manifest_path, "version", "minor"],
+        ExitCode.SUCCESS,
+        stderr_contains="2.3.3",
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "version", "patch"],
+        ExitCode.SUCCESS,
+        stderr_contains="2.3.4",
     )
 
 
-def test_global_install():
+def test_global_install(pixi: Path) -> None:
     # Install
-    verify_cli_command("pixi global install rattler-build", 0, None, "rattler-build")
+    verify_cli_command(
+        [pixi, "global", "install", "rattler-build"],
+        ExitCode.SUCCESS,
+        stdout_excludes="rattler-build",
+    )
 
-    # TODO: fix this, not working because of the repodata gateway
-    # verify_cli_command('pixi global install rattler-build -c https://fast.prefix.dev/conda-forge', 0, None, "rattler-build")
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "rattler-build",
+            "-c",
+            "https://fast.prefix.dev/conda-forge",
+        ],
+        ExitCode.SUCCESS,
+        stdout_excludes="rattler-build",
+    )
 
     # Upgrade
-    verify_cli_command("pixi global upgrade rattler-build", 0)
+    verify_cli_command([pixi, "global", "upgrade", "rattler-build"], ExitCode.SUCCESS)
 
     # List
-    verify_cli_command("pixi global list", 0, stderr_contains="rattler-build")
+    verify_cli_command([pixi, "global", "list"], ExitCode.SUCCESS, stderr_contains="rattler-build")
 
     # Remove
-    verify_cli_command("pixi global remove rattler-build", 0)
-    verify_cli_command("pixi global remove rattler-build", 1)
+    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.FAILURE)
 
 
-def test_search():
+def test_search(pixi: Path) -> None:
     verify_cli_command(
-        "pixi search rattler-build -c conda-forge", 0, stdout_contains="rattler-build"
+        [pixi, "search", "rattler-build", "-c", "conda-forge"],
+        ExitCode.SUCCESS,
+        stdout_contains="rattler-build",
     )
-    # TODO: fix this, not working because of the repodata gateway
-    # verify_cli_command('pixi search rattler-build -c https://fast.prefix.dev/conda-forge', 0, stdout_contains="rattler-build")
+    verify_cli_command(
+        [pixi, "search", "rattler-build", "-c", "https://fast.prefix.dev/conda-forge"],
+        ExitCode.SUCCESS,
+        stdout_contains="rattler-build",
+    )
 
 
-def test_simple_project_setup(tmp_path):
+def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
-    verify_cli_command(f"pixi init {tmp_path}", 0)
+    verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
 
     # Add package
     verify_cli_command(
-        f"pixi add --manifest-path {manifest_path}  _r-mutex", 0, stderr_contains="Added"
+        [pixi, "add", "--manifest-path", manifest_path, "_r-mutex"],
+        ExitCode.SUCCESS,
+        stderr_contains="Added",
     )
     verify_cli_command(
-        f"pixi add --manifest-path {manifest_path} --feature test _r-mutex==1.0.1",
-        0,
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--feature",
+            "test",
+            "_r-mutex==1.0.1",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["test", "==1.0.1"],
     )
     verify_cli_command(
-        f"pixi add --manifest-path {manifest_path} --platform linux-64 conda-forge::_r-mutex",
-        0,
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--platform",
+            "linux-64",
+            "conda-forge::_r-mutex",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge"],
     )
     verify_cli_command(
-        f"pixi add --manifest-path {manifest_path} -f test -p osx-arm64 _r-mutex",
-        0,
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "-f",
+            "test",
+            "-p",
+            "osx-arm64",
+            "_r-mutex",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test"],
     )
 
     # Remove package
     verify_cli_command(
-        f"pixi remove --manifest-path {manifest_path} _r-mutex", 0, stderr_contains="Removed"
+        [pixi, "remove", "--manifest-path", manifest_path, "_r-mutex"],
+        ExitCode.SUCCESS,
+        stderr_contains="Removed",
     )
     verify_cli_command(
-        f"pixi remove --manifest-path {manifest_path} --feature test _r-mutex",
-        0,
+        [
+            pixi,
+            "remove",
+            "--manifest-path",
+            manifest_path,
+            "--feature",
+            "test",
+            "_r-mutex",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["test", "Removed"],
     )
     verify_cli_command(
-        f"pixi remove --manifest-path {manifest_path} --platform linux-64 conda-forge::_r-mutex",
-        0,
+        [
+            pixi,
+            "remove",
+            "--manifest-path",
+            manifest_path,
+            "--platform",
+            "linux-64",
+            "conda-forge::_r-mutex",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge", "Removed"],
     )
     verify_cli_command(
-        f"pixi remove --manifest-path {manifest_path} -f test -p osx-arm64 _r-mutex",
-        0,
+        [
+            pixi,
+            "remove",
+            "--manifest-path",
+            manifest_path,
+            "-f",
+            "test",
+            "-p",
+            "osx-arm64",
+            "_r-mutex",
+        ],
+        ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
+
+
+def test_pixi_init_pyproject(tmp_path: Path, pixi: Path) -> None:
+    manifest_path = tmp_path / "pyproject.toml"
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)
+    # Verify that install works
+    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)

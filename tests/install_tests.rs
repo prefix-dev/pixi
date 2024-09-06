@@ -1,32 +1,30 @@
 mod common;
 
+use crate::common::{
+    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+};
+use common::{LockFileExt, PixiControl};
+use pixi::cli::cli_config::ProjectConfig;
+use pixi::cli::{run, run::Args, LockFileUsageArgs};
+use pixi::environment::LockFileUsage;
+use pixi::Project;
+use pixi_config::{Config, DetachedEnvironments};
+use pixi_consts::consts;
+use pixi_manifest::{FeatureName, FeaturesExt};
+use rattler_conda_types::Platform;
 use std::{
     fs::{create_dir_all, File},
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
-
-use common::{LockFileExt, PixiControl};
-use pixi::cli::cli_config::ProjectConfig;
-use pixi::cli::{run, run::Args, LockFileUsageArgs};
-use pixi_config::{Config, DetachedEnvironments};
-use pixi_consts::consts;
-use pixi_manifest::FeatureName;
-use rattler_conda_types::Platform;
-use serial_test::serial;
 use tempfile::TempDir;
-use uv_toolchain::PythonEnvironment;
-
-use crate::common::{
-    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
-    package_database::{Package, PackageDatabase},
-};
+use uv_python::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
@@ -153,7 +151,6 @@ async fn test_incremental_lock_file() {
 
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
     let pixi = PixiControl::new().unwrap();
@@ -249,7 +246,6 @@ async fn install_locked_with_config() {
 
 /// Test `pixi install/run --frozen` functionality
 #[tokio::test]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen() {
     let pixi = PixiControl::new().unwrap();
@@ -298,12 +294,11 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_toolchain::Interpreter::query(python, cache).unwrap();
-    uv_toolchain::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
+    uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
     let pixi = PixiControl::new().unwrap();
@@ -359,7 +354,6 @@ async fn pypi_reinstall_python() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
@@ -424,7 +418,7 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 2 was selected from
     // channel `a`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
     // Switch the channel around
@@ -445,12 +439,11 @@ async fn test_channels_changed() {
 
     // Get an up-to-date lockfile and verify that bar version 1 was now selected
     // from channel `b`.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
@@ -464,7 +457,6 @@ async fn install_conda_meta_history() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn minimal_lockfile_update_pypi() {
     let pixi = PixiControl::new().unwrap();
@@ -500,7 +492,7 @@ async fn minimal_lockfile_update_pypi() {
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+        pep508_rs::Requirement::from_str("click>7.1.2").unwrap()
     ));
 }
 
@@ -509,7 +501,6 @@ async fn minimal_lockfile_update_pypi() {
 /// then change the installer back and see if it reinstalls the package
 /// with a new version
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_installer_name() {
     let pixi = PixiControl::new().unwrap();
@@ -564,4 +555,144 @@ async fn test_installer_name() {
     let installer = dist_info.join("INSTALLER");
     let installer = std::fs::read_to_string(installer).unwrap();
     assert_eq!(installer, consts::PIXI_UV_INSTALLER);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+/// Test full prefix install for an old lock file to see if it still works.
+/// Makes sure the lockfile isn't touched and the environment is still installed.
+async fn test_old_lock_install() {
+    let lock_str = std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap();
+    let project = Project::from_path(Path::new(
+        "tests/satisfiability/old_lock_file/pyproject.toml",
+    ))
+    .unwrap();
+    pixi::environment::update_prefix(&project.default_environment(), LockFileUsage::Update, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        lock_str,
+        std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_no_build_isolation() {
+    let current_platform = Platform::current();
+    let setup_py = r#"
+from setuptools import setup, find_packages
+# custom import
+import boltons
+setup(
+    name="my-pkg",
+    version="0.1.0",
+    author="Your Name",
+    author_email="your.email@example.com",
+    description="A brief description of your package",
+    url="https://github.com/yourusername/your-repo",
+    packages=find_packages(),  # Automatically find packages in your project
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.6",
+    install_requires=[
+    ],
+    entry_points={
+        'console_scripts': [
+            'your_command=your_package.module:main_function',
+        ],
+    },
+)
+    "#;
+
+    let manifest = format!(
+        r#"
+    [project]
+    name = "no-build-isolation"
+    channels = ["conda-forge"]
+    platforms = ["{platform}"]
+
+    [pypi-options]
+    no-build-isolation = ["my-pkg"]
+
+    [dependencies]
+    python = "3.12.*"
+    setuptools = ">=72,<73"
+    boltons = ">=24,<25"
+
+    [pypi-dependencies.my-pkg]
+    path = "./my-pkg"
+    "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    let project_path = pixi.project_path();
+    // Write setup.py to a my-pkg folder
+    let my_pkg = project_path.join("my-pkg");
+    std::fs::create_dir_all(&my_pkg).unwrap();
+    std::fs::write(my_pkg.join("setup.py"), setup_py).unwrap();
+
+    let has_pkg = pixi
+        .project()
+        .unwrap()
+        .default_environment()
+        .pypi_options()
+        .no_build_isolation
+        .unwrap()
+        .contains(&"my-pkg".to_string());
+
+    assert!(has_pkg, "my-pkg is not in no-build-isolation list");
+    pixi.install().await.expect("cannot install project");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_setuptools_override_failure() {
+    // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
+    let manifest = format!(
+        r#"
+        [project]
+        channels = ["conda-forge"]
+        name = "pixi-source-problem"
+        platforms = ["{platform}"]
+
+        [dependencies]
+        pip = ">=24.0,<25"
+
+        # The transitive dependencies of viser were causing issues
+        [pypi-dependencies]
+        viser = "==0.2.7"
+        "#,
+        platform = Platform::current()
+    );
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    pixi.install().await.expect("cannot install project");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_many_linux_wheel_tag() {
+    let pixi = PixiControl::new().unwrap();
+    #[cfg(not(target_os = "linux"))]
+    pixi.init_with_platforms(vec![
+        Platform::current().to_string(),
+        "linux-64".to_string(),
+    ])
+    .await
+    .unwrap();
+    #[cfg(target_os = "linux")]
+    pixi.init().await.unwrap();
+
+    pixi.add("python==3.12.*").await.unwrap();
+    // We know that this package has many linux wheel tags for this version
+    pixi.add("gmsh==4.13.1")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
 }

@@ -38,12 +38,12 @@ pub struct ChannelsConfig {
 
 impl ChannelsConfig {
     /// Parses the channels, getting channel config and default channels from config
-    pub fn resolve_from_config(&self, config: &Config) -> IndexSet<Channel> {
+    pub(crate) fn resolve_from_config(&self, config: &Config) -> IndexSet<Channel> {
         self.resolve(config.global_channel_config(), config.default_channels())
     }
 
     /// Parses the channels, getting channel config and default channels from project
-    pub fn resolve_from_project(&self, project: Option<&Project>) -> IndexSet<Channel> {
+    pub(crate) fn resolve_from_project(&self, project: Option<&Project>) -> IndexSet<Channel> {
         match project {
             Some(project) => {
                 let channels = project
@@ -91,7 +91,7 @@ pub struct PrefixUpdateConfig {
     pub config: ConfigCli,
 }
 impl PrefixUpdateConfig {
-    pub fn lock_file_usage(&self) -> LockFileUsage {
+    pub(crate) fn lock_file_usage(&self) -> LockFileUsage {
         if self.no_lockfile_update {
             LockFileUsage::Frozen
         } else {
@@ -100,7 +100,7 @@ impl PrefixUpdateConfig {
     }
 
     /// Decide whether to install or not.
-    pub fn no_install(&self) -> bool {
+    pub(crate) fn no_install(&self) -> bool {
         self.no_install || self.no_lockfile_update
     }
 }
@@ -135,7 +135,7 @@ pub struct DependencyConfig {
 }
 
 impl DependencyConfig {
-    pub fn dependency_type(&self) -> DependencyType {
+    pub(crate) fn dependency_type(&self) -> DependencyType {
         if self.pypi {
             DependencyType::PypiDependency
         } else if self.host {
@@ -146,12 +146,16 @@ impl DependencyConfig {
             DependencyType::CondaDependency(SpecType::Run)
         }
     }
-    pub fn feature_name(&self) -> FeatureName {
+    pub(crate) fn feature_name(&self) -> FeatureName {
         self.feature
             .clone()
             .map_or(FeatureName::Default, FeatureName::Named)
     }
-    pub fn display_success(&self, operation: &str, implicit_constraints: HashMap<String, String>) {
+    pub(crate) fn display_success(
+        &self,
+        operation: &str,
+        implicit_constraints: HashMap<String, String>,
+    ) {
         for package in self.specs.clone() {
             eprintln!(
                 "{}{operation} {}{}",

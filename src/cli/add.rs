@@ -64,6 +64,7 @@ use crate::{
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
 ///   `project.dependencies.aws` array
+///
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
 #[derive(Parser, Debug, Default)]
@@ -116,7 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     spec_type,
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
-                    DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    DependencyOverwriteBehavior::Overwrite,
                     &channel_config,
                 )?;
                 if added {
@@ -130,12 +131,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         DependencyType::PypiDependency => {
             let specs = dependency_config.pypi_deps(&project)?;
             for (name, spec) in specs {
-                let added = project.manifest.add_pypi_dependency(
+                let added = project.manifest.add_pep508_dependency(
                     &spec,
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
                     Some(args.editable),
-                    DependencyOverwriteBehavior::OverwriteIfExplicit,
+                    DependencyOverwriteBehavior::Overwrite,
                 )?;
                 if added {
                     if spec.version_or_url.is_none() {
@@ -339,7 +340,7 @@ fn update_pypi_specs_from_lock_file(
                 version_or_url: Some(VersionSpecifier(version_spec)),
                 ..req
             };
-            project.manifest.add_pypi_dependency(
+            project.manifest.add_pep508_dependency(
                 &req,
                 platforms,
                 feature_name,

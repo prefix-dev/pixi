@@ -8,6 +8,8 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
@@ -21,16 +23,15 @@ use rattler_shell::{
     shell::{Shell, ShellEnum},
 };
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
 use crate::{
-    cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
+    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
+    prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
 };
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -253,7 +254,7 @@ pub(super) async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
-pub fn prompt_user_to_continue(
+pub(crate) fn prompt_user_to_continue(
     packages: &IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<bool> {
     let dangerous_packages = HashMap::from([
@@ -313,7 +314,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()
         .context("failed to determine virtual packages")?
         .iter()
@@ -417,7 +418,9 @@ pub(super) async fn globally_install_package(
     let prefix = Prefix::new(bin_prefix);
 
     // Install the environment
-    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+    let package_cache = PackageCache::new(
+        pixi_config::get_cache_dir()?.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+    );
 
     let result = await_in_progress("creating virtual environment", |pb| {
         Installer::new()

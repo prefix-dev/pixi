@@ -12,7 +12,7 @@ use rattler::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::prefix::Prefix;
@@ -55,7 +55,7 @@ pub struct EnvironmentHash {
 }
 
 impl EnvironmentHash {
-    pub fn from_args(args: &Args, config: &Config) -> Self {
+    pub(crate) fn from_args(args: &Args, config: &Config) -> Self {
         Self {
             command: args
                 .command
@@ -73,7 +73,7 @@ impl EnvironmentHash {
     }
 
     /// Returns the name of the environment.
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
@@ -119,7 +119,11 @@ pub async fn create_exec_prefix(
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
     let environment_name = EnvironmentHash::from_args(args, config).name();
-    let prefix = Prefix::new(cache_dir.join("cached-envs-v0").join(environment_name));
+    let prefix = Prefix::new(
+        cache_dir
+            .join(pixi_consts::consts::CACHED_ENVS_DIR)
+            .join(environment_name),
+    );
 
     let mut guard = PrefixGuard::new(prefix.root())
         .into_diagnostic()
@@ -181,7 +185,7 @@ pub async fn create_exec_prefix(
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()
         .context("failed to determine virtual packages")?
         .iter()
@@ -216,7 +220,9 @@ pub async fn create_exec_prefix(
                 .clear_when_done(true)
                 .finish(),
         )
-        .with_package_cache(PackageCache::new(cache_dir.join("pkgs")))
+        .with_package_cache(PackageCache::new(
+            cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+        ))
         .install(prefix.root(), solved_records)
         .await
         .into_diagnostic()

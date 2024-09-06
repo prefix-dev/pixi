@@ -97,12 +97,15 @@ impl Manifest {
         let contents = contents.into();
         let (parsed, file_name) = match manifest_kind {
             ManifestKind::Pixi => (ParsedManifest::from_toml_str(&contents), "pixi.toml"),
-            ManifestKind::Pyproject => (
-                PyProjectManifest::from_toml_str(&contents)
+            ManifestKind::Pyproject => {
+                let manifest = match PyProjectManifest::from_toml_str(&contents)
                     .and_then(|m| m.ensure_pixi(&contents))
-                    .map(|x| x.into()),
-                "pyproject.toml",
-            ),
+                {
+                    Ok(manifest) => Ok(manifest.try_into().into_diagnostic()?),
+                    Err(e) => Err(e),
+                };
+                (manifest, "pyproject.toml")
+            }
         };
 
         let (manifest, document) = match parsed.and_then(|manifest| {
@@ -374,7 +377,7 @@ impl Manifest {
     }
 
     /// Add a pypi requirement to the manifest
-    pub fn add_pypi_dependency(
+    pub fn add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         platforms: &[Platform],
@@ -387,7 +390,7 @@ impl Manifest {
             // Add the pypi dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pypi_dependency(requirement, editable, overwrite_behavior)
+                .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
@@ -417,6 +420,7 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
+                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
                 .remove_dependency(dep, spec_type)
             {
                 Ok(_) => (),
@@ -443,6 +447,7 @@ impl Manifest {
             // Remove the dependency from the manifest
             match self
                 .target_mut(platform, feature_name)
+                .ok_or_else(|| Self::handle_target_missing(platform.as_ref(), feature_name))?
                 .remove_pypi_dependency(dep)
             {
                 Ok(_) => (),
@@ -456,6 +461,24 @@ impl Manifest {
                 .remove_pypi_dependency(dep, platform, feature_name)?;
         }
         Ok(())
+    }
+
+    fn handle_target_missing(
+        platform: Option<&Platform>,
+        feature_name: &FeatureName,
+    ) -> miette::Report {
+        match platform {
+            None => {
+                miette!("No target for feature `{}`", feature_name)
+            }
+            Some(platform) => {
+                miette!(
+                    "No target for feature `{}` on platform `{}`",
+                    feature_name,
+                    platform
+                )
+            }
+        }
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -570,12 +593,15 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to a target
-    pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
+    pub fn target_mut(
+        &mut self,
+        platform: Option<Platform>,
+        name: &FeatureName,
+    ) -> Option<&mut Target> {
         self.feature_mut(name)
             .unwrap()
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
     }
 
     /// Returns the default feature.
@@ -593,9 +619,9 @@ impl Manifest {
 
     /// Returns the mutable feature with the given name or `None` if it does not
     /// exist.
-    pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> miette::Result<&mut Feature>
+    pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
-        Q: Hash + Equivalent<FeatureName> + Display,
+        Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
         self.parsed
             .features
@@ -613,9 +639,9 @@ impl Manifest {
     }
 
     /// Returns the feature with the given name or `None` if it does not exist.
-    pub fn feature<Q: ?Sized>(&self, name: &Q) -> Option<&Feature>
+    pub fn feature<Q>(&self, name: &Q) -> Option<&Feature>
     where
-        Q: Hash + Equivalent<FeatureName>,
+        Q: ?Sized + Hash + Equivalent<FeatureName>,
     {
         self.parsed.features.get(name)
     }
@@ -631,9 +657,9 @@ impl Manifest {
 
     /// Returns the environment with the given name or `None` if it does not
     /// exist.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    pub fn environment<Q>(&self, name: &Q) -> Option<&Environment>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
     }
@@ -657,6 +683,7 @@ mod tests {
 
     use super::*;
     use crate::{channel::PrioritizedChannel, manifest::Manifest};
+    use glob::glob;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -2107,5 +2134,54 @@ bar = "*"
             manifest.default_feature().channel_priority.unwrap(),
             ChannelPriority::Disabled
         );
+    }
+
+    #[test]
+    pub fn test_unsupported_pep508_errors() {
+        let manifest_error = Manifest::from_str(
+            Path::new("pyproject.toml"),
+            r#"
+        [project]
+        name = "issue-1797"
+        version = "0.1.0"
+        dependencies = [
+            "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"
+        ]
+
+        [tool.pixi.project]
+        channels = ["conda-forge"]
+        platforms = ["win-64"]
+        "#,
+        )
+        .unwrap_err();
+
+        let mut error = String::new();
+        let report_handler = NarratableReportHandler::new().with_cause_chain();
+        report_handler
+            .render_report(&mut error, manifest_error.as_ref())
+            .unwrap();
+        insta::assert_snapshot!(error, @r###"
+        Unsupported pep508 requirement: 'attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main'
+            Diagnostic severity: error
+            Caused by: Found invalid characters for git revision 'main', branches and tags are not supported yet
+        "###);
+    }
+
+    #[test]
+    fn test_docs_pixi_manifests() {
+        let location = "../../docs/source_files/pixi_tomls/*.toml";
+
+        // Check that the glob is not empty
+        assert!(glob(location).unwrap().count() > 0);
+
+        for entry in glob(location).unwrap() {
+            match entry {
+                Ok(path) => {
+                    let contents = std::fs::read_to_string(path).unwrap();
+                    let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+                }
+                Err(e) => println!("{:?}", e),
+            }
+        }
     }
 }

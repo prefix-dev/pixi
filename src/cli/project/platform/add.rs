@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
+    environment::{update_prefix, LockFileUsage},
     Project,
 };
 use clap::Parser;
@@ -44,7 +44,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .add_platforms(platforms.iter(), &feature_name)?;
 
     // Try to update the lock-file with the new channels
-    get_up_to_date_prefix(
+    update_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,

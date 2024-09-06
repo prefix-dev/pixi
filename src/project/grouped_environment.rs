@@ -51,7 +51,7 @@ impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
 
 impl<'p> GroupedEnvironment<'p> {
     /// Returns an iterator over all the environments in the group.
-    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + '_ {
+    pub(crate) fn environments(&self) -> impl Iterator<Item = Environment<'p>> + '_ {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.environments()),
             GroupedEnvironment::Environment(env) => Either::Right(std::iter::once(env.clone())),
@@ -59,7 +59,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Constructs a `GroupedEnvironment` from a `GroupedEnvironmentName`.
-    pub fn from_name(project: &'p Project, name: &GroupedEnvironmentName) -> Option<Self> {
+    pub(crate) fn from_name(project: &'p Project, name: &GroupedEnvironmentName) -> Option<Self> {
         match name {
             GroupedEnvironmentName::Group(g) => {
                 Some(GroupedEnvironment::Group(project.solve_group(g)?))
@@ -71,12 +71,12 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Returns the prefix of this group.
-    pub fn prefix(&self) -> Prefix {
+    pub(crate) fn prefix(&self) -> Prefix {
         Prefix::new(self.dir())
     }
 
     /// Returns the directory where the prefix of this instance is stored.
-    pub fn dir(&self) -> PathBuf {
+    pub(crate) fn dir(&self) -> PathBuf {
         match self {
             GroupedEnvironment::Group(solve_group) => solve_group.dir(),
             GroupedEnvironment::Environment(env) => env.dir(),
@@ -84,7 +84,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Returns the name of the group.
-    pub fn name(&self) -> GroupedEnvironmentName {
+    pub(crate) fn name(&self) -> GroupedEnvironmentName {
         match self {
             GroupedEnvironment::Group(group) => {
                 GroupedEnvironmentName::Group(group.name().to_string())
@@ -95,7 +95,7 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
     /// Returns the system requirements of the group.
-    pub fn system_requirements(&self) -> SystemRequirements {
+    pub(crate) fn system_requirements(&self) -> SystemRequirements {
         match self {
             GroupedEnvironment::Group(group) => group.system_requirements(),
             GroupedEnvironment::Environment(env) => env.system_requirements(),
@@ -103,7 +103,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Returns the virtual packages from the group based on the system requirements.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+    pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
             .into_iter()
             .map(GenericVirtualPackage::from)
@@ -145,7 +145,7 @@ pub enum GroupedEnvironmentName {
 
 impl GroupedEnvironmentName {
     /// Returns a fancy display of the name that can be used in the console.
-    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+    pub(crate) fn fancy_display(&self) -> console::StyledObject<&str> {
         match self {
             GroupedEnvironmentName::Group(name) => {
                 consts::SOLVE_GROUP_STYLE.apply_to(name.as_str())
@@ -155,7 +155,7 @@ impl GroupedEnvironmentName {
     }
 
     /// Returns the name as a string slice.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             GroupedEnvironmentName::Group(group) => group.as_str(),
             GroupedEnvironmentName::Environment(env) => env.as_str(),
