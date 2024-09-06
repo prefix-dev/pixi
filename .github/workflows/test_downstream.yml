@@ -27,6 +27,11 @@ jobs:
         repository:
           - Deltares/Ribasim
           - quantco/polarify
+        include:
+          - arch: { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
+            repository: nerfstudio-project/nerfstudio
+    env:
+      CONDA_OVERRIDE_CUDA: "11.8"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
