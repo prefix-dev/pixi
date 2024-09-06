@@ -174,7 +174,6 @@ impl Project {
             .and_then(OsStr::to_str)
             .map(String::from)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
-
         let env_path = binary_path
             .parent()
             .ok_or_else(|| {
@@ -187,7 +186,6 @@ impl Project {
                     binary_path.display()
                 )
             })?;
-
         let env = env_path
             .file_name()
             .and_then(OsStr::to_str)
@@ -199,7 +197,7 @@ impl Project {
             })?
             .to_string();
 
-        let conda_meta = env_path.join("conda_meta");
+        let conda_meta = env_path.join("conda-meta");
 
         let package = Self::package_from_conda_meta(&conda_meta, &binary)?;
 
