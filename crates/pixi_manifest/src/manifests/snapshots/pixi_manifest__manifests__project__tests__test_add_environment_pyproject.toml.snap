@@ -1,9 +1,8 @@
 ---
-source: crates/pixi_manifest/src/document.rs
-assertion_line: 604
+source: crates/pixi_manifest/src/manifests/project.rs
 expression: source.to_string()
 ---
-[environments]
+[tool.pixi.environments]
 foo = []
 bar = ["not-default"]
 baz = { features = ["default"], solve-group = "group1" }
