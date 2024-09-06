@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
@@ -12,6 +13,7 @@ use serde_with::{serde_as, serde_derive::Deserialize};
 use super::environment::EnvironmentName;
 
 use super::error::ManifestError;
+use super::ExposedData;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
@@ -19,6 +21,29 @@ use pixi_spec::PixiSpec;
 pub struct ParsedManifest {
     /// The environments the project can create.
     environments: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+impl TryFrom<Vec<ExposedData>> for ParsedManifest {
+    type Error = miette::Report;
+    fn try_from(value: Vec<ExposedData>) -> Result<Self, Self::Error> {
+        let mut env_temp: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
+        for data in value {
+            let ExposedData {
+                env,
+                exposed,
+                binary,
+                package,
+            } = data;
+            let mut parsed_environment = env_temp.entry(env.parse()?).or_default();
+            todo!("Add channels and platform");
+            parsed_environment
+                .dependencies
+                .insert(package.parse().into_diagnostic()?, PixiSpec::default());
+            parsed_environment.exposed.insert(exposed.parse()?, binary);
+        }
+
+        todo!();
+    }
 }
 
 impl ParsedManifest {
@@ -71,7 +96,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
 }
 
 #[serde_as]
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
     #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
@@ -109,11 +134,11 @@ impl fmt::Display for ExposedKey {
 }
 
 impl FromStr for ExposedKey {
-    type Err = String;
+    type Err = miette::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
-            Err("The key 'pixi' is not allowed in the exposed map".to_string())
+            miette::bail!("The key 'pixi' is not allowed in the exposed map");
         } else {
             Ok(ExposedKey(value.to_string()))
         }

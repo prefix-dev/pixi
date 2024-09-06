@@ -14,6 +14,7 @@ use miette::{miette, Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
+use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
@@ -65,9 +66,9 @@ impl Debug for Project {
 }
 
 struct ExposedData {
+    env: String,
     exposed: String,
     binary: String,
-    env: String,
     package: String,
 }
 
@@ -185,9 +186,9 @@ impl Project {
         let package = Self::package_from_conda_meta(&conda_meta, &binary)?;
 
         Ok(ExposedData {
+            env,
             exposed,
             binary,
-            env,
             package,
         })
     }
