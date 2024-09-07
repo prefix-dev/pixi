@@ -1427,6 +1427,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "file_url"
+version = "0.1.5"
+source = "git+https://github.com/conda/rattler#d54fd4ff817fefc704bf4e649ff2b22ee39f98cb"
+dependencies = [
+ "itertools 0.13.0",
+ "percent-encoding",
+ "thiserror",
+ "typed-path",
+ "url",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2304,7 +2316,7 @@ dependencies = [
  "pypi-types",
  "reflink-copy",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "sha2",
@@ -2389,7 +2401,7 @@ checksum = "db2b7379a75544c94b3da32821b0bf41f9062e9970e23b78cc577d0d89676d16"
 dependencies = [
  "jiff-tzdb-platform",
  "serde",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3263,7 +3275,7 @@ dependencies = [
  "pep440_rs",
  "pubgrub",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "schemars",
  "serde",
  "smallvec",
@@ -3441,7 +3453,7 @@ dependencies = [
  "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "rattler_lock",
  "rattler_networking",
  "rattler_repodata_gateway",
@@ -3593,10 +3605,10 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "file_url",
+ "file_url 0.1.4",
  "insta",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "serde",
  "serde-untagged",
  "serde_json",
@@ -3672,7 +3684,7 @@ name = "platform-tags"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.3.2#c5440001ce2cff1657aaa51ce39779fca3e6c565"
 dependencies = [
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "thiserror",
 ]
@@ -3796,7 +3808,7 @@ dependencies = [
  "indexmap 2.3.0",
  "log",
  "priority-queue",
- "rustc-hash 1.1.0",
+ "rustc-hash",
  "thiserror",
 ]
 
@@ -3853,7 +3865,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "reqwest 0.12.5",
  "reqwest-middleware",
  "reqwest-retry 0.5.0",
@@ -3907,7 +3919,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "rustls 0.23.12",
  "socket2",
  "thiserror",
@@ -3924,7 +3936,7 @@ dependencies = [
  "bytes",
  "rand",
  "ring",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "rustls 0.23.12",
  "slab",
  "thiserror",
@@ -4019,7 +4031,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "rattler_cache",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_shell",
@@ -4050,7 +4062,7 @@ dependencies = [
  "itertools 0.13.0",
  "parking_lot 0.12.3",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "rattler_networking",
  "rattler_package_streaming",
  "reqwest 0.12.5",
@@ -4063,13 +4075,12 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.27.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4dc7a58ae237e3f57310095033da58b37d98ce7c167bc928b0f81951279c514"
+version = "0.27.5"
+source = "git+https://github.com/conda/rattler#d54fd4ff817fefc704bf4e649ff2b22ee39f98cb"
 dependencies = [
  "chrono",
  "dirs",
- "file_url",
+ "file_url 0.1.5",
  "fxhash",
  "glob",
  "hex",
@@ -4078,9 +4089,9 @@ dependencies = [
  "lazy-regex",
  "nom",
  "purl",
- "rattler_digest",
+ "rattler_digest 1.0.2",
  "rattler_macros",
- "rattler_redaction",
+ "rattler_redaction 0.1.2",
  "regex",
  "serde",
  "serde-untagged",
@@ -4115,20 +4126,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_digest"
+version = "1.0.2"
+source = "git+https://github.com/conda/rattler#d54fd4ff817fefc704bf4e649ff2b22ee39f98cb"
+dependencies = [
+ "blake2",
+ "digest",
+ "generic-array",
+ "hex",
+ "md-5",
+ "serde",
+ "serde_with",
+ "sha2",
+]
+
+[[package]]
 name = "rattler_lock"
 version = "0.22.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ce9290c3c0a702806b74b015a5c3dd638211255379f59d261e098ffc12d98d9"
 dependencies = [
  "chrono",
- "file_url",
+ "file_url 0.1.4",
  "fxhash",
  "indexmap 2.3.0",
  "itertools 0.13.0",
  "pep440_rs",
  "pep508_rs",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "serde",
  "serde_repr",
  "serde_with",
@@ -4139,9 +4165,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18011e84fcc8dba03a4af5b70cbb99362968cdace525139df430b4f268ef58e0"
+version = "1.0.2"
+source = "git+https://github.com/conda/rattler#d54fd4ff817fefc704bf4e649ff2b22ee39f98cb"
 dependencies = [
  "quote",
  "syn 2.0.72",
@@ -4186,9 +4211,9 @@ dependencies = [
  "futures-util",
  "num_cpus",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "rattler_networking",
- "rattler_redaction",
+ "rattler_redaction 0.1.1",
  "reqwest 0.12.5",
  "reqwest-middleware",
  "serde_json",
@@ -4215,6 +4240,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_redaction"
+version = "0.1.2"
+source = "git+https://github.com/conda/rattler#d54fd4ff817fefc704bf4e649ff2b22ee39f98cb"
+dependencies = [
+ "url",
+]
+
+[[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4229,7 +4262,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "dirs",
- "file_url",
+ "file_url 0.1.4",
  "futures",
  "hex",
  "http 1.1.0",
@@ -4246,9 +4279,9 @@ dependencies = [
  "pin-project-lite",
  "rattler_cache",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "rattler_networking",
- "rattler_redaction",
+ "rattler_redaction 0.1.1",
  "reqwest 0.12.5",
  "reqwest-middleware",
  "rmp-serde",
@@ -4295,7 +4328,7 @@ dependencies = [
  "futures",
  "itertools 0.13.0",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 1.0.1",
  "resolvo",
  "serde",
  "tempfile",
@@ -4807,12 +4840,6 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
-
-[[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
@@ -6157,7 +6184,7 @@ dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
  "rust-netrc",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "tokio",
  "tracing",
  "url",
@@ -6178,7 +6205,7 @@ dependencies = [
  "pep508_rs",
  "pypi-types",
  "regex",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",
@@ -6206,7 +6233,7 @@ dependencies = [
  "nanoid",
  "pypi-types",
  "rmp-serde",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "tempfile",
  "tracing",
@@ -6272,7 +6299,7 @@ dependencies = [
  "pep508_rs",
  "platform-tags",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tracing",
@@ -6292,7 +6319,7 @@ dependencies = [
  "install-wheel-rs",
  "itertools 0.13.0",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "tracing",
  "uv-build",
  "uv-cache",
@@ -6326,7 +6353,7 @@ dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
  "rmp-serde",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "tempfile",
  "thiserror",
@@ -6361,7 +6388,7 @@ dependencies = [
  "pypi-types",
  "rayon",
  "reqwest 0.12.5",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "sha2",
  "thiserror",
  "tokio",
@@ -6433,7 +6460,7 @@ dependencies = [
  "platform-tags",
  "pypi-types",
  "rayon",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "same-file",
  "tempfile",
  "thiserror",
@@ -6563,7 +6590,7 @@ dependencies = [
  "pypi-types",
  "requirements-txt",
  "rkyv",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "same-file",
  "serde",
  "textwrap",
@@ -6609,7 +6636,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "thiserror",
  "url",
  "uv-cache",
@@ -6648,7 +6675,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.3.2#c5440001ce2cff1657aaa51c
 dependencies = [
  "anstream",
  "owo-colors",
- "rustc-hash 2.0.0",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -6662,7 +6689,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pypi-types",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "thiserror",
  "tokio",

@@ -91,6 +91,7 @@ file_url = "0.1.4"
 rattler = { version = "0.27.6", default-features = false }
 rattler_cache = { version = "0.1.8", default-features = false }
 rattler_conda_types = { version = "0.27.2", default-features = false }
+# rattler_conda_types = {path = "../rattler/crates/rattler_conda_types", default-features = false }
 rattler_digest = { version = "1.0.1", default-features = false }
 rattler_lock = { version = "0.22.20", default-features = false }
 rattler_networking = { version = "0.21.2", default-features = false }
@@ -321,7 +322,7 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.3.2" }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "5e3eaf254b5bd481c75d2710eed055f95b756913" }
 # deno_task_shell = { path = "../deno_task_shell" }
 # rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+rattler_conda_types = { git = "https://github.com/conda/rattler" }
 # rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
@@ -329,7 +330,7 @@ reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", 
 # rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+# rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
 #rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
