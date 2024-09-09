@@ -1,4 +1,5 @@
 use clap::Parser;
+use miette::Context;
 
 use crate::environment::update_prefix;
 use crate::DependencyType;
@@ -41,21 +42,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match dependency_type {
         DependencyType::PypiDependency => {
             for name in dependency_config.pypi_deps(&project)?.keys() {
-                project.manifest.remove_pypi_dependency(
-                    name,
-                    &dependency_config.platform,
-                    &dependency_config.feature_name(),
-                )?;
+                project
+                    .manifest
+                    .remove_pypi_dependency(
+                        name,
+                        &dependency_config.platform,
+                        &dependency_config.feature_name(),
+                    )
+                    .wrap_err(format!(
+                        "failed to remove PyPI dependency: '{}'",
+                        name.as_source()
+                    ))?;
             }
         }
         DependencyType::CondaDependency(spec_type) => {
             for name in dependency_config.specs()?.keys() {
-                project.manifest.remove_dependency(
-                    name,
-                    spec_type,
-                    &dependency_config.platform,
-                    &dependency_config.feature_name(),
-                )?;
+                project
+                    .manifest
+                    .remove_dependency(
+                        name,
+                        spec_type,
+                        &dependency_config.platform,
+                        &dependency_config.feature_name(),
+                    )
+                    .wrap_err(format!(
+                        "failed to remove dependency: '{}'",
+                        name.as_source()
+                    ))?;
             }
         }
     };
