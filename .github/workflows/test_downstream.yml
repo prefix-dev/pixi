@@ -24,7 +24,7 @@ jobs:
           # Windows
           - {
               target: x86_64-pc-windows-msvc,
-              os: 16core_windows_latest_runner,
+              os: windows-latest,
               extension: .exe,
               name: "Windows",
             }
