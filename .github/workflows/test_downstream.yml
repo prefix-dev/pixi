@@ -194,7 +194,7 @@ jobs:
           mv pixi_bin/pixi-${{ matrix.arch.target }} ${{ env.TARGET_RELEASE }}/pixi
           chmod a+x ${{ env.TARGET_RELEASE }}/pixi
       - name: Create Directory and Move Executable
-        if: matrix.arch.os == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
+        if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
         run: |
           New-Item -ItemType Directory -Force -Path "${{ env.TARGET_RELEASE }}"
           Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
