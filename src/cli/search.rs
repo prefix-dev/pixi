@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::future::{Future, IntoFuture};
 use std::io::{self, Write};
+use std::str::FromStr;
 
 use clap::Parser;
 use itertools::Itertools;
@@ -14,6 +15,7 @@ use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
+use url::Url;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;
@@ -407,11 +409,10 @@ fn print_matching_packages<W: Write>(
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
 
-        let channel_name = package
-            .channel
-            .strip_prefix(channel_config.channel_alias.as_str())
-            .unwrap_or(package.channel.as_str())
-            .trim_end_matches('/');
+        let channel_name = Url::from_str(&package.channel)
+            .ok()
+            .and_then(|url| channel_config.strip_channel_alias(&url))
+            .unwrap_or_else(|| package.channel.to_string());
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 
