@@ -6,7 +6,7 @@ on:
 jobs:
   # Install a couple of projects that we know use pixi
   test-downstream:
-    name: ${{ matrix.arch.os }} - ${{ matrix.repository }}
+    name: ${{ matrix.arch.name }} - ${{ matrix.repository }}
     # if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
     runs-on: ${{ matrix.arch.os }}
     strategy:
@@ -17,23 +17,29 @@ jobs:
           - {
               target: x86_64-unknown-linux-musl,
               os: 8core_ubuntu_latest_runner,
+              name: "Linux",
             }
           # MacOS
-          - { target: x86_64-apple-darwin, os: macos-13 }
-          - { target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
+          - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+          - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-Arm" } # macOS-14 is the ARM chipset
           # Windows
           - {
               target: x86_64-pc-windows-msvc,
               os: 16core_windows_latest_runner,
               extension: .exe,
+              name: "Windows",
             }
         repository:
           - Deltares/Ribasim
           - quantco/polarify
         include:
           # Include specific nerfstudio test
-          # is using a v4 lockfile so we need to allow it to change
-          - arch: { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
+          - arch:
+              {
+                target: x86_64-unknown-linux-musl,
+                os: 8core_ubuntu_latest_runner,
+                name: "Linux",
+              }
             project: { ref: nerfstudio-project/nerfstudio }
     env:
       CONDA_OVERRIDE_CUDA: "11.8"
@@ -79,22 +85,27 @@ jobs:
 
   # Test all of the examples
   test-examples:
-    name: Test examples on ${{ matrix.arch.os }}
+    name: ${{ matrix.arch.name }} - Test Examples
     runs-on: ${{ matrix.arch.os }}
     strategy:
       fail-fast: false
       matrix:
         arch:
           # Linux
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-20.04,
+              name: "Linux",
+            }
           # MacOS
-          - { target: x86_64-apple-darwin, os: macos-13 }
-          - { target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
+          - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+          - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
           # Windows
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
               extension: .exe,
+              name: "Windows",
             }
     steps:
       - name: checkout repo
@@ -142,7 +153,7 @@ jobs:
   # Run integration tests that test the command line
   # pixi interface
   test-integration:
-    name: Integration test on ${{ matrix.arch.os }}
+    name: ${{ matrix.arch.name }} - Integration Tests
     runs-on: ${{ matrix.arch.os }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
@@ -151,15 +162,20 @@ jobs:
       matrix:
         arch:
           # Linux
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-20.04,
+              name: "Linux",
+            }
           # MacOS
-          - { target: x86_64-apple-darwin, os: macos-13 }
-          - { target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
+          - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+          - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
           # Windows
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
               extension: .exe,
+              name: "Windows",
             }
     steps:
       - name: Checkout repo
