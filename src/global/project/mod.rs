@@ -68,6 +68,7 @@ impl Debug for Project {
     }
 }
 
+#[derive(Debug)]
 struct ExposedData {
     env: EnvironmentName,
     platform: Option<Platform>,
@@ -121,8 +122,9 @@ impl Project {
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
         if !manifest_path.exists() {
+            let warn = console::style(console::Emoji("⚠️ ", "")).yellow();
             let prompt = format!(
-                "{}\nYou don't have a global manifest yet.\n\
+                "{} You don't have a global manifest yet.\n\
                 Do you want to create one based on your existing installation?\n\
                 Your existing installation will be removed if you decide against it.",
                 console::style(console::Emoji("⚠️ ", "")).yellow(),
