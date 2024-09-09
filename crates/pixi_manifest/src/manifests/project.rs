@@ -539,17 +539,6 @@ mod tests {
 
     #[test]
     fn test_get_nested_toml_table_name() {
-        let file_contents = r#"
-[project]
-name = "foo"
-version = "0.1.0"
-description = "foo description"
-channels = []
-platforms = ["linux-64", "win-64"]
-
-        "#;
-
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         // Test all different options for the feature name and platform
         assert_eq!(
             "dependencies".to_string(),
