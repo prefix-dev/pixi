@@ -139,7 +139,11 @@ impl Project {
                         .interact()
                         .into_diagnostic()?)
             {
-                return Self::from_existing_installation(&manifest_path, bin_dir, env_root).await;
+                return Self::from_existing_installation(&manifest_path, bin_dir, env_root)
+                    .await
+                    .wrap_err_with(|| {
+                        "Failed to create global manifest from existing installation"
+                    });
             }
 
             tokio::fs::File::create(&manifest_path)

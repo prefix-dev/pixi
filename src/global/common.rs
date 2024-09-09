@@ -202,7 +202,7 @@ pub(crate) struct EnvDir {
 }
 
 impl EnvDir {
-    /// Create the Binary Environment directory
+    /// Create the binary environment directory
     pub(crate) async fn new(
         root: EnvRoot,
         environment_name: EnvironmentName,
@@ -213,7 +213,7 @@ impl EnvDir {
         Ok(Self { root, path })
     }
 
-    /// Initialize the Binary Environment directory from an existing path
+    /// Initialize the binary environment directory from an existing path
     pub(crate) async fn from_existing(
         root: EnvRoot,
         environment_name: EnvironmentName,
