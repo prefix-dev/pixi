@@ -1830,7 +1830,7 @@ The task shell is a limited implementation of a bourne-shell interface.</p>
 <li><code>echo hello &gt; file.txt</code> will put <code>hello</code> in <code>file.txt</code> and overwrite existing text.</li>
 <li><code>python main.py 2&gt; file.txt</code> will put the <code>stderr</code> output in <code>file.txt</code>.</li>
 <li><code>python main.py &amp;&gt; file.txt</code> will put the <code>stderr</code> <strong>and</strong> <code>stdout</code> in <code>file.txt</code>.</li>
-<li><code>echo hello &gt; file.txt</code> will append <code>hello</code> to the existing <code>file.txt</code>.</li>
+<li><code>echo hello &gt;&gt; file.txt</code> will append <code>hello</code> to the existing <code>file.txt</code>.</li>
 </ul>
 </li>
 <li><strong>Glob expansion:</strong> <code>*</code> to expand all options.<ul>
