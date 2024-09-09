@@ -117,37 +117,52 @@ impl Project {
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
         if !manifest_path.exists() {
-            if let Some(project) = Self::from_existing_installation(bin_dir, env_root).await? {
-                return Ok(project);
-            } else {
-                tokio::fs::File::create(&manifest_path)
-                    .await
-                    .into_diagnostic()
-                    .wrap_err_with(|| {
-                        format!("Couldn't create file {}", manifest_path.display())
-                    })?;
+            let prompt = format!(
+                "{}\nYou don't have a global manifest yet.\n\
+                Do you want to import it from your existing installation?\n\
+                Your existing installation will be removed if you decide against it.",
+                console::style(advice).yellow()
+            );
+            if dialoguer::Confirm::new()
+                .with_prompt(prompt)
+                .default(true)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?
+            {
+                return Self::from_existing_installation(&manifest_path, bin_dir, env_root).await;
             }
+
+            tokio::fs::File::create(&manifest_path)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Couldn't create file {}", manifest_path.display()))?;
         }
 
         Self::from_path(&manifest_path)
     }
 
     async fn from_existing_installation(
+        manifest_path: &Path,
         bin_dir: &BinDir,
         env_root: &EnvRoot,
-    ) -> miette::Result<Option<Self>> {
+    ) -> miette::Result<Self> {
         let exposed_binaries: Vec<ExposedData> = bin_dir
             .files()
             .await?
             .into_iter()
             .filter_map(|path| match is_text(&path) {
                 Ok(true) => Some(Ok(path)), // Success and is text, continue with path
-                Ok(false) => None,          // Success a isn't text, filter out
+                Ok(false) => None,          // Success and isn't text, filter out
                 Err(e) => Some(Err(e)),     // Failure, continue with error
             })
             .map(|result| result.and_then(Self::exposed_data_from_binary_path))
             .collect::<miette::Result<_>>()?;
-        todo!();
+
+        let parsed_manifest = ParsedManifest::from(exposed_binaries);
+        let toml = toml_edit::ser::to_string(&parsed_manifest).into_diagnostic()?;
+
+        Self::from_str(manifest_path, &toml)
     }
 
     fn exposed_data_from_binary_path(path: PathBuf) -> miette::Result<ExposedData> {
