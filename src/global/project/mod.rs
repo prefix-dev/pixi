@@ -3,6 +3,7 @@ use std::{
     ffi::OsStr,
     fmt::Formatter,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::OnceLock,
 };
 
@@ -16,7 +17,8 @@ pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
-use rattler_conda_types::Platform;
+use pixi_manifest::PrioritizedChannel;
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
@@ -67,11 +69,11 @@ impl Debug for Project {
 }
 
 struct ExposedData {
-    env: String,
-    platform: Option<String>,
-    channel: String,
-    package: String,
-    exposed: String,
+    env: EnvironmentName,
+    platform: Option<Platform>,
+    channel: PrioritizedChannel,
+    package: PackageName,
+    exposed: ExposedKey,
     binary: String,
 }
 
@@ -152,8 +154,8 @@ impl Project {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
-            .map(String::from)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
+            .and_then(ExposedKey::from_str)?;
         let binary_path = Self::extract_bin_from_script(&path)?;
 
         let binary = binary_path
@@ -181,8 +183,8 @@ impl Project {
                     "binary_path's grandparent '{}' has no file name",
                     binary_path.display()
                 )
-            })?
-            .to_string();
+            })
+            .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join("conda-meta");
 
@@ -201,7 +203,7 @@ impl Project {
     fn package_from_conda_meta(
         conda_meta: &Path,
         binary: &str,
-    ) -> miette::Result<(Option<String>, String, String)> {
+    ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
         for entry in std::fs::read_dir(conda_meta)
             .into_diagnostic()
             .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
@@ -230,15 +232,14 @@ impl Project {
                                         let platform = json
                                             .pointer("/subdir")
                                             .map(|p| p.to_string())
-                                            .map(|p| match p.as_str() {
-                                                "noarch" => None,
-                                                platform
-                                                    if platform
-                                                        == Platform::current().to_string() =>
-                                                {
+                                            .map(|p| Platform::from_str(&p))
+                                            .map(|p| match p {
+                                                Ok(Platform::NoArch) => None,
+                                                Ok(platform) if platform == Platform::current() => {
                                                     None
                                                 }
-                                                _ => Some(p),
+                                                Err(_) => None,
+                                                Ok(p) => Some(p),
                                             })
                                             .ok_or_else(|| {
                                                 miette!(
@@ -249,22 +250,16 @@ impl Project {
                                         let channel = json
                                             .pointer("/channel")
                                             .map(|c| c.to_string())
-                                            .map(|channel| {
-                                                if let Some(c) = channel
-                                                    .strip_prefix("https://conda.anaconda.org")
-                                                {
-                                                    c.to_string()
-                                                } else {
-                                                    channel
-                                                }
-                                            })
-                                            .map(|s| s.trim_end_matches('/').to_string())
                                             .ok_or_else(|| {
                                                 miette!(
                                                     "Could not find channel in {}",
                                                     conda_meta.display()
                                                 )
-                                            })?;
+                                            })
+                                            .and_then(|c| {
+                                                NamedChannelOrUrl::from_str(&c).into_diagnostic()
+                                            })
+                                            .map(PrioritizedChannel::from)?;
                                         let package = json
                                             .pointer("/name")
                                             .map(|p| p.to_string())
@@ -273,6 +268,9 @@ impl Project {
                                                     "Could not find package name in {}",
                                                     conda_meta.display()
                                                 )
+                                            })
+                                            .and_then(|p| {
+                                                PackageName::from_str(&p).into_diagnostic()
                                             })?;
                                         return Ok((platform, channel, package));
                                     }

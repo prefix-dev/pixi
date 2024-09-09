@@ -23,10 +23,12 @@ pub struct ParsedManifest {
     environments: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
-impl TryFrom<Vec<ExposedData>> for ParsedManifest {
-    type Error = miette::Report;
-    fn try_from(value: Vec<ExposedData>) -> Result<Self, Self::Error> {
-        let mut env_temp: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
+impl<I> From<I> for ParsedManifest
+where
+    I: IntoIterator<Item = ExposedData>,
+{
+    fn from(value: I) -> Self {
+        let mut environments: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
         for data in value {
             let ExposedData {
                 env,
@@ -36,15 +38,16 @@ impl TryFrom<Vec<ExposedData>> for ParsedManifest {
                 binary,
                 exposed,
             } = data;
-            let mut parsed_environment = env_temp.entry(env.parse()?).or_default();
-            todo!("Add channels and platform");
+            let mut parsed_environment = environments.entry(env).or_default();
+            parsed_environment.channels.insert(channel);
+            parsed_environment.platform = platform;
             parsed_environment
                 .dependencies
-                .insert(package.parse().into_diagnostic()?, PixiSpec::default());
-            parsed_environment.exposed.insert(exposed.parse()?, binary);
+                .insert(package, PixiSpec::default());
+            parsed_environment.exposed.insert(exposed, binary);
         }
 
-        todo!();
+        Self { environments }
     }
 }
 
