@@ -5,6 +5,7 @@ use pixi_config::{Config, ConfigCli};
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", long = "assume-yes")]
     assume_yes: bool,
     #[clap(flatten)]
