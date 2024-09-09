@@ -3,7 +3,11 @@ use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::Pha
 use indexmap::{map::IndexMap, Equivalent};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::{
+    de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor},
+    ser::SerializeMap,
+    Serializer,
+};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use toml_edit::DocumentMut;
 
@@ -329,6 +333,20 @@ where
     D: Deserializer<'de>,
 {
     Ok(Some(deserialize_package_map(deserializer)?))
+}
+
+pub fn serialize_package_map<S>(
+    package_map: &IndexMap<PackageName, PixiSpec>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(package_map.len()))?;
+    for (package_name, spec) in package_map {
+        map.serialize_entry(package_name, spec)?;
+    }
+    map.end()
 }
 
 #[cfg(test)]

@@ -44,7 +44,6 @@ impl From<NamedChannelOrUrl> for PrioritizedChannel {
     }
 }
 
-#[derive(Serialize)]
 pub enum TomlPrioritizedChannelStrOrMap {
     Map(PrioritizedChannel),
     Str(NamedChannelOrUrl),
@@ -87,6 +86,18 @@ impl<'de> Deserialize<'de> for TomlPrioritizedChannelStrOrMap {
             })
             .expecting("either a map or a string")
             .deserialize(deserializer)
+    }
+}
+
+impl Serialize for TomlPrioritizedChannelStrOrMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            TomlPrioritizedChannelStrOrMap::Map(map) => map.serialize(serializer),
+            TomlPrioritizedChannelStrOrMap::Str(str) => str.serialize(serializer),
+        }
     }
 }
 

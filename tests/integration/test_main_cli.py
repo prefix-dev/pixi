@@ -244,6 +244,28 @@ def test_global_sync(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([python_injected, "--version"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.SUCCESS, env=env)
 
+
+def test_global_migrate(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = """
+    [envs.test]
+    channels = ["conda-forge"]
+    [envs.test.dependencies]
+    ripgrep = "*"
+    python = "*"
+
+    [envs.test.exposed]
+    rg = "rg"
+    grep = "rg"
+    python = "python3"
+    python3 = "python"
+    """
+    manifest.write_text(toml)
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+
     # Test migration from existing environments
     original_manifest = tomli.loads(manifest.read_text())
     manifest.unlink()

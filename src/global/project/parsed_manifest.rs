@@ -20,7 +20,7 @@ use pixi_spec::PixiSpec;
 #[derive(Debug, Clone, Serialize)]
 pub struct ParsedManifest {
     /// The environments the project can create.
-    environments: IndexMap<EnvironmentName, ParsedEnvironment>,
+    envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
 impl<I> From<I> for ParsedManifest
@@ -28,7 +28,7 @@ where
     I: IntoIterator<Item = ExposedData>,
 {
     fn from(value: I) -> Self {
-        let mut environments: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
+        let mut envs: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
         for data in value {
             let ExposedData {
                 env,
@@ -38,7 +38,7 @@ where
                 binary,
                 exposed,
             } = data;
-            let mut parsed_environment = environments.entry(env).or_default();
+            let mut parsed_environment = envs.entry(env).or_default();
             parsed_environment.channels.insert(channel);
             parsed_environment.platform = platform;
             parsed_environment
@@ -47,7 +47,7 @@ where
             parsed_environment.exposed.insert(exposed, binary);
         }
 
-        Self { environments }
+        Self { envs }
     }
 }
 
@@ -58,7 +58,7 @@ impl ParsedManifest {
     }
 
     pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.environments.clone()
+        self.envs.clone()
     }
 }
 
@@ -95,7 +95,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         }
 
         Ok(Self {
-            environments: manifest.envs,
+            envs: manifest.envs,
         })
     }
 }
@@ -108,7 +108,11 @@ pub(crate) struct ParsedEnvironment {
     channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
     platform: Option<Platform>,
-    #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
+    #[serde(
+        default,
+        deserialize_with = "pixi_manifest::deserialize_package_map",
+        serialize_with = "pixi_manifest::serialize_package_map"
+    )]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
     pub(crate) exposed: IndexMap<ExposedKey, String>,
 }

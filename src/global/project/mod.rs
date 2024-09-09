@@ -16,13 +16,14 @@ use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-use pixi_config::{home_path, Config};
+use pixi_config::{default_channel_config, home_path, Config};
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
+use url::Url;
 
 use crate::{
     global::{common::is_text, EnvDir},
@@ -169,7 +170,9 @@ impl Project {
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string(&parsed_manifest).into_diagnostic()?;
-
+        tokio::fs::write(&manifest_path, &toml)
+            .await
+            .into_diagnostic()?;
         Self::from_str(manifest_path, &toml)
     }
 
@@ -237,7 +240,7 @@ impl Project {
                     format!("Couldn't read file from directory {}", conda_meta.display())
                 })?
                 .path();
-
+            let channel_config = default_channel_config();
             // Check if the entry is a file and has a .json extension
             if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json") {
                 let content = std::fs::read_to_string(&path).into_diagnostic()?;
@@ -253,9 +256,9 @@ impl Project {
                                 if let Some(path_str) = path_value.as_str() {
                                     if path_str == format!("bin/{binary}") {
                                         let platform = json
-                                            .pointer("/subdir")
-                                            .map(|p| p.to_string())
-                                            .map(|p| Platform::from_str(&p))
+                                            .get("subdir")
+                                            .and_then(|p| p.as_str())
+                                            .map(Platform::from_str)
                                             .map(|p| match p {
                                                 Ok(Platform::NoArch) => None,
                                                 Ok(platform) if platform == Platform::current() => {
@@ -271,21 +274,29 @@ impl Project {
                                                 )
                                             })?;
                                         let channel = json
-                                            .pointer("/channel")
-                                            .map(|c| c.to_string())
+                                            .get("channel")
+                                            .and_then(|c| c.as_str())
                                             .ok_or_else(|| {
                                                 miette!(
                                                     "Could not find channel in {}",
                                                     conda_meta.display()
                                                 )
                                             })
+                                            .map(|channel| {
+                                                Url::from_str(channel)
+                                                    .ok()
+                                                    .and_then(|url| {
+                                                        channel_config.strip_channel_alias(&url)
+                                                    })
+                                                    .unwrap_or_else(|| channel.to_string())
+                                            })
                                             .and_then(|c| {
                                                 NamedChannelOrUrl::from_str(&c).into_diagnostic()
                                             })
                                             .map(PrioritizedChannel::from)?;
                                         let package = json
-                                            .pointer("/name")
-                                            .map(|p| p.to_string())
+                                            .get("name")
+                                            .and_then(|p| p.as_str())
                                             .ok_or_else(|| {
                                                 miette!(
                                                     "Could not find package name in {}",
@@ -293,7 +304,7 @@ impl Project {
                                                 )
                                             })
                                             .and_then(|p| {
-                                                PackageName::from_str(&p).into_diagnostic()
+                                                PackageName::from_str(p).into_diagnostic()
                                             })?;
                                         return Ok((platform, channel, package));
                                     }
