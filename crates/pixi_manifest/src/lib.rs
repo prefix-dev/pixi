@@ -9,7 +9,6 @@ mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
-// mod manifest;
 mod metadata;
 mod parsed_manifest;
 pub mod pypi;
