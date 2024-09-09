@@ -106,7 +106,11 @@ impl Project {
     /// Discovers the project manifest file in path at `~/.pixi/manifests/pixi-global.toml`.
     /// If the manifest doesn't exist yet, and the function will try to create one from the existing installation.
     /// If that one fails, an empty one will be created.
-    pub(crate) async fn discover(bin_dir: &BinDir, env_root: &EnvRoot) -> miette::Result<Self> {
+    pub(crate) async fn discover(
+        bin_dir: &BinDir,
+        env_root: &EnvRoot,
+        assume_yes: bool,
+    ) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
 
         tokio::fs::create_dir_all(&manifest_dir)
@@ -119,16 +123,18 @@ impl Project {
         if !manifest_path.exists() {
             let prompt = format!(
                 "{}\nYou don't have a global manifest yet.\n\
-                Do you want to import it from your existing installation?\n\
+                Do you want to create one based on your existing installation?\n\
                 Your existing installation will be removed if you decide against it.",
-                console::style(advice).yellow()
+                console::style(console::Emoji("⚠️ ", "")).yellow(),
             );
-            if dialoguer::Confirm::new()
-                .with_prompt(prompt)
-                .default(true)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?
+            if !env_root.directories().await?.is_empty()
+                && (assume_yes
+                    || dialoguer::Confirm::new()
+                        .with_prompt(prompt)
+                        .default(true)
+                        .show_default(true)
+                        .interact()
+                        .into_diagnostic()?)
             {
                 return Self::from_existing_installation(&manifest_path, bin_dir, env_root).await;
             }

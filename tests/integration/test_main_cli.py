@@ -26,9 +26,8 @@ def verify_cli_command(
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
     env: dict[str, str] | None = None,
-    input: str | None = None,
 ) -> None:
-    process = subprocess.run(command, capture_output=True, text=True, env=env, input=input)
+    process = subprocess.run(command, capture_output=True, text=True, env=env)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
@@ -248,7 +247,7 @@ def test_global_sync(pixi: Path, tmp_path: Path) -> None:
     # Test migration from existing environments
     original_manifest = tomli.loads(manifest.read_text())
     manifest.unlink()
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env, input="y")
+    verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = tomli.loads(manifest.read_text())
     assert original_manifest == migrated_manifest
 
