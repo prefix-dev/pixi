@@ -333,7 +333,7 @@ impl Project {
         #[cfg(unix)]
         const PATTERN: &str = r#""([^"]+)" "\$@""#;
         #[cfg(windows)]
-        const PATTERN: &str = r#"^"([^"]+)"\s.*\$"#;
+        const PATTERN: &str = r#"@"([^"]+)" %/*"#;
         static RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
