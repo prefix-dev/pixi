@@ -7,7 +7,6 @@ jobs:
   # Install a couple of projects that we know use pixi
   test-downstream:
     name: ${{ matrix.arch.name }} - ${{ matrix.repository }}
-    # if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
     runs-on: ${{ matrix.arch.os }}
     strategy:
       fail-fast: false
@@ -40,7 +39,7 @@ jobs:
                 os: 8core_ubuntu_latest_runner,
                 name: "Linux",
               }
-            project: { ref: nerfstudio-project/nerfstudio }
+            repository: nerfstudio-project/nerfstudio
     env:
       CONDA_OVERRIDE_CUDA: "11.8"
     steps:
@@ -201,6 +200,6 @@ jobs:
           Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
         shell: pwsh
       - name: Typecheck integration tests
-        run: ${{ env.TARGET_RELEASE }}/pixi run typecheck-integration
+        run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run typecheck-integration
       - name: Run integration tests
-        run: ${{ env.TARGET_RELEASE }}/pixi run test-integration-ci
+        run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-integration-ci
