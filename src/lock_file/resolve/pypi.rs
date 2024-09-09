@@ -260,15 +260,17 @@ pub async fn resolve_pypi(
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
     // TODO: create a cached registry client per index_url set?
+    let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let registry_client = Arc::new(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
-            .index_strategy(to_index_strategy(pypi_options.index_strategy.as_ref()))
+            .index_strategy(index_strategy)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
     );
+
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &context.cache);
@@ -301,7 +303,10 @@ pub async fn resolve_pypi(
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
     tracing::debug!("using build-isolation: {:?}", build_isolation);
 
-    let options = Options::default();
+    let options = Options {
+        index_strategy,
+        ..Options::default()
+    };
     let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,

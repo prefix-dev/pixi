@@ -1,0 +1,11 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pypi_simple_server"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]

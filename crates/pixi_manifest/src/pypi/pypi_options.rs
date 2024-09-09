@@ -11,6 +11,7 @@ use url::Url;
 /// The strategy to use when resolving against multiple index URLs.
 /// By default, uv will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents "dependency confusion" attacks, whereby an attack can upload a malicious package under the same name to a secondary.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum IndexStrategy {
     #[default]
     /// Only use results from the first index that returns a match for a given package name

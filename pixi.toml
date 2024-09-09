@@ -98,6 +98,13 @@ jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
 pyyaml = ">=6.0.1,<6.1"
 
+[feature.pypi-gen.dependencies]
+hatchling = ">=1.25.0,<2"
+python-build = ">=1.2.2,<2"
+
+[feature.pypi-gen.tasks]
+pypi-gen-indexes = "python tests/pypi-indexes/generate-indexes.py"
+
 [environments]
 default = { features = [
   "build",
@@ -111,6 +118,7 @@ docs = { features = [
 lint = { features = [
   "lint",
 ], no-default-feature = true, solve-group = "default" }
+pypi-gen = { features = ["pypi-gen"] }
 schema = { features = [
   "schema",
   "pytest",
