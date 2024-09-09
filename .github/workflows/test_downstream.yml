@@ -147,7 +147,7 @@ jobs:
         run: pixi install -v
       - name: Test examples
         shell: bash
-        run: bash tests/test_examples.sh
+        run: pixi run run-all-examples-ci
 
   # Run integration tests that test the command line
   # pixi interface

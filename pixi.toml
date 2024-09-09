@@ -20,9 +20,12 @@ bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 release = "python scripts/release.py"
+# Run all examples on the dev machine
 run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec .pixi/target/release/pixi", depends-on = [
   "build",
 ] }
+# Run all examples on the CI machine
+run-all-examples-ci = { cmd = "python ./tests/run_all_examples.py" }
 test = "cargo test"
 test-all = "cargo test --all-features"
 
