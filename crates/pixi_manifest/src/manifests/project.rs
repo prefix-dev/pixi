@@ -11,8 +11,8 @@ use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
 /// Struct that is used to access a table in `pixi.toml` or `pyproject.toml`.
 pub struct TableName<'a> {
     prefix: Option<&'static str>,
-    platform: Option<Platform>,
-    feature_name: Option<FeatureName>,
+    platform: Option<&'a Platform>,
+    feature_name: Option<&'a FeatureName>,
     table: Option<&'a str>,
 }
 
@@ -22,7 +22,7 @@ impl Display for TableName<'_> {
     }
 }
 
-impl TableName<'_> {
+impl<'a> TableName<'a> {
     /// Create a new `TableName` with default values.
     pub fn new() -> Self {
         Self {
@@ -40,13 +40,13 @@ impl TableName<'_> {
     }
 
     /// Set the platform of the table.
-    pub fn with_platform(mut self, platform: Option<Platform>) -> Self {
+    pub fn with_platform(mut self, platform: Option<&'a Platform>) -> Self {
         self.platform = platform;
         self
     }
 
     /// Set the feature name of the table.
-    pub fn with_feature_name(mut self, feature_name: Option<FeatureName>) -> Self {
+    pub fn with_feature_name(mut self, feature_name: Option<&'a FeatureName>) -> Self {
         self.feature_name = feature_name;
         self
     }
@@ -162,10 +162,9 @@ impl ManifestSource {
 
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(feature_name.clone()))
+            .with_feature_name(Some(feature_name))
             .with_table(table);
 
-        // let table_name = self.get_nested_toml_table_name(feature_name, None, table);
         self.manifest()
             .get_or_insert_toml_array(table_name.to_string().as_str(), array_name)
     }
@@ -215,8 +214,8 @@ impl ManifestSource {
 
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(feature_name.clone()))
-            .with_platform(platform)
+            .with_feature_name(Some(feature_name))
+            .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest()
@@ -238,8 +237,8 @@ impl ManifestSource {
     ) -> Result<(), TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(feature_name.clone()))
-            .with_platform(platform)
+            .with_feature_name(Some(feature_name))
+            .with_platform(platform.as_ref())
             .with_table(Some(spec_type.name()));
 
         self.manifest()
@@ -264,8 +263,8 @@ impl ManifestSource {
 
         let dependency_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform)
-            .with_feature_name(Some(feature_name.clone()))
+            .with_platform(platform.as_ref())
+            .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
         self.manifest()
@@ -315,8 +314,8 @@ impl ManifestSource {
 
                 let dependency_table = TableName::new()
                     .with_prefix(self.table_prefix())
-                    .with_platform(platform)
-                    .with_feature_name(Some(feature_name.clone()))
+                    .with_platform(platform.as_ref())
+                    .with_feature_name(Some(feature_name))
                     .with_table(Some(consts::PYPI_DEPENDENCIES));
 
                 self.manifest()
@@ -342,8 +341,8 @@ impl ManifestSource {
         // anyways
         let task_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform)
-            .with_feature_name(Some(feature_name.clone()))
+            .with_platform(platform.as_ref())
+            .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
         self.manifest()
@@ -364,8 +363,8 @@ impl ManifestSource {
         // Get the task table either from the target platform or the default tasks.
         let task_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform)
-            .with_feature_name(Some(feature_name.clone()))
+            .with_platform(platform.as_ref())
+            .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
         self.manifest()
@@ -404,7 +403,7 @@ impl ManifestSource {
 
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
         // Get the environment table
@@ -420,7 +419,7 @@ impl ManifestSource {
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
         Ok(self
@@ -493,7 +492,7 @@ mod tests {
     fn test_get_or_insert_toml_table() {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
         let task_table = TableName::new()
-            .with_feature_name(Some(FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("tasks"));
 
         let _ = manifest
@@ -503,8 +502,8 @@ mod tests {
             .map(|t| t.set_implicit(false));
 
         let linux_task_table = TableName::new()
-            .with_feature_name(Some(FeatureName::Default))
-            .with_platform(Some(Platform::Linux64))
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_platform(Some(&Platform::Linux64))
             .with_table(Some("tasks"));
 
         let _ = manifest
@@ -513,8 +512,10 @@ mod tests {
             .get_or_insert_nested_table(linux_task_table.to_string().as_str())
             .map(|t| t.set_implicit(false));
 
+        let feature_name = FeatureName::Named("test".to_string());
+
         let named_feature_task = TableName::new()
-            .with_feature_name(Some(FeatureName::Named("test".to_string())))
+            .with_feature_name(Some(&feature_name))
             .with_table(Some("tasks"));
 
         let _ = manifest
@@ -524,8 +525,8 @@ mod tests {
             .map(|t| t.set_implicit(false));
 
         let named_feature_linux_task = TableName::new()
-            .with_feature_name(Some(FeatureName::Named("test".to_string())))
-            .with_platform(Some(Platform::Linux64))
+            .with_feature_name(Some(&feature_name))
+            .with_platform(Some(&Platform::Linux64))
             .with_table(Some("tasks"));
 
         let _ = manifest
@@ -553,7 +554,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             "dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(FeatureName::Default))
+                .with_feature_name(Some(&FeatureName::Default))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
@@ -561,16 +562,17 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             "target.linux-64.dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(FeatureName::Default))
-                .with_platform(Some(Platform::Linux64))
+                .with_feature_name(Some(&FeatureName::Default))
+                .with_platform(Some(&Platform::Linux64))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
 
+        let feature_name = FeatureName::Named("test".to_string());
         assert_eq!(
             "feature.test.dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(FeatureName::Named("test".to_string())))
+                .with_feature_name(Some(&feature_name))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
@@ -578,8 +580,8 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             "feature.test.target.linux-64.dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(FeatureName::Named("test".to_string())))
-                .with_platform(Some(Platform::Linux64))
+                .with_feature_name(Some(&feature_name))
+                .with_platform(Some(&Platform::Linux64))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
