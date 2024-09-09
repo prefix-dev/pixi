@@ -20,7 +20,7 @@ bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 release = "python scripts/release.py"
-run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec .pixi/target/release/pixi", depends-on = [
+run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec $CARGO_TARGET_DIR/pixi", depends-on = [
   "build",
 ] }
 test = "cargo test"
@@ -69,7 +69,11 @@ compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
 [feature.build.target.linux-64.activation]
-scripts = ["scripts/activate_linux.sh"]
+scripts = ["scripts/activate.sh"]
+[feature.build.target.osx-arm64.activation]
+scripts = ["scripts/activate.sh"]
+[feature.build.target.win-64.activation]
+scripts = ["scripts/activate.bat"]
 
 [feature.docs.dependencies]
 cairosvg = "2.7.1.*"
