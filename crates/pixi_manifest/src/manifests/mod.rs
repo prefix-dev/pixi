@@ -8,7 +8,7 @@ pub use project::ManifestSource;
 
 use crate::error::TomlError;
 
-/// Represent a wrapper around a TOML document.
+/// Represents a wrapper around a TOML document.
 /// This struct is exposed to other crates
 /// to allow for easy manipulation of the TOML document.
 #[derive(Debug, Clone, Default)]
