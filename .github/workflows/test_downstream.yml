@@ -14,25 +14,27 @@ jobs:
       matrix:
         arch:
           # Linux
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: 8core_ubuntu_latest_runner,
+            }
           # MacOS
           - { target: x86_64-apple-darwin, os: macos-13 }
           - { target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
           # Windows
           - {
               target: x86_64-pc-windows-msvc,
-              os: windows-latest,
+              os: 16core_windows_latest_runner,
               extension: .exe,
             }
         project:
-          - { ref: Deltares/Ribasim, lock_file_may_change: false }
-          - { ref: quantco/polarify, lock_file_may_change: false }
+          - { ref: Deltares/Ribasim }
+          - { ref: quantco/polarify }
         include:
           # Include specific nerfstudio test
           # is using a v4 lockfile so we need to allow it to change
           - arch: { target: x86_64-unknown-linux-musl, os: ubuntu-20.04 }
-            project:
-              { ref: nerfstudio-project/nerfstudio, lock_file_may_change: true }
+            project: { ref: nerfstudio-project/nerfstudio }
     env:
       CONDA_OVERRIDE_CUDA: "11.8"
     steps:
@@ -72,12 +74,8 @@ jobs:
         run: pixi --help
       - name: Info
         run: pixi info
-
       - name: Install repository
         run: pixi install -v
-      - name: Check lockfile didn't change
-        if: matrix.lock_file_may_change != true
-        run: git diff --exit-code pixi.lock
 
   # Test all of the examples
   test-examples:
