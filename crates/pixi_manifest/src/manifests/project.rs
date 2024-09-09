@@ -1,14 +1,14 @@
-use std::fmt;
+use std::fmt::{self, Display, Formatter};
 
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
-use serde_with::with_prefix;
 use toml_edit::{value, Array, Item, Table, Value};
 
 use super::TomlManifest;
 use crate::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
 
+/// Struct that is used to access a table in `pixi.toml` or `pyproject.toml`.
 pub struct TableName<'a> {
     prefix: Option<&'static str>,
     platform: Option<Platform>,
@@ -16,18 +16,14 @@ pub struct TableName<'a> {
     table: Option<&'a str>,
 }
 
-impl ToString for TableName<'_> {
-    fn to_string(&self) -> String {
-        self.to_toml_table_name()
+impl Display for TableName<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_toml_table_name())
     }
 }
 
-pub struct GlobalTableName<'a> {
-    env_name: Option<Platform>,
-    table: Option<&'a str>,
-}
-
 impl TableName<'_> {
+    /// Create a new `TableName` with default values.
     pub fn new() -> Self {
         Self {
             prefix: None,
@@ -37,33 +33,38 @@ impl TableName<'_> {
         }
     }
 
+    /// Set the prefix of the table.
     pub fn with_prefix(mut self, prefix: Option<&'static str>) -> Self {
         self.prefix = prefix;
         self
     }
 
+    /// Set the platform of the table.
     pub fn with_platform(mut self, platform: Option<Platform>) -> Self {
         self.platform = platform;
         self
     }
 
+    /// Set the feature name of the table.
     pub fn with_feature_name(mut self, feature_name: Option<FeatureName>) -> Self {
         self.feature_name = feature_name;
         self
     }
 
+    /// Set the optional and custom table name.
     pub fn with_table(mut self, table: Option<&'static str>) -> Self {
         self.table = table;
         self
     }
 }
 
-/// [env.python-310.dependencies]
-///
-/// [env.python-310.exposed]
-///
-
 impl TableName<'_> {
+    /// Returns the name of the table in dotted form (e.g. `table1.table2.array`).
+    /// It is composed of
+    /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
+    /// - the feature if it is not the default feature
+    /// - the platform if it is not `None`
+    /// - the name of a nested TOML table if it is not `None`
     fn to_toml_table_name(&self) -> String {
         let mut parts = Vec::new();
 
@@ -146,49 +147,6 @@ impl ManifestSource {
             ManifestSource::PixiToml(document) => document,
         }
     }
-
-    /// Returns the a nested path. It is composed of
-    /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
-    /// - the feature if it is not the default feature
-    /// - the platform if it is not `None`
-    /// - the name of a nested TOML table if it is not `None`
-    // fn get_nested_toml_table_name(
-    //     &self,
-    //     feature_name: &FeatureName,
-    //     platform: Option<Platform>,
-    //     table: Option<&str>,
-    // ) -> String {
-    //     let mut parts = Vec::new();
-    //     if let ManifestSource::PyProjectToml(_) = self {
-    //         parts.push(PYPROJECT_PIXI_PREFIX);
-    //     }
-    //     if !feature_name.is_default() {
-    //         parts.push("feature");
-    //         parts.push(feature_name.as_str());
-    //     }
-    //     if let Some(platform) = platform {
-    //         parts.push("target");
-    //         parts.push(platform.as_str());
-    //     }
-    //     if let Some(table) = table {
-    //         parts.push(table);
-    //     }
-    //     parts.join(".")
-    // }
-
-    /// Retrieve a mutable reference to a target table `table_name`
-    /// for a specific platform and feature.
-    /// If the table is not found, it is inserted into the document.
-    // fn get_or_insert_toml_table<'a>(
-    //     &'a mut self,
-    //     platform: Option<Platform>,
-    //     feature: &FeatureName,
-    //     table_name: &str,
-    // ) -> Result<&'a mut Table, TomlError> {
-    //     let table_name: String =
-    //         self.get_nested_toml_table_name(feature, platform, Some(table_name));
-    //     self.get_or_insert_nested_table(&table_name)
-    // }
 
     /// Returns a mutable reference to the specified array either in project or
     /// feature.

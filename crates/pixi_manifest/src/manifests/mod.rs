@@ -8,10 +8,14 @@ pub use project::ManifestSource;
 
 use crate::error::TomlError;
 
+/// Represent a wrapper around a TOML document.
+/// This struct is exposed to other crates
+/// to allow for easy manipulation of the TOML document.
 #[derive(Debug, Clone, Default)]
 pub struct TomlManifest(toml_edit::DocumentMut);
 
 impl TomlManifest {
+    /// Create a new `TomlManifest` from a `toml_edit::DocumentMut` document.
     pub fn new(document: toml_edit::DocumentMut) -> Self {
         Self(document)
     }
@@ -23,9 +27,6 @@ impl TomlManifest {
         &'a mut self,
         table_name: &str,
     ) -> Result<&'a mut Table, TomlError> {
-        // let parts = table_name.to_toml_table_name();
-        // let table_name = table_name.to_string();
-
         let parts: Vec<&str> = table_name.split('.').collect();
 
         let mut current_table = self.0.as_table_mut();
@@ -35,7 +36,7 @@ impl TomlManifest {
             let item = entry.or_insert(Item::Table(Table::new()));
             current_table = item
                 .as_table_mut()
-                .ok_or_else(|| TomlError::table_error(part, &table_name))?;
+                .ok_or_else(|| TomlError::table_error(part, table_name))?;
             // Avoid creating empty tables
             current_table.set_implicit(true);
         }
