@@ -119,6 +119,7 @@ impl BinDir {
     }
 }
 
+/// Global environoments directory, default to `$HOME/.pixi/envs`
 #[derive(Debug, Clone)]
 pub struct EnvRoot(PathBuf);
 
@@ -182,21 +183,23 @@ impl EnvRoot {
 
 /// Global binary environments directory
 pub(crate) struct EnvDir {
-    root: EnvRoot,
+    pub(crate) root: EnvRoot,
+    pub(crate) bin_dir: BinDir,
     path: PathBuf,
 }
 
 impl EnvDir {
     /// Create the Binary Environment directory
     pub(crate) async fn new<T: Into<EnvironmentName>>(
-        root: EnvRoot,
         environment_name: T,
     ) -> miette::Result<Self> {
+        let root =  EnvRoot::from_env().await?;
+        let bin_dir = BinDir::from_env().await?;
         let environment_name = environment_name.into();
         let path = root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
-        Ok(Self { root, path })
+        Ok(Self { root, bin_dir, path })
     }
 
     /// Construct the path to the env directory for the environment

@@ -82,4 +82,8 @@ impl Manifest {
     pub fn remove_dependency(&mut self, _dep: &PackageName) -> miette::Result<()> {
         todo!()
     }
+
+    pub fn expose_binary(&mut self, env_name: &str, bin_name: &str) -> miette::Result<()> {
+        todo!()
+    }
 }
