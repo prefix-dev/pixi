@@ -377,7 +377,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::manifest::Manifest;
+    use crate::manifests::manifest::Manifest;
 
     #[test]
     fn test_dependencies_borrowed() {

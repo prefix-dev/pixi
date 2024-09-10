@@ -1,7 +1,6 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
-import pytest
 
 PIXI_VERSION = "0.29.0"
 
@@ -10,11 +9,6 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     FAILURE = 1
     INCORRECT_USAGE = 2
-
-
-@pytest.fixture
-def pixi() -> Path:
-    return Path(__file__).parent.joinpath("../../.pixi/target/release/pixi")
 
 
 def verify_cli_command(
