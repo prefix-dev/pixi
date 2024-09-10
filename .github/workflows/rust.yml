@@ -102,7 +102,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        main: "${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}"
         include:
           - {
               name: "Linux",
@@ -120,9 +119,6 @@ jobs:
               target: x86_64-pc-windows-msvc,
               os: 16core_windows_latest_runner,
             }
-        exclude:
-          - target: "x86_64-apple-darwin"
-            main: false
 
     steps:
       - uses: actions/checkout@v4
