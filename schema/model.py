@@ -477,12 +477,12 @@ class FindLinksURL(StrictBaseModel):
 
 
 class PyPIOptions(StrictBaseModel):
-    """Options that determine the behavior of PyPI package resolution and installation"""
+    """Options related to PyPI indexes"""
 
     index_url: NonEmptyStr | None = Field(
         None,
         alias="index-url",
-        description="PyPI registry that should be used as the primary index",
+        description="Alternative PyPI registry that should be used as the main index",
         examples=["https://pypi.org/simple"],
     )
     extra_index_urls: list[NonEmptyStr] | None = Field(
@@ -500,16 +500,8 @@ class PyPIOptions(StrictBaseModel):
     no_build_isolation: list[PyPIPackageName] = Field(
         None,
         alias="no-build-isolation",
-        description="Packages that should NOT be isolated during the build process",
+        description="Packages that should not be isolated during the build process",
         examples=[["numpy"]],
-    )
-    index_strategy: (
-        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
-    ) = Field(
-        None,
-        alias="index-strategy",
-        description="The strategy to use when resolving packages from multiple indexes",
-        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
     )
 
 
