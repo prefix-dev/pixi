@@ -3639,6 +3639,7 @@ dependencies = [
  "rattler_lock",
  "thiserror",
  "url",
+ "uv-configuration",
  "uv-git",
  "uv-normalize",
  "uv-python",

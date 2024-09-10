@@ -14,3 +14,4 @@ find-links:
 no-build-isolation:
   - foo
   - bar
+index-strategy: ~
