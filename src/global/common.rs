@@ -189,17 +189,33 @@ pub(crate) struct EnvDir {
 }
 
 impl EnvDir {
-    /// Create the Binary Environment directory
-    pub(crate) async fn new<T: Into<EnvironmentName>>(
-        environment_name: T,
-    ) -> miette::Result<Self> {
-        let root =  EnvRoot::from_env().await?;
+    /// Create the default Binary Environment directory
+    pub(crate) async fn new<T: Into<EnvironmentName>>(environment_name: T) -> miette::Result<Self> {
+        let root = EnvRoot::from_env().await?;
         let bin_dir = BinDir::from_env().await?;
         let environment_name = environment_name.into();
         let path = root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
-        Ok(Self { root, bin_dir, path })
+        Ok(Self {
+            root,
+            bin_dir,
+            path,
+        })
+    }
+
+    /// Create the Binary Environment based on passed global environment root
+    pub(crate) async fn from_env_root<T: Into<EnvironmentName>>(env_root: EnvRoot, environment_name: T) -> miette::Result<Self> {
+        let bin_dir = BinDir::from_env().await?;
+        let environment_name = environment_name.into();
+        let path = env_root.path().join(environment_name.as_str());
+        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+
+        Ok(Self {
+            root: env_root,
+            bin_dir,
+            path,
+        })
     }
 
     /// Construct the path to the env directory for the environment
@@ -254,10 +270,10 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
 
         // Define a test environment name
-        let environment_name = "test-env".parse().unwrap();
+        let environment_name: EnvironmentName = "test-env".parse().unwrap();
 
         // Create a new binary env dir
-        let bin_env_dir = EnvDir::new(env_root, environment_name).await.unwrap();
+        let bin_env_dir = EnvDir::from_env_root(env_root, environment_name).await.unwrap();
 
         // Verify that the directory was created
         assert!(bin_env_dir.path().exists());
@@ -275,7 +291,7 @@ mod tests {
         // Create some directories in the temporary directory
         let envs = ["env1", "env2", "env3"];
         for env in &envs {
-            EnvDir::new(env_root.clone(), env.parse().unwrap())
+            EnvDir::from_env_root(env_root.clone(), env.parse::<EnvironmentName>().unwrap())
                 .await
                 .unwrap();
         }

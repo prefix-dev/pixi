@@ -109,7 +109,7 @@ pub(crate) async fn install_environment(
             script_exec_mapping(
                 exposed_name,
                 entry_point,
-                exposed_executables.clone(),
+                exposed_executables.iter(),
                 &bin_env_dir.bin_dir,
                 environment_name,
             )
@@ -134,20 +134,18 @@ pub(crate) async fn install_environment(
 /// # Errors
 ///
 /// Returns an error if the entry point is not found in the list of executable names.
-fn script_exec_mapping(
+pub(crate) fn script_exec_mapping<'a>(
     exposed_name: &ExposedKey,
     entry_point: &str,
-    executables: impl IntoIterator<Item = (String, PathBuf)>,
+    mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
     bin_dir: &BinDir,
     environment_name: &EnvironmentName,
 ) -> miette::Result<ScriptExecMapping> {
-
     executables
-        .into_iter()
         .find(|(executable_name, _)| *executable_name == entry_point)
         .map(|(_, executable_path)| ScriptExecMapping {
             global_script_path: bin_dir.executable_script_path(exposed_name),
-            original_executable: executable_path,
+            original_executable: executable_path.clone(),
         })
         .ok_or_else(|| miette::miette!("Could not find {entry_point} in {environment_name}"))
 }
@@ -480,7 +478,7 @@ pub(crate) async fn sync(
         let packages = specs.keys().cloned().collect();
 
         install_environment(
-            &environment_name,
+            environment_name,
             &environment.exposed,
             packages,
             solved_records.clone(),

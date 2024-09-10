@@ -14,6 +14,7 @@ use super::error::ManifestError;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
+///
 #[derive(Debug, Clone)]
 pub struct ParsedManifest {
     /// The environments the project can create.
@@ -26,8 +27,15 @@ impl ParsedManifest {
         toml_edit::de::from_str(source).map_err(ManifestError::from)
     }
 
-    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.environments.clone()
+    pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
+        &self.environments
+    }
+
+    pub(crate) fn get_mut_environment(
+        &mut self,
+        key: &EnvironmentName,
+    ) -> Option<&mut ParsedEnvironment> {
+        self.environments.get_mut(key)
     }
 }
 
@@ -100,6 +108,12 @@ impl ParsedEnvironment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ExposedKey(String);
+
+impl ExposedKey {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl fmt::Display for ExposedKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
