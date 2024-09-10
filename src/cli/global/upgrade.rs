@@ -30,6 +30,10 @@ pub struct Args {
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
     platform: Platform,
+
+    /// Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
+    #[clap(long)]
+    no_activation: bool,
 }
 
 impl HasSpecs for Args {
@@ -41,7 +45,14 @@ impl HasSpecs for Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
     let specs = args.specs()?;
-    upgrade_packages(specs, config, args.channels, args.platform).await
+    upgrade_packages(
+        specs,
+        config,
+        args.channels,
+        args.platform,
+        args.no_activation,
+    )
+    .await
 }
 
 pub(super) async fn upgrade_packages(
@@ -49,6 +60,7 @@ pub(super) async fn upgrade_packages(
     config: Config,
     cli_channels: ChannelsConfig,
     platform: Platform,
+    no_activation: bool,
 ) -> miette::Result<()> {
     let channel_cli = cli_channels.resolve_from_config(&config);
 
@@ -200,6 +212,7 @@ pub(super) async fn upgrade_packages(
                 records,
                 authenticated_client.clone(),
                 platform,
+                no_activation,
             )
             .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));

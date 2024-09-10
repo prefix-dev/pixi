@@ -21,6 +21,10 @@ pub struct Args {
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
     platform: Platform,
+
+    /// Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
+    #[clap(long)]
+    no_activation: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -38,5 +42,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    upgrade_packages(specs, config, args.channels, args.platform).await
+    upgrade_packages(
+        specs,
+        config,
+        args.channels,
+        args.platform,
+        args.no_activation,
+    )
+    .await
 }
