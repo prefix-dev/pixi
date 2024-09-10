@@ -1,6 +1,5 @@
 ---
-source: crates/pixi_manifest/src/document.rs
-assertion_line: 604
+source: crates/pixi_manifest/src/manifests/project.rs
 expression: source.to_string()
 ---
 [tool.pixi.environments]

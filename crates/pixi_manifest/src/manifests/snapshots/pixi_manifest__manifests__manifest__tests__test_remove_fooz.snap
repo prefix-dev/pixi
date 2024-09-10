@@ -1,6 +1,5 @@
 ---
-source: crates/pixi_manifest/src/manifest.rs
-assertion_line: 914
+source: crates/pixi_manifest/src/manifests/manifest.rs
 expression: manifest.document.to_string()
 ---
             [project]
@@ -9,8 +8,8 @@ expression: manifest.document.to_string()
             channels = []
             platforms = ["linux-64", "win-64"]
 
-            [dependencies]
-            fooz = "*"
-
             [target.win-64.dependencies]
             bar = "*"
+
+            [target.linux-64.build-dependencies]
+            baz = "*"
