@@ -55,8 +55,8 @@ pub(crate) async fn install_environment(
     try_increase_rlimit_to_sensible();
 
     // Create the binary environment prefix where we install or update the package
-    let env_root = EnvRoot::from_env().await?;
-    let bin_env_dir = EnvDir::new(env_root, environment_name.clone()).await?;
+    let bin_env_dir = EnvDir::new(environment_name.clone()).await?;
+
     let prefix = Prefix::new(bin_env_dir.path());
 
     // Install the environment
@@ -96,23 +96,11 @@ pub(crate) async fn install_environment(
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
-    /// Processes prefix records to filter and collect executable files.
-    /// It performs the following steps:
-    /// 1. Filters records to only include direct dependencies
-    /// 2. Finds executables for each filtered record.
-    /// 3. Maps executables to a tuple of file name (as a string) and file path.
-    /// 4. Filters tuples to include only those whose names are in the `exposed` values.
-    /// 5. Collects the resulting tuples into a vector of executables.
-    let executables: Vec<(String, PathBuf)> = prefix_records
+    let all_executables = prefix.find_executables(prefix_records.as_slice());
+
+    let exposed_executables: Vec<_> = all_executables
         .into_iter()
-        .filter(|record| packages.contains(&record.repodata_record.package_record.name))
-        .flat_map(|record| find_executables(&prefix, record))
-        .filter_map(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| (name.to_string(), path.clone()))
-        })
-        .filter(|(name, path)| exposed.values().contains(&name))
+        .filter(|(name, _)| exposed.values().contains(name))
         .collect();
 
     let script_mapping = exposed
@@ -121,8 +109,8 @@ pub(crate) async fn install_environment(
             script_exec_mapping(
                 exposed_name,
                 entry_point,
-                executables.clone(),
-                bin_dir,
+                exposed_executables.clone(),
+                &bin_env_dir.bin_dir,
                 environment_name,
             )
         })
@@ -153,6 +141,7 @@ fn script_exec_mapping(
     bin_dir: &BinDir,
     environment_name: &EnvironmentName,
 ) -> miette::Result<ScriptExecMapping> {
+
     executables
         .into_iter()
         .find(|(executable_name, _)| *executable_name == entry_point)

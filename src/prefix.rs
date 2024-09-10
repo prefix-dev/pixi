@@ -105,4 +105,86 @@ impl Prefix {
 
         Ok(result)
     }
+
+    /// Processes prefix records (that you can get by using `find_installed_packages`)
+    /// to filter and collect executable files.
+    /// It performs the following steps:
+    /// 1. Filters records to only include direct dependencies
+    /// 2. Finds executables for each filtered record.
+    /// 3. Maps executables to a tuple of file name (as a string) and file path.
+    /// 4. Filters tuples to include only those whose names are in the `exposed` values.
+    /// 5. Collects the resulting tuples into a vector of executables.
+    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<(String, PathBuf)> {
+        prefix_packages
+            .iter()
+            .flat_map(|record| {
+                record
+                    .files
+                    .iter()
+                    .filter(|relative_path| is_executable(self, relative_path))
+                    .filter_map(|path| {
+                        path.file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| (name.to_string(), path.clone()))
+                    })
+            })
+            .collect()
+    }
+}
+
+pub(crate) fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
+    // Check if the file is in a known executable directory.
+    let binary_folders = if cfg!(windows) {
+        &([
+            "",
+            "Library/mingw-w64/bin/",
+            "Library/usr/bin/",
+            "Library/bin/",
+            "Scripts/",
+            "bin/",
+        ][..])
+    } else {
+        &(["bin"][..])
+    };
+
+    let parent_folder = match relative_path.parent() {
+        Some(dir) => dir,
+        None => return false,
+    };
+
+    if !binary_folders
+        .iter()
+        .any(|bin_path| Path::new(bin_path) == parent_folder)
+    {
+        return false;
+    }
+
+    // Check if the file is executable
+    let absolute_path = prefix.root().join(relative_path);
+    is_executable::is_executable(absolute_path)
+}
+
+/// Create the environment activation script
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
+    let activator =
+        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
+    let result = activator
+        .activation(ActivationVariables {
+            conda_prefix: None,
+            path: None,
+            path_modification_behavior: PathModificationBehavior::Prepend,
+        })
+        .into_diagnostic()?;
+
+    // Add a shebang on unix based platforms
+    let script = if cfg!(unix) {
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
+    } else {
+        result.script.contents().into_diagnostic()?
+    };
+
+    Ok(script)
 }
