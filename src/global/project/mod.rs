@@ -18,7 +18,6 @@ use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
 
-mod document;
 mod environment;
 mod error;
 mod manifest;
@@ -124,7 +123,7 @@ impl Project {
     }
 
     /// Returns the environments in this project.
-    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
+    pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         self.manifest.parsed.environments()
     }
 

@@ -2,12 +2,14 @@ use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, PackageName};
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item};
 
 use super::error::ManifestError;
 
-use super::MANIFEST_DEFAULT_NAME;
-use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
+use super::parsed_manifest::ParsedManifest;
+use super::{EnvironmentName, ExposedKey, MANIFEST_DEFAULT_NAME};
+
+use pixi_manifest::TomlManifest;
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
@@ -23,7 +25,7 @@ pub struct Manifest {
     pub contents: String,
 
     /// Editable toml document
-    pub document: ManifestSource,
+    pub document: TomlManifest,
 
     /// The parsed manifest
     pub parsed: ParsedManifest,
@@ -52,11 +54,10 @@ impl Manifest {
             Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,
         };
 
-        let source = ManifestSource(document);
         let manifest = Self {
             path: manifest_path.to_path_buf(),
             contents,
-            document: source,
+            document: TomlManifest::new(document),
             parsed: manifest,
         };
 
@@ -83,7 +84,39 @@ impl Manifest {
         todo!()
     }
 
-    pub fn expose_binary(&mut self, env_name: &str, bin_name: &str) -> miette::Result<()> {
-        todo!()
+    pub fn expose_binary(
+        &mut self,
+        env_name: &EnvironmentName,
+        exposed_name: ExposedKey,
+        actual_bin: String,
+    ) -> miette::Result<()> {
+        let table_name = format!("envs.{}.exposed", env_name);
+
+        // let bin_name = bin_name.to_string();
+        self.document
+            .get_or_insert_nested_table(&table_name)?
+            .insert(
+                exposed_name.as_str(),
+                Item::Value(toml_edit::Value::from(actual_bin.clone())),
+            );
+
+        let mut envs = self.parsed.get_mut_environment(env_name);
+        let envs = if envs.is_none() {
+            miette::bail!("Environment {env_name} not found");
+        } else {
+            envs.expect("we checked this above")
+        };
+
+        envs.exposed.insert(exposed_name.clone(), actual_bin.clone());
+
+        tracing::debug!("added {}={} in toml document", exposed_name, actual_bin);
+        Ok(())
+    }
+
+    /// Save the manifest to the file and update the contents
+    pub fn save(&mut self) -> miette::Result<()> {
+        self.contents = self.document.to_string();
+        std::fs::write(&self.path, self.contents.clone()).into_diagnostic()?;
+        Ok(())
     }
 }
