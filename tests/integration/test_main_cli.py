@@ -1,6 +1,7 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
+import pytest
 
 PIXI_VERSION = "0.29.0"
 
