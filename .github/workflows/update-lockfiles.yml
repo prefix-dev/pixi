@@ -21,10 +21,9 @@ jobs:
       - name: Update lockfiles
         run: |
           set -euo pipefail
-          pixi global install pixi-diff-to-markdown
-          pixi update --json --no-install | pixi-diff-to-markdown >> diff.md
+          pixi update --json --no-install | pixi exec pixi-diff-to-markdown >> diff.md
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: 'bump: update pixi lockfile'

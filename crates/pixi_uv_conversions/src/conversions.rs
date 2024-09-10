@@ -1,10 +1,16 @@
 use std::path::{Path, PathBuf};
 
 use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
-use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use pixi_manifest::pypi::{pypi_options::PypiOptions, GitRev};
+use pep508_rs::{
+    InvalidNameError, PackageName, UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError,
+};
+use pixi_manifest::pypi::{
+    pypi_options::{IndexStrategy, PypiOptions},
+    GitRev,
+};
 use rattler_lock::FindLinksUrlOrPath;
 use uv_git::GitReference;
+use uv_python::PythonEnvironment;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -114,5 +120,54 @@ pub fn to_git_reference(rev: &GitRev) -> GitReference {
     match rev {
         GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
         GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
+    }
+}
+
+fn packages_to_build_isolation<'a>(
+    names: Option<&'a [PackageName]>,
+    python_environment: &'a PythonEnvironment,
+) -> uv_types::BuildIsolation<'a> {
+    return if let Some(package_names) = names {
+        uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
+    } else {
+        uv_types::BuildIsolation::default()
+    };
+}
+
+/// Convert optional list of strings to package names
+pub fn isolated_names_to_packages(
+    names: Option<&[String]>,
+) -> Result<Option<Vec<PackageName>>, InvalidNameError> {
+    if let Some(names) = names {
+        let names = names
+            .iter()
+            .map(|n| n.parse())
+            .collect::<Result<Vec<PackageName>, _>>()?;
+        Ok(Some(names))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Convert optional list of package names to build isolation
+pub fn names_to_build_isolation<'a>(
+    names: Option<&'a [PackageName]>,
+    env: &'a PythonEnvironment,
+) -> uv_types::BuildIsolation<'a> {
+    packages_to_build_isolation(names, env)
+}
+
+/// Convert pixi `IndexStrategy` to `uv_types::IndexStrategy`
+pub fn to_index_strategy(
+    index_strategy: Option<&IndexStrategy>,
+) -> uv_configuration::IndexStrategy {
+    if let Some(index_strategy) = index_strategy {
+        match index_strategy {
+            IndexStrategy::FirstIndex => uv_configuration::IndexStrategy::FirstIndex,
+            IndexStrategy::UnsafeFirstMatch => uv_configuration::IndexStrategy::UnsafeFirstMatch,
+            IndexStrategy::UnsafeBestMatch => uv_configuration::IndexStrategy::UnsafeBestMatch,
+        }
+    } else {
+        uv_configuration::IndexStrategy::default()
     }
 }

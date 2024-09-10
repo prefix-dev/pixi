@@ -38,5 +38,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    upgrade_packages(specs, config, &args.channels, args.platform).await
+    upgrade_packages(specs, config, args.channels, args.platform).await
 }

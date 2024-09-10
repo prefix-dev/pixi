@@ -236,12 +236,8 @@ pub fn amend_pypi_purls_for_record(
 
     // package is not in our mapping yet
     // so we assume that it is the same as the one from conda-forge
-    if purls.is_none() && is_conda_forge_record(record) {
-        // Convert the conda package names to pypi package names. If the conversion
-        // fails we just assume that its not a valid python package.
-        if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
-            purls.get_or_insert_with(Vec::new).push(purl);
-        }
+    if let Some(purl) = assume_conda_is_pypi(purls.as_ref(), record) {
+        purls.get_or_insert_with(Vec::new).push(purl);
     }
 
     // If we have found some purls we overwrite whatever was there before.
@@ -250,4 +246,18 @@ pub fn amend_pypi_purls_for_record(
     }
 
     Ok(())
+}
+
+/// Try to assume that the conda-forge package is a PyPI package and return a purl.
+pub fn assume_conda_is_pypi(
+    purls: Option<&Vec<PackageUrl>>,
+    record: &RepoDataRecord,
+) -> Option<PackageUrl> {
+    if purls.is_none() && is_conda_forge_record(record) {
+        // Convert the conda package names to pypi package names. If the conversion
+        // fails we just assume that its not a valid python package.
+        build_pypi_purl_from_package_record(&record.package_record)
+    } else {
+        None
+    }
 }

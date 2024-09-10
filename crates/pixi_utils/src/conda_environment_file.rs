@@ -1,11 +1,53 @@
-use std::{io::BufRead, path::Path, str::FromStr};
-
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, SourceSpan};
+use pixi_config::Config;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
+use std::path::PathBuf;
+use std::{io::BufRead, path::Path, str::FromStr};
+use thiserror::Error;
 
-use pixi_config::Config;
+#[derive(Debug, Error)]
+#[error("Failed to parse '{path}' as a conda environment file")]
+struct YamlParseError {
+    #[source]
+    source: serde_yaml::Error,
+    src: NamedSource<String>,
+    span: Option<SourceSpan>,
+    path: PathBuf,
+}
+
+impl Diagnostic for YamlParseError {
+    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
+        Some(&self.src)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        self.span.as_ref().map(|span| {
+            Box::new(std::iter::once(miette::LabeledSpan::new(
+                Some("error occurred here".to_string()),
+                span.offset(),
+                span.len(),
+            ))) as Box<dyn Iterator<Item = miette::LabeledSpan>>
+        })
+    }
+}
+
+impl YamlParseError {
+    fn new(src: NamedSource<String>, source: serde_yaml::Error, path: PathBuf) -> Self {
+        let span = source.location().map(|loc| {
+            let start = loc.index();
+            let end = start + 1; // Could expand this to a larger span if needed
+            (start..end).into()
+        });
+        Self {
+            src,
+            source,
+            span,
+            path,
+        }
+    }
+}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CondaEnvFile {
@@ -60,8 +102,14 @@ impl CondaEnvFile {
             s.push_str(&line);
             s.push('\n');
         }
-
-        let env_file = serde_yaml::from_str(&s).into_diagnostic()?;
+        let env_file: CondaEnvFile = match serde_yaml::from_str(&s) {
+            Ok(env_file) => env_file,
+            Err(e) => {
+                let src = NamedSource::new(path.display().to_string(), s.to_string());
+                let error = YamlParseError::new(src, e, path.to_path_buf());
+                return Err(miette::Report::new(error));
+            }
+        };
         Ok(env_file)
     }
 
@@ -94,17 +142,26 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
-                let match_spec = MatchSpec::from_str(&d, Lenient).into_diagnostic()?;
-                if let Some(channel) = match_spec.clone().channel {
+                let match_spec = MatchSpec::from_str(&d, Lenient)
+                    .into_diagnostic()
+                    .wrap_err(format!("Can't parse '{}' as conda dependency", d))?;
+                if let Some(channel) = &match_spec.channel {
                     // TODO: This is a bit hacky, we should probably have a better way to handle this.
-                    picked_up_channels
-                        .push(NamedChannelOrUrl::from_str(channel.name()).into_diagnostic()?);
+                    picked_up_channels.push(
+                        NamedChannelOrUrl::from_str(channel.name())
+                            .into_diagnostic()
+                            .wrap_err(format!("Can't parse '{}' as channel", channel.name()))?,
+                    );
                 }
                 conda_deps.push(match_spec);
             }
             CondaEnvDep::Pip { pip } => pip_deps.extend(
                 pip.iter()
-                    .map(|dep| pep508_rs::Requirement::from_str(dep).into_diagnostic())
+                    .map(|dep| {
+                        pep508_rs::Requirement::from_str(dep)
+                            .into_diagnostic()
+                            .wrap_err(format!("Can't parse '{}' as pypi dependency", dep))
+                    })
                     .collect::<miette::Result<Vec<_>>>()?,
             ),
         }

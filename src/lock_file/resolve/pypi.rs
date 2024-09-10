@@ -11,7 +11,7 @@ use std::{
 
 use distribution_types::{
     BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist, Verbatim,
+    Name, Resolution, ResolvedDist, SourceDist,
 };
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -21,7 +21,10 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
-use pixi_uv_conversions::{as_uv_req, pypi_options_to_index_locations};
+use pixi_uv_conversions::{
+    as_uv_req, isolated_names_to_packages, names_to_build_isolation,
+    pypi_options_to_index_locations, to_index_strategy,
+};
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -39,7 +42,7 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_git::GitResolver;
 use uv_normalize::PackageName;
-use uv_python::{Interpreter, PythonVersion};
+use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
@@ -257,14 +260,17 @@ pub async fn resolve_pypi(
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
     // TODO: create a cached registry client per index_url set?
+    let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let registry_client = Arc::new(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
+            .index_strategy(index_strategy)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
     );
+
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &context.cache);
@@ -282,10 +288,25 @@ pub async fn resolve_pypi(
     };
 
     // Create a shared in-memory index.
-    let in_memory_index = InMemoryIndex::default();
+    // We need two in-memory indexes, one for the build dispatch and one for the resolver.
+    // because we manually override requests for the resolver,
+    // but we don't want to override requests for the build dispatch.
+    //
+    // The BuildDispatch might resolve or install when building wheels which will be mostly
+    // with build isolation. In that case we want to use fresh non-tampered requests.
+    let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
-    let options = Options::default();
+    let env = PythonEnvironment::from_interpreter(interpreter.clone());
+    let non_isolated_packages =
+        isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
+    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
+    tracing::debug!("using build-isolation: {:?}", build_isolation);
+
+    let options = Options {
+        index_strategy,
+        ..Options::default()
+    };
     let git_resolver = GitResolver::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,
@@ -294,12 +315,13 @@ pub async fn resolve_pypi(
         &interpreter,
         &index_locations,
         &flat_index,
-        &in_memory_index,
+        &build_dispatch_in_memory_index,
         &git_resolver,
         &context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        uv_types::BuildIsolation::Isolated,
+        // BuildIsolation::Shared(&env),
+        build_isolation,
         LinkMode::default(),
         &context.build_options,
         None,
@@ -355,7 +377,10 @@ pub async fn resolve_pypi(
         Constraints::from_requirements(constraints.iter().cloned()),
         Overrides::default(),
         Default::default(),
-        Preferences::from_iter(preferences, Some(&marker_environment)),
+        Preferences::from_iter(
+            preferences,
+            &ResolverMarkers::SpecificEnvironment(marker_environment.clone().into()),
+        ),
         None,
         None,
         uv_resolver::Exclusions::None,
@@ -393,6 +418,9 @@ pub async fn resolve_pypi(
         package_requests: package_requests.clone(),
     };
 
+    // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
+    // one. As we have noted in the comment above.
+    let resolver_in_memory_index = InMemoryIndex::default();
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
         .expect("could not get version from interpreter");
     let resolution = Resolver::new_custom_io(
@@ -401,7 +429,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
         ResolverMarkers::SpecificEnvironment(marker_environment.into()),
         &PythonRequirement::from_python_version(&interpreter, &python_version),
-        &in_memory_index,
+        &resolver_in_memory_index,
         &git_resolver,
         provider,
         EmptyInstalledPackages,
@@ -465,17 +493,6 @@ async fn lock_pypi_packages<'a>(
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
-                            // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(wheel_path) => {
-                                let index_path = best_wheel.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
-                                let relative_wheel_path = wheel_path
-                                    .strip_prefix(&index_path)
-                                    .expect("the build wheel is not stored relative to the index");
-                                let verbatim_index_path = best_wheel.index.verbatim();
-                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
-                                    .join(relative_wheel_path)
-                                    .into()
-                            }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
                                 let base = Url::from_str(base).expect("invalid base url");
@@ -491,6 +508,7 @@ async fn lock_pypi_packages<'a>(
                         let url = dist.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
                             .expect("could not create direct-url");
+
                         (UrlOrPath::Url(direct_url), None)
                     }
                     BuiltDist::Path(dist) => {
@@ -532,17 +550,6 @@ async fn lock_pypi_packages<'a>(
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
-                            // I (tim) thinks this only happens for flat path based indexes
-                            FileLocation::Path(source_path) => {
-                                let index_path = reg.index.to_file_path().expect("got a build wheel from a path but the index does not refer to a valid path.");
-                                let relative_wheel_path = source_path
-                                    .strip_prefix(&index_path)
-                                    .expect("the build wheel is not stored relative to the index");
-                                let verbatim_index_path = reg.index.verbatim();
-                                Path::new(AsRef::<str>::as_ref(&verbatim_index_path))
-                                    .join(relative_wheel_path)
-                                    .into()
-                            }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
                                 let base = Url::from_str(base).expect("invalid base url");

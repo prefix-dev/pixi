@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/pypi/pypi_options.rs
-assertion_line: 203
 expression: merged_opts
 ---
 index-url: "https://example.com/pypi"
@@ -12,3 +11,7 @@ find-links:
   - url: "https://flat.index/"
   - path: /path/to/flat/index2
   - url: "https://flat.index2/"
+no-build-isolation:
+  - foo
+  - bar
+index-strategy: ~

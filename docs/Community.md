@@ -51,6 +51,7 @@ When you want to show your users and contributors that they can use pixi in your
 - [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
 - [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
+- [jslorrma/keyrings.artifacts](https://github.com/jslorrma/keyrings.artifacts): Keyring backend that provides authentication for publishing or consuming Python packages to or from Azure Artifacts feeds within Azure DevOps
 - [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
 - [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
 - [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.

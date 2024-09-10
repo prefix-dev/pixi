@@ -1,0 +1,28 @@
+[project]
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = [
+  "detectron2 @ git+https://github.com/facebookresearch/detectron2.git@bcfd464d0c810f0442d91a349c0f6df945467143",
+]
+description = "Build detectron2 from source and installs into pypi environment"
+name = "detectron2-from-source"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64"]
+
+[tool.pixi.dependencies]
+cxx-compiler = "1.7.*"
+ninja = ">=1, <=2"
+pytorch = ">=2.4.0, <=3.0.0"
+setuptools = ">=72, <=73"
+
+[tool.pixi.pypi-options]
+# Will build detectron2 and fvcore without isolation
+# in the default environment
+no-build-isolation = ["detectron2", "fvcore"]

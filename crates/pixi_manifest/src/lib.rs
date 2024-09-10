@@ -1,7 +1,6 @@
 mod activation;
 pub(crate) mod channel;
 mod dependencies;
-mod document;
 mod environment;
 mod environments;
 mod error;
@@ -9,7 +8,7 @@ mod feature;
 mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
-mod manifest;
+mod manifests;
 mod metadata;
 mod parsed_manifest;
 pub mod pypi;
@@ -24,7 +23,7 @@ mod validation;
 
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
-pub use manifest::{Manifest, ManifestKind};
+pub use manifests::manifest::{Manifest, ManifestKind};
 
 pub use crate::environments::Environments;
 pub use crate::parsed_manifest::ParsedManifest;

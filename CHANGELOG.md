@@ -5,6 +5,106 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.29.0] - 2024-09-04
+#### ✨ Highlights
+
+- Add build-isolation options, for more details check out our [docs](https://pixi.sh/v0.29.0/reference/project_configuration/#no-build-isolation)
+- Allow to use virtual package overrides from environment variables ([PR](https://github.com/conda/rattler/pull/818))
+- Many bug fixes
+
+
+#### Added
+
+- Add build-isolation options by @tdejager in [#1909](https://github.com/prefix-dev/pixi/pull/1909)
+
+
+- Add release script by @Hofer-Julian in [#1971](https://github.com/prefix-dev/pixi/pull/1971)
+
+
+#### Changed
+
+- Use rustls-tls instead of native-tls per default by @Hofer-Julian in [#1929](https://github.com/prefix-dev/pixi/pull/1929)
+
+
+- Upgrade to uv 0.3.4 by @tdejager in [#1936](https://github.com/prefix-dev/pixi/pull/1936)
+
+
+- Upgrade to uv 0.4.0 by @tdejager in [#1944](https://github.com/prefix-dev/pixi/pull/1944)
+
+
+- Better error for when the target or platform are missing by @tdejager in [#1959](https://github.com/prefix-dev/pixi/pull/1959)
+
+
+- Improve integration tests by @Hofer-Julian in [#1958](https://github.com/prefix-dev/pixi/pull/1958)
+
+
+- Improve release script by @Hofer-Julian in [#1974](https://github.com/prefix-dev/pixi/pull/1974)
+
+
+#### Fixed
+
+- Update env variables in installation docs by @lev112 in [#1937](https://github.com/prefix-dev/pixi/pull/1937)
+
+
+- Always overwrite when pixi adding the dependency by @ruben-arts in [#1935](https://github.com/prefix-dev/pixi/pull/1935)
+
+
+- Typo in schema.json by @SobhanMP in [#1948](https://github.com/prefix-dev/pixi/pull/1948)
+
+
+- Using file url as mapping by @nichmor in [#1930](https://github.com/prefix-dev/pixi/pull/1930)
+
+
+- Offline mapping should not request by @nichmor in [#1968](https://github.com/prefix-dev/pixi/pull/1968)
+
+
+- `pixi init` for `pyproject.toml` by @Hofer-Julian in [#1947](https://github.com/prefix-dev/pixi/pull/1947)
+
+
+- Use two in memory indexes, for resolve and builds by @tdejager in [#1969](https://github.com/prefix-dev/pixi/pull/1969)
+
+
+- Minor issues and todos by @KGrewal1 in [#1963](https://github.com/prefix-dev/pixi/pull/1963)
+
+
+#### Refactor
+
+- Improve integration tests by @Hofer-Julian in [#1942](https://github.com/prefix-dev/pixi/pull/1942)
+
+
+#### New Contributors
+* @SobhanMP made their first contribution in [#1948](https://github.com/prefix-dev/pixi/pull/1948)
+* @lev112 made their first contribution in [#1937](https://github.com/prefix-dev/pixi/pull/1937)
+
+### [0.28.2] - 2024-08-28
+#### Changed
+
+- Use mold on linux by @Hofer-Julian in [#1914](https://github.com/prefix-dev/pixi/pull/1914)
+
+#### Documentation
+
+- Fix global manifest by @Hofer-Julian in [#1912](https://github.com/prefix-dev/pixi/pull/1912)
+- Document azure keyring usage by @tdejager in [#1913](https://github.com/prefix-dev/pixi/pull/1913)
+
+#### Fixed
+
+- Let `init` add dependencies independent of target and don't install by @ruben-arts in [#1916](https://github.com/prefix-dev/pixi/pull/1916)
+- Enable use of manylinux wheeltags once again by @tdejager in [#1925](https://github.com/prefix-dev/pixi/pull/1925)
+- The bigger runner by @ruben-arts in [#1902](https://github.com/prefix-dev/pixi/pull/1902)
+
+### [0.28.1] - 2024-08-26
+#### Changed
+- Uv upgrade to 0.3.2 by @tdejager in [#1900](https://github.com/prefix-dev/pixi/pull/1900)
+
+#### Documentation
+- Add `keyrings.artifacts` to the list of project built with `pixi` by @jslorrma in [#1908](https://github.com/prefix-dev/pixi/pull/1908)
+
+#### Fixed
+- Use default indexes if non where given by the lockfile by @ruben-arts in [#1910](https://github.com/prefix-dev/pixi/pull/1910)
+
+#### New Contributors
+* @jslorrma made their first contribution in [#1908](https://github.com/prefix-dev/pixi/pull/1908)
+
 ### [0.28.0] - 2024-08-22
 #### ✨ Highlights
 - **Bug Fixes**: Major fixes in general but especially for PyPI installation issues and better error messaging.

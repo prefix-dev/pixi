@@ -60,8 +60,8 @@ pub struct CacheArgs {
     pub repodata: bool,
 
     /// Answer yes to all questions.
-    #[arg(long)]
-    pub yes: bool,
+    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    assume_yes: bool,
     // TODO: Would be amazing to have a --unused flag to clean only the unused cache.
     //       By searching the inode count of the packages and removing based on that.
     // #[arg(long)]
@@ -139,7 +139,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     if args.exec {
         dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
     }
-    if dirs.is_empty() && (args.yes || dialoguer::Confirm::new()
+    if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
                 .interact_opt()
                 .into_diagnostic()?

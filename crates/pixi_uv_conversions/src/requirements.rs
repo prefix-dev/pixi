@@ -127,14 +127,16 @@ pub fn as_uv_req(
                 .to_str()
                 .map(|s| s.to_owned())
                 .unwrap_or_else(String::new);
-            let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
+            let verbatim = VerbatimUrl::from_path(path, project_root)?.with_given(given);
 
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized,
-                    lock_path: path.clone(),
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
+                    // TODO: we could see if we ever need this
+                    // AFAICS it would be useful for constrainging dependencies
+                    r#virtual: false,
                 }
             } else if *editable == Some(true) {
                 {
@@ -145,7 +147,6 @@ pub fn as_uv_req(
             } else {
                 RequirementSource::Path {
                     install_path: canonicalized,
-                    lock_path: path.clone(),
                     url: verbatim,
                     ext: DistExtension::from_path(path)?,
                 }

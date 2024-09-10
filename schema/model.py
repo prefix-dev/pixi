@@ -197,7 +197,7 @@ class _PyPiGitRequirement(_PyPIRequirement):
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to sue")
+    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
@@ -477,12 +477,12 @@ class FindLinksURL(StrictBaseModel):
 
 
 class PyPIOptions(StrictBaseModel):
-    """Options related to PyPI indexes"""
+    """Options that determine the behavior of PyPI package resolution and installation"""
 
     index_url: NonEmptyStr | None = Field(
         None,
         alias="index-url",
-        description="Alternative PyPI registry that should be used as the main index",
+        description="PyPI registry that should be used as the primary index",
         examples=["https://pypi.org/simple"],
     )
     extra_index_urls: list[NonEmptyStr] | None = Field(
@@ -496,6 +496,20 @@ class PyPIOptions(StrictBaseModel):
         alias="find-links",
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
+    )
+    no_build_isolation: list[PyPIPackageName] = Field(
+        None,
+        alias="no-build-isolation",
+        description="Packages that should NOT be isolated during the build process",
+        examples=[["numpy"]],
+    )
+    index_strategy: (
+        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
+    ) = Field(
+        None,
+        alias="index-strategy",
+        description="The strategy to use when resolving packages from multiple indexes",
+        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
     )
 
 
