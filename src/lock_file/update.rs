@@ -1,14 +1,9 @@
 use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Write,
+    collections::{HashMap, HashSet},
     future::{ready, Future},
     iter,
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -18,14 +13,13 @@ use futures::{
     future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
 use indexmap::IndexSet;
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-use parking_lot::Mutex;
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
-use pypi_mapping::{self, Reporter};
+use pypi_mapping;
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform, RepoDataRecord};
@@ -34,21 +28,23 @@ use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
-use url::Url;
 use uv_normalize::ExtraName;
 
+use super::{
+    reporter::{GatewayProgressReporter, SolveProgressBar},
+    update,
+    utils::IoConcurrencyLimit,
+    OutdatedEnvironments, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
+    UvResolutionContext,
+};
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::BuildContext,
+    build::{BuildContext},
     environment::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
-    load_lock_file,
-    lock_file::{
-        self, update, utils::IoConcurrencyLimit, OutdatedEnvironments, PypiRecord,
-        PypiRecordsByName, RepoDataRecordsByName, UvResolutionContext,
-    },
+    load_lock_file, lock_file,
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -316,12 +312,16 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_repodata_records:
-        PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<RepoDataRecordsByName>>>>,
+    solved_repodata_records: PerEnvironmentAndPlatform<
+        'p,
+        Arc<BarrierCell<Arc<RepoDataRecordsByName>>>,
+    >,
 
     /// Keeps track of all pending grouped conda targets that are being solved.
-    grouped_solved_repodata_records:
-        PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<RepoDataRecordsByName>>>>,
+    grouped_solved_repodata_records: PerGroupAndPlatform<
+        'p,
+        Arc<BarrierCell<Arc<RepoDataRecordsByName>>>,
+    >,
 
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
@@ -1206,7 +1206,12 @@ impl<'p> UpdateContext<'p> {
         while let Some(result) = pending_futures.next().await {
             top_level_progress.inc(1);
             match result? {
-                TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
+                TaskResult::CondaGroupSolved(
+                    group_name,
+                    platform,
+                    records,
+                    duration,
+                ) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
                         .expect("group should exist");
 
@@ -1545,21 +1550,29 @@ async fn spawn_solve_conda_environment_task(
                     },
                 );
 
-            // Fetch the repodata of the source specs.
+            // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
                 .cloned()
                 .map(|c| c.into_base_url(&channel_config))
                 .collect::<Vec<_>>();
-            let source_futures = FuturesUnordered::new();
             let mut source_match_specs = Vec::new();
+            let source_futures = FuturesUnordered::new();
             for (name, source_spec) in source_specs.iter() {
-                source_futures.push(build_context.extract_source_metadata(
-                    source_spec,
-                    &channel_urls,
-                    platform,
-                ));
-                // TODO: We also need to make sure that only the source package is used.
+                source_futures.push(
+                    build_context
+                        .extract_source_metadata(source_spec, &channel_urls, platform)
+                        .map_err(|e| {
+                            Report::new(e).wrap_err(format!(
+                                "failed to extract metadata for '{}'",
+                                name.as_source()
+                            ))
+                        }),
+                );
+
+                // Add a dependency to the source package itself.
+                // TODO: We also need to make sure that only the source package is used when
+                //  passing these packages to the gateway.
                 source_match_specs.push(MatchSpec {
                     name: Some(name.clone()),
                     ..MatchSpec::default()
@@ -1567,14 +1580,13 @@ async fn spawn_solve_conda_environment_task(
             }
             let source_repodata: Vec<_> = source_futures.try_collect().await?;
 
-            // Extract the match spec requirements from the metadata of the source packages.
+            // Extract transitive requirements from the requirements of the source packages
             let mut query_match_specs = match_specs.clone();
             for source_repodata in source_repodata
                 .iter()
                 .flat_map(|r| r.metadata.iter())
                 .flat_map(|r| &r.package_record.depends)
             {
-                dbg!(source_repodata);
                 if let Ok(spec) = MatchSpec::from_str(source_repodata, ParseStrictness::Lenient) {
                     query_match_specs.push(spec);
                 }
@@ -1612,10 +1624,7 @@ async fn spawn_solve_conda_environment_task(
                 virtual_packages,
                 existing_repodata_records.records.clone(),
                 available_packages,
-                source_repodata
-                    .into_iter()
-                    .map(|metadata| metadata.metadata)
-                    .collect(),
+                source_repodata,
                 channel_priority,
             )
             .await
@@ -2012,266 +2021,4 @@ async fn spawn_create_prefix_task(
         Box::new(python_status),
         duration,
     ))
-}
-
-/// A helper struct that manages a progress-bar for solving an environment.
-#[derive(Clone)]
-pub(crate) struct SolveProgressBar {
-    pub pb: ProgressBar,
-}
-
-impl SolveProgressBar {
-    pub(crate) fn new(
-        pb: ProgressBar,
-        platform: Platform,
-        environment_name: GroupedEnvironmentName,
-    ) -> Self {
-        let name_and_platform = format!(
-            "{}:{}",
-            environment_name.fancy_display(),
-            consts::PLATFORM_STYLE.apply_to(platform)
-        );
-
-        pb.set_style(indicatif::ProgressStyle::with_template("    {prefix:20!} ..").unwrap());
-        pb.enable_steady_tick(Duration::from_millis(100));
-        pb.set_prefix(name_and_platform);
-        Self { pb }
-    }
-
-    pub(crate) fn start(&self) {
-        self.pb.reset_elapsed();
-        self.reset_style()
-    }
-
-    pub(crate) fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
-        self.pb.set_message(msg);
-    }
-
-    pub(crate) fn inc(&self, n: u64) {
-        self.pb.inc(n);
-    }
-
-    pub(crate) fn set_position(&self, n: u64) {
-        self.pb.set_position(n)
-    }
-
-    pub(crate) fn set_update_style(&self, total: usize) {
-        self.pb.set_length(total as u64);
-        self.pb.set_position(0);
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {msg:.dim}")
-                .unwrap()
-                .progress_chars("━━╾─"),
-        );
-    }
-
-    pub(crate) fn set_bytes_update_style(&self, total: usize) {
-        self.pb.set_length(total as u64);
-        self.pb.set_position(0);
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8} {msg:.dim}")
-                .unwrap()
-                .progress_chars("━━╾─")
-                .with_key(
-                    "smoothed_bytes_per_sec",
-                    |s: &ProgressState, w: &mut dyn Write| match (s.pos(), s.elapsed().as_millis()) {
-                        (pos, elapsed_ms) if elapsed_ms > 0 => {
-                            write!(w, "{}/s", HumanBytes((pos as f64 * 1000_f64 / elapsed_ms as f64) as u64)).unwrap()
-                        }
-                        _ => write!(w, "-").unwrap(),
-                    },
-                )
-        );
-    }
-
-    pub(crate) fn reset_style(&self) {
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
-            )
-            .unwrap(),
-        );
-    }
-
-    pub(crate) fn finish(&self) {
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {} {{prefix:20!}} [{{elapsed_precise}}]",
-                console::style(console::Emoji("✔", "↳")).green(),
-            ))
-            .unwrap(),
-        );
-        self.pb.finish_and_clear();
-    }
-
-    fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn Reporter> {
-        Arc::new(PurlAmendReporter {
-            pb: self.clone(),
-            style_set: AtomicBool::new(false),
-        })
-    }
-}
-
-struct PurlAmendReporter {
-    pb: Arc<SolveProgressBar>,
-    style_set: AtomicBool,
-}
-
-impl pypi_mapping::Reporter for PurlAmendReporter {
-    fn download_started(&self, _package: &RepoDataRecord, total: usize) {
-        if !self.style_set.swap(true, Ordering::Relaxed) {
-            self.pb.set_update_style(total);
-        }
-    }
-
-    fn download_finished(&self, _package: &RepoDataRecord, _total: usize) {
-        self.pb.inc(1);
-    }
-
-    fn download_failed(&self, package: &RepoDataRecord, total: usize) {
-        self.download_finished(package, total);
-    }
-}
-
-struct GatewayProgressReporter {
-    inner: Mutex<InnerProgressState>,
-}
-
-impl GatewayProgressReporter {
-    pub(crate) fn new(pb: Arc<SolveProgressBar>) -> Self {
-        Self {
-            inner: Mutex::new(InnerProgressState {
-                pb,
-                downloads: VecDeque::new(),
-
-                bytes_downloaded: 0,
-                total_bytes: 0,
-                total_pending_downloads: 0,
-
-                jlap: VecDeque::default(),
-                total_pending_jlap: 0,
-            }),
-        }
-    }
-}
-
-struct InnerProgressState {
-    pb: Arc<SolveProgressBar>,
-
-    downloads: VecDeque<DownloadState>,
-
-    bytes_downloaded: usize,
-    total_bytes: usize,
-    total_pending_downloads: usize,
-
-    jlap: VecDeque<JLAPState>,
-    total_pending_jlap: usize,
-}
-
-impl InnerProgressState {
-    fn update_progress(&self) {
-        if self.total_pending_downloads > 0 {
-            self.pb.set_bytes_update_style(self.total_bytes);
-            self.pb.set_position(self.bytes_downloaded as u64);
-            self.pb.set_message("downloading repodata");
-        } else if self.total_pending_jlap > 0 {
-            self.pb.reset_style();
-            self.pb.set_message("applying JLAP patches");
-        } else {
-            self.pb.reset_style();
-            self.pb.set_message("parsing repodata");
-        }
-    }
-}
-
-struct DownloadState {
-    _started_at: Instant,
-    bytes_downloaded: usize,
-    total_size: usize,
-    _finished_at: Option<Instant>,
-}
-
-struct JLAPState {
-    _started_at: Instant,
-    _finished_at: Option<Instant>,
-}
-
-impl rattler_repodata_gateway::Reporter for GatewayProgressReporter {
-    fn on_download_start(&self, _url: &Url) -> usize {
-        let mut inner = self.inner.lock();
-        let download_idx = inner.downloads.len();
-        inner.downloads.push_back(DownloadState {
-            _started_at: Instant::now(),
-            bytes_downloaded: 0,
-            total_size: 0,
-            _finished_at: None,
-        });
-        inner.total_pending_downloads += 1;
-        inner.update_progress();
-        download_idx
-    }
-
-    fn on_download_progress(
-        &self,
-        _url: &Url,
-        index: usize,
-        bytes_downloaded: usize,
-        total_bytes: Option<usize>,
-    ) {
-        let mut inner = self.inner.lock();
-
-        let download = inner
-            .downloads
-            .get_mut(index)
-            .expect("download index should exist");
-
-        let prev_bytes_downloaded = download.bytes_downloaded;
-        let prev_total_size = download.total_size;
-        download.bytes_downloaded = bytes_downloaded;
-        download.total_size = total_bytes.unwrap_or(0);
-
-        inner.bytes_downloaded = inner.bytes_downloaded + bytes_downloaded - prev_bytes_downloaded;
-        inner.total_bytes = inner.total_bytes + total_bytes.unwrap_or(0) - prev_total_size;
-
-        inner.update_progress();
-    }
-
-    fn on_download_complete(&self, _url: &Url, _index: usize) {
-        let mut inner = self.inner.lock();
-        let download = inner
-            .downloads
-            .get_mut(_index)
-            .expect("download index should exist");
-        download._finished_at = Some(Instant::now());
-
-        inner.total_pending_downloads -= 1;
-
-        inner.update_progress();
-    }
-
-    fn on_jlap_start(&self) -> usize {
-        let mut inner = self.inner.lock();
-
-        let index = inner.jlap.len();
-        inner.jlap.push_back(JLAPState {
-            _started_at: Instant::now(),
-            _finished_at: None,
-        });
-        inner.total_pending_jlap += 1;
-
-        inner.update_progress();
-
-        index
-    }
-
-    fn on_jlap_completed(&self, index: usize) {
-        let mut inner = self.inner.lock();
-        let jlap = inner.jlap.get_mut(index).expect("jlap index should exist");
-        jlap._finished_at = Some(Instant::now());
-        inner.total_pending_jlap -= 1;
-
-        inner.update_progress();
-    }
 }

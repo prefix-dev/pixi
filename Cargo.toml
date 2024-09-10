@@ -280,6 +280,7 @@ tokio-util = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+typed-path = { workspace = true }
 url = { workspace = true }
 uv-auth = { workspace = true }
 uv-cache = { workspace = true }

@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+pub(crate) mod pinned;
+use std::{path::PathBuf, str::FromStr};
 
 use miette::Diagnostic;
 use pixi_build_frontend::{BackendOverrides, SetupRequest};
@@ -11,6 +12,10 @@ use rattler_conda_types::{
 use thiserror::Error;
 use url::Url;
 
+use crate::build::{
+    pinned::{PinnedPathSpec, PinnedSourceSpec},
+};
+
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Debug, Clone)]
 pub struct BuildContext {
@@ -22,8 +27,8 @@ pub enum BuildError {
     #[error("failed to resolve source path {}", &.0.path)]
     ResolveSourcePath(PathSourceSpec, #[source] std::io::Error),
 
-    #[error("failed to construct build frontend")]
-    BuildFrontendSetup(#[source] pixi_build_frontend::BuildFrontendError),
+    #[error(transparent)]
+    BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
 
     #[error("failed to retrieve package metadata")]
     ExtractMetadata(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
@@ -34,15 +39,20 @@ pub enum BuildError {
 /// etc.
 #[derive(Debug)]
 pub struct SourceCheckout {
+    /// The path to where the source is located locally on disk.
     pub path: PathBuf,
-    // TODO(baszalmstra): Add source pinning information, e.g. the commit hash for git, the sha
-    //  hash for a url, etc.
+
+    /// The exact source specification
+    pub pinned: PinnedSourceSpec,
 }
 
 /// The metadata of a source checkout.
 #[derive(Debug)]
 pub struct SourceMetadata {
+    /// The source checkout that the manifest was extracted from.
     pub source: SourceCheckout,
+
+    /// All the repodata records that can be extracted from the source.
     pub metadata: Vec<RepoDataRecord>,
 }
 
@@ -89,7 +99,13 @@ impl BuildContext {
                 let source_path = path
                     .resolve(&self.channel_config.root_dir)
                     .map_err(|err| BuildError::ResolveSourcePath(path.clone(), err))?;
-                Ok(SourceCheckout { path: source_path })
+                Ok(SourceCheckout {
+                    path: source_path,
+                    pinned: PinnedPathSpec {
+                        path: path.path.clone(),
+                    }
+                    .into(),
+                })
             }
         }
     }
@@ -142,7 +158,18 @@ impl BuildContext {
 
                 // TODO(baszalmstra): Figure out something much better than this.
                 let archive_path = source.path.join(&file_name);
-                let url = Url::from_directory_path(&archive_path).expect("invalid source path");
+                let path = dunce::simplified(&archive_path);
+                let source_url = Url::from_file_path(&path).expect("invalid file path");
+
+                // HACK: The url crate does not allow changing the scheme of a URL with a `file`
+                // scheme to something does is not a file.
+                let url_str: String = source_url.into();
+                let updated_url_str = match url_str.strip_prefix("file:") {
+                    Some(rest) => format!("source:{}", rest),
+                    None => url_str,
+                };
+                let url = Url::from_str(&updated_url_str)
+                    .expect("updating the scheme of a URL should not result in an invalid URL");
 
                 RepoDataRecord {
                     // TODO(baszalmstra): Figure out what to do with this value

@@ -4,7 +4,7 @@ use pixi_build_types::procedures::conda_metadata::{CondaMetadataParams, CondaMet
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error)]
 pub enum FinishError {
-    #[error("error while setting up pixi protocol")]
+    #[error(transparent)]
     Pixi(#[from] pixi_protocol::InitializeError),
 }
 

@@ -4,7 +4,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 
-use crate::lock_file::LockedCondaPackages;
+use crate::{build::SourceMetadata, lock_file::LockedCondaPackages};
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a
@@ -14,13 +14,14 @@ pub async fn resolve_conda(
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
     available_packages: Vec<RepoData>,
-    source_packages: Vec<Vec<RepoDataRecord>>,
+    source_packages: Vec<SourceMetadata>,
     channel_priority: ChannelPriority,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
+        // Combine the repodata from the source packages and from registry channels.
         let mut all_packages = Vec::with_capacity(available_packages.len() + 1);
-        for repo_data in &source_packages {
-            all_packages.push(repo_data.iter().collect_vec());
+        for source_metadata in &source_packages {
+            all_packages.push(source_metadata.metadata.iter().collect());
         }
         for repo_data in &available_packages {
             all_packages.push(repo_data.iter().collect_vec());

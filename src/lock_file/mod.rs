@@ -5,6 +5,7 @@ mod resolve;
 mod satisfiability;
 mod update;
 mod utils;
+mod reporter;
 
 use miette::{IntoDiagnostic, WrapErr};
 pub use outdated::OutdatedEnvironments;

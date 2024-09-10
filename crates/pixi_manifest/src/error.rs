@@ -53,8 +53,8 @@ impl TomlError {
     pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
         if let Some(span) = self.span() {
             Err(miette::miette!(
-                labels = vec![LabeledSpan::at(span, self.message())],
-                "failed to parse project manifest"
+                labels = vec![LabeledSpan::new_primary_with_span(None, span)],
+                "{}", self.message(),
             )
             .with_source_code(NamedSource::new(file_name, contents.into())))
         } else {

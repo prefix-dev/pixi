@@ -4,6 +4,7 @@ use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error as ClientError, TransportReceiverT, TransportSenderT},
 };
+use jsonrpsee::core::client::Error;
 use miette::IntoDiagnostic;
 use pixi_build_types::{
     procedures,
@@ -19,17 +20,32 @@ use crate::{
     jsonrpc::{stdio_transport, RpcParams},
     tool::Tool,
 };
+use crate::protocols::error::BackendError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitializeError {
-    #[error("I/O error")]
+    #[error("an unexpected io error occured while communicating with the pixi build backend")]
     Io(#[from] std::io::Error),
-    #[error("JSON-RPC error")]
-    JsonRpc(#[from] ClientError),
-    #[error("Cannot acquire stdin handle")]
+    #[error(transparent)]
+    JsonRpc(ClientError),
+    #[error(transparent)]
+    BackendError(#[from] BackendError),
+    #[error("failed to acquire stdin handle")]
     StdinHandle,
-    #[error("Cannot acquire stdout handle")]
+    #[error("failed to acquire stdout handle")]
     StdoutHandle,
+}
+impl From<ClientError> for InitializeError {
+    fn from(value: ClientError) -> Self {
+        match value {
+            Error::Call(err) if err.code() > -32001 => {
+                Self::BackendError(BackendError::from(err))
+            },
+            e => {
+                Self::JsonRpc(e)
+            }
+        }
+    }
 }
 
 /// A protocol that uses a pixi manifest to invoke a build backend.
