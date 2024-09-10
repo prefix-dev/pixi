@@ -125,7 +125,7 @@ impl PypiOptions {
 
         // Allow only one index strategy
         let index_strategy = if let Some(other_index_strategy) = other.index_strategy.clone() {
-            if let Some(own_index_strategy) = self.index_strategy.clone() {
+            if let Some(own_index_strategy) = &self.index_strategy {
                 return Err(PypiOptionsMergeError::MultipleIndexStrategies {
                     first: own_index_strategy.to_string(),
                     second: other_index_strategy.to_string(),

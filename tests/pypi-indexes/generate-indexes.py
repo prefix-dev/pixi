@@ -6,7 +6,9 @@ from build import ProjectBuilder
 
 indexes_path = Path(__file__).parent
 
-index_html_template = """<!DOCTYPE html>
+index_html_template = """\
+<!-- This file has been generated with `generate-indexes.py` --> 
+<!DOCTYPE html>
 <html>
   <body>
     %LINKS%
