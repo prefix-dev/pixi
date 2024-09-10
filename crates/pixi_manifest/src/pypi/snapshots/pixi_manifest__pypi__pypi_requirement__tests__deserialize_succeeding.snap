@@ -7,64 +7,64 @@ expression: snapshot
 - input:
     version: "==1.2.3"
   result:
-    version: "==1.2.3"
     extras: []
+    version: "==1.2.3"
 - input: "*"
   result: "*"
 - input:
     path: foobar
   result:
+    editable: ~
+    extras: []
     path: foobar
-    editable: ~
-    extras: []
 - input:
     path: ~/.cache
   result:
-    path: ~/.cache
     editable: ~
     extras: []
+    path: ~/.cache
 - input:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    extras: []
     subdirectory: ~
-    extras: []
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: ~
-    tag: ~
+    extras: []
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
     rev: ~
     subdirectory: ~
-    extras: []
+    tag: ~
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
-    tag: ~
+    extras: []
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
     rev: ~
     subdirectory: ~
-    extras: []
+    tag: ~
 - input:
     git: "ssh://github.com/conda-forge/21cmfast-feedstock"
     tag: v1.2.3
   result:
-    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
     branch: ~
-    tag: v1.2.3
+    extras: []
+    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
     rev: ~
     subdirectory: ~
-    extras: []
+    tag: v1.2.3
 - input:
     git: "https://github.com/prefix-dev/rattler-build"
     rev: "123456"
   result:
-    git: "https://github.com/prefix-dev/rattler-build"
     branch: ~
-    tag: ~
+    extras: []
+    git: "https://github.com/prefix-dev/rattler-build"
     rev: "123456"
     subdirectory: ~
-    extras: []
+    tag: ~
