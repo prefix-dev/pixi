@@ -293,21 +293,29 @@ The `pypi-options` table is used to define options that are specific to PyPI reg
 These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
 
 The options that can be defined are:
-  - `index-url`: replaces the main index url.
-  - `extra-index-urls`: adds an extra index url.
-  - `find-links`: similar to `--find-links` option in `pip`.
-  - `no-build-isolation`: disables build isolation, can only be set per package.
+
+- `index-url`: replaces the main index url.
+- `extra-index-urls`: adds an extra index url.
+- `find-links`: similar to `--find-links` option in `pip`.
+- `no-build-isolation`: disables build isolation, can only be set per package.
+- `index-strategy`: allows for specifying the index strategy to use.
+
+These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
+
 
 ### Alternative registries
 
-Currently the main reason to use this table is to define alternative registries.
-We support:
+!!! info "Strict Index Priority"
+    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
+    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [uv docs](https://docs.astral.sh/uv/pip/compatibility/#packages-that-exist-on-multiple-indexes)
 
-- `index-url`: replaces the main index url.
-   Only one `index-url` can be defined per environment.
-- `extra-index-urls`: adds an extra index url.
+Often you might want to use an alternative or extra index for your project. This can be done by adding the `pypi-options` table to your `pixi.toml` file, the following options are available:
+
+- `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
+   **Only one** `index-url` can be defined per environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
 
 An example:
 
@@ -318,12 +326,11 @@ extra-index-urls = ["https://example.com/simple"]
 find-links = [{path = './links'}]
 ```
 
-There are some examples in the pixi repository that make use of this feature.
-To read about existing authentication methods, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
 
-!!! info "Strict Index Priority"
-    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
-    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [UV Readme](https://github.com/astral-sh/uv/blob/main/PIP_COMPATIBILITY.md#packages-that-exist-on-multiple-indexes)
+!!! tip "Authentication Methods"
+    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+
 
 ### No Build Isolation
 Even though build isolation is a good default.
@@ -332,12 +339,36 @@ This is convenient if you want to use `torch` or something similar for your buil
 
 
 ```toml
+[dependencies]
+pytorch = "2.4.0"
+
 [pypi-options]
 no-build-isolation = ["detectron2"]
 
 [pypi-dependencies]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
 ```
+
+!!! tip "Conda dependencies define the build environment"
+    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+
+### Index Strategy
+
+The strategy to use when resolving against multiple index URLs. Description modified from the [uv](https://docs.astral.sh/uv/reference/settings/#index-strategy) documentation:
+
+By default, `uv` and thus `pixi`, will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents *dependency confusion* attacks, whereby an attack can upload a malicious package under the same name to a secondary index.
+
+!!! warning "One index strategy per environment"
+    Only one `index-strategy` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"first-index"**: Only use results from the first index that returns a match for a given package name
+- **"unsafe-first-match"**: Search for every package name across all indexes, exhausting the versions from the first index before moving on to the next. Meaning if the package `a` is available on index `x` and `y`, it will prefer the version from `x` unless you've requested a package version that is **only** available on `y`.
+- **"unsafe-best-match"**: Search for every package name across all indexes, preferring the *best* version found. If a package version is in multiple indexes, only look at the entry for the first index. So given index, `x` and `y` that both contain package `a`, it will take the *best* version from either `x` or `y`, but should **that version** be available on both indexes it will prefer `x`.
+
+!!! info "PyPI only"
+    The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
 ## The `dependencies` table(s)
 
