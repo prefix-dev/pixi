@@ -4,7 +4,10 @@ use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
 use pep508_rs::{
     InvalidNameError, PackageName, UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError,
 };
-use pixi_manifest::pypi::{pypi_options::PypiOptions, GitRev};
+use pixi_manifest::pypi::{
+    pypi_options::{IndexStrategy, PypiOptions},
+    GitRev,
+};
 use rattler_lock::FindLinksUrlOrPath;
 use uv_git::GitReference;
 use uv_python::PythonEnvironment;
@@ -152,4 +155,19 @@ pub fn names_to_build_isolation<'a>(
     env: &'a PythonEnvironment,
 ) -> uv_types::BuildIsolation<'a> {
     packages_to_build_isolation(names, env)
+}
+
+/// Convert pixi `IndexStrategy` to `uv_types::IndexStrategy`
+pub fn to_index_strategy(
+    index_strategy: Option<&IndexStrategy>,
+) -> uv_configuration::IndexStrategy {
+    if let Some(index_strategy) = index_strategy {
+        match index_strategy {
+            IndexStrategy::FirstIndex => uv_configuration::IndexStrategy::FirstIndex,
+            IndexStrategy::UnsafeFirstMatch => uv_configuration::IndexStrategy::UnsafeFirstMatch,
+            IndexStrategy::UnsafeBestMatch => uv_configuration::IndexStrategy::UnsafeBestMatch,
+        }
+    } else {
+        uv_configuration::IndexStrategy::default()
+    }
 }

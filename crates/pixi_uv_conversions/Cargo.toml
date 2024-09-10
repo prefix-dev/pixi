@@ -20,6 +20,7 @@ pypi-types = { workspace = true }
 rattler_lock = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
+uv-configuration = { workspace = true }
 uv-git = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }

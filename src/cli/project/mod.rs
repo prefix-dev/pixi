@@ -4,6 +4,7 @@ use clap::Parser;
 pub mod channel;
 pub mod description;
 pub mod environment;
+pub mod export;
 pub mod platform;
 pub mod version;
 
@@ -14,6 +15,7 @@ pub enum Command {
     Platform(platform::Args),
     Version(version::Args),
     Environment(environment::Args),
+    Export(export::Args),
 }
 
 /// Modify the project configuration file through the command line.
@@ -33,6 +35,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Platform(args) => platform::execute(args).await?,
         Command::Version(args) => version::execute(args).await?,
         Command::Environment(args) => environment::execute(args).await?,
+        Command::Export(cmd) => export::execute(cmd).await?,
     };
     Ok(())
 }

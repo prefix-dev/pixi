@@ -10,27 +10,22 @@ use std::{
     str::FromStr,
 };
 
-use self::builders::{HasDependencyConfig, RemoveBuilder};
-use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
-};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use pixi::task::{
-    get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-    TaskGraphError,
-};
 use pixi::{
     cli::{
-        add, init,
+        add,
+        cli_config::{PrefixUpdateConfig, ProjectConfig},
+        init,
         install::Args,
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
-    task::TaskName,
+    task::{
+        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName,
+    },
     Project, UpdateLockFileOptions,
 };
 use pixi_consts::consts;
@@ -40,6 +35,12 @@ use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, Package};
 use tempfile::TempDir;
 use thiserror::Error;
+
+use self::builders::{HasDependencyConfig, RemoveBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+};
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -93,6 +94,13 @@ pub trait LockFileExt {
         platform: Platform,
         requirement: pep508_rs::Requirement,
     ) -> bool;
+
+    fn get_pypi_package_version(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<String>;
 }
 
 impl LockFileExt for LockFile {
@@ -156,6 +164,20 @@ impl LockFileExt for LockFile {
             .filter_map(Package::into_pypi)
             .any(move |p| p.satisfies(&requirement));
         package_found
+    }
+
+    fn get_pypi_package_version(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<String> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.packages(platform)
+                    .and_then(|mut packages| packages.find(|p| p.name() == package))
+            })
+            .map(|p| p.version().to_string())
     }
 }
 
