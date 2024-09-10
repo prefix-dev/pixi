@@ -350,7 +350,8 @@ mod tests {
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
+        manifests::manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior,
+        FeatureName,
     };
 
     const PYPROJECT_FULL: &str = r#"
