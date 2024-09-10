@@ -23,7 +23,6 @@ mod validation;
 
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
-
 pub use manifests::manifest::{Manifest, ManifestKind};
 pub use manifests::TomlManifest;
 
