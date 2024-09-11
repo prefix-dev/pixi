@@ -13,7 +13,6 @@ use rattler_conda_types::{
 };
 use rattler_lock::FindLinksUrlOrPath;
 
-use crate::cli::LockFileUsageArgs;
 use crate::project::Environment;
 use crate::Project;
 
@@ -31,9 +30,6 @@ pub struct Args {
     /// environment.
     #[arg(short, long)]
     pub environment: Option<String>,
-
-    #[clap(flatten)]
-    pub lock_file_args: LockFileUsageArgs,
 }
 
 fn format_pip_extras(extras: &[ExtraName]) -> String {
@@ -142,28 +138,32 @@ fn build_env_yaml(
     let mut pip_dependencies: Vec<String> = Vec::new();
 
     for feature in environment.features() {
-        for (key, value) in feature.dependencies(None, Some(*platform)).unwrap().iter() {
-            let spec = MatchSpec {
-                name: Some(key.clone()),
-                version: value.clone().into_version(),
-                build: None,
-                build_number: None,
-                subdir: None,
-                md5: None,
-                sha256: None,
-                url: None,
-                file_name: None,
-                channel: None,
-                namespace: None,
-            };
-            env_yaml
-                .dependencies
-                .push(MatchSpecOrSubSection::MatchSpec(spec));
+        if let Some(dependencies) = feature.dependencies(None, Some(*platform)) {
+            for (key, value) in dependencies.iter() {
+                let spec = MatchSpec {
+                    name: Some(key.clone()),
+                    version: value.clone().into_version(),
+                    build: None,
+                    build_number: None,
+                    subdir: None,
+                    md5: None,
+                    sha256: None,
+                    url: None,
+                    file_name: None,
+                    channel: None,
+                    namespace: None,
+                };
+                env_yaml
+                    .dependencies
+                    .push(MatchSpecOrSubSection::MatchSpec(spec));
+            }
         }
 
         if feature.has_pypi_dependencies() {
-            for (name, requirement) in feature.pypi_dependencies(Some(*platform)).unwrap().iter() {
-                pip_dependencies.push(format_pip_dependency(name, requirement));
+            if let Some(pypi_dependencies) = feature.pypi_dependencies(Some(*platform)) {
+                for (name, requirement) in pypi_dependencies.iter() {
+                    pip_dependencies.push(format_pip_dependency(name, requirement));
+                }
             }
         }
     }
@@ -340,6 +340,28 @@ mod tests {
         let env_yaml = build_env_yaml(&platform, &environment);
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_find_links",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_pyproject_panic() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/docker/pyproject.toml");
+        let project = Project::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Platform::OsxArm64),
+            environment: Some("default".to_string()),
+            lock_file_args: LockFileUsageArgs::default(),
+        };
+        let environment = project
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+
+        let env_yaml = build_env_yaml(&platform, &environment);
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_pyproject_panic",
             env_yaml.unwrap().to_yaml_string()
         );
     }
