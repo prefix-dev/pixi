@@ -210,6 +210,9 @@ pub async fn resolve_pypi(
         .into_diagnostic()
         .context("failed to extract python packages from conda metadata")?;
 
+    // eprintln!("conda_python_packages: {:?}", conda_python_packages);
+    // panic!("stop here");
+
     if !conda_python_packages.is_empty() {
         tracing::info!(
             "the following python packages are assumed to be installed by conda: {conda_python_packages}",

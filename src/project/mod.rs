@@ -534,9 +534,21 @@ impl Project {
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
                         .collect();
 
+                    let feature_channels: HashSet<_> = manifest
+                        .parsed
+                        .features
+                        .values()
+                        .flat_map(|feature| feature.channels.iter())
+                        .flatten()
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
+
+                    let project_and_feature_channels: HashSet<_> =
+                        project_channels.union(&feature_channels).collect();
+
                     for channel in channel_to_location_map.keys() {
-                        if !project_channels.contains(channel) {
-                            let channels = project_channels
+                        if !project_and_feature_channels.contains(channel) {
+                            let channels = project_and_feature_channels
                                 .iter()
                                 .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
                                 .collect::<Vec<_>>()
