@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use itertools::Itertools;
+use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
@@ -213,7 +214,10 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     let env_yaml = build_env_yaml(&platform, &environment).unwrap();
 
     if let Some(output_path) = args.output_path {
-        env_yaml.to_path(output_path.as_path()).unwrap();
+        env_yaml
+            .to_path(output_path.as_path())
+            .into_diagnostic()
+            .with_context(|| "failed to write environment YAML")?;
     } else {
         println!("{}", env_yaml.to_yaml_string());
     }
@@ -234,7 +238,7 @@ mod tests {
         let project = Project::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
-            platform: None,
+            platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             lock_file_args: LockFileUsageArgs::default(),
         };
