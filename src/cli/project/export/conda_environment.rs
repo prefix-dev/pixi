@@ -240,7 +240,6 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -262,7 +261,6 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -285,7 +283,6 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -308,7 +305,6 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -330,7 +326,6 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -352,7 +347,6 @@ mod tests {
             output_path: None,
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
-            lock_file_args: LockFileUsageArgs::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
