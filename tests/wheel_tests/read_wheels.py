@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import tomllib
-from typing import Literal, Iterable, Self
+from typing import Literal, Iterable, Self, Any
 
 
 @dataclass
@@ -9,13 +9,19 @@ class PackageSpec:
     version: Literal["*"] | str = "*"
     extras: str | None = None
     target: str | None = None
+    system_requirements: dict[str, Any] | None = None
 
     @classmethod
     def __from_toml(cls, spec: dict[str, str] | str) -> Self:
         if isinstance(spec, str):
-            return cls(version=spec, extras=None, target=None)
+            return cls(version=spec, extras=None, target=None, system_requirements=None)
         if isinstance(spec, dict):
-            return cls(spec.get("version", "*"), spec.get("extras"), spec.get("target"))
+            return cls(
+                spec.get("version", "*"),
+                spec.get("extras"),
+                spec.get("target"),
+                spec.get("system-requirements"),
+            )
 
     @classmethod
     def from_toml(cls, spec: dict[str, str] | list[dict[str, str]] | str) -> Self | list[Self]:
@@ -56,12 +62,19 @@ class WheelTest:
             toml = tomllib.load(f)
             if not isinstance(toml, dict):
                 raise ValueError("Expected a dictionary")
-            if "wheels" not in toml:
-                raise ValueError("Expected a 'wheels' key")
-            wheels = toml["wheels"]
+            wheels = toml
             return cls({name: PackageSpec.from_toml(spec) for name, spec in wheels.items()})
 
     @classmethod
     def from_str(cls, s: str) -> Self:
         toml = tomllib.loads(s)
         return cls({name: PackageSpec.from_toml(spec) for name, spec in toml.items()})
+
+
+def read_wheel_file() -> Iterable[Package]:
+    """
+    Read the wheel file `wheels.txt` and return the name of the wheel
+    which is split per line
+    """
+    wheel_path = Path(__file__).parent / Path("wheels.toml")
+    return WheelTest.from_toml(wheel_path).to_packages()

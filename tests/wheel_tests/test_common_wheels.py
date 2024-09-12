@@ -1,28 +1,18 @@
-from typing import Iterable
-from multiprocessing import Lock
 import pytest
-from pathlib import Path
 import pathlib
-import os
 import subprocess
 import tempfile
-from read_wheels import Package, WheelTest
-import json
+from read_wheels import Package, read_wheel_file
 import time
-
-StrPath = str | os.PathLike[str]
-
-
-def run(args: list[StrPath], cwd: StrPath | None = None) -> None:
-    proc: subprocess.CompletedProcess[bytes] = subprocess.run(
-        args, cwd=cwd, capture_output=True, check=False
-    )
-    proc.check_returncode()
+from record_results import record_result
+from helpers import add_system_requirements, log_called_process_error, run
 
 
-def test_wheel(pixi_path: str | None, wheel: Package):
+def test_wheel(pixi_path: str | None, package: Package, testrun_uid: str):
     """
-    Create a temporary directory and install the wheel in it
+    Create a temporary directory and install the wheel in it.
+    The `testrun_uid` is a unique identifier for the test run
+    this is created by pytest-xdist
     """
     start = time.perf_counter()
     try:
@@ -30,65 +20,54 @@ def test_wheel(pixi_path: str | None, wheel: Package):
             dtemp: pathlib.Path = pathlib.Path(_dtemp)
             manifest_path = dtemp / "pixi.toml"
             run(["pixi", "init"], cwd=dtemp)
-            run(["pixi", "add", "--manifest-path", manifest_path, "python==3.12.*"])
+
+            # Check if we need to add system-requirements
+            # There is no CLI for it currently so we need to manually edit the file
+            if package.spec.system_requirements:
+                add_system_requirements(manifest_path, package.spec.system_requirements)
+
             run(
-                [
-                    "pixi",
-                    "-vvv",
-                    "add",
-                    "--manifest-path",
-                    manifest_path,
-                    "--pypi",
-                    wheel.to_add_cmd(),
-                ],
+                ["pixi", "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"]
             )
+
+            run_args = [
+                "pixi",
+                "-vvv",
+                "add",
+                "--no-progress",
+                "--manifest-path",
+                manifest_path,
+                "--pypi",
+                package.to_add_cmd(),
+            ]
+
+            # Add for another platform, if specified
+            if package.spec.target:
+                run_args.extend(["--platform", package.spec.target])
+
+            run(run_args)
             # Record the success of the test
-            record_result(wheel.name, "passed", time.perf_counter() - start, "")
+            record_result(
+                testrun_uid, package.to_add_cmd(), "passed", time.perf_counter() - start, ""
+            )
     except subprocess.CalledProcessError as e:
         # Record the failure details
-        record_result(wheel.name, "failed", time.perf_counter() - start, str(e))
-
-
-def read_wheel_file() -> Iterable[Package]:
-    """
-    Read the wheel file `wheels.txt` and return the name of the wheel
-    which is split per line
-    """
-    wheel_path = Path(__file__).parent / Path("wheels.toml")
-    return WheelTest.from_toml(wheel_path).to_packages()
+        record_result(
+            testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
+        )
+        log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
 
 
 def pytest_generate_tests(metafunc):
     """
-    This generates the test for the wheels
+    This generates the test for the wheels by reading the wheels from the toml specification
+    creates a test for each entry in the toml file
     """
-    if "wheel" in metafunc.fixturenames:
-        wheels = read_wheel_file()
-        metafunc.parametrize("wheel", [pytest.param(w, id=f"{w.name}") for w in wheels])
+    if "package" in metafunc.fixturenames:
+        packages = read_wheel_file()
+        metafunc.parametrize("package", [pytest.param(w, id=f"{w.to_add_cmd()}") for w in packages])
 
 
 @pytest.fixture(scope="session")
 def pixi_path(pytestconfig):
     return pytestconfig.getoption("pixi_exec")
-
-
-lock = Lock()
-RESULTS_FILE = "test_results.json"
-
-
-def record_result(name, outcome, duration, details):
-    """
-    Collects test status after each test run, compatible with pytest-xdist.
-    """
-    result = {"name": name, "outcome": outcome, "duration": duration, "longrepr": details}
-
-    # Lock for thread-safe write access to the results file
-    with lock:
-        path = Path(RESULTS_FILE)
-        results = []
-        if path.exists():
-            with open(RESULTS_FILE, "r") as f:
-                results = json.load(f)
-        results.append(result)
-        with open(RESULTS_FILE, "w") as f:
-            json.dump(results, f)
