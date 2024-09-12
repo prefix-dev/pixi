@@ -245,7 +245,7 @@ async fn add_pypi_functionality() {
     pixi.init().await.unwrap();
 
     // Add python
-    pixi.add("python")
+    pixi.add("python~=3.12.0")
         .set_type(DependencyType::CondaDependency(SpecType::Run))
         .with_install(false)
         .await
