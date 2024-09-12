@@ -10,6 +10,10 @@ from pathlib import Path
 def terminal_summary():
     # Read aggregated results from the shared file
     results_file = RESULTS_FILE
+    if not results_file.exists():
+        print("Error: No test results found.")
+        return
+
     with results_file.open("r") as f:
         results = toml.load(f)["results"]
 
@@ -60,6 +64,9 @@ def terminal_summary():
 
 
 def markdown_summary():
+    if not RESULTS_FILE.exists():
+        return
+
     summary_file = Path(__file__).parent / ".summary.md"
     with summary_file.open("w") as f:
         # Read the RESULTS_FILE and generate a markdown summary
