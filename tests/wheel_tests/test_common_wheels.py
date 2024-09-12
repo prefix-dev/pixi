@@ -1,4 +1,5 @@
 import pytest
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -9,7 +10,7 @@ from helpers import add_system_requirements, log_called_process_error, run
 import sys
 
 
-def test_wheel(pixi_path: str | None, package: Package, testrun_uid: str):
+def test_wheel(pixi: str, package: Package, testrun_uid: str):
     """
     Create a temporary directory and install the wheel in it.
     The `testrun_uid` is a unique identifier for the test run
@@ -19,20 +20,21 @@ def test_wheel(pixi_path: str | None, package: Package, testrun_uid: str):
     try:
         with tempfile.TemporaryDirectory() as _dtemp:
             dtemp: pathlib.Path = pathlib.Path(_dtemp)
+            # Path to the manifest file
             manifest_path = dtemp / "pixi.toml"
-            run(["pixi", "init"], cwd=dtemp)
+            run([pixi, "init"], cwd=dtemp)
 
             # Check if we need to add system-requirements
             # There is no CLI for it currently so we need to manually edit the file
             if package.spec.system_requirements:
                 add_system_requirements(manifest_path, package.spec.system_requirements)
 
-            run(
-                ["pixi", "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"]
-            )
+            # Add python to the project
+            run([pixi, "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"])
 
+            # Add the wheel to the project
             run_args = [
-                "pixi",
+                pixi,
                 "-vvv",
                 "add",
                 "--no-progress",
@@ -56,6 +58,7 @@ def test_wheel(pixi_path: str | None, package: Package, testrun_uid: str):
         record_result(
             testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
         )
+        # Log the error
         log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
 
 
@@ -70,10 +73,24 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture(scope="session")
-def pixi_path(pytestconfig):
+def pixi(pytestconfig):
+    # The command line argument overrides the default path
     if pytestconfig.getoption("pixi_exec"):
         return pytestconfig.getoption("pixi_exec")
+
+    # Check pixi environment variable
+    project_root = os.environ.get("PIXI_PROJECT_ROOT")
+    if not project_root:
+        pytest.exit("PROJECT_ROOT environment variable is not set, run from pixi task")
+
+    # Check if the target directory exists
+    assert project_root
+    project_root = pathlib.Path(project_root)
+    target_dir = project_root.joinpath(".pixi/target/release")
+    if not target_dir.exists():
+        pytest.exit("pixi executable not found, run `pixi r build` first")
+
     if sys.platform.startswith("win"):
-        return pathlib.Path(__file__).parent.joinpath("../../.pixi/target/release/pixi.exe")
+        return project_root.joinpath(".pixi/target/release/pixi.exe")
     else:
-        return pathlib.Path(__file__).parent.joinpath("../../.pixi/target/release/pixi")
+        return project_root.joinpath(".pix/target/release/pixi")
