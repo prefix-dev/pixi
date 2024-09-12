@@ -20,7 +20,7 @@ bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
 pypi-proxy = "python ./tests/pypi_proxy.py"
 release = "python scripts/release.py"
-run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec .pixi/target/release/pixi", depends-on = [
+run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build",
 ] }
 test = "cargo test"
@@ -28,11 +28,14 @@ test-all = "cargo test --all-features"
 
 [feature.pytest.dependencies]
 mypy = ">=1.11,<1.12"
-pytest = ">=8.0.2,<9"
+# For detecting cpu cores with pytest-xdist
+psutil = ">=6.0.0,<7"
+# For running tests in parallel, use this instead of regular pytest
+pytest-xdist = ">=3.6.1,<4"
 
 [feature.pytest.tasks]
-test-integration-ci = "pytest tests/integration"
-test-integration-dev = { cmd = "pytest tests/integration", depends-on = [
+test-integration-ci = "pytest -n logical tests/integration"
+test-integration-dev = { cmd = "pytest -n logical tests/integration", depends-on = [
   "build",
 ] }
 typecheck-integration = "mypy --strict tests/integration"
@@ -69,7 +72,11 @@ compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
 [feature.build.target.linux-64.activation]
-scripts = ["scripts/activate_linux.sh"]
+scripts = ["scripts/activate.sh"]
+[feature.build.target.osx-arm64.activation]
+scripts = ["scripts/activate.sh"]
+[feature.build.target.win-64.activation]
+scripts = ["scripts/activate.bat"]
 
 [feature.docs.dependencies]
 cairosvg = "2.7.1.*"
@@ -98,6 +105,13 @@ jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
 pyyaml = ">=6.0.1,<6.1"
 
+[feature.pypi-gen.dependencies]
+hatchling = ">=1.25.0,<2"
+python-build = ">=1.2.2,<2"
+
+[feature.pypi-gen.tasks]
+pypi-gen-indexes = "python tests/pypi-indexes/generate-indexes.py"
+
 [environments]
 default = { features = [
   "build",
@@ -111,6 +125,7 @@ docs = { features = [
 lint = { features = [
   "lint",
 ], no-default-feature = true, solve-group = "default" }
+pypi-gen = { features = ["pypi-gen"] }
 schema = { features = [
   "schema",
   "pytest",
