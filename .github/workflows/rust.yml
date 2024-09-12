@@ -108,11 +108,7 @@ jobs:
               target: x86_64-unknown-linux-musl,
               os: 8core_ubuntu_latest_runner,
             }
-          - {
-              name: "macOS",
-              target: x86_64-apple-darwin,
-              os: macos-13,
-            }
+          - { name: "macOS", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
           - {
               name: "Windows",
@@ -425,3 +421,9 @@ jobs:
     needs:
       - build
     uses: ./.github/workflows/test_downstream.yml
+
+  test_common_wheels:
+    name: "Test installation of common wheels"
+    needs:
+      - build
+    uses: ./.github/workflows/test_common_wheels.yml

@@ -1,6 +1,6 @@
 import sys
-from helpers import setup_stdout_stderr_logging
 from generate_summaries import terminal_summary, markdown_summary
+from helpers import setup_stdout_stderr_logging
 
 
 def pytest_configure(config):
