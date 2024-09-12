@@ -54,7 +54,7 @@ jobs:
         shell: pwsh
       - name: Test common wheels
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
-      - name: Write .summary.md to github summary
+      - name: Write .summary.md to Github Summary
         if: matrix.arch.name != 'Windows'
         run: |
           cat ./tests/wheel_tests/.summary.md >> $GITHUB_STEP_SUMMARY.
@@ -62,3 +62,8 @@ jobs:
         if: matrix.arch.name == 'Windows'
         run: |
           Get-Content ./tests/wheel_tests/.summary.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+      - name: Upload Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./tests/wheel_tests/.logs

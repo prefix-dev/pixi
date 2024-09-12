@@ -43,7 +43,8 @@ def terminal_summary():
         "To filter tests by a specific wheel, use the command:\n"
         "[bold green]pytest -k '<pixi_add_cmd>'[/]\n\n"
         "Replace [bold]<pixi_add_com>[/] with the desired wheel's name to run only tests for that wheel.\n"
-        r"E.g use [magenta] pixi r test-common-wheels -k \"jax\[cuda12]\"[/] to run tests for the [bold]jax\[cuda12][/] wheel.\n\n"
+        r'E.g use [magenta] pixi r test-common-wheels -k "jax\[cuda12]"[/] to run tests for the [bold]jax\[cuda12][/] wheel.'
+        "\n\n"
         "[bold yellow]Note:[/]\n"
         "Any [italic]failed[/] tests will have recorded their output to the [bold].log/[/] directory, which"
         " resides next to to `wheels.toml` file.\n"
