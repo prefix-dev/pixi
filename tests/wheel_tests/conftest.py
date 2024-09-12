@@ -1,4 +1,3 @@
-import sys
 from generate_summaries import terminal_summary, markdown_summary
 from helpers import setup_stdout_stderr_logging
 
@@ -8,14 +7,9 @@ def pytest_configure(config):
 
 
 def pytest_addoption(parser):
-    if sys.platform.startswith("win"):
-        parser.addoption(
-            "--pixi-exec", action="store", default="pixi.exe", help="Path to the pixi executable"
-        )
-    else:
-        parser.addoption(
-            "--pixi-exec", action="store", default="pixi", help="Path to the pixi executable"
-        )
+    parser.addoption(
+        "--pixi-exec", action="store", default="pixi", help="Path to the pixi executable"
+    )
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):

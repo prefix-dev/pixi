@@ -40,13 +40,13 @@ jobs:
       - name: Debug
         run: |
           pwd
-      - name: Setup unix binary, add to github path
+      - name: Create Directory and Move Executable to TARGET_RELEASE
         if: matrix.arch.name != 'Windows'
         run: |
           mkdir -p ${{ env.TARGET_RELEASE }}
           mv pixi_bin/pixi-${{ matrix.arch.target }} ${{ env.TARGET_RELEASE }}/pixi
           chmod a+x ${{ env.TARGET_RELEASE }}/pixi
-      - name: Create Directory and Move Executable
+      - name: Create Directory and Move Executable to TARGET_RELEASE
         if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
         run: |
           New-Item -ItemType Directory -Force -Path "${{ env.TARGET_RELEASE }}"

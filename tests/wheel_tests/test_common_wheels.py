@@ -6,6 +6,7 @@ from read_wheels import Package, read_wheel_file
 import time
 from record_results import record_result
 from helpers import add_system_requirements, log_called_process_error, run
+import sys
 
 
 def test_wheel(pixi_path: str | None, package: Package, testrun_uid: str):
@@ -70,4 +71,9 @@ def pytest_generate_tests(metafunc):
 
 @pytest.fixture(scope="session")
 def pixi_path(pytestconfig):
-    return pytestconfig.getoption("pixi_exec")
+    if pytestconfig.getoption("pixi_exec"):
+        return pytestconfig.getoption("pixi_exec")
+    if sys.platform.startswith("win"):
+        return pathlib.Path(__file__).parent.joinpath("../../.pixi/target/release/pixi.exe")
+    else:
+        return pathlib.Path(__file__).parent.joinpath("../../.pixi/target/release/pixi")
