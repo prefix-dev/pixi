@@ -5,7 +5,7 @@ on:
 
 jobs:
   test_common_wheels:
-    name: ${{ matrix.arch.name }} - ${{ matrix.repository }}
+    name: ${{ matrix.arch.name }} - Test Installation of Common Wheels
     runs-on: ${{ matrix.arch.os }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
