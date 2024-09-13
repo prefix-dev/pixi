@@ -9,6 +9,8 @@ jobs:
     runs-on: ${{ matrix.arch.os }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
+      LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
+      SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
     strategy:
       fail-fast: false
       matrix:
@@ -55,15 +57,11 @@ jobs:
       - name: Test common wheels
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
-        if: matrix.arch.name != 'Windows'
         run: |
-          cat ./tests/wheel_tests/.summary.md >> $GITHUB_STEP_SUMMARY.
-      - name: Write .summary.md to GitHub summary
-        if: matrix.arch.name == 'Windows'
-        run: |
-          Get-Content ./tests/wheel_tests/.summary.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+        shell: bash
+          cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY.
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: ./tests/wheel_tests/.logs
+          path: ${{ env.LOGS_DIR }}
