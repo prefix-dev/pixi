@@ -57,9 +57,9 @@ jobs:
       - name: Test common wheels
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
-        run: |
         shell: bash
-          cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY.
+        run: |
+          cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
