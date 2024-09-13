@@ -556,7 +556,7 @@ impl Project {
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             miette::bail!(
-                                "Defined conda-pypi-map channel: {} is missing from the channels, which are: {}",
+                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
                                 console::style(
                                     channel
                                         .name
@@ -970,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mapping_check_also_feature_channels() {
+    fn test_mapping_ensure_feature_channels_also_checked() {
         let file_contents = r#"
             [project]
             name = "foo"
