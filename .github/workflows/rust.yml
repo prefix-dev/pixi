@@ -28,8 +28,6 @@ env:
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
-  # SCCACHE_GHA_ENABLED: "true"
-  # RUSTC_WRAPPER: "sccache"
 
 jobs:
   check-rustdoc-links:
