@@ -31,6 +31,13 @@ impl PixiRecord {
         }
     }
 
+    pub fn into_binary(self) -> Option<RepoDataRecord> {
+        match self {
+            PixiRecord::Binary(record) => Some(record),
+            PixiRecord::Source(_) => None,
+        }
+    }
+
     pub fn as_binary_mut(&mut self) -> Option<&mut RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),
