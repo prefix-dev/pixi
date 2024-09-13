@@ -996,6 +996,10 @@ mod tests {
         let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
         let project = Project::from_manifest(manifest);
 
+        // We output error message with bold channel name,
+        // so we need to disable colors for snapshot
+        console::set_colors_enabled(false);
+
         insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
     }
 }
