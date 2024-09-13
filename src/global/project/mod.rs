@@ -1,7 +1,7 @@
 use std::{
     env,
     ffi::OsStr,
-    fmt::Formatter,
+    fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
     sync::OnceLock,
@@ -13,24 +13,21 @@ use itertools::Itertools;
 use manifest::Manifest;
 use miette::{miette, Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
-pub(crate) use parsed_manifest::ExposedKey;
-pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
+pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{default_channel_config, home_path, Config};
 use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
-use std::fmt::Debug;
 use url::Url;
 
+use super::{find_executables, BinDir, EnvRoot};
 use crate::{
     global::{common::is_text, EnvDir},
     prefix::Prefix,
 };
-
-use super::{BinDir, EnvRoot};
 
 mod document;
 mod environment;
@@ -40,10 +37,10 @@ mod parsed_manifest;
 
 pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 
-/// The pixi global project, this main struct to interact with the pixi global project.
-/// This struct holds the `Manifest` and has functions to modify
-/// or request information from it. This allows in the future to have multiple manifests
-/// linked to a pixi global project.
+/// The pixi global project, this main struct to interact with the pixi global
+/// project. This struct holds the `Manifest` and has functions to modify
+/// or request information from it. This allows in the future to have multiple
+/// manifests linked to a pixi global project.
 #[derive(Clone)]
 pub struct Project {
     /// Root folder of the project
@@ -69,6 +66,7 @@ impl Debug for Project {
     }
 }
 
+/// Intermediate struct to store all the binaries that are exposed.
 #[derive(Debug)]
 struct ExposedData {
     env: EnvironmentName,
@@ -76,7 +74,7 @@ struct ExposedData {
     channel: PrioritizedChannel,
     package: PackageName,
     exposed: ExposedKey,
-    binary: String,
+    executable_name: String,
 }
 
 impl Project {
@@ -105,9 +103,10 @@ impl Project {
         Ok(Self::from_manifest(manifest))
     }
 
-    /// Discovers the project manifest file in path at `~/.pixi/manifests/pixi-global.toml`.
-    /// If the manifest doesn't exist yet, and the function will try to create one from the existing installation.
-    /// If that one fails, an empty one will be created.
+    /// Discovers the project manifest file in path at
+    /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
+    /// yet, and the function will try to create one from the existing
+    /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover(
         bin_dir: &BinDir,
         env_root: &EnvRoot,
@@ -173,7 +172,7 @@ impl Project {
             .collect::<miette::Result<_>>()?;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
-        let toml = toml_edit::ser::to_string(&parsed_manifest).into_diagnostic()?;
+        let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         tokio::fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
@@ -225,7 +224,7 @@ impl Project {
             platform,
             channel,
             package,
-            binary,
+            executable_name: binary,
             exposed,
         })
     }
@@ -234,6 +233,9 @@ impl Project {
         conda_meta: &Path,
         binary: &str,
     ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+        // HACK: FIX ME
+        let prefix = Prefix::new(conda_meta.parent().unwrap());
+
         for entry in std::fs::read_dir(conda_meta)
             .into_diagnostic()
             .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
@@ -246,77 +248,37 @@ impl Project {
                 .path();
             let channel_config = default_channel_config();
             // Check if the entry is a file and has a .json extension
-            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+            if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
                 let content = std::fs::read_to_string(&path).into_diagnostic()?;
-                let json: serde_json::Value = serde_json::from_str(&content)
+                let prefix_record = PrefixRecord::from_path(&path)
                     .into_diagnostic()
                     .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
 
-                // Check if the JSON contains the specified structure
-                if let Some(paths) = json.pointer("/paths_data/paths") {
-                    if let Some(array) = paths.as_array() {
-                        for item in array {
-                            if let Some(path_value) = item.get("_path") {
-                                if let Some(path_str) = path_value.as_str() {
-                                    if path_str == format!("bin/{binary}") {
-                                        let platform = json
-                                            .get("subdir")
-                                            .and_then(|p| p.as_str())
-                                            .map(Platform::from_str)
-                                            .map(|p| match p {
-                                                Ok(Platform::NoArch) => None,
-                                                Ok(platform) if platform == Platform::current() => {
-                                                    None
-                                                }
-                                                Err(_) => None,
-                                                Ok(p) => Some(p),
-                                            })
-                                            .ok_or_else(|| {
-                                                miette!(
-                                                    "Could not find platform in {}",
-                                                    conda_meta.display()
-                                                )
-                                            })?;
-                                        let channel = json
-                                            .get("channel")
-                                            .and_then(|c| c.as_str())
-                                            .ok_or_else(|| {
-                                                miette!(
-                                                    "Could not find channel in {}",
-                                                    conda_meta.display()
-                                                )
-                                            })
-                                            .map(|channel| {
-                                                Url::from_str(channel)
-                                                    .ok()
-                                                    .and_then(|url| {
-                                                        channel_config.strip_channel_alias(&url)
-                                                    })
-                                                    .unwrap_or_else(|| channel.to_string())
-                                            })
-                                            .and_then(|c| {
-                                                NamedChannelOrUrl::from_str(&c).into_diagnostic()
-                                            })
-                                            .map(PrioritizedChannel::from)?;
-                                        let package = json
-                                            .get("name")
-                                            .and_then(|p| p.as_str())
-                                            .ok_or_else(|| {
-                                                miette!(
-                                                    "Could not find package name in {}",
-                                                    conda_meta.display()
-                                                )
-                                            })
-                                            .and_then(|p| {
-                                                PackageName::from_str(p).into_diagnostic()
-                                            })?;
-                                        return Ok((platform, channel, package));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                let binaries = find_executables(&prefix, &prefix_record);
+                let Some(found_binary) = binaries
+                    .iter()
+                    .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(binary))
+                else {
+                    continue;
+                };
+
+                let platform = match Platform::from_str(
+                    &prefix_record.repodata_record.package_record.subdir,
+                ) {
+                    Ok(Platform::NoArch) => None,
+                    Ok(platform) if platform == Platform::current() => None,
+                    Err(_) => None,
+                    Ok(p) => Some(p),
+                };
+
+                let channel: PrioritizedChannel =
+                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
+                        .into_diagnostic()?
+                        .into();
+
+                let name = prefix_record.repodata_record.package_record.name;
+
+                return Ok((platform, channel, name));
             }
         }
 
@@ -383,8 +345,9 @@ impl Project {
 mod tests {
     use std::io::Write;
 
-    use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
+
+    use super::*;
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]

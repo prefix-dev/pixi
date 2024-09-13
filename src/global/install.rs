@@ -1,4 +1,3 @@
-use crate::global;
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -13,35 +12,33 @@ use distribution_types::Diagnostic;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{bail, Context, IntoDiagnostic};
+use pixi_config::{self, default_channel_config, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::VirtualPackage;
-use rattler_virtual_packages::VirtualPackageOverrides;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
+use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 use crate::{
-    cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs, prefix::Prefix,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-use crate::{
+    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
+    global,
     global::{channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
+    prefix::Prefix,
+    rlimit::try_increase_rlimit_to_sensible,
     task::ExecutableTask,
 };
-use pixi_config::{self, default_channel_config, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-
-use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 
 /// Installs global environment records
 pub(crate) async fn install_environment(
@@ -50,19 +47,14 @@ pub(crate) async fn install_environment(
     packages: Vec<PackageName>,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
-    bin_dir: &BinDir,
-    env_root: &EnvRoot,
+    prefix: &Prefix,
 ) -> miette::Result<()> {
     try_increase_rlimit_to_sensible();
-
-    // Create the binary environment prefix where we install or update the package
-    let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
-    let prefix = Prefix::new(bin_env_dir.path());
 
     // Install the environment
     let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
 
-    let result = await_in_progress("creating virtual environment", |pb| {
+    await_in_progress("creating virtual environment", |pb| {
         Installer::new()
             .with_download_client(authenticated_client)
             .with_io_concurrency_limit(100)
@@ -82,6 +74,16 @@ pub(crate) async fn install_environment(
     .await
     .into_diagnostic()?;
 
+    Ok(())
+}
+
+pub(crate) async fn expose_executables(
+    env_name: &EnvironmentName,
+    parsed_environment: &ParsedEnvironment,
+    packages: Vec<PackageName>,
+    prefix: &Prefix,
+    bin_dir: &BinDir,
+) -> miette::Result<bool> {
     // Determine the shell to use for the invocation script
     let shell: ShellEnum = if cfg!(windows) {
         rattler_shell::shell::CmdExe.into()
@@ -101,15 +103,16 @@ pub(crate) async fn install_environment(
     /// 1. Filters records to only include direct dependencies
     /// 2. Finds executables for each filtered record.
     /// 3. Maps executables to a tuple of file name (as a string) and file path.
-    /// 4. Filters tuples to include only those whose names are in the `exposed` values.
+    /// 4. Filters tuples to include only those whose names are in the `exposed`
+    ///    values.
     /// 5. Collects the resulting tuples into a vector of executables.
     let executables: Vec<(String, PathBuf)> = prefix_records
         .into_iter()
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
-        .flat_map(|record| find_executables(&prefix, record))
+        .flat_map(|record| global::find_executables(&prefix, &record))
         .filter_map(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
+            path.file_stem()
+                .and_then(OsStr::to_str)
                 .map(|name| (name.to_string(), path.clone()))
         })
         .filter(|(name, path)| parsed_environment.exposed.values().contains(&name))
@@ -129,9 +132,7 @@ pub(crate) async fn install_environment(
         })
         .collect::<miette::Result<Vec<_>>>()?;
 
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
-
-    Ok(())
+    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
 }
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
@@ -141,12 +142,13 @@ pub(crate) async fn install_environment(
 /// the original executable.
 /// # Returns
 ///
-/// A `miette::Result` containing the `ScriptExecMapping` if the entry point is found,
-/// or an error if it is not.
+/// A `miette::Result` containing the `ScriptExecMapping` if the entry point is
+/// found, or an error if it is not.
 ///
 /// # Errors
 ///
-/// Returns an error if the entry point is not found in the list of executable names.
+/// Returns an error if the entry point is not found in the list of executable
+/// names.
 fn script_exec_mapping(
     exposed_name: &ExposedKey,
     entry_point: &str,
@@ -186,53 +188,12 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
     Ok(script)
 }
 
-/// Mapping from the global script location to an executable in a package environment .
+/// Mapping from the global script location to an executable in a package
+/// environment .
 #[derive(Debug)]
 pub struct ScriptExecMapping {
     pub global_script_path: PathBuf,
     pub original_executable: PathBuf,
-}
-
-/// Find the executable scripts within the specified package installed in this
-/// conda prefix.
-fn find_executables(prefix: &Prefix, prefix_package: PrefixRecord) -> Vec<PathBuf> {
-    prefix_package
-        .files
-        .into_iter()
-        .filter(|relative_path| is_executable(prefix, relative_path))
-        .collect()
-}
-
-fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
-    // Check if the file is in a known executable directory.
-    let binary_folders = if cfg!(windows) {
-        &([
-            "",
-            "Library/mingw-w64/bin/",
-            "Library/usr/bin/",
-            "Library/bin/",
-            "Scripts/",
-            "bin/",
-        ][..])
-    } else {
-        &(["bin"][..])
-    };
-
-    let parent_folder = match relative_path.parent() {
-        Some(dir) => dir,
-        None => return false,
-    };
-
-    if !binary_folders
-        .iter()
-        .any(|bin_path| Path::new(bin_path) == parent_folder)
-    {
-        return false;
-    }
-
-    // Check if the file is executable
-    let absolute_path = prefix.root().join(relative_path);
-    is_executable::is_executable(absolute_path)
 }
 
 /// Returns the string to add for all arguments passed to the script
@@ -306,12 +267,21 @@ async fn map_executables_to_global_bin_scripts(
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
+///
+/// Returns true if a change was made.
 async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
-) -> miette::Result<()> {
+) -> miette::Result<bool> {
+    let mut changed = false;
+    enum AddedOrChanged {
+        Unchanged,
+        Added,
+        Changed,
+    }
+
     for ScriptExecMapping {
         global_script_path,
         original_executable,
@@ -339,9 +309,25 @@ async fn create_executable_scripts(
             script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
         }
 
-        tokio::fs::write(&global_script_path, script)
-            .await
-            .into_diagnostic()?;
+        let added_or_changed = if global_script_path.exists() {
+            match tokio::fs::read_to_string(global_script_path).await {
+                Ok(previous_script) if previous_script != script => AddedOrChanged::Changed,
+                Ok(_) => AddedOrChanged::Unchanged,
+                Err(_) => AddedOrChanged::Changed,
+            }
+        } else {
+            AddedOrChanged::Added
+        };
+
+        if matches!(
+            added_or_changed,
+            AddedOrChanged::Changed | AddedOrChanged::Added
+        ) {
+            tokio::fs::write(&global_script_path, script)
+                .await
+                .into_diagnostic()?;
+            changed = true;
+        }
 
         #[cfg(unix)]
         {
@@ -349,8 +335,26 @@ async fn create_executable_scripts(
             std::fs::set_permissions(global_script_path, std::fs::Permissions::from_mode(0o755))
                 .into_diagnostic()?;
         }
+
+        let executable_name = global_script_path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .expect("must always have at least a name");
+        match added_or_changed {
+            AddedOrChanged::Unchanged => {}
+            AddedOrChanged::Added => eprintln!(
+                "{}Added binary '{}'.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                executable_name
+            ),
+            AddedOrChanged::Changed => eprintln!(
+                "{}Updated binary '{}'.",
+                console::style(console::Emoji("~ ", "")).yellow(),
+                executable_name
+            ),
+        }
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
@@ -426,8 +430,8 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
             eprintln!(
-                "{} Remove binary '{file_name}'.",
-                console::style(console::Emoji("✔", " ")).green()
+                "{}Remove binary '{file_name}'.",
+                console::style(console::Emoji("✔ ", "")).green()
             );
         }
     }
@@ -451,60 +455,83 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             })
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
-        let channels = environment
-            .channels()
-            .into_iter()
-            .map(|channel| channel.clone().into_channel(config.global_channel_config()))
-            .collect_vec();
+        let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(bin_env_dir.path());
 
-        let repodata = await_in_progress("querying repodata ", |_| async {
-            gateway
-                .query(
-                    channels,
-                    [environment.platform(), Platform::NoArch],
-                    specs.values().cloned().collect_vec(),
-                )
-                .recursive(true)
-                .await
-                .into_diagnostic()
-        })
-        .await?;
+        let prefix_records = prefix.find_installed_packages(Some(50)).await?;
+        let all_specs_are_matched = specs.iter().all(|(name, spec)| {
+            let Some(prefix_record) = prefix_records
+                .iter()
+                .find(|record| record.repodata_record.package_record.name == *name)
+            else {
+                return false;
+            };
 
-        // Determine virtual packages of the current platform
-        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .iter()
-            .cloned()
-            .map(GenericVirtualPackage::from)
-            .collect();
+            spec.matches(&prefix_record.repodata_record)
+        });
+        if !all_specs_are_matched {
+            let channels = environment
+                .channels()
+                .into_iter()
+                .map(|channel| channel.clone().into_channel(config.global_channel_config()))
+                .collect_vec();
 
-        // Solve the environment
-        let solver_specs = specs.clone();
-        let solved_records = tokio::task::spawn_blocking(move || {
-            wrap_in_progress("solving environment", move || {
-                Solver.solve(SolverTask {
-                    specs: solver_specs.values().cloned().collect_vec(),
-                    virtual_packages,
-                    ..SolverTask::from_iter(&repodata)
-                })
+            let repodata = await_in_progress("querying repodata ", |_| async {
+                gateway
+                    .query(
+                        channels,
+                        [environment.platform(), Platform::NoArch],
+                        specs.values().cloned().collect_vec(),
+                    )
+                    .recursive(true)
+                    .await
+                    .into_diagnostic()
             })
-            .into_diagnostic()
-            .context("failed to solve environment")
-        })
-        .await
-        .into_diagnostic()??;
+            .await?;
 
-        let packages = specs.keys().cloned().collect();
+            // Determine virtual packages of the current platform
+            let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
+                .into_diagnostic()
+                .context("failed to determine virtual packages")?
+                .iter()
+                .cloned()
+                .map(GenericVirtualPackage::from)
+                .collect();
 
-        install_environment(
+            // Solve the environment
+            let solver_specs = specs.clone();
+            let solved_records = tokio::task::spawn_blocking(move || {
+                wrap_in_progress("solving environment", move || {
+                    Solver.solve(SolverTask {
+                        specs: solver_specs.values().cloned().collect_vec(),
+                        virtual_packages,
+                        ..SolverTask::from_iter(&repodata)
+                    })
+                })
+                .into_diagnostic()
+                .context("failed to solve environment")
+            })
+            .await
+            .into_diagnostic()??;
+
+            let packages = specs.keys().cloned().collect();
+            install_environment(
+                &env_name,
+                &environment,
+                packages,
+                solved_records.clone(),
+                auth_client.clone(),
+                &prefix,
+            )
+            .await?;
+        }
+
+        expose_executables(
             &env_name,
             &environment,
-            packages,
-            solved_records.clone(),
-            auth_client.clone(),
+            specs.keys().cloned().collect(),
+            &prefix,
             &bin_dir,
-            &env_root,
         )
         .await?;
     }

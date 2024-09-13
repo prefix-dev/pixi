@@ -1,4 +1,5 @@
 use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
@@ -35,7 +36,7 @@ where
                 platform,
                 channel,
                 package,
-                binary,
+                executable_name: binary,
                 exposed,
             } = data;
             let mut parsed_environment = envs.entry(env).or_default();
