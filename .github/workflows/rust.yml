@@ -28,8 +28,8 @@ env:
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
+  # SCCACHE_GHA_ENABLED: "true"
+  # RUSTC_WRAPPER: "sccache"
 
 jobs:
   check-rustdoc-links:
@@ -38,8 +38,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.5
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
@@ -70,10 +71,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
-
+      - uses: Swatinem/rust-cache@v2
       - name: Run clippy
         run: cargo clippy --all-targets --workspace
 
@@ -108,11 +106,7 @@ jobs:
               target: x86_64-unknown-linux-musl,
               os: 8core_ubuntu_latest_runner,
             }
-          - {
-              name: "macOS",
-              target: x86_64-apple-darwin,
-              os: macos-13,
-            }
+          - { name: "macOS", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
           - {
               name: "Windows",
@@ -125,10 +119,8 @@ jobs:
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
-      #      - uses: Swatinem/rust-cache@v2
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -216,9 +208,7 @@ jobs:
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
-      #      - uses: Swatinem/rust-cache@v2
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
 
       - name: Setup | Install cargo-wix [Windows]
         # aarch64 is only supported in wix 4.0 development builds
