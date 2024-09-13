@@ -7,9 +7,7 @@ def pytest_configure(config):
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--pixi-exec", action="store", default="pixi", help="Path to the pixi executable"
-    )
+    parser.addoption("--pixi-exec", action="store", help="Path to the pixi executable")
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):

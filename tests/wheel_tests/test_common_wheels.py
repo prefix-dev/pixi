@@ -91,6 +91,6 @@ def pixi(pytestconfig):
         pytest.exit("pixi executable not found, run `pixi r build` first")
 
     if sys.platform.startswith("win"):
-        return project_root.joinpath(".pixi/target/release/pixi.exe")
+        return target_dir.joinpath("pixi.exe")
     else:
-        return project_root.joinpath(".pix/target/release/pixi")
+        return target_dir.joinpath("pixi")

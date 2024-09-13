@@ -6,6 +6,11 @@ from typing import Literal, Iterable, Self, Any
 
 @dataclass
 class PackageSpec:
+    """
+    A class to represent the package specification in the `wheels.toml` file.
+    A single Package Name can have multiple specifications.
+    """
+
     version: Literal["*"] | str = "*"
     extras: str | None = None
     target: str | None = None
@@ -33,6 +38,11 @@ class PackageSpec:
 
 @dataclass
 class Package:
+    """
+    Specifies a package which is a name and a specification
+    on how to install it.
+    """
+
     name: str
     spec: PackageSpec
 
@@ -47,6 +57,10 @@ class Package:
 
 @dataclass
 class WheelTest:
+    """
+    A class to represent the `wheels.toml` file
+    """
+
     name: dict[str, list[PackageSpec] | PackageSpec]
 
     def to_packages(self) -> Iterable[Package]:
@@ -58,6 +72,9 @@ class WheelTest:
 
     @classmethod
     def from_toml(cls, file: Path) -> Self:
+        """
+        Read the wheels from the toml file and return the instance
+        """
         with file.open("rb") as f:
             toml = tomllib.load(f)
             if not isinstance(toml, dict):
@@ -67,14 +84,17 @@ class WheelTest:
 
     @classmethod
     def from_str(cls, s: str) -> Self:
+        """
+        Read the wheels from the toml string and return the instance
+        """
         toml = tomllib.loads(s)
         return cls({name: PackageSpec.from_toml(spec) for name, spec in toml.items()})
 
 
 def read_wheel_file() -> Iterable[Package]:
     """
-    Read the wheel file `wheels.txt` and return the name of the wheel
-    which is split per line
+    Read the wheel file `wheels.toml` and return the package
+    instances.
     """
     wheel_path = Path(__file__).parent / Path("wheels.toml")
     return WheelTest.from_toml(wheel_path).to_packages()
