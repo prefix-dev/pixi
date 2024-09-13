@@ -2,7 +2,6 @@ import pytest
 import os
 import pathlib
 import subprocess
-import tempfile
 from read_wheels import Package, read_wheel_file
 import time
 from record_results import record_result
@@ -10,56 +9,52 @@ from helpers import add_system_requirements, log_called_process_error, run
 import sys
 
 
-def test_wheel(pixi: str, package: Package, testrun_uid: str):
+def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.Path):
     """
     Create a temporary directory and install the wheel in it.
     The `testrun_uid` is a unique identifier for the test run
     this is created by pytest-xdist
     """
     start = time.perf_counter()
-    with tempfile.TemporaryDirectory() as _dtemp:
-        try:
-            dtemp: pathlib.Path = pathlib.Path(_dtemp)
-            # Path to the manifest file
-            manifest_path = dtemp / "pixi.toml"
-            run([pixi, "init"], cwd=dtemp)
+    try:
+        # Path to the manifest file
+        manifest_path = tmp_path / "pixi.toml"
+        run([pixi, "init"], cwd=tmp_path)
 
-            # Check if we need to add system-requirements
-            # There is no CLI for it currently so we need to manually edit the file
-            if package.spec.system_requirements:
-                add_system_requirements(manifest_path, package.spec.system_requirements)
+        # Check if we need to add system-requirements
+        # There is no CLI for it currently so we need to manually edit the file
+        if package.spec.system_requirements:
+            add_system_requirements(manifest_path, package.spec.system_requirements)
 
-            # Add python to the project
-            run([pixi, "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"])
+        # Add python to the project
+        run([pixi, "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"])
 
-            # Add the wheel to the project
-            run_args = [
-                pixi,
-                "-vvv",
-                "add",
-                "--no-progress",
-                "--manifest-path",
-                manifest_path,
-                "--pypi",
-                package.to_add_cmd(),
-            ]
+        # Add the wheel to the project
+        run_args = [
+            pixi,
+            "-vvv",
+            "add",
+            "--no-progress",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            package.to_add_cmd(),
+        ]
 
-            # Add for another platform, if specified
-            if package.spec.target:
-                run_args.extend(["--platform", package.spec.target])
+        # Add for another platform, if specified
+        if package.spec.target:
+            run_args.extend(["--platform", package.spec.target])
 
-            run(run_args)
-            # Record the success of the test
-            record_result(
-                testrun_uid, package.to_add_cmd(), "passed", time.perf_counter() - start, ""
-            )
-        except subprocess.CalledProcessError as e:
-            # Record the failure details
-            record_result(
-                testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
-            )
-            # Log the error
-            log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
+        run(run_args)
+        # Record the success of the test
+        record_result(testrun_uid, package.to_add_cmd(), "passed", time.perf_counter() - start, "")
+    except subprocess.CalledProcessError as e:
+        # Record the failure details
+        record_result(
+            testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
+        )
+        # Log the error
+        log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
 
 
 def pytest_generate_tests(metafunc):
