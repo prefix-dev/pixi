@@ -21,6 +21,7 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
 pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pixi_config::Config;
@@ -551,6 +552,7 @@ impl Project {
                             let channels = project_and_feature_channels
                                 .iter()
                                 .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .sorted()
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             miette::bail!(
@@ -965,5 +967,35 @@ mod tests {
                 .unwrap(),
             &MappingLocation::Path(PathBuf::from("mapping.json"))
         );
+    }
+
+    #[test]
+    fn test_mapping_check_also_feature_channels() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {custom-feature-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+
+            [feature.a]
+            channels = ["custom-feature-channel"]
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert!(project.pypi_name_mapping_source().is_ok());
+
+        let non_existing_channel = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
     }
 }
