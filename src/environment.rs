@@ -8,6 +8,7 @@ use std::{
 
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
+use itertools::{Either, Itertools};
 use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
@@ -26,6 +27,7 @@ use tokio::sync::Semaphore;
 use crate::{
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
+    pixi_record::PixiRecord,
     prefix::Prefix,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
     rlimit::try_increase_rlimit_to_sensible,
@@ -293,7 +295,7 @@ pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
     _platform: Platform,
-    conda_records: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
@@ -359,7 +361,7 @@ pub async fn update_prefix_pypi(
             install_pypi::update_python_distributions(
                 lock_file_dir,
                 prefix,
-                conda_records,
+                pixi_records,
                 pypi_records,
                 &python_info.path,
                 system_requirements,
@@ -489,7 +491,7 @@ pub async fn update_prefix_conda(
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
-    repodata_records: Vec<RepoDataRecord>,
+    pixi_records: Vec<PixiRecord>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
@@ -497,6 +499,17 @@ pub async fn update_prefix_conda(
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
+
+    let (repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
+        .into_iter()
+        .partition_map(|record| match record {
+            PixiRecord::Binary(record) => Either::Left(record),
+            PixiRecord::Source(record) => Either::Right(record),
+        });
+
+    if !source_records.is_empty() {
+        unimplemented!("source records are not supported yet");
+    }
 
     // Execute the operations that are returned by the solver.
     let result = await_in_progress(

@@ -1,12 +1,12 @@
-use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
-use thiserror::Error;
 
 use pixi_manifest::pypi::PyPiPackageName;
+use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
+use thiserror::Error;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 
-/// Defines information about a Pypi package extracted from either a python package or from a
-/// conda package. That can be used for comparison in both
+/// Defines information about a Pypi package extracted from either a python
+/// package or from a conda package. That can be used for comparison in both
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
@@ -15,32 +15,38 @@ pub struct PypiPackageIdentifier {
 }
 
 impl PypiPackageIdentifier {
-    /// Extracts the python packages that will be installed when the specified conda package is
-    /// installed.
-    pub(crate) fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
+    /// Extracts the python packages that will be installed when the specified
+    /// conda package is installed.
+    pub(crate) fn from_repodata_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
 
         Ok(result)
     }
 
-    /// Helper function to write the result of extract the python packages that will be installed
-    /// into a pre-allocated vector.
+    pub fn from_package_record(record: &PackageRecord) -> Result<Vec<Self>, ConversionError> {
+        let mut result = Vec::new();
+        if let Some(purls) = &record.purls {
+            for purl in purls.iter() {
+                if let Some(entry) = Self::convert_from_purl(purl, &record.version.as_str())? {
+                    result.push(entry);
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Helper function to write the result of extract the python packages that
+    /// will be installed into a pre-allocated vector.
     fn from_record_into(
         record: &RepoDataRecord,
         result: &mut Vec<Self>,
     ) -> Result<(), ConversionError> {
         let mut has_pypi_purl = false;
-        // Check the PURLs for a python package.
-        if let Some(purls) = &record.package_record.purls {
-            for purl in purls.iter() {
-                if let Some(entry) =
-                    Self::convert_from_purl(purl, &record.package_record.version.as_str())?
-                {
-                    result.push(entry);
-                    has_pypi_purl = true;
-                }
-            }
+        let identifiers = Self::from_package_record(&record.package_record)?;
+        if !identifiers.is_empty() {
+            has_pypi_purl = true;
+            result.extend(identifiers);
         }
 
         // Backwards compatibility:
@@ -57,8 +63,8 @@ impl PypiPackageIdentifier {
                 "Using backwards compatibility purl logic for conda package: {}",
                 record.package_record.name.as_source()
             );
-            // Convert the conda package names to pypi package names. If the conversion fails we
-            // just assume that its not a valid python package.
+            // Convert the conda package names to pypi package names. If the conversion
+            // fails we just assume that its not a valid python package.
             let name = PackageName::from_str(record.package_record.name.as_source()).ok();
             let version =
                 pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
@@ -66,7 +72,8 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
-                    // TODO: We can't really tell which python extras are enabled in a conda package.
+                    // TODO: We can't really tell which python extras are enabled in a conda
+                    // package.
                     extras: Default::default(),
                 })
             }

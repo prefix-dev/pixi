@@ -1,16 +1,19 @@
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-
-use crate::cli::cli_config::PrefixUpdateConfig;
-use crate::cli::LockFileUsageArgs;
-use crate::lock_file::UpdateLockFileOptions;
-use crate::Project;
 use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
 use rattler_lock::{CondaPackage, Environment, Package};
+
+use crate::{
+    cli::{cli_config::PrefixUpdateConfig, LockFileUsageArgs},
+    lock_file::UpdateLockFileOptions,
+    Project,
+};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -18,7 +21,8 @@ pub struct Args {
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,
 
-    /// Environment to render. Can be repeated for multiple envs. Defaults to all environments
+    /// Environment to render. Can be repeated for multiple envs. Defaults to
+    /// all environments
     #[arg(short, long)]
     pub environment: Option<Vec<String>>,
 
@@ -28,7 +32,8 @@ pub struct Args {
     pub platform: Option<Vec<Platform>>,
 
     /// PyPI dependencies are not supported in the conda explicit spec file.
-    /// This flag allows creating the spec file even if PyPI dependencies are present.
+    /// This flag allows creating the spec file even if PyPI dependencies are
+    /// present.
     #[arg(long, default_value = "false")]
     pub ignore_pypi_errors: bool,
 
@@ -47,7 +52,14 @@ fn build_explicit_spec<'a>(
 
     for cp in conda_packages {
         let prec = cp.package_record();
-        let mut url = cp.url().to_owned();
+        let Some(mut url) = cp.location().as_url().cloned() else {
+            tracing::warn!(
+                "Skipping package {} since it does not have a URL",
+                cp.package_record().name.as_source()
+            );
+            continue;
+        };
+
         let hash = prec.md5.ok_or(miette::miette!(
             "Package {} does not contain an md5 hash",
             prec.name.as_normalized()
@@ -201,9 +213,10 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
 mod tests {
     use std::path::Path;
 
-    use super::*;
     use rattler_lock::LockFile;
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_render_conda_explicit_spec() {

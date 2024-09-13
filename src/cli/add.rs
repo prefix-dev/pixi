@@ -21,6 +21,7 @@ use crate::{
     environment::verify_prefix_location_unchanged,
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
+    pixi_record::PixiRecord,
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
 
@@ -373,8 +374,11 @@ fn update_conda_specs_from_lock_file(
         .filter_map(|(env, platform)| {
             let locked_env = updated_lock_file.environment(&env)?;
             locked_env
-                .conda_repodata_records_for_platform(platform)
-                .ok()?
+                .conda_repodata_records_for_platform(platform)?
+                .into_iter()
+                .map(PixiRecord::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .ok()
         })
         .flatten()
         .collect_vec();
@@ -384,8 +388,8 @@ fn update_conda_specs_from_lock_file(
     for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             conda_records.iter().filter_map(|record| {
-                if record.package_record.name == name {
-                    Some(record.package_record.version.version())
+                if record.package_record().name == name {
+                    Some(record.package_record().version.version())
                 } else {
                     None
                 }

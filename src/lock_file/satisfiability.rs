@@ -190,11 +190,11 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                     // it is actually a path
                     let url = match url_or_path {
                         UrlOrPath::Path(path) => {
-                            let ext = DistExtension::from_path(path.clone()).map_err(|e| {
-                                ParsedUrlError::MissingExtensionPath(path.clone(), e)
+                            let ext = DistExtension::from_path(Path::new(path.as_str())).map_err(|e| {
+                                ParsedUrlError::MissingExtensionPath(path.as_str().into(), e)
                             })?;
                             let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                                path.clone(),
+                                path.as_str().into(),
                                 ext,
                                 verbatim_url.to_url(),
                             ));
@@ -321,7 +321,7 @@ pub fn verify_platform_satisfiability(
     for package in locked_environment.packages(platform).into_iter().flatten() {
         match package {
             Package::Conda(conda) => {
-                let url = conda.url().clone();
+                let url = conda.location().clone();
                 conda_packages.push(
                     conda
                         .try_into()
@@ -407,7 +407,7 @@ pub(crate) fn pypi_satifisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { install_path, .. } => match &locked_data.url_or_path {
+        RequirementSource::Directory { install_path, .. } => match &locked_data.location {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satifsfy
             UrlOrPath::Url(url) => Err(PlatformUnsat::EditablePackageIsUrl(
@@ -415,12 +415,17 @@ pub(crate) fn pypi_satifisfies_editable(
                 url.to_string(),
             )),
             UrlOrPath::Path(path) => {
-                let absolute_path = project_root.join(path);
                 // sometimes the path is relative, so we need to join it with the project root
-                if &absolute_path != install_path {
+                let absolute_path = if path.is_absolute() {
+                    Cow::Borrowed(Path::new(path.as_str()))
+                } else {
+                    Cow::Owned(project_root.join(Path::new(path.as_str())))
+                };
+
+                if install_path != &absolute_path {
                     return Err(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
-                        absolute_path.clone(),
+                        absolute_path.into_owned(),
                         install_path.clone(),
                     ));
                 }
@@ -454,7 +459,7 @@ pub(crate) fn pypi_satifisfies_requirement(
             specifier.contains(&locked_data.version)
         }
         RequirementSource::Url { url: spec_url, .. } => {
-            if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
+            if let UrlOrPath::Url(locked_url) = &locked_data.location {
                 // Url may not start with git, and must start with direct+
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
@@ -477,7 +482,7 @@ pub(crate) fn pypi_satifisfies_requirement(
             precise: _precise,
             ..
         } => {
-            match &locked_data.url_or_path {
+            match &locked_data.location {
                 UrlOrPath::Url(url) => {
                     if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
                         let repo_is_same = locked_git_url.url.repository() == repository;
@@ -511,9 +516,14 @@ pub(crate) fn pypi_satifisfies_requirement(
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
-            if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
+            if let UrlOrPath::Path(locked_path) = &locked_data.location {
                 // sometimes the path is relative, so we need to join it with the project root
-                if &project_root.join(locked_path) != install_path {
+                let absolute_path = if locked_path.is_absolute() {
+                    Cow::Borrowed(Path::new(locked_path.as_str()))
+                } else {
+                    Cow::Owned(project_root.join(Path::new(locked_path.as_str())))
+                };
+                if install_path != &absolute_path {
                     return false;
                 }
                 return true;
@@ -753,13 +763,19 @@ pub(crate) fn verify_package_platform_satisfiability(
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still
                     // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        if path.is_dir() {
-                            let path =
-                                dunce::canonicalize(project_root.join(path)).map_err(|e| {
-                                    PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
+                    if let UrlOrPath::Path(path) = &record.0.location {
+                        let absolute_path = if path.is_absolute() {
+                            Cow::Borrowed(Path::new(path.as_str()))
+                        } else {
+                            Cow::Owned(project_root.join(Path::new(path.as_str())))
+                        };
+
+                        if absolute_path.is_dir() {
+                            let canonicalized_path =
+                                dunce::canonicalize(&absolute_path).map_err(|e| {
+                                    PlatformUnsat::FailedToCanonicalizePath(absolute_path.into_owned(), e)
                                 })?;
-                            let hashable = PypiSourceTreeHashable::from_directory(path)
+                            let hashable = PypiSourceTreeHashable::from_directory(canonicalized_path)
                                 .map_err(|e| {
                                     PlatformUnsat::FailedToDetermineSourceTreeHash(
                                         record.0.name.clone(),

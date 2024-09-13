@@ -1,19 +1,17 @@
 pub(crate) mod pinned;
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 use miette::Diagnostic;
 use pixi_build_frontend::{BackendOverrides, SetupRequest};
 use pixi_build_types::procedures::conda_metadata::{ChannelConfiguration, CondaMetadataParams};
 use pixi_spec::{PathSourceSpec, SourceSpec};
-use rattler_conda_types::{
-    package::{ArchiveIdentifier, ArchiveType},
-    ChannelConfig, PackageRecord, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{ChannelConfig, PackageRecord, Platform};
 use thiserror::Error;
 use url::Url;
 
-use crate::build::{
-    pinned::{PinnedPathSpec, PinnedSourceSpec},
+use crate::{
+    build::pinned::{PinnedPathSpec, PinnedSourceSpec},
+    pixi_record::SourceRecord,
 };
 
 /// The [`BuildContext`] is used to build packages from source.
@@ -52,8 +50,8 @@ pub struct SourceMetadata {
     /// The source checkout that the manifest was extracted from.
     pub source: SourceCheckout,
 
-    /// All the repodata records that can be extracted from the source.
-    pub metadata: Vec<RepoDataRecord>,
+    /// All the records that can be extracted from the source.
+    pub records: Vec<SourceRecord>,
 }
 
 impl BuildContext {
@@ -72,11 +70,11 @@ impl BuildContext {
 
         // TODO: Add caching of this information based on the source.
 
-        let metadata = self
-            .extract_metadata(&source, channels, target_platform)
+        let records = self
+            .extract_records(&source, channels, target_platform)
             .await?;
 
-        Ok(SourceMetadata { source, metadata })
+        Ok(SourceMetadata { source, records })
     }
 
     /// Acquires the source from the given source specification. A source
@@ -112,12 +110,12 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
-    async fn extract_metadata(
+    async fn extract_records(
         &self,
         source: &SourceCheckout,
         channels: &[Url],
         target_platform: Platform,
-    ) -> Result<Vec<RepoDataRecord>, BuildError> {
+    ) -> Result<Vec<SourceRecord>, BuildError> {
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
@@ -148,35 +146,8 @@ impl BuildContext {
             .packages
             .into_iter()
             .map(|p| {
-                let file_name = ArchiveIdentifier {
-                    name: p.name.as_normalized().to_string(),
-                    version: p.version.to_string(),
-                    build_string: p.build.clone(),
-                    archive_type: ArchiveType::Conda,
-                }
-                .to_file_name();
-
-                // TODO(baszalmstra): Figure out something much better than this.
-                let archive_path = source.path.join(&file_name);
-                let path = dunce::simplified(&archive_path);
-                let source_url = Url::from_file_path(&path).expect("invalid file path");
-
-                // HACK: The url crate does not allow changing the scheme of a URL with a `file`
-                // scheme to something does is not a file.
-                let url_str: String = source_url.into();
-                let updated_url_str = match url_str.strip_prefix("file:") {
-                    Some(rest) => format!("source:{}", rest),
-                    None => url_str,
-                };
-                let url = Url::from_str(&updated_url_str)
-                    .expect("updating the scheme of a URL should not result in an invalid URL");
-
-                RepoDataRecord {
-                    // TODO(baszalmstra): Figure out what to do with this value
-                    channel: "".to_string(),
-
-                    file_name,
-                    url,
+                SourceRecord {
+                    source: source.pinned.clone(),
                     package_record: PackageRecord {
                         // We cannot now these values from the metadata because no actual package
                         // was built yet.

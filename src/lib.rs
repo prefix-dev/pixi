@@ -16,6 +16,7 @@ mod build;
 mod repodata;
 mod rlimit;
 
-pub use lock_file::load_lock_file;
-pub use lock_file::UpdateLockFileOptions;
+mod pixi_record;
+
+pub use lock_file::{load_lock_file, UpdateLockFileOptions};
 pub use project::{DependencyType, Project};

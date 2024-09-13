@@ -15,7 +15,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::pypi_options_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{Package, UrlOrPath};
+use rattler_lock::{Package};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -340,10 +340,7 @@ fn create_package_to_output<'a, 'b>(
                         registry.get_version(&package_data.name, &package_data.version)?;
                     Some(version.filename.to_string())
                 })
-                .or_else(|| match &package_data.url_or_path {
-                    UrlOrPath::Url(url) => Some(url.to_string()),
-                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
-                })
+                .or_else(|| Some(package_data.location.to_string()))
         }
     };
 

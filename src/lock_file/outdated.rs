@@ -306,9 +306,9 @@ fn find_inconsistent_solve_groups<'p>(
                         match conda_packages_by_name.get(&pkg.package_record().name) {
                             None => {
                                 conda_packages_by_name
-                                    .insert(pkg.package_record().name.clone(), pkg.url().clone());
+                                    .insert(pkg.package_record().name.clone(), pkg.location().clone());
                             }
-                            Some(url) if pkg.url() != url => {
+                            Some(url) if pkg.location() != url => {
                                 conda_package_mismatch = true;
                             }
                             _ => {}
@@ -318,9 +318,9 @@ fn find_inconsistent_solve_groups<'p>(
                         match pypi_packages_by_name.get(&pkg.data().package.name) {
                             None => {
                                 pypi_packages_by_name
-                                    .insert(pkg.data().package.name.clone(), pkg.url().clone());
+                                    .insert(pkg.data().package.name.clone(), pkg.location().clone());
                             }
-                            Some(url) if pkg.url() != url => {
+                            Some(url) if pkg.location() != url => {
                                 pypi_package_mismatch = true;
                             }
                             _ => {}

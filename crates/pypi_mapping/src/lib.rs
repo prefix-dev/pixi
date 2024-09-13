@@ -138,7 +138,7 @@ impl PurlSource {
 pub async fn amend_pypi_purls(
     client: ClientWithMiddleware,
     mapping_source: &MappingSource,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     // Construct a client with a retry policy and local caching
@@ -168,7 +168,7 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
         }
         MappingSource::Disabled => {
-            for record in conda_packages.iter_mut() {
+            for record in conda_packages.into_iter() {
                 if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
                     record
                         .package_record

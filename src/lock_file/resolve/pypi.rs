@@ -30,11 +30,11 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
-use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
+use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
@@ -51,9 +51,10 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        package_identifier, resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
+        resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
         PypiPackageIdentifier, PypiRecord, UvResolutionContext,
     },
+    pixi_record::PixiRecord,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
@@ -106,18 +107,23 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 /// relative
 ///
 /// I think this has to do with the order of UV processing the requirements
-fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
+fn process_uv_path_url(path_url: &VerbatimUrl) -> Utf8TypedPathBuf {
     let given = path_url.given().expect("path should have a given url");
     if given.starts_with("file://") {
-        path_url
+        let path = path_url
             .to_file_path()
-            .expect("path should be a valid file path")
+            .expect("path should be a valid file path");
+        Utf8TypedPathBuf::from(
+            path.as_os_str()
+                .to_str()
+                .expect("since a URL is a valid UTF-8 string, this should be a valid UTF-8 string"),
+        )
     } else {
-        PathBuf::from(given)
+        Utf8TypedPathBuf::from(given)
     }
 }
 
-type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
+type CondaPythonPackages = HashMap<PackageName, (PixiRecord, PypiPackageIdentifier)>;
 
 /// Convert back to PEP508 without the VerbatimParsedUrl
 /// We need this function because we need to convert to the introduced
@@ -183,7 +189,7 @@ pub async fn resolve_pypi(
     pypi_options: &PypiOptions,
     dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
-    locked_conda_records: &[RepoDataRecord],
+    locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
@@ -195,10 +201,19 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
-    let conda_python_packages = locked_conda_records
+    let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {
-            package_identifier::PypiPackageIdentifier::from_record(record).map_or_else(
+            let result = match record {
+                PixiRecord::Binary(repodata_record) => {
+                    PypiPackageIdentifier::from_repodata_record(repodata_record)
+                }
+                PixiRecord::Source(source_record) => {
+                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                }
+            };
+
+            result.map_or_else(
                 |err| Either::Right(once(Err(err))),
                 |identifiers| {
                     Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
@@ -238,9 +253,12 @@ pub async fn resolve_pypi(
     use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda
     // packages.
-    let python_record = locked_conda_records
+    let python_record = locked_pixi_records
         .iter()
-        .find(|r| is_python_record(r))
+        .find(|r| match r {
+            PixiRecord::Binary(r) => is_python_record(r),
+            _ => false,
+        })
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Construct the marker environment for the target platform
@@ -288,12 +306,13 @@ pub async fn resolve_pypi(
     };
 
     // Create a shared in-memory index.
-    // We need two in-memory indexes, one for the build dispatch and one for the resolver.
-    // because we manually override requests for the resolver,
+    // We need two in-memory indexes, one for the build dispatch and one for the
+    // resolver. because we manually override requests for the resolver,
     // but we don't want to override requests for the build dispatch.
     //
-    // The BuildDispatch might resolve or install when building wheels which will be mostly
-    // with build isolation. In that case we want to use fresh non-tampered requests.
+    // The BuildDispatch might resolve or install when building wheels which will be
+    // mostly with build isolation. In that case we want to use fresh
+    // non-tampered requests.
     let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
@@ -418,8 +437,8 @@ pub async fn resolve_pypi(
         package_requests: package_requests.clone(),
     };
 
-    // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
-    // one. As we have noted in the comment above.
+    // We need a new in-memory index for the resolver so that it does not conflict
+    // with the build dispatch one. As we have noted in the comment above.
     let resolver_in_memory_index = InMemoryIndex::default();
     let python_version = PythonVersion::from_str(&interpreter_version.to_string())
         .expect("could not get version from interpreter");
@@ -486,7 +505,7 @@ async fn lock_pypi_packages<'a>(
                 continue;
             }
             ResolvedDist::Installable(Dist::Built(dist)) => {
-                let (url_or_path, hash) = match &dist {
+                let (location, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let best_wheel = dist.best_wheel();
                         let url = match &best_wheel.file.url {
@@ -526,7 +545,7 @@ async fn lock_pypi_packages<'a>(
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
                     requires_python: metadata.requires_python,
                     editable: false,
-                    url_or_path,
+                    location,
                     hash,
                 }
             }
@@ -544,7 +563,7 @@ async fn lock_pypi_packages<'a>(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let (url_or_path, hash, editable) = match source {
+                let (location, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
                         let url_or_path = match &reg.file.url {
                             FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
@@ -621,7 +640,7 @@ async fn lock_pypi_packages<'a>(
                         metadata.requires_dist.iter(),
                     ),
                     requires_python: metadata.requires_python,
-                    url_or_path,
+                    location,
                     hash,
                     editable,
                 }

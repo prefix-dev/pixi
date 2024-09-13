@@ -155,18 +155,18 @@ version = "0.29.0"
 [features]
 default = ["rustls-tls"]
 native-tls = [
-  "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
-  "rattler_repodata_gateway/native-tls",
-  "rattler/native-tls",
-  "pixi_utils/native-tls",
+    "reqwest/native-tls",
+    "reqwest/native-tls-alpn",
+    "rattler_repodata_gateway/native-tls",
+    "rattler/native-tls",
+    "pixi_utils/native-tls",
 ]
 rustls-tls = [
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
-  "rattler_repodata_gateway/rustls-tls",
-  "rattler/rustls-tls",
-  "pixi_utils/rustls-tls",
+    "reqwest/rustls-tls",
+    "reqwest/rustls-tls-native-roots",
+    "rattler_repodata_gateway/rustls-tls",
+    "rattler/rustls-tls",
+    "pixi_utils/rustls-tls",
 ]
 slow_integration_tests = []
 
@@ -178,13 +178,13 @@ barrier_cell = { path = "crates/barrier_cell" }
 cfg-if = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
-  "derive",
-  "usage",
-  "wrap_help",
-  "std",
-  "color",
-  "error-context",
-  "env",
+    "derive",
+    "usage",
+    "wrap_help",
+    "std",
+    "color",
+    "error-context",
+    "env",
 ] }
 clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
@@ -214,12 +214,12 @@ is_executable = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 miette = { workspace = true, features = [
-  "fancy",
-  "supports-color",
-  "supports-hyperlinks",
-  "supports-unicode",
-  "terminal_size",
-  "textwrap",
+    "fancy",
+    "supports-color",
+    "supports-hyperlinks",
+    "supports-unicode",
+    "terminal_size",
+    "textwrap",
 ] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
@@ -230,14 +230,15 @@ pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 platform-tags = { workspace = true }
 pypi-types = { workspace = true }
+file_url = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
-  "sparse",
-  "gateway",
+    "sparse",
+    "gateway",
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
@@ -257,8 +258,8 @@ pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
-  "http2",
-  "macos-system-configuration",
+    "http2",
+    "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
@@ -347,16 +348,17 @@ reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", 
 # rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 # rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
 
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler = { path = "../rattler/crates/rattler" }
+file_url = { path = "../rattler/crates/file_url" }
+rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler_networking = { path = "../rattler/crates/rattler_networking" }
+rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "../rattler/crates/rattler_shell" }
+rattler_solve = { path = "../rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+rattler_lock = { path = "../rattler/crates/rattler_lock" }
+rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
+rattler = { path = "../rattler/crates/rattler" }
 
 
 # Change these lines if you want a patched version of uv

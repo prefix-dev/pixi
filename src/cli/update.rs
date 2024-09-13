@@ -324,7 +324,7 @@ impl LockFileDiff {
                         Package::Conda(p) => {
                             let name = &p.package_record().name;
                             match previous_conda_packages.remove(name) {
-                                Some(previous) if previous.url() != p.url() => {
+                                Some(previous) if previous.location() != p.location() => {
                                     diff.changed
                                         .push((Package::Conda(previous), Package::Conda(p)));
                                 }
@@ -337,7 +337,7 @@ impl LockFileDiff {
                         Package::Pypi(p) => {
                             let name = &p.data().package.name;
                             match previous_pypi_packages.remove(name) {
-                                Some(previous) if previous.url() != p.url() => {
+                                Some(previous) if previous.location() != p.location() => {
                                     diff.changed
                                         .push((Package::Pypi(previous), Package::Pypi(p)));
                                 }

@@ -1,5 +1,6 @@
 use pixi_spec::GitReference;
 use rattler_digest::{Md5Hash, Sha256Hash};
+use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
@@ -50,5 +51,33 @@ pub struct PinnedPathSpec {
 impl From<PinnedPathSpec> for PinnedSourceSpec {
     fn from(value: PinnedPathSpec) -> Self {
         PinnedSourceSpec::Path(value)
+    }
+}
+
+impl From<PinnedSourceSpec> for UrlOrPath {
+    fn from(value: PinnedSourceSpec) -> Self {
+        match value {
+            PinnedSourceSpec::Url(spec) => spec.into(),
+            PinnedSourceSpec::Git(spec) => spec.into(),
+            PinnedSourceSpec::Path(spec) => spec.into(),
+        }
+    }
+}
+
+impl From<PinnedPathSpec> for UrlOrPath {
+    fn from(value: PinnedPathSpec) -> Self {
+        UrlOrPath::Path(value.path)
+    }
+}
+
+impl From<PinnedGitSpec> for UrlOrPath {
+    fn from(_value: PinnedGitSpec) -> Self {
+        unimplemented!()
+    }
+}
+
+impl From<PinnedUrlSpec> for UrlOrPath {
+    fn from(_value: PinnedUrlSpec) -> Self {
+        unimplemented!()
     }
 }
