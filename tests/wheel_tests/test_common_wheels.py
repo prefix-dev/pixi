@@ -17,8 +17,8 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str):
     this is created by pytest-xdist
     """
     start = time.perf_counter()
-    try:
-        with tempfile.TemporaryDirectory() as _dtemp:
+    with tempfile.TemporaryDirectory() as _dtemp:
+        try:
             dtemp: pathlib.Path = pathlib.Path(_dtemp)
             # Path to the manifest file
             manifest_path = dtemp / "pixi.toml"
@@ -53,13 +53,13 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str):
             record_result(
                 testrun_uid, package.to_add_cmd(), "passed", time.perf_counter() - start, ""
             )
-    except subprocess.CalledProcessError as e:
-        # Record the failure details
-        record_result(
-            testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
-        )
-        # Log the error
-        log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
+        except subprocess.CalledProcessError as e:
+            # Record the failure details
+            record_result(
+                testrun_uid, package.to_add_cmd(), "failed", time.perf_counter() - start, str(e)
+            )
+            # Log the error
+            log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
 
 
 def pytest_generate_tests(metafunc):
