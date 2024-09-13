@@ -125,6 +125,11 @@ impl Project {
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         self.manifest.parsed.environments()
     }
+
+    /// Returns a specific environment based by name.
+    pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
+        self.manifest.parsed.environments().get(name)
+    }
 }
 
 #[cfg(test)]

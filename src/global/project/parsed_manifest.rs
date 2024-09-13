@@ -3,10 +3,12 @@ use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use miette::Diagnostic;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
 use serde_with::{serde_as, serde_derive::Deserialize};
+use thiserror::Error;
 
 use super::environment::EnvironmentName;
 
@@ -113,6 +115,10 @@ impl ExposedKey {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn from_str(value: &str) -> Result<Self, ParseExposedKeyError> {
+        value.parse()
+    }
 }
 
 impl fmt::Display for ExposedKey {
@@ -122,11 +128,11 @@ impl fmt::Display for ExposedKey {
 }
 
 impl FromStr for ExposedKey {
-    type Err = String;
+    type Err = ParseExposedKeyError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
-            Err("The key 'pixi' is not allowed in the exposed map".to_string())
+            Err(ParseExposedKeyError {})
         } else {
             Ok(ExposedKey(value.to_string()))
         }
@@ -158,6 +164,13 @@ impl<'de> Deserialize<'de> for ExposedKey {
         deserializer.deserialize_str(ExposedKeyVisitor)
     }
 }
+
+/// Represents an error that occurs when parsing an binary exposed key.
+///
+/// This error is returned when a string fails to be parsed as an environment name.
+#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
+#[error("pixi is not allowed as exposed name in the map")]
+pub struct ParseExposedKeyError {}
 
 #[cfg(test)]
 mod tests {

@@ -292,7 +292,7 @@ async fn map_executables_to_global_bin_scripts(
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
-async fn create_executable_scripts(
+pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,

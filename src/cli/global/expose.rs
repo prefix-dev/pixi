@@ -2,12 +2,15 @@ use std::{error::Error, path::PathBuf};
 
 use clap::Parser;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use rattler_shell::shell::ShellEnum;
 
+use crate::global::{expose_add, expose_remove};
+
 use crate::{
     global::{
-        self, create_executable_scripts, script_exec_mapping, EnvDir, ExposedKey,
+        self, create_executable_scripts, script_exec_mapping, EnvDir, EnvironmentName, ExposedKey,
     },
     prefix::{create_activation_script, Prefix},
 };
@@ -19,7 +22,7 @@ pub struct AddArgs {
     name: Vec<(String, String)>,
 
     #[clap(long)]
-    environment_name: String,
+    environment: String,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -36,91 +39,45 @@ fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Syn
 }
 
 #[derive(Parser, Debug)]
+pub struct RemoveArgs {
+    /// The binary or binaries to remove as executable  (e.g. python atuin)
+    name: Vec<String>,
+
+    #[clap(long)]
+    environment: String,
+
+    #[clap(flatten)]
+    config: ConfigCli,
+}
+
+#[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
-pub enum Command {
+pub enum SubCommand {
     #[clap(name = "add")]
     Add(AddArgs),
+    #[clap(name = "remove")]
+    Remove(RemoveArgs),
 }
 
 /// Expose some binaries
-pub async fn execute(args: Command) -> miette::Result<()> {
+pub async fn execute(args: SubCommand) -> miette::Result<()> {
     match args {
-        Command::Add(args) => add(args).await?,
+        SubCommand::Add(args) => add(args).await?,
+        SubCommand::Remove(args) => remove(args).await?,
     }
     Ok(())
 }
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     // should we do a sync first?
-    let mut project = global::Project::discover()?;
+    let project = global::Project::discover()?.with_cli_config(args.config);
+    let env_name: EnvironmentName = args.environment.parse()?;
+    expose_add(project, env_name, args.name).await
+}
 
-    let exposed_by_env = project.environment(args.environment_name.clone());
-
-    if exposed_by_env.is_none() {
-        miette::bail!("Environment not found");
-    } else {
-        exposed_by_env.expect("we checked this above");
-    }
-
-    let bin_env_dir = EnvDir::new(args.environment_name.clone()).await?;
-
-    let prefix = Prefix::new(bin_env_dir.path());
-
-    let prefix_records = prefix.find_installed_packages(None).await?;
-
-    let all_executables: Vec<(String, PathBuf)> =
-        prefix.find_executables(prefix_records.as_slice());
-
-    let binary_to_be_exposed: Vec<&String> = args
-        .name
-        .iter()
-        .map(|(_, actual_binary)| actual_binary)
-        .collect();
-
-    // Check if all binaries that are to be exposed are present in the environment
-    let all_binaries_present = args
-        .name
-        .iter()
-        .all(|(_, binary_name)| binary_to_be_exposed.contains(&binary_name));
-
-    if !all_binaries_present {
-        miette::bail!("Not all binaries are present in the environment");
-    }
-
-    let env_name = args.environment_name.clone().into();
-
-    for (name_to_exposed, real_binary_to_be_exposed) in args.name.iter() {
-        let exposed_key = ExposedKey::try_from(name_to_exposed.clone()).unwrap();
-
-        let script_mapping = script_exec_mapping(
-            &exposed_key,
-            real_binary_to_be_exposed,
-            all_executables.iter(),
-            &bin_env_dir.bin_dir,
-            &env_name,
-        )?;
-
-        // Determine the shell to use for the invocation script
-        let shell: ShellEnum = if cfg!(windows) {
-            rattler_shell::shell::CmdExe.into()
-        } else {
-            rattler_shell::shell::Bash.into()
-        };
-
-        let activation_script = create_activation_script(&prefix, shell.clone())?;
-
-        create_executable_scripts(&[script_mapping], &prefix, &shell, activation_script).await?;
-
-        // Add the new binary to the manifest
-        project
-            .manifest
-            .expose_binary(
-                &env_name,
-                exposed_key,
-                real_binary_to_be_exposed.to_string(),
-            )
-            .unwrap();
-        project.manifest.save()?;
-    }
-    Ok(())
+pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
+    // should we do a sync first?
+    let project = global::Project::discover()?.with_cli_config(args.config);
+    let env_name: EnvironmentName = args.environment.parse()?;
+    expose_remove(project, env_name, args.name).await
 }

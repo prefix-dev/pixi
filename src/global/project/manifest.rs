@@ -84,7 +84,7 @@ impl Manifest {
         todo!()
     }
 
-    pub fn expose_binary(
+    pub fn add_exposed_binary(
         &mut self,
         env_name: &EnvironmentName,
         exposed_name: ExposedKey,
@@ -92,7 +92,6 @@ impl Manifest {
     ) -> miette::Result<()> {
         let table_name = format!("envs.{}.exposed", env_name);
 
-        // let bin_name = bin_name.to_string();
         self.document
             .get_or_insert_nested_table(&table_name)?
             .insert(
@@ -100,16 +99,37 @@ impl Manifest {
                 Item::Value(toml_edit::Value::from(actual_bin.clone())),
             );
 
-        let mut envs = self.parsed.get_mut_environment(env_name);
-        let envs = if envs.is_none() {
-            miette::bail!("Environment {env_name} not found");
-        } else {
-            envs.expect("we checked this above")
-        };
+        let mut envs = self
+            .parsed
+            .get_mut_environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
 
-        envs.exposed.insert(exposed_name.clone(), actual_bin.clone());
+        envs.exposed
+            .insert(exposed_name.clone(), actual_bin.clone());
 
         tracing::debug!("added {}={} in toml document", exposed_name, actual_bin);
+        Ok(())
+    }
+
+    pub fn remove_exposed_binary(
+        &mut self,
+        env_name: &EnvironmentName,
+        exposed_name: &ExposedKey,
+    ) -> miette::Result<()> {
+        let table_name = format!("envs.{}.exposed", env_name);
+
+        self.document
+            .get_or_insert_nested_table(&table_name)?
+            .remove(exposed_name.as_str());
+
+        let mut envs = self
+            .parsed
+            .get_mut_environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
+
+        envs.exposed.swap_remove(exposed_name);
+
+        tracing::debug!("removed {} from manifest", exposed_name);
         Ok(())
     }
 

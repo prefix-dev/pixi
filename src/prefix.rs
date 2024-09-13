@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;

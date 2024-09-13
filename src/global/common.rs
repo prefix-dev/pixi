@@ -205,7 +205,10 @@ impl EnvDir {
     }
 
     /// Create the Binary Environment based on passed global environment root
-    pub(crate) async fn from_env_root<T: Into<EnvironmentName>>(env_root: EnvRoot, environment_name: T) -> miette::Result<Self> {
+    pub(crate) async fn from_env_root<T: Into<EnvironmentName>>(
+        env_root: EnvRoot,
+        environment_name: T,
+    ) -> miette::Result<Self> {
         let bin_dir = BinDir::from_env().await?;
         let environment_name = environment_name.into();
         let path = env_root.path().join(environment_name.as_str());
@@ -273,7 +276,9 @@ mod tests {
         let environment_name: EnvironmentName = "test-env".parse().unwrap();
 
         // Create a new binary env dir
-        let bin_env_dir = EnvDir::from_env_root(env_root, environment_name).await.unwrap();
+        let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
+            .await
+            .unwrap();
 
         // Verify that the directory was created
         assert!(bin_env_dir.path().exists());
