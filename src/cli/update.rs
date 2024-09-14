@@ -312,7 +312,7 @@ impl LockFileDiff {
                             Either::Left((p.package_record().name.clone(), p))
                         }
                         rattler_lock::Package::Pypi(p) => {
-                            Either::Right((p.data().package.name.clone(), p))
+                            Either::Right((p.package_data().name.clone(), p))
                         }
                     });
 
@@ -335,7 +335,7 @@ impl LockFileDiff {
                             }
                         }
                         Package::Pypi(p) => {
-                            let name = &p.data().package.name;
+                            let name = &p.package_data().name;
                             match previous_pypi_packages.remove(name) {
                                 Some(previous) if previous.location() != p.location() => {
                                     diff.changed
@@ -516,7 +516,7 @@ impl LockFileDiff {
                     &p.package_record().version.as_str(),
                     &p.package_record().build
                 ),
-                Package::Pypi(p) => p.data().package.version.to_string(),
+                Package::Pypi(p) => p.package_data().version.to_string(),
             }
         }
 
@@ -584,8 +584,8 @@ impl LockFileDiff {
                         )
                     }
                     (Package::Pypi(previous), Package::Pypi(current)) => {
-                        let previous = previous.data().package;
-                        let current = current.data().package;
+                        let previous = previous.package_data();
+                        let current = current.package_data();
 
                         format!(
                             "{} {} {}\t{}\t->\t{}",
@@ -663,11 +663,11 @@ impl LockFileJsonDiff {
                         explicit: conda_dependencies.contains_key(&pkg.package_record().name),
                     },
                     Package::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.data().package.name.as_dist_info_name().into_owned(),
+                        name: pkg.package_data().name.as_dist_info_name().into_owned(),
                         before: None,
                         after: Some(serde_json::to_value(&pkg).unwrap()),
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
+                        explicit: pypi_dependencies.contains_key(&pkg.package_data().name),
                     },
                 });
 
@@ -681,11 +681,11 @@ impl LockFileJsonDiff {
                     },
 
                     Package::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.data().package.name.as_dist_info_name().into_owned(),
+                        name: pkg.package_data().name.as_dist_info_name().into_owned(),
                         before: Some(serde_json::to_value(&pkg).unwrap()),
                         after: None,
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.data().package.name),
+                        explicit: pypi_dependencies.contains_key(&pkg.package_data().name),
                     },
                 });
 
@@ -708,11 +708,11 @@ impl LockFileJsonDiff {
                         let after = serde_json::to_value(&new).unwrap();
                         let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
-                            name: old.data().package.name.as_dist_info_name().into_owned(),
+                            name: old.package_data().name.as_dist_info_name().into_owned(),
                             before: Some(before),
                             after: Some(after),
                             ty: JsonPackageType::Pypi,
-                            explicit: pypi_dependencies.contains_key(&old.data().package.name),
+                            explicit: pypi_dependencies.contains_key(&old.package_data().name),
                         }
                     }
                     _ => unreachable!("packages cannot change type, they are represented as removals and inserts instead"),

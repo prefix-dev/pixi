@@ -34,8 +34,7 @@ use super::{
     reporter::{GatewayProgressReporter, SolveProgressBar},
     update,
     utils::IoConcurrencyLimit,
-    OutdatedEnvironments, PypiRecord, PypiRecordsByName,
-    UvResolutionContext,
+    OutdatedEnvironments, PypiRecord, PypiRecordsByName, UvResolutionContext,
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -46,7 +45,6 @@ use crate::{
     },
     load_lock_file, lock_file,
     lock_file::records_by_name::PixiRecordsByName,
-    pixi_record::PixiRecord,
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -54,6 +52,7 @@ use crate::{
     },
     Project,
 };
+use pixi_record::PixiRecord;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -200,7 +199,12 @@ impl<'p> LockFileDerivedData<'p> {
             .lock_file
             .environment(environment.name().as_str())
             .expect("the lock-file should be up-to-date so it should also include the environment");
-        locked_env.pypi_packages_for_platform(platform)
+        let packages = locked_env.pypi_packages_for_platform(platform)?;
+        Some(
+            packages
+                .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                .collect(),
+        )
     }
 
     fn pypi_indexes(&self, environment: &Environment<'p>) -> Option<PypiIndexes> {
@@ -220,8 +224,10 @@ impl<'p> LockFileDerivedData<'p> {
             .lock_file
             .environment(environment.name().as_str())
             .expect("the lock-file should be up-to-date so it should also include the environment");
-        Some(locked_env.conda_repodata_records_for_platform(platform)?
-            .into_iter()
+        let packages = locked_env.conda_packages_for_platform(platform)?;
+        Some(
+            packages
+            .cloned()
             .map(PixiRecord::try_from)
             .collect::<Result<Vec<_>, _>>()
             .expect("since the lock-file is up to date we should be able to extract the repodata records from it"))
@@ -699,12 +705,11 @@ impl<'p> UpdateContextBuilder<'p> {
                     .environment(env.name().as_str())
                     .into_iter()
                     .map(move |locked_env| {
-                        let records = locked_env.conda_repodata_records();
-                        records
-                            .into_iter()
+                        locked_env
+                            .conda_packages()
                             .map(|(platform, records)| {
                                 records
-                                    .into_iter()
+                                    .cloned()
                                     .map(PixiRecord::try_from)
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|records| {
@@ -732,7 +737,12 @@ impl<'p> UpdateContextBuilder<'p> {
                                 .pypi_packages()
                                 .into_iter()
                                 .map(|(platform, records)| {
-                                    (platform, Arc::new(PypiRecordsByName::from_iter(records)))
+                                    (
+                                        platform,
+                                        Arc::new(PypiRecordsByName::from_iter(records.map(
+                                            |(data, env_data)| (data.clone(), env_data.clone()),
+                                        ))),
+                                    )
                                 })
                                 .collect(),
                         )
@@ -1865,7 +1875,9 @@ async fn spawn_solve_pypi_task(
     pypi_mapping::amend_pypi_purls(
         environment.project().client().clone().into(),
         pypi_name_mapping_location,
-        pixi_records.iter_mut().filter_map(PixiRecord::as_binary_mut),
+        pixi_records
+            .iter_mut()
+            .filter_map(PixiRecord::as_binary_mut),
         None,
     )
     .await?;

@@ -1,10 +1,16 @@
+mod pinned_source;
+mod source_record;
 use rattler_conda_types::{
     package::ArchiveIdentifier, MatchSpec, Matches, NamelessMatchSpec, PackageRecord,
     RepoDataRecord,
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use thiserror::Error;
-use crate::build::pinned::{PinnedPathSpec, PinnedSourceSpec};
+
+pub use pinned_source::{
+    ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
+};
+pub use source_record::SourceRecord;
 
 /// A record of a conda package that is either something installable from a
 /// binary file or something that still requires building.
@@ -24,6 +30,7 @@ impl PixiRecord {
         }
     }
 
+    /// Returns a reference to the binary record if it is a binary record.
     pub fn as_binary(&self) -> Option<&RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),
@@ -31,6 +38,7 @@ impl PixiRecord {
         }
     }
 
+    /// Converts this instance into a binary record if it is a binary record.
     pub fn into_binary(self) -> Option<RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),
@@ -38,6 +46,8 @@ impl PixiRecord {
         }
     }
 
+    /// Returns a mutable reference to the binary record if it is a binary
+    /// record.
     pub fn as_binary_mut(&mut self) -> Option<&mut RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),
@@ -45,23 +55,30 @@ impl PixiRecord {
         }
     }
 
+    /// Returns the source record if it is a source record.
     pub fn as_source(&self) -> Option<&SourceRecord> {
         match self {
             PixiRecord::Binary(_) => None,
             PixiRecord::Source(record) => Some(record),
         }
     }
-}
 
-/// A record of a conda package that still requires building.
-#[derive(Debug, Clone)]
-pub struct SourceRecord {
-    /// Information about the conda package. This is metadata of the package
-    /// after it has been build.
-    pub package_record: PackageRecord,
+    /// Converts this instance into a source record if it is a source record.
+    pub fn into_source(self) -> Option<SourceRecord> {
+        match self {
+            PixiRecord::Binary(_) => None,
+            PixiRecord::Source(record) => Some(record),
+        }
+    }
 
-    /// Exact definition of the source of the package.
-    pub source: PinnedSourceSpec,
+    /// Returns a mutable reference to the source record if it is a source
+    /// record.
+    pub fn as_source_mut(&mut self) -> Option<&mut SourceRecord> {
+        match self {
+            PixiRecord::Binary(_) => None,
+            PixiRecord::Source(record) => Some(record),
+        }
+    }
 }
 
 impl From<SourceRecord> for PixiRecord {
@@ -76,24 +93,16 @@ impl From<RepoDataRecord> for PixiRecord {
     }
 }
 
-impl From<SourceRecord> for CondaPackageData {
-    fn from(value: SourceRecord) -> Self {
-        CondaPackageData {
-            package_record: value.package_record,
-            location: value.source.into(),
-            file_name: None,
-            channel: None,
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum ParseLockFileError {
     #[error("missing field/fields '{1}' for package {0}")]
     Missing(UrlOrPath, String),
 
-    #[error("failed to convert location to URL for package {0}")]
-    LocationToUrlConversionError(UrlOrPath, #[source] file_url::FileURLParseError),
+    #[error("invalid url for package {0}")]
+    InvalidRecordUrl(UrlOrPath, #[source] file_url::FileURLParseError),
+
+    #[error(transparent)]
+    PinnedSourceSpecError(#[from] pinned_source::ParseError),
 }
 
 impl TryFrom<CondaPackageData> for PixiRecord {
@@ -110,7 +119,7 @@ impl TryFrom<CondaPackageData> for PixiRecord {
                 |err| match err {
                     ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
                     ConversionError::LocationToUrlConversionError(err) => {
-                        ParseLockFileError::LocationToUrlConversionError(location, err)
+                        ParseLockFileError::InvalidRecordUrl(location, err)
                     }
                 },
             )?))
@@ -129,37 +138,6 @@ impl From<PixiRecord> for CondaPackageData {
     }
 }
 
-impl TryFrom<CondaPackageData> for SourceRecord {
-    type Error = ParseLockFileError;
-
-    fn try_from(value: CondaPackageData) -> Result<Self, Self::Error> {
-        let source = match value.location {
-            UrlOrPath::Url(_) => unimplemented!(),
-            UrlOrPath::Path(path) => PinnedPathSpec { path }.into(),
-        };
-        Ok(Self {
-            package_record: value.package_record,
-            source,
-        })
-    }
-}
-
-impl Matches<SourceRecord> for NamelessMatchSpec {
-    fn matches(&self, pkg: &SourceRecord) -> bool {
-        if !self.matches(&pkg.package_record) {
-            return false;
-        }
-
-        if let Some(_) = &self.channel {
-            // We don't have a channel in a source record. So if a matchspec requires that
-            // information it can't match.
-            return false;
-        }
-
-        true
-    }
-}
-
 impl Matches<PixiRecord> for NamelessMatchSpec {
     fn matches(&self, record: &PixiRecord) -> bool {
         match record {
@@ -169,34 +147,12 @@ impl Matches<PixiRecord> for NamelessMatchSpec {
     }
 }
 
-impl Matches<SourceRecord> for MatchSpec {
-    fn matches(&self, pkg: &SourceRecord) -> bool {
-        if !self.matches(&pkg.package_record) {
-            return false;
-        }
-
-        if let Some(_) = &self.channel {
-            // We don't have a channel in a source record. So if a matchspec requires that
-            // information it can't match.
-            return false;
-        }
-
-        true
-    }
-}
-
 impl Matches<PixiRecord> for MatchSpec {
     fn matches(&self, record: &PixiRecord) -> bool {
         match record {
             PixiRecord::Binary(record) => self.matches(record),
             PixiRecord::Source(record) => self.matches(record),
         }
-    }
-}
-
-impl AsRef<PackageRecord> for SourceRecord {
-    fn as_ref(&self) -> &PackageRecord {
-        &self.package_record
     }
 }
 

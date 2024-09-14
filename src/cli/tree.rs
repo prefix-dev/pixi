@@ -440,14 +440,13 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
             );
         } else if let Some(pypi_package) = package.as_pypi() {
             let name = pypi_package
-                .data()
-                .package
+                .package_data()
                 .name
                 .as_dist_info_name()
                 .into_owned();
 
             let mut dependencies = Vec::new();
-            for p in pypi_package.data().package.requires_dist.iter() {
+            for p in pypi_package.package_data().requires_dist.iter() {
                 // If this is not true, it means that the marker does not hold for every environment
                 if !&p.marker.is_true() {
                     tracing::info!(

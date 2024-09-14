@@ -54,9 +54,10 @@ use crate::{
         resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
         PypiPackageIdentifier, PypiRecord, UvResolutionContext,
     },
-    pixi_record::PixiRecord,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
+
+use pixi_record::PixiRecord;
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;

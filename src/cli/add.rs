@@ -21,9 +21,9 @@ use crate::{
     environment::verify_prefix_location_unchanged,
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
-    pixi_record::PixiRecord,
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
+use pixi_record::PixiRecord;
 
 /// Adds dependencies to the project
 ///
@@ -308,11 +308,18 @@ fn update_pypi_specs_from_lock_file(
         .into_iter()
         // Get all the conda and pypi records for the combination of environments and
         // platforms
-        .filter_map(|(env, platform)| {
-            let locked_env = updated_lock_file.environment(&env)?;
-            locked_env.pypi_packages_for_platform(platform)
+        .flat_map(|(env, platform)| {
+            updated_lock_file
+                .environment(&env)
+                .into_iter()
+                .flat_map(move |env| {
+                    env.pypi_packages_for_platform(platform)
+                        .into_iter()
+                        .flatten()
+                        .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                        .collect_vec()
+                })
         })
-        .flatten()
         .collect_vec();
 
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
@@ -373,9 +380,9 @@ fn update_conda_specs_from_lock_file(
         // platforms
         .filter_map(|(env, platform)| {
             let locked_env = updated_lock_file.environment(&env)?;
-            locked_env
-                .conda_repodata_records_for_platform(platform)?
-                .into_iter()
+            let packages = locked_env.conda_packages_for_platform(platform)?;
+            packages
+                .cloned()
                 .map(PixiRecord::try_from)
                 .collect::<Result<Vec<_>, _>>()
                 .ok()
@@ -429,7 +436,7 @@ fn unlock_packages(
         if affected_environments.contains(&(env.name().as_str(), platform)) {
             match package {
                 Package::Conda(package) => !conda_packages.contains(&package.package_record().name),
-                Package::Pypi(package) => !pypi_packages.contains(&package.data().package.name),
+                Package::Pypi(package) => !pypi_packages.contains(&package.package_data().name),
             }
         } else {
             true

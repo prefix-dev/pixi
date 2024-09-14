@@ -17,7 +17,9 @@ pub struct PypiPackageIdentifier {
 impl PypiPackageIdentifier {
     /// Extracts the python packages that will be installed when the specified
     /// conda package is installed.
-    pub(crate) fn from_repodata_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
+    pub(crate) fn from_repodata_record(
+        record: &RepoDataRecord,
+    ) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
 

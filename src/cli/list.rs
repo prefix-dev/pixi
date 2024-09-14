@@ -15,7 +15,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::pypi_options_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{Package};
+use rattler_lock::Package;
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -321,7 +321,7 @@ fn create_package_to_output<'a, 'b>(
     let size_bytes = match p {
         Package::Conda(pkg) => pkg.package_record().size,
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index.as_mut().and_then(|registry| {
                 let version = registry.get_version(&package_data.name, &package_data.version)?;
                 get_dir_size(&version.path).ok()
@@ -330,9 +330,9 @@ fn create_package_to_output<'a, 'b>(
     };
 
     let source = match p {
-        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
+        Package::Conda(pkg) => pkg.location().file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index
                 .as_mut()
                 .and_then(|registry| {
@@ -347,7 +347,7 @@ fn create_package_to_output<'a, 'b>(
     let is_explicit = project_dependency_names.contains(&name);
     let is_editable = match p {
         Package::Conda(_) => false,
-        Package::Pypi(p) => p.data().package.editable,
+        Package::Pypi(p) => p.package_data().editable,
     };
 
     PackageToOutput {

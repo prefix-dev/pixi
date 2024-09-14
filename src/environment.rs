@@ -8,8 +8,8 @@ use std::{
 
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
-use itertools::{Either, Itertools};
 use fancy_display::FancyDisplay;
+use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
@@ -27,12 +27,12 @@ use tokio::sync::Semaphore;
 use crate::{
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
-    pixi_record::PixiRecord,
     prefix::Prefix,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
     rlimit::try_increase_rlimit_to_sensible,
     Project,
 };
+use pixi_record::PixiRecord;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -508,7 +508,7 @@ pub async fn update_prefix_conda(
         });
 
     if !source_records.is_empty() {
-        unimplemented!("source records are not supported yet");
+        unimplemented!("installing source records is not supported yet");
     }
 
     // Execute the operations that are returned by the solver.

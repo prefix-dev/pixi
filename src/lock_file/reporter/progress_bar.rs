@@ -1,9 +1,4 @@
-use std::{
-    borrow::Cow,
-    fmt::Write,
-    sync::{Arc},
-    time::Duration,
-};
+use std::{borrow::Cow, fmt::Write, sync::Arc, time::Duration};
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use pixi_consts::consts;

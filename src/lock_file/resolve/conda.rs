@@ -1,13 +1,7 @@
-use std::path::{Path, PathBuf};
-
 use ahash::HashMap;
-use file_url::file_path_to_url;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{
-    package::ArchiveIdentifier, GenericVirtualPackage, MatchSpec, RepoDataRecord,
-};
-use rattler_lock::UrlOrPath;
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use url::Url;
@@ -15,8 +9,9 @@ use url::Url;
 use crate::{
     build::{SourceCheckout, SourceMetadata},
     lock_file::LockedCondaPackages,
-    pixi_record::{PixiRecord, SourceRecord},
 };
+
+use pixi_record::{PixiRecord, SourceRecord};
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a
@@ -93,7 +88,8 @@ pub async fn resolve_conda(
 }
 
 fn unique_url(checkout: &SourceCheckout, source: &SourceRecord) -> Url {
-    let mut url = Url::from_directory_path(&checkout.path).expect("expected source checkout to be a valid url");
+    let mut url = Url::from_directory_path(&checkout.path)
+        .expect("expected source checkout to be a valid url");
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()

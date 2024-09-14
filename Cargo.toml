@@ -134,12 +134,12 @@ pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
+pixi_record = { path = "crates/pixi_record" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
-
 
 [package]
 authors.workspace = true
@@ -253,6 +253,7 @@ pixi_progress = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
+pixi_record = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
@@ -338,27 +339,29 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "5e3eaf254b5bd481c75d2710eed055f95b756913" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-# rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+file_url = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch="refactor/conda_url_or_path" }
 
-file_url = { path = "../rattler/crates/file_url" }
-rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../rattler/crates/rattler_digest" }
-rattler_networking = { path = "../rattler/crates/rattler_networking" }
-rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../rattler/crates/rattler_shell" }
-rattler_solve = { path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-rattler_lock = { path = "../rattler/crates/rattler_lock" }
-rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-rattler = { path = "../rattler/crates/rattler" }
+# file_url = { path = "../rattler/crates/file_url" }
+# rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+# rattler_digest = { path = "../rattler/crates/rattler_digest" }
+# rattler_networking = { path = "../rattler/crates/rattler_networking" }
+# rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+# rattler_shell = { path = "../rattler/crates/rattler_shell" }
+# rattler_solve = { path = "../rattler/crates/rattler_solve" }
+# rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+# rattler_lock = { path = "../rattler/crates/rattler_lock" }
+# rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
+# rattler = { path = "../rattler/crates/rattler" }
 
 
 # Change these lines if you want a patched version of uv

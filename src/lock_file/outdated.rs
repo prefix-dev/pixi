@@ -305,8 +305,10 @@ fn find_inconsistent_solve_groups<'p>(
                     Package::Conda(pkg) => {
                         match conda_packages_by_name.get(&pkg.package_record().name) {
                             None => {
-                                conda_packages_by_name
-                                    .insert(pkg.package_record().name.clone(), pkg.location().clone());
+                                conda_packages_by_name.insert(
+                                    pkg.package_record().name.clone(),
+                                    pkg.location().clone(),
+                                );
                             }
                             Some(url) if pkg.location() != url => {
                                 conda_package_mismatch = true;
@@ -315,10 +317,12 @@ fn find_inconsistent_solve_groups<'p>(
                         }
                     }
                     Package::Pypi(pkg) => {
-                        match pypi_packages_by_name.get(&pkg.data().package.name) {
+                        match pypi_packages_by_name.get(&pkg.package_data().name) {
                             None => {
-                                pypi_packages_by_name
-                                    .insert(pkg.data().package.name.clone(), pkg.location().clone());
+                                pypi_packages_by_name.insert(
+                                    pkg.package_data().name.clone(),
+                                    pkg.location().clone(),
+                                );
                             }
                             Some(url) if pkg.location() != url => {
                                 pypi_package_mismatch = true;

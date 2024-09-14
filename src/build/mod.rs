@@ -1,4 +1,3 @@
-pub(crate) mod pinned;
 use std::path::PathBuf;
 
 use miette::Diagnostic;
@@ -9,10 +8,7 @@ use rattler_conda_types::{ChannelConfig, PackageRecord, Platform};
 use thiserror::Error;
 use url::Url;
 
-use crate::{
-    build::pinned::{PinnedPathSpec, PinnedSourceSpec},
-    pixi_record::SourceRecord,
-};
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Debug, Clone)]

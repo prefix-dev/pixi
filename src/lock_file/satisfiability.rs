@@ -190,9 +190,9 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
                     // it is actually a path
                     let url = match url_or_path {
                         UrlOrPath::Path(path) => {
-                            let ext = DistExtension::from_path(Path::new(path.as_str())).map_err(|e| {
-                                ParsedUrlError::MissingExtensionPath(path.as_str().into(), e)
-                            })?;
+                            let ext = DistExtension::from_path(Path::new(path.as_str())).map_err(
+                                |e| ParsedUrlError::MissingExtensionPath(path.as_str().into(), e),
+                            )?;
                             let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                                 path.as_str().into(),
                                 ext,
@@ -272,8 +272,7 @@ pub fn verify_environment_satisfiability(
                     .should_pypi_indexes_be_present()
                     && locked_environment
                         .pypi_packages()
-                        .iter()
-                        .any(|(_platform, packages)| !packages.is_empty())
+                        .any(|(_platform, mut packages)| packages.next().is_some())
                 {
                     return Err(IndexesMismatch {
                         current: indexes,
@@ -329,7 +328,7 @@ pub fn verify_platform_satisfiability(
                 );
             }
             Package::Pypi(pypi) => {
-                pypi_packages.push((pypi.data().package.clone(), pypi.data().environment.clone()));
+                pypi_packages.push((pypi.package_data().clone(), pypi.environment_data().clone()));
             }
         }
     }
@@ -773,16 +772,20 @@ pub(crate) fn verify_package_platform_satisfiability(
                         if absolute_path.is_dir() {
                             let canonicalized_path =
                                 dunce::canonicalize(&absolute_path).map_err(|e| {
-                                    PlatformUnsat::FailedToCanonicalizePath(absolute_path.into_owned(), e)
-                                })?;
-                            let hashable = PypiSourceTreeHashable::from_directory(canonicalized_path)
-                                .map_err(|e| {
-                                    PlatformUnsat::FailedToDetermineSourceTreeHash(
-                                        record.0.name.clone(),
+                                    PlatformUnsat::FailedToCanonicalizePath(
+                                        absolute_path.into_owned(),
                                         e,
                                     )
-                                })?
-                                .hash();
+                                })?;
+                            let hashable =
+                                PypiSourceTreeHashable::from_directory(canonicalized_path)
+                                    .map_err(|e| {
+                                        PlatformUnsat::FailedToDetermineSourceTreeHash(
+                                            record.0.name.clone(),
+                                            e,
+                                        )
+                                    })?
+                                    .hash();
                             if Some(hashable) != record.0.hash {
                                 return Err(PlatformUnsat::SourceTreeHashMismatch(
                                     record.0.name.clone(),
@@ -1180,7 +1183,7 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url_or_path: "git+https://github.com/mypkg@29932f3915935d773dc8d52c292cadd81c81071d"
+            location: "git+https://github.com/mypkg@29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
             hash: None,
@@ -1230,9 +1233,7 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url_or_path: UrlOrPath::Path(
-                PathBuf::from_str("C:\\Users\\username\\mypkg.tar.gz").unwrap(),
-            ),
+            location: UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into()),
             hash: None,
             requires_dist: vec![],
             requires_python: None,

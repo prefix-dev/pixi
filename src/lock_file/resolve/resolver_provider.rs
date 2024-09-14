@@ -20,10 +20,9 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::{
-    lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier},
-    pixi_record::PixiRecord,
-};
+use crate::lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier};
+
+use pixi_record::PixiRecord;
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,

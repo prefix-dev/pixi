@@ -6,10 +6,8 @@ use std::{
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
 
-use crate::{
-    lock_file::{PypiPackageIdentifier, PypiRecord},
-    pixi_record::PixiRecord,
-};
+use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use pixi_record::PixiRecord;
 
 pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;

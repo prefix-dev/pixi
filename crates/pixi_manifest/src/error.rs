@@ -54,7 +54,8 @@ impl TomlError {
         if let Some(span) = self.span() {
             Err(miette::miette!(
                 labels = vec![LabeledSpan::new_primary_with_span(None, span)],
-                "{}", self.message(),
+                "{}",
+                self.message(),
             )
             .with_source_code(NamedSource::new(file_name, contents.into())))
         } else {

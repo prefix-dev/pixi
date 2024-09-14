@@ -161,7 +161,8 @@ pub async fn amend_pypi_purls(
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     let conda_packages = conda_packages.into_iter().collect_vec();
-    let conda_mapping = conda_pypi_name_mapping(client, conda_packages.iter().map(|p| *p as &_), reporter).await?;
+    let conda_mapping =
+        conda_pypi_name_mapping(client, conda_packages.iter().map(|p| *p as &_), reporter).await?;
     let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
 
     for record in conda_packages {

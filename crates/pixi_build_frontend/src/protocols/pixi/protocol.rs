@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
+use jsonrpsee::core::client::Error;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error as ClientError, TransportReceiverT, TransportSenderT},
 };
-use jsonrpsee::core::client::Error;
 use miette::IntoDiagnostic;
 use pixi_build_types::{
     procedures,
@@ -16,11 +16,11 @@ use pixi_build_types::{
 };
 use rattler_conda_types::ChannelConfig;
 
+use crate::protocols::error::BackendError;
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
     tool::Tool,
 };
-use crate::protocols::error::BackendError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitializeError {
@@ -38,12 +38,8 @@ pub enum InitializeError {
 impl From<ClientError> for InitializeError {
     fn from(value: ClientError) -> Self {
         match value {
-            Error::Call(err) if err.code() > -32001 => {
-                Self::BackendError(BackendError::from(err))
-            },
-            e => {
-                Self::JsonRpc(e)
-            }
+            Error::Call(err) if err.code() > -32001 => Self::BackendError(BackendError::from(err)),
+            e => Self::JsonRpc(e),
         }
     }
 }

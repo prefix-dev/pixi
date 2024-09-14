@@ -1,6 +1,6 @@
-use pixi_spec::GitReference;
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
+use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
@@ -34,6 +34,19 @@ pub struct PinnedGitSpec {
     pub git: Url,
     pub commit: String,
     pub rev: Option<GitReference>,
+}
+
+/// A reference to a specific commit in a git repository.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum GitReference {
+    /// The HEAD commit of a branch.
+    Branch(String),
+
+    /// A specific tag.
+    Tag(String),
+
+    /// A specific commit.
+    Rev(String),
 }
 
 impl From<PinnedGitSpec> for PinnedSourceSpec {
@@ -79,5 +92,19 @@ impl From<PinnedGitSpec> for UrlOrPath {
 impl From<PinnedUrlSpec> for UrlOrPath {
     fn from(_value: PinnedUrlSpec) -> Self {
         unimplemented!()
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ParseError {}
+
+impl TryFrom<UrlOrPath> for PinnedSourceSpec {
+    type Error = ParseError;
+
+    fn try_from(value: UrlOrPath) -> Result<Self, Self::Error> {
+        match value {
+            UrlOrPath::Url(_) => unimplemented!(),
+            UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
+        }
     }
 }
