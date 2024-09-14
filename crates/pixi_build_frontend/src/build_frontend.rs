@@ -51,7 +51,7 @@ impl BuildFrontend {
         &self.channel_config
     }
 
-    /// Construcst a new [`Builder`] for the given request. This object can be
+    /// Constructs a new [`Builder`] for the given request. This object can be
     /// used to build the package.
     pub async fn setup_protocol(
         &self,

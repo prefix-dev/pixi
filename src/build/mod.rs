@@ -24,8 +24,8 @@ pub enum BuildError {
     #[error(transparent)]
     BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
 
-    #[error("failed to retrieve package metadata")]
-    ExtractMetadata(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    ExtractMetadata(Box<dyn Diagnostic + Send + Sync + 'static>),
 }
 
 /// Location of the source code for a package. This will be used as the input

@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
-use jsonrpsee::core::client::Error;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
-    core::client::{ClientT, Error as ClientError, TransportReceiverT, TransportSenderT},
+    core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
 };
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{
@@ -15,14 +14,15 @@ use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities,
 };
 use rattler_conda_types::ChannelConfig;
+use thiserror::Error;
 
-use crate::protocols::error::BackendError;
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
+    protocols::error::BackendError,
     tool::Tool,
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum InitializeError {
     #[error("an unexpected io error occured while communicating with the pixi build backend")]
     Io(#[from] std::io::Error),
@@ -118,6 +118,22 @@ impl Protocol {
                 RpcParams::from(request),
             )
             .await
+            .map_err(|err| match err {
+                Error::Call(err) if err.code() > -32001 => {
+                    GetMetadataError::Backend(BackendError::from(err))
+                }
+                e => GetMetadataError::JsonRpc(e),
+            })
             .into_diagnostic()
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum GetMetadataError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Backend(BackendError),
+
+    #[error(transparent)]
+    JsonRpc(#[from] ClientError),
 }
