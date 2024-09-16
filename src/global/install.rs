@@ -394,7 +394,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
     let bin_dir = BinDir::from_env().await?;
     let env_root = EnvRoot::from_env().await?;
 
-    let project = global::Project::discover(&bin_dir, &env_root, assume_yes)
+    let project = global::Project::discover_or_create(&bin_dir, &env_root, assume_yes)
         .await?
         .with_cli_config(config.clone());
 

@@ -249,7 +249,7 @@ impl Project {
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub(crate) async fn discover(
+    pub(crate) async fn discover_or_create(
         bin_dir: &BinDir,
         env_root: &EnvRoot,
         assume_yes: bool,
