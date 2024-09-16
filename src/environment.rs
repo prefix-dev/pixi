@@ -14,6 +14,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_record::PixiRecord;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -23,8 +24,10 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
+use url::Url;
 
 use crate::{
+    build::BuildContext,
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
@@ -32,7 +35,6 @@ use crate::{
     rlimit::try_increase_rlimit_to_sensible,
     Project,
 };
-use pixi_record::PixiRecord;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -492,23 +494,35 @@ pub async fn update_prefix_conda(
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
+    channels: Vec<Url>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
+    build_context: BuildContext,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
-    let (repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
+    let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
         .into_iter()
         .partition_map(|record| match record {
             PixiRecord::Binary(record) => Either::Left(record),
             PixiRecord::Source(record) => Either::Right(record),
         });
 
-    if !source_records.is_empty() {
-        unimplemented!("installing source records is not supported yet");
+    // Build conda packages out of the source records
+    for source_record in source_records {
+        let built_source_record = build_context
+            .build_source_record(&source_record, &channels, platform)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to build a conda package for {} {}",
+                    &source_record.package_record.name.as_source(), &source_record.package_record.version
+                )
+            })?;
+        repodata_records.push(built_source_record);
     }
 
     // Execute the operations that are returned by the solver.

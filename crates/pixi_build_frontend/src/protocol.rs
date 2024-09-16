@@ -1,5 +1,9 @@
+use pixi_build_types::procedures::{
+    conda_build::CondaBuildResult,
+    conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+};
+use pixi_build_types::procedures::conda_build::CondaBuildParams;
 use crate::{conda_build_protocol, pixi_protocol};
-use pixi_build_types::procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error)]
@@ -44,7 +48,6 @@ pub enum DiscoveryError {
 /// ergonomic to add their implementation directly into the frontend because no
 /// bridge executable is needed. We can always add this later too using the
 /// existing protocol.
-///
 // I think because we mostly have a single variant in use, boxing does not make
 // sense here.
 #[allow(clippy::large_enum_variant)]
@@ -73,6 +76,16 @@ impl Protocol {
         match self {
             Self::Pixi(protocol) => protocol.get_conda_metadata(request).await,
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
+        }
+    }
+
+    pub async fn conda_build(
+        &self,
+        request: &CondaBuildParams,
+    ) -> miette::Result<CondaBuildResult> {
+        match self {
+            Self::Pixi(protocol) => protocol.conda_build(request).await,
+            Self::CondaBuild(_) => unreachable!(),
         }
     }
 }

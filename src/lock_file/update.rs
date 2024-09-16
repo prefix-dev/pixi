@@ -19,6 +19,7 @@ use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
+use pixi_record::PixiRecord;
 use pypi_mapping;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
@@ -52,7 +53,6 @@ use crate::{
     },
     Project,
 };
-use pixi_record::PixiRecord;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -105,6 +105,9 @@ pub struct LockFileDerivedData<'p> {
 
     /// The IO concurrency semaphore to use when updating environments
     pub io_concurrency_limit: IoConcurrencyLimit,
+
+    /// The build context that was used to create the lock-file
+    pub build_context: BuildContext,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -258,6 +261,10 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the locked environment from the lock-file.
         let records = self.pixi_records(environment, platform).unwrap_or_default();
+        let channel_urls = environment
+            .channel_urls(&self.project.channel_config())
+            .into_iter()
+            .collect_vec();
 
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
@@ -268,6 +275,7 @@ impl<'p> LockFileDerivedData<'p> {
             environment.project().authenticated_client().clone(),
             installed_packages,
             records,
+            channel_urls,
             platform,
             &format!(
                 "{} environment '{}'",
@@ -280,6 +288,7 @@ impl<'p> LockFileDerivedData<'p> {
             ),
             "",
             self.io_concurrency_limit.clone().into(),
+            self.build_context.clone(),
         )
         .await?;
 
@@ -553,6 +562,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
+            build_context: BuildContext::new(project.channel_config()),
         });
     }
 
@@ -570,6 +580,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
+            build_context: BuildContext::new(project.channel_config()),
         });
     }
 
@@ -1035,6 +1046,7 @@ impl<'p> UpdateContext<'p> {
                 self.package_cache.clone(),
                 records_future,
                 self.io_concurrency_limit.clone(),
+                self.build_context.clone(),
             )
             .map_err(move |e| {
                 e.context(format!(
@@ -1385,6 +1397,7 @@ impl<'p> UpdateContext<'p> {
             updated_pypi_prefixes: HashMap::default(),
             uv_context,
             io_concurrency_limit: self.io_concurrency_limit,
+            build_context: self.build_context,
         })
     }
 }
@@ -1553,9 +1566,8 @@ async fn spawn_solve_conda_environment_task(
             // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
-                .cloned()
-                .map(|c| c.into_base_url(&channel_config))
-                .collect::<Vec<_>>();
+                .map(|c| c.clone().into_base_url(&channel_config))
+                .collect_vec();
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (name, source_spec) in source_specs.iter() {
@@ -1958,10 +1970,14 @@ async fn spawn_create_prefix_task(
     package_cache: PackageCache,
     pixi_records: impl Future<Output = Arc<PixiRecordsByName>>,
     io_concurrency_limit: IoConcurrencyLimit,
+    build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
     let group_name = group.name().clone();
     let prefix = group.prefix();
     let client = group.project().authenticated_client().clone();
+    let channels = group
+        .channel_urls(&group.project().channel_config())
+        .collect_vec();
 
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
@@ -1991,6 +2007,7 @@ async fn spawn_create_prefix_task(
                 client,
                 installed_packages,
                 pixi_records.records.clone(),
+                channels,
                 Platform::current(),
                 &format!(
                     "{} python environment to solve pypi packages for '{}'",
@@ -2003,6 +2020,7 @@ async fn spawn_create_prefix_task(
                 ),
                 "  ",
                 io_concurrency_limit.into(),
+                build_context,
             )
             .await?;
             let end = Instant::now();

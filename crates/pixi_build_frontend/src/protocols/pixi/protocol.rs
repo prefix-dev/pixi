@@ -3,11 +3,13 @@ use std::path::PathBuf;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
+    types::ErrorCode,
 };
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{
+        conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
     },
@@ -24,24 +26,37 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum InitializeError {
-    #[error("an unexpected io error occured while communicating with the pixi build backend")]
+    #[error("an unexpected io error occurred while communicating with the pixi build backend")]
     Io(#[from] std::io::Error),
     #[error(transparent)]
-    JsonRpc(ClientError),
-    #[error(transparent)]
-    BackendError(#[from] BackendError),
+    Protocol(#[from] ProtocolError),
     #[error("failed to acquire stdin handle")]
     StdinHandle,
     #[error("failed to acquire stdout handle")]
     StdoutHandle,
 }
-impl From<ClientError> for InitializeError {
-    fn from(value: ClientError) -> Self {
-        match value {
+
+impl ProtocolError {
+    pub fn from_client_error(err: ClientError, method: &str) -> Self {
+        match err {
             Error::Call(err) if err.code() > -32001 => Self::BackendError(BackendError::from(err)),
+            Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
+                Self::MethodNotImplemented(method.to_string())
+            }
             e => Self::JsonRpc(e),
         }
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ProtocolError {
+    #[error(transparent)]
+    JsonRpc(ClientError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BackendError(#[from] BackendError),
+    #[error("the build backend does not implement the method '{0}'")]
+    MethodNotImplemented(String),
 }
 
 /// A protocol that uses a pixi manifest to invoke a build backend.
@@ -98,7 +113,10 @@ impl Protocol {
                     capabilities: FrontendCapabilities {},
                 }),
             )
-            .await?;
+            .await
+            .map_err(|err| {
+                ProtocolError::from_client_error(err, procedures::initialize::METHOD_NAME)
+            })?;
 
         Ok(Self {
             _channel_config: channel_config,
@@ -118,22 +136,26 @@ impl Protocol {
                 RpcParams::from(request),
             )
             .await
-            .map_err(|err| match err {
-                Error::Call(err) if err.code() > -32001 => {
-                    GetMetadataError::Backend(BackendError::from(err))
-                }
-                e => GetMetadataError::JsonRpc(e),
+            .map_err(|err| {
+                ProtocolError::from_client_error(err, procedures::conda_metadata::METHOD_NAME)
             })
             .into_diagnostic()
     }
-}
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum GetMetadataError {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Backend(BackendError),
-
-    #[error(transparent)]
-    JsonRpc(#[from] ClientError),
+    /// Build a specific conda package output
+    pub async fn conda_build(
+        &self,
+        request: &CondaBuildParams,
+    ) -> miette::Result<CondaBuildResult> {
+        self.client
+            .request(
+                procedures::conda_build::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await
+            .map_err(|err| {
+                ProtocolError::from_client_error(err, procedures::conda_build::METHOD_NAME)
+            })
+            .into_diagnostic()
+    }
 }
