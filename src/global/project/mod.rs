@@ -18,6 +18,7 @@ pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{default_channel_config, home_path, Config};
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
+use rattler_digest::digest::typenum::Exp;
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
@@ -75,6 +76,142 @@ struct ExposedData {
     package: PackageName,
     exposed: ExposedKey,
     executable_name: String,
+}
+
+impl ExposedData {
+    pub(self) fn from_binary_path(path: &Path) -> miette::Result<Self> {
+        let exposed = path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
+            .and_then(ExposedKey::from_str)?;
+        let binary_path = Self::extract_bin_from_script(path)?;
+
+        let binary = binary_path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .map(String::from)
+            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
+        let env_path = binary_path
+            .parent()
+            .ok_or_else(|| {
+                miette::miette!("binary_path '{}' has no parent", binary_path.display())
+            })?
+            .parent()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "binary_path's parent '{}' has no parent",
+                    binary_path.display()
+                )
+            })?;
+        let env = env_path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| {
+                miette::miette!(
+                    "binary_path's grandparent '{}' has no file name",
+                    binary_path.display()
+                )
+            })
+            .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
+
+        let conda_meta = env_path.join("conda-meta");
+
+        let (platform, channel, package) = Self::package_from_conda_meta(&conda_meta, &binary)?;
+
+        Ok(ExposedData {
+            env,
+            platform,
+            channel,
+            package,
+            executable_name: binary,
+            exposed,
+        })
+    }
+
+    fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
+        // Read the script file into a string
+        let script_content = std::fs::read_to_string(script)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Could not read {}", script.display()))?;
+
+        // Compile the regex pattern
+        #[cfg(unix)]
+        const PATTERN: &str = r#""([^"]+)" "\$@""#;
+        #[cfg(windows)]
+        const PATTERN: &str = r#"@"([^"]+)" %/*"#;
+        static RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+
+        // Apply the regex to the script content
+        if let Some(caps) = RE.captures(&script_content) {
+            if let Some(matched) = caps.get(1) {
+                return Ok(PathBuf::from(matched.as_str()));
+            }
+        }
+
+        // Return an error if the binary path could not be extracted
+        miette::bail!(
+            "Failed to extract binary path from script {}",
+            script.display()
+        )
+    }
+
+    fn package_from_conda_meta(
+        conda_meta: &Path,
+        binary: &str,
+    ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+        // HACK: FIX ME
+        let prefix = Prefix::new(conda_meta.parent().unwrap());
+
+        for entry in std::fs::read_dir(conda_meta)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
+        {
+            let path = entry
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!("Couldn't read file from directory {}", conda_meta.display())
+                })?
+                .path();
+            let channel_config = default_channel_config();
+            // Check if the entry is a file and has a .json extension
+            if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+                let content = std::fs::read_to_string(&path).into_diagnostic()?;
+                let prefix_record = PrefixRecord::from_path(&path)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+
+                let binaries = find_executables(&prefix, &prefix_record);
+                let Some(found_binary) = binaries
+                    .iter()
+                    .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(binary))
+                else {
+                    continue;
+                };
+
+                let platform = match Platform::from_str(
+                    &prefix_record.repodata_record.package_record.subdir,
+                ) {
+                    Ok(Platform::NoArch) => None,
+                    Ok(platform) if platform == Platform::current() => None,
+                    Err(_) => None,
+                    Ok(p) => Some(p),
+                };
+
+                let channel: PrioritizedChannel =
+                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
+                        .into_diagnostic()?
+                        .into();
+
+                let name = prefix_record.repodata_record.package_record.name;
+
+                return Ok((platform, channel, name));
+            }
+        }
+
+        miette::bail!("Could not find {binary} in {}", conda_meta.display())
+    }
 }
 
 impl Project {
@@ -168,7 +305,7 @@ impl Project {
                 Ok(false) => None,          // Success and isn't text, filter out
                 Err(e) => Some(Err(e)),     // Failure, continue with error
             })
-            .map(|result| result.and_then(Self::exposed_data_from_binary_path))
+            .map(|result| result.and_then(|p| ExposedData::from_binary_path(&p)))
             .collect::<miette::Result<_>>()?;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
@@ -177,140 +314,6 @@ impl Project {
             .await
             .into_diagnostic()?;
         Self::from_str(manifest_path, &toml)
-    }
-
-    fn exposed_data_from_binary_path(path: PathBuf) -> miette::Result<ExposedData> {
-        let exposed = path
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
-            .and_then(ExposedKey::from_str)?;
-        let binary_path = Self::extract_bin_from_script(&path)?;
-
-        let binary = binary_path
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .map(String::from)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
-        let env_path = binary_path
-            .parent()
-            .ok_or_else(|| {
-                miette::miette!("binary_path '{}' has no parent", binary_path.display())
-            })?
-            .parent()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "binary_path's parent '{}' has no parent",
-                    binary_path.display()
-                )
-            })?;
-        let env = env_path
-            .file_name()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| {
-                miette::miette!(
-                    "binary_path's grandparent '{}' has no file name",
-                    binary_path.display()
-                )
-            })
-            .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
-
-        let conda_meta = env_path.join("conda-meta");
-
-        let (platform, channel, package) = Self::package_from_conda_meta(&conda_meta, &binary)?;
-
-        Ok(ExposedData {
-            env,
-            platform,
-            channel,
-            package,
-            executable_name: binary,
-            exposed,
-        })
-    }
-
-    fn package_from_conda_meta(
-        conda_meta: &Path,
-        binary: &str,
-    ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-        // HACK: FIX ME
-        let prefix = Prefix::new(conda_meta.parent().unwrap());
-
-        for entry in std::fs::read_dir(conda_meta)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
-        {
-            let path = entry
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    format!("Couldn't read file from directory {}", conda_meta.display())
-                })?
-                .path();
-            let channel_config = default_channel_config();
-            // Check if the entry is a file and has a .json extension
-            if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
-                let content = std::fs::read_to_string(&path).into_diagnostic()?;
-                let prefix_record = PrefixRecord::from_path(&path)
-                    .into_diagnostic()
-                    .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
-
-                let binaries = find_executables(&prefix, &prefix_record);
-                let Some(found_binary) = binaries
-                    .iter()
-                    .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(binary))
-                else {
-                    continue;
-                };
-
-                let platform = match Platform::from_str(
-                    &prefix_record.repodata_record.package_record.subdir,
-                ) {
-                    Ok(Platform::NoArch) => None,
-                    Ok(platform) if platform == Platform::current() => None,
-                    Err(_) => None,
-                    Ok(p) => Some(p),
-                };
-
-                let channel: PrioritizedChannel =
-                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-                        .into_diagnostic()?
-                        .into();
-
-                let name = prefix_record.repodata_record.package_record.name;
-
-                return Ok((platform, channel, name));
-            }
-        }
-
-        miette::bail!("Could not find {binary} in {}", conda_meta.display())
-    }
-
-    fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
-        // Read the script file into a string
-        let script_content = std::fs::read_to_string(script)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not read {}", script.display()))?;
-
-        // Compile the regex pattern
-        #[cfg(unix)]
-        const PATTERN: &str = r#""([^"]+)" "\$@""#;
-        #[cfg(windows)]
-        const PATTERN: &str = r#"@"([^"]+)" %/*"#;
-        static RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
-
-        // Apply the regex to the script content
-        if let Some(caps) = RE.captures(&script_content) {
-            if let Some(matched) = caps.get(1) {
-                return Ok(PathBuf::from(matched.as_str()));
-            }
-        }
-
-        // Return an error if the binary path could not be extracted
-        miette::bail!(
-            "Failed to extract binary path from script {}",
-            script.display()
-        )
     }
 
     /// Get default dir for the pixi global manifest
