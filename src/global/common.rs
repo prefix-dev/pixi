@@ -129,7 +129,7 @@ pub struct EnvRoot(PathBuf);
 impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
-    pub(self) async fn new(path: PathBuf) -> miette::Result<Self> {
+    pub async fn new(path: PathBuf) -> miette::Result<Self> {
         tokio::fs::create_dir_all(&path)
             .await
             .into_diagnostic()
@@ -174,9 +174,9 @@ impl EnvRoot {
     /// Delete environments that are not listed
     pub(crate) async fn prune(
         &self,
-        environments: impl IntoIterator<Item = EnvironmentName>,
+        environments_to_keep: impl IntoIterator<Item = EnvironmentName>,
     ) -> miette::Result<()> {
-        let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
+        let env_set: ahash::HashSet<EnvironmentName> = environments_to_keep.into_iter().collect();
 
         for env_path in self.directories().await? {
             let Some(Ok(env_name)) = env_path
@@ -223,12 +223,12 @@ impl EnvDir {
     }
 
     /// Initialize the binary environment directory from an existing path
-    pub(crate) fn from_existing(
+    pub(crate) fn try_from_existing(
         root: EnvRoot,
         environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
         let path = root.path().join(environment_name.as_str());
-        if !path.exists() {
+        if !path.is_dir() {
             return Err(miette::miette!(
                 "Directory does not exist: {}",
                 path.display()

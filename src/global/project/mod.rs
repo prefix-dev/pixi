@@ -80,7 +80,7 @@ struct ExposedData {
 }
 
 impl ExposedData {
-    pub(self) async fn from_binary_path(path: &Path) -> miette::Result<Self> {
+    pub async fn from_binary_path(path: &Path) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
@@ -280,7 +280,7 @@ impl Project {
                         .interact()
                         .into_diagnostic()?)
             {
-                return Self::from_existing_installation(&manifest_path, bin_dir, env_root)
+                return Self::try_from_existing_installation(&manifest_path, bin_dir, env_root)
                     .await
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
@@ -296,7 +296,7 @@ impl Project {
         Self::from_path(&manifest_path)
     }
 
-    async fn from_existing_installation(
+    async fn try_from_existing_installation(
         manifest_path: &Path,
         bin_dir: &BinDir,
         env_root: &EnvRoot,
