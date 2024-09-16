@@ -246,7 +246,7 @@ def test_global_migrate(pixi: Path, tmp_path: Path) -> None:
     manifest = manifests.joinpath("pixi-global.toml")
     toml = """
     [envs.test]
-    channels = ["conda-forge"]
+    channels = ["https://conda.anaconda.org/conda-forge"]
     [envs.test.dependencies]
     ripgrep = "*"
     python = "*"
