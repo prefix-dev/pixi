@@ -98,23 +98,20 @@ pub(crate) async fn expose_executables(
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
-    /// Processes prefix records to filter and collect executable files.
-    /// It performs the following steps:
-    /// 1. Filters records to only include direct dependencies
-    /// 2. Finds executables for each filtered record.
-    /// 3. Maps executables to a tuple of file name (as a string) and file path.
-    /// 4. Filters tuples to include only those whose names are in the `exposed`
-    ///    values.
-    /// 5. Collects the resulting tuples into a vector of executables.
+    // Processes prefix records to filter and collect executable files.
     let executables: Vec<(String, PathBuf)> = prefix_records
         .into_iter()
+        // Filters records to only include direct dependencies
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
+        // Finds executables for each filtered record.
         .flat_map(|record| global::find_executables(prefix, &record))
+        // Maps executables to a tuple of file name (as a string) and file path.
         .filter_map(|path| {
             path.file_stem()
                 .and_then(OsStr::to_str)
                 .map(|name| (name.to_string(), path.clone()))
         })
+        // Filters tuples to include only those whose names are in the `exposed` values
         .filter(|(name, path)| parsed_environment.exposed.values().contains(&name))
         .collect();
 

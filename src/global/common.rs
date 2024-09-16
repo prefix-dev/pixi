@@ -275,6 +275,7 @@ pub(crate) async fn find_designated_package(
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
 }
 
+/// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
 pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     let mut file = std::fs::File::open(&file_path)
         .into_diagnostic()
@@ -288,6 +289,8 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(buffer[..bytes_read].contains(&0))
 }
 
+/// Checks if given path points to a text file by calling `is_binary`.
+/// If that returns `false`, then it is a text file and vice-versa.
 pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
 }
