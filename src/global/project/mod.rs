@@ -163,6 +163,7 @@ impl ExposedData {
     ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
         // HACK: FIX ME
         let prefix = Prefix::new(conda_meta.parent().unwrap());
+        let channel_config = default_channel_config();
 
         for entry in std::fs::read_dir(conda_meta)
             .into_diagnostic()
@@ -174,7 +175,6 @@ impl ExposedData {
                     format!("Couldn't read file from directory {}", conda_meta.display())
                 })?
                 .path();
-            let channel_config = default_channel_config();
             // Check if the entry is a file and has a .json extension
             if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
                 let content = std::fs::read_to_string(&path).into_diagnostic()?;
