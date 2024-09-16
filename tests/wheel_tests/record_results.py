@@ -1,9 +1,11 @@
 from pathlib import Path
 from multiprocessing import Lock
 import toml
+from filelock import FileLock
 
 lock = Lock()
 RESULTS_FILE = Path(__file__).parent / ".wheel_test_results.toml"
+LOCK_FILE = RESULTS_FILE.with_suffix(".lock")
 
 
 def record_result(test_id: str, name: str, outcome: str, duration: float, details: str):
@@ -12,7 +14,9 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
     """
     result = {"name": name, "outcome": outcome, "duration": duration, "longrepr": details}
 
-    # Lock for process-safe write access to the results file
+    # Use file lock for process-safe write access to the results file
+    lock = FileLock(str(LOCK_FILE))
+
     with lock:
         test = {"id": test_id, "results": []}
 

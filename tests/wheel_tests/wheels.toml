@@ -8,8 +8,6 @@ dvclive = "*"
 icecream = "*"
 matplotlib = "*"
 meshpy = "*"
-# No windows built for 0.0.19
-meshtaichi-patcher = "0.0.18"
 mkdocs = "*"
 mkdocs-material = "*"
 numpy = "*"
@@ -25,6 +23,15 @@ trimesh = "*"
 typeguard = "*"
 
 ## Add more complex dependencies after this line:
+
+
+[meshtaichi-patcher]
+target = "linux-64"
+version = "*"
+
+[meshtools]
+target = "linux-64"
+version = "*"
 
 [rerun-sdk]
 # Explicitly specify the target platform

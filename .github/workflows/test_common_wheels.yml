@@ -59,13 +59,13 @@ jobs:
         continue-on-error: true
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
-        if: matrix.arch.name != 'Windows'
+        if: matrix.arch.name != 'Windows' && ${{ always() }}}
         continue-on-error: true
         shell: bash
         run: |
           cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
       - name: Write .summary.md to GitHub Summary (Windows)
-        if: matrix.arch.name == 'Windows'
+        if: matrix.arch.name == 'Windows' && ${{ always() }}
         continue-on-error: true
         shell: pwsh
         run: |
@@ -73,6 +73,7 @@ jobs:
           Get-Content $resolvedPath | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
       - name: Upload Logs
         uses: actions/upload-artifact@v4
+        if: ${{ always() }}
         with:
           name: wheel-tests-logs-${{ matrix.arch.name }}
           include-hidden-files: true
