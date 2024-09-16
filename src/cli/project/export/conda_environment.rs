@@ -17,17 +17,16 @@ use crate::project::Environment;
 use crate::Project;
 
 #[derive(Debug, Parser)]
-#[clap(arg_required_else_help = false)]
 pub struct Args {
     /// Explicit path to export the environment to
     pub output_path: Option<PathBuf>,
 
-    /// The platform to render the environment file for.    
-    /// Defaults to the current platform. 
+    /// The platform to render the environment file for.
+    /// Defaults to the current platform.
     #[arg(short, long)]
     pub platform: Option<Platform>,
 
-    /// The environment to render the environment file for. 
+    /// The environment to render the environment file for.
     /// Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
