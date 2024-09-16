@@ -11,6 +11,7 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
       LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
       SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
+      PYTHONIOENCODING: utf-8
     strategy:
       fail-fast: false
       matrix:
