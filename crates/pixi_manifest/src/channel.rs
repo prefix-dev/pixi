@@ -59,8 +59,10 @@ impl TomlPrioritizedChannelStrOrMap {
             },
         }
     }
+}
 
-    pub fn from_prioritized_channel(channel: PrioritizedChannel) -> Self {
+impl From<PrioritizedChannel> for TomlPrioritizedChannelStrOrMap {
+    fn from(channel: PrioritizedChannel) -> Self {
         if let Some(priority) = channel.priority {
             TomlPrioritizedChannelStrOrMap::Map(PrioritizedChannel {
                 channel: channel.channel,
@@ -122,8 +124,7 @@ impl serde_with::SerializeAs<PrioritizedChannel> for TomlPrioritizedChannelStrOr
     where
         S: Serializer,
     {
-        let toml_prioritized_channel =
-            TomlPrioritizedChannelStrOrMap::from_prioritized_channel(source.clone());
+        let toml_prioritized_channel: TomlPrioritizedChannelStrOrMap = source.clone().into();
         toml_prioritized_channel.serialize(serializer)
     }
 }
