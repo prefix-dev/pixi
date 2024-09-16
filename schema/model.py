@@ -34,25 +34,31 @@ UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
-Platform = (
-    Literal["linux-32"]
-    | Literal["linux-64"]
-    | Literal["linux-aarch64"]
-    | Literal["linux-armv6l"]
-    | Literal["linux-armv7l"]
-    | Literal["linux-ppc64le"]
-    | Literal["linux-ppc64"]
-    | Literal["linux-s390x"]
-    | Literal["linux-riscv32"]
-    | Literal["linux-riscv64"]
-    | Literal["osx-64"]
-    | Literal["osx-arm64"]
-    | Literal["win-32"]
-    | Literal["win-64"]
-    | Literal["win-arm64"]
-    | Literal["emscripten-wasm32"]
-    | Literal["wasi-wasm32"]
-)
+
+
+class Platform(str, Enum):
+    """A supported operating system and processor architecture pair."""
+
+    emscripten_wasm32 = "emscripten-wasm32"
+    linux_32 = "linux-32"
+    linux_64 = "linux-64"
+    linux_aarch64 = "linux-aarch64"
+    linux_armv6l = "linux-armv6l"
+    linux_armv7l = "linux-armv7l"
+    linux_ppc64 = "linux-ppc64"
+    linux_ppc64le = "linux-ppc64le"
+    linux_riscv32 = "linux-riscv32"
+    linux_riscv64 = "linux-riscv64"
+    linux_s390x = "linux-s390x"
+    noarch = "noarch"
+    osx_64 = "osx-64"
+    osx_arm64 = "osx-arm64"
+    unknown = "unknown"
+    wasi_wasm32 = "wasi-wasm32"
+    win_32 = "win-32"
+    win_64 = "win-64"
+    win_arm64 = "win-arm64"
+    zos_z = "zos-z"
 
 
 class StrictBaseModel(BaseModel):
@@ -424,7 +430,7 @@ class Feature(StrictBaseModel):
         "- 'strict': only take the package from the channel it exist in first."
         "- 'disabled': group all dependencies together as if there is no channel difference.",
     )
-    platforms: list[NonEmptyStr] | None = Field(
+    platforms: list[Platform] | None = Field(
         None,
         description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
     )
