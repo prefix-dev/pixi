@@ -13,8 +13,15 @@ class PackageSpec:
 
     version: Literal["*"] | str = "*"
     extras: str | None = None
-    target: str | None = None
+    target: str | list[str] | None = None
     system_requirements: dict[str, Any] | None = None
+
+    def target_iter(self) -> Iterable[str]:
+        if isinstance(self.target, str):
+            return [self.target]
+        elif isinstance(self.target, list):
+            return self.target
+        return []
 
     @classmethod
     def __from_toml(cls, spec: dict[str, str] | str) -> Self:

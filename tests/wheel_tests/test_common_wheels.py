@@ -42,7 +42,7 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
         ]
 
         # Add for another platform, if specified
-        if package.spec.target:
+        for platform in package.spec.target_iter():
             run_args.extend(["--platform", package.spec.target])
 
         run(run_args)

@@ -7,7 +7,6 @@ dvc = "*"
 dvclive = "*"
 icecream = "*"
 matplotlib = "*"
-meshpy = "*"
 mkdocs = "*"
 mkdocs-material = "*"
 numpy = "*"
@@ -24,6 +23,10 @@ typeguard = "*"
 
 ## Add more complex dependencies after this line:
 
+## Failing for windows (add for linux until the issue is resolved)
+[meshpy]
+target = "linux-64"
+version = "*"
 
 [meshtaichi-patcher]
 target = "linux-64"
@@ -34,9 +37,6 @@ target = "linux-64"
 version = "*"
 
 [rerun-sdk]
-# Explicitly specify the target platform
-# because this was failing before
-target = "linux-64"
 version = "*"
 # Use these system requirements
 # because the wheel requires a higher version of glibc than the conda counterpart

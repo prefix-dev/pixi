@@ -6,6 +6,8 @@ from rich.text import Text
 from rich.panel import Panel
 from pathlib import Path
 
+from read_wheels import read_wheel_file
+
 
 def terminal_summary():
     # Read aggregated results from the shared file
@@ -17,14 +19,17 @@ def terminal_summary():
     with results_file.open("r") as f:
         results = toml.load(f)["results"]
 
+    packages = read_wheel_file()
+
     console = Console()
     table = Table(title="Test Results", show_header=True, header_style="bold magenta")
-    table.add_column("Test Name", style="dim", width=60)
+    table.add_column("Test Name", style="dim")
     table.add_column("Outcome", justify="right")
     table.add_column("Duration (s)", justify="right")
     table.add_column("Error Details")
 
     # Populate the table with collected results
+    names = []
     for result in sorted(results, key=lambda r: r["name"]):
         outcome_color = "green" if result["outcome"] == "passed" else "red"
         error_details = result["longrepr"] if result["outcome"] == "failed" else ""
@@ -34,6 +39,17 @@ def terminal_summary():
             f"{result['duration']:.2f}",
             error_details,
         )
+        # Record name
+        names.append(result["name"])
+
+    for package in packages:
+        if package.to_add_cmd() not in names:
+            table.add_row(
+                Text(package.to_add_cmd()),
+                Text("N/A", style="dim"),
+                Text("N/A", style="dim"),
+                Text("N/A", style="dim"),
+            )
 
     # Display the table in the terminal
     console.print(table)
