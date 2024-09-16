@@ -36,10 +36,10 @@ rich = ">=13.7.1,<14"
 toml = ">=0.10.2,<0.11"
 
 [feature.pytest.tasks]
-test-common-wheels = { cmd = "pytest -n logical tests/wheel_tests/", depends-on = [
+test-common-wheels-ci = { cmd = "pytest -n logical tests/wheel_tests/" }
+test-common-wheels-dev = { cmd = "pytest -n logical tests/wheel_tests/", depends-on = [
   "build",
 ] }
-test-common-wheels-ci = { cmd = "pytest -n logical tests/wheel_tests/" }
 test-integration-ci = "pytest -n logical tests/integration"
 test-integration-dev = { cmd = "pytest -n logical tests/integration", depends-on = [
   "build",
