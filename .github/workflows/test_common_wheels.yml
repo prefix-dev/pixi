@@ -56,17 +56,14 @@ jobs:
           Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
         shell: pwsh
       - name: Test common wheels
-        continue-on-error: true
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
         if: matrix.arch.name != 'Windows' && ${{ always() }}}
-        continue-on-error: true
         shell: bash
         run: |
           cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
       - name: Write .summary.md to GitHub Summary (Windows)
         if: matrix.arch.name == 'Windows' && ${{ always() }}
-        continue-on-error: true
         shell: pwsh
         run: |
           $resolvedPath = Resolve-Path $env:SUMMARY_FILE
