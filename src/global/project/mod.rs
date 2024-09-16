@@ -139,6 +139,11 @@ impl ExposedData {
         })
     }
 
+    /// Extracts the executable path from a script file.
+    ///
+    /// This function reads the content of the script file and attempts to extract
+    /// the path of the executable it references. It is used to determine
+    /// the actual binary path from a wrapper script.
     fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
         // Read the script file into a string
         let script_content = std::fs::read_to_string(script)
