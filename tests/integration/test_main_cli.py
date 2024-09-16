@@ -13,11 +13,6 @@ class ExitCode(IntEnum):
     INCORRECT_USAGE = 2
 
 
-@pytest.fixture
-def pixi() -> Path:
-    return Path(__file__).parent.joinpath("../../.pixi/target/release/pixi")
-
-
 def verify_cli_command(
     command: list[Path | str],
     expected_exit_code: ExitCode,

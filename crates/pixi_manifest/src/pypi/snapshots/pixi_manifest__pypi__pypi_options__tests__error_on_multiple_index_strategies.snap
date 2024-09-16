@@ -1,0 +1,5 @@
+---
+source: crates/pixi_manifest/src/pypi/pypi_options.rs
+expression: merged_opts.err().unwrap()
+---
+multiple index strategies are not supported, found both first-index and unsafe-best-match across multiple pypi options

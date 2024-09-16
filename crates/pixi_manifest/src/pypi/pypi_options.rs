@@ -3,9 +3,35 @@ use indexmap::IndexSet;
 use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{hash::Hash, iter};
+use std::{fmt::Display, hash::Hash, iter};
 use thiserror::Error;
 use url::Url;
+
+// taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
+/// The strategy to use when resolving against multiple index URLs.
+/// By default, uv will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents "dependency confusion" attacks, whereby an attack can upload a malicious package under the same name to a secondary.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndexStrategy {
+    #[default]
+    /// Only use results from the first index that returns a match for a given package name
+    FirstIndex,
+    /// Search for every package name across all indexes, exhausting the versions from the first index before moving on to the next
+    UnsafeFirstMatch,
+    /// Search for every package name across all indexes, preferring the "best" version found. If a package version is in multiple indexes, only look at the entry for the first index
+    UnsafeBestMatch,
+}
+
+impl Display for IndexStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            IndexStrategy::FirstIndex => "first-index",
+            IndexStrategy::UnsafeFirstMatch => "unsafe-first-match",
+            IndexStrategy::UnsafeBestMatch => "unsafe-best-match",
+        };
+        write!(f, "{}", s)
+    }
+}
 
 /// Specific options for a PyPI registries
 #[serde_as]
@@ -21,6 +47,8 @@ pub struct PypiOptions {
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
     /// Disable isolated builds
     pub no_build_isolation: Option<Vec<String>>,
+    /// The strategy to use when resolving against multiple index URLs.
+    pub index_strategy: Option<IndexStrategy>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -42,12 +70,14 @@ impl PypiOptions {
         extra_indexes: Option<Vec<Url>>,
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
         no_build_isolation: Option<Vec<String>>,
+        index_strategy: Option<IndexStrategy>,
     ) -> Self {
         Self {
             index_url: index,
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
             no_build_isolation,
+            index_strategy,
         }
     }
 
@@ -93,6 +123,20 @@ impl PypiOptions {
             self.index_url.clone()
         };
 
+        // Allow only one index strategy
+        let index_strategy = if let Some(other_index_strategy) = other.index_strategy.clone() {
+            if let Some(own_index_strategy) = &self.index_strategy {
+                return Err(PypiOptionsMergeError::MultipleIndexStrategies {
+                    first: own_index_strategy.to_string(),
+                    second: other_index_strategy.to_string(),
+                });
+            } else {
+                Some(other_index_strategy)
+            }
+        } else {
+            self.index_strategy.clone()
+        };
+
         // Chain together and deduplicate the extra indexes
         let extra_indexes = self
             .extra_index_urls
@@ -135,6 +179,7 @@ impl PypiOptions {
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
             no_build_isolation,
+            index_strategy,
         })
     }
 }
@@ -165,10 +210,16 @@ pub enum PypiOptionsMergeError {
         "multiple primary pypi indexes are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultiplePrimaryIndexes { first: String, second: String },
+    #[error(
+        "multiple index strategies are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultipleIndexStrategies { first: String, second: String },
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::pypi::pypi_options::IndexStrategy;
+
     use super::PypiOptions;
     use rattler_lock::FindLinksUrlOrPath;
     use url::Url;
@@ -196,7 +247,8 @@ mod tests {
                     FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                     FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
                 ]),
-                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()])
+                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
+                index_strategy: None,
             },
         );
     }
@@ -212,6 +264,7 @@ mod tests {
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap()),
             ]),
             no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
+            index_strategy: None,
         };
 
         // Create the second set of options
@@ -223,6 +276,7 @@ mod tests {
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index2").unwrap()),
             ]),
             no_build_isolation: Some(vec!["foo".to_string()]),
+            index_strategy: None,
         };
 
         // Merge the two options
@@ -239,6 +293,7 @@ mod tests {
             extra_index_urls: None,
             find_links: None,
             no_build_isolation: None,
+            index_strategy: None,
         };
 
         // Create the second set of options
@@ -247,10 +302,37 @@ mod tests {
             extra_index_urls: None,
             find_links: None,
             no_build_isolation: None,
+            index_strategy: None,
         };
 
         // Merge the two options
         // This should error because there are two primary indexes
+        let merged_opts = opts.union(&opts2);
+        insta::assert_snapshot!(merged_opts.err().unwrap());
+    }
+
+    #[test]
+    fn test_error_on_multiple_index_strategies() {
+        // Create the first set of options
+        let opts = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: None,
+            index_strategy: Some(IndexStrategy::FirstIndex),
+        };
+
+        // Create the second set of options
+        let opts2 = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: None,
+            index_strategy: Some(IndexStrategy::UnsafeBestMatch),
+        };
+
+        // Merge the two options
+        // This should error because there are two index strategies
         let merged_opts = opts.union(&opts2);
         insta::assert_snapshot!(merged_opts.err().unwrap());
     }

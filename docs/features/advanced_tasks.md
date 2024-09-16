@@ -260,7 +260,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - `echo hello > file.txt` will put `hello` in `file.txt` and overwrite existing text.
   - `python main.py 2> file.txt` will put the `stderr` output in `file.txt`.
   - `python main.py &> file.txt` will put the `stderr` **and** `stdout` in `file.txt`.
-  - `echo hello > file.txt` will append `hello` to the existing `file.txt`.
+  - `echo hello >> file.txt` will append `hello` to the existing `file.txt`.
 - **Glob expansion:** `*` to expand all options.
   - `echo *.py` will echo all filenames that end with `.py`
   - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
