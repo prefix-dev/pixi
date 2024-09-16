@@ -32,14 +32,14 @@ where
         let mut envs: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
         for data in value {
             let ExposedData {
-                env,
+                env_name,
                 platform,
                 channel,
                 package,
                 executable_name,
                 exposed,
             } = data;
-            let mut parsed_environment = envs.entry(env).or_default();
+            let mut parsed_environment = envs.entry(env_name).or_default();
             parsed_environment.channels.insert(channel);
             parsed_environment.platform = platform;
             parsed_environment

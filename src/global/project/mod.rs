@@ -71,7 +71,7 @@ impl Debug for Project {
 /// Intermediate struct to store all the binaries that are exposed.
 #[derive(Debug)]
 struct ExposedData {
-    env: EnvironmentName,
+    env_name: EnvironmentName,
     platform: Option<Platform>,
     channel: PrioritizedChannel,
     package: PackageName,
@@ -85,13 +85,13 @@ impl ExposedData {
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
-    pub async fn from_exposed_path(path: &Path) -> miette::Result<Self> {
+    pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
             .and_then(ExposedKey::from_str)?;
-        let executable_path = Self::extract_executable_from_script(path)?;
+        let executable_path = extract_executable_from_script(path)?;
 
         let executable = executable_path
             .file_stem()
@@ -113,7 +113,7 @@ impl ExposedData {
                     executable_path.display()
                 )
             })?;
-        let env = env_path
+        let env_name = env_path
             .file_name()
             .and_then(OsStr::to_str)
             .ok_or_else(|| {
@@ -126,11 +126,14 @@ impl ExposedData {
 
         let conda_meta = env_path.join("conda-meta");
 
+        let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(bin_env_dir.path());
+
         let (platform, channel, package) =
-            Self::package_from_conda_meta(&conda_meta, &executable).await?;
+            package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
 
         Ok(ExposedData {
-            env,
+            env_name,
             platform,
             channel,
             package,
@@ -138,102 +141,100 @@ impl ExposedData {
             exposed,
         })
     }
+}
 
-    /// Extracts the executable path from a script file.
-    ///
-    /// This function reads the content of the script file and attempts to extract
-    /// the path of the executable it references. It is used to determine
-    /// the actual binary path from a wrapper script.
-    fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
-        // Read the script file into a string
-        let script_content = std::fs::read_to_string(script)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not read {}", script.display()))?;
+/// Extracts the executable path from a script file.
+///
+/// This function reads the content of the script file and attempts to extract
+/// the path of the executable it references. It is used to determine
+/// the actual binary path from a wrapper script.
+fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
+    // Read the script file into a string
+    let script_content = std::fs::read_to_string(script)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not read {}", script.display()))?;
 
-        // Compile the regex pattern
-        #[cfg(unix)]
-        const PATTERN: &str = r#""([^"]+)" "\$@""#;
-        #[cfg(windows)]
-        const PATTERN: &str = r#"@"([^"]+)" %/*"#;
-        static RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+    // Compile the regex pattern
+    #[cfg(unix)]
+    const PATTERN: &str = r#""([^"]+)" "\$@""#;
+    #[cfg(windows)]
+    const PATTERN: &str = r#"@"([^"]+)" %/*"#;
+    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
-        // Apply the regex to the script content
-        if let Some(caps) = RE.captures(&script_content) {
-            if let Some(matched) = caps.get(1) {
-                return Ok(PathBuf::from(matched.as_str()));
-            }
+    // Apply the regex to the script content
+    if let Some(caps) = RE.captures(&script_content) {
+        if let Some(matched) = caps.get(1) {
+            return Ok(PathBuf::from(matched.as_str()));
         }
-
-        // Return an error if the executable path could not be extracted
-        miette::bail!(
-            "Failed to extract executable path from script {}",
-            script.display()
-        )
     }
 
-    /// Extracts package metadata from the `conda-meta` directory for a given executable.
-    ///
-    /// This function reads the `conda-meta` directory to find the package metadata
-    /// associated with the specified executable. It returns the platform, channel, and
-    /// package name of the executable.
-    async fn package_from_conda_meta(
-        conda_meta: &Path,
-        executable: &str,
-    ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-        // HACK: FIX ME
-        let prefix = Prefix::new(conda_meta.parent().unwrap());
-        let channel_config = default_channel_config();
+    // Return an error if the executable path could not be extracted
+    miette::bail!(
+        "Failed to extract executable path from script {}",
+        script.display()
+    )
+}
 
-        let read_dir = tokio::fs::read_dir(conda_meta)
-            .await
+/// Extracts package metadata from the `conda-meta` directory for a given executable.
+///
+/// This function reads the `conda-meta` directory to find the package metadata
+/// associated with the specified executable. It returns the platform, channel, and
+/// package name of the executable.
+async fn package_from_conda_meta(
+    conda_meta: &Path,
+    executable: &str,
+    prefix: &Prefix,
+) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+    let channel_config = default_channel_config();
+
+    let read_dir = tokio::fs::read_dir(conda_meta)
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?;
+    let mut entries = ReadDirStream::new(read_dir);
+
+    while let Some(entry) = entries.next().await {
+        let path = entry
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?;
-        let mut entries = ReadDirStream::new(read_dir);
-
-        while let Some(entry) = entries.next().await {
-            let path = entry
+            .wrap_err_with(|| {
+                format!("Couldn't read file from directory {}", conda_meta.display())
+            })?
+            .path();
+        // Check if the entry is a file and has a .json extension
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+            let content = std::fs::read_to_string(&path).into_diagnostic()?;
+            let prefix_record = PrefixRecord::from_path(&path)
                 .into_diagnostic()
-                .wrap_err_with(|| {
-                    format!("Couldn't read file from directory {}", conda_meta.display())
-                })?
-                .path();
-            // Check if the entry is a file and has a .json extension
-            if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
-                let content = std::fs::read_to_string(&path).into_diagnostic()?;
-                let prefix_record = PrefixRecord::from_path(&path)
-                    .into_diagnostic()
-                    .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
 
-                let binaries = find_executables(&prefix, &prefix_record);
-                let Some(found_executable) = binaries.iter().find(|exe_path| {
-                    exe_path.file_stem().and_then(OsStr::to_str) == Some(executable)
-                }) else {
-                    continue;
-                };
+            let binaries = find_executables(prefix, &prefix_record);
+            let Some(found_executable) = binaries
+                .iter()
+                .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(executable))
+            else {
+                continue;
+            };
 
-                let platform = match Platform::from_str(
-                    &prefix_record.repodata_record.package_record.subdir,
-                ) {
+            let platform =
+                match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
                     Ok(Platform::NoArch) => None,
                     Ok(platform) if platform == Platform::current() => None,
                     Err(_) => None,
                     Ok(p) => Some(p),
                 };
 
-                let channel: PrioritizedChannel =
-                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-                        .into_diagnostic()?
-                        .into();
+            let channel: PrioritizedChannel =
+                NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
+                    .into_diagnostic()?
+                    .into();
 
-                let name = prefix_record.repodata_record.package_record.name;
+            let name = prefix_record.repodata_record.package_record.name;
 
-                return Ok((platform, channel, name));
-            }
+            return Ok((platform, channel, name));
         }
-
-        miette::bail!("Could not find {executable} in {}", conda_meta.display())
     }
+
+    miette::bail!("Could not find {executable} in {}", conda_meta.display())
 }
 
 impl Project {
@@ -329,7 +330,7 @@ impl Project {
             })
             .map(|result| async move {
                 match result {
-                    Ok(p) => ExposedData::from_exposed_path(&p).await,
+                    Ok(path) => ExposedData::from_exposed_path(&path, env_root).await,
                     Err(e) => Err(e),
                 }
             });
