@@ -22,7 +22,6 @@ pub enum Command {
     #[clap(visible_alias = "ces")]
     CondaExplicitSpec(conda_explicit_spec::Args),
     /// Export project environment to a conda environment.yaml file
-    #[clap(visible_alias = "conda")]
     CondaEnvironment(conda_environment::Args),
 }
 

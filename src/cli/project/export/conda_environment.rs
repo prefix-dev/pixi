@@ -22,12 +22,13 @@ pub struct Args {
     /// Explicit path to export the environment to
     pub output_path: Option<PathBuf>,
 
-    /// Environment to render, defaults to the current environment
+    /// The platform to render the environment file for.    
+    /// Defaults to the current platform. 
     #[arg(short, long)]
     pub platform: Option<Platform>,
 
-    /// The environment to list packages for. Defaults to the default
-    /// environment.
+    /// The environment to render the environment file for. 
+    /// Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 }
