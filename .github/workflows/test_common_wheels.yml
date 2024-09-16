@@ -74,6 +74,6 @@ jobs:
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-tests-logs-${{ matrix.arch.name } }
+          name: wheel-tests-logs-${{ matrix.arch.name }}
           include-hidden-files: true
           path: ${{ env.LOGS_DIR }}
