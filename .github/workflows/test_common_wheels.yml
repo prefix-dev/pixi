@@ -58,12 +58,12 @@ jobs:
       - name: Test common wheels
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
-        if: matrix.arch.name != 'Windows' && ${{ always() }}}
+        if: ${{ matrix.arch.name != 'Windows' && always() }}
         shell: bash
         run: |
           cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
       - name: Write .summary.md to GitHub Summary (Windows)
-        if: matrix.arch.name == 'Windows' && ${{ always() }}
+        if: ${{ matrix.arch.name == 'Windows' && always() }}
         shell: pwsh
         run: |
           $resolvedPath = Resolve-Path $env:SUMMARY_FILE
