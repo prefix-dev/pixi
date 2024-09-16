@@ -55,7 +55,7 @@ def log_called_process_error(name: str, err: subprocess.CalledProcessError, std_
     std_err_log = LOG_DIR / f"{name}.stderr"
     if err.returncode != 0:
         if not std_err_only:
-            with std_out_log.open("w") as f:
+            with std_out_log.open("w", encoding="utf-8") as f:
                 f.write(err.stdout.decode("uft-8"))
-        with std_err_log.open("w") as f:
+        with std_err_log.open("w", encoding="utf-8") as f:
             f.write(err.stderr.decode("utf-8"))
