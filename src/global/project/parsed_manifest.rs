@@ -109,11 +109,7 @@ pub(crate) struct ParsedEnvironment {
     channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
     platform: Option<Platform>,
-    #[serde(
-        default,
-        deserialize_with = "pixi_manifest::deserialize_package_map",
-        serialize_with = "pixi_manifest::serialize_package_map"
-    )]
+    #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
     pub(crate) exposed: IndexMap<ExposedKey, String>,
 }

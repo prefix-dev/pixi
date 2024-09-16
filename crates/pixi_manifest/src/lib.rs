@@ -26,7 +26,7 @@ pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use manifests::manifest::{Manifest, ManifestKind};
 
 pub use crate::environments::Environments;
-pub use crate::parsed_manifest::{deserialize_package_map, serialize_package_map, ParsedManifest};
+pub use crate::parsed_manifest::{deserialize_package_map, ParsedManifest};
 pub use crate::solve_group::{SolveGroup, SolveGroups};
 pub use activation::Activation;
 pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
