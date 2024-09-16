@@ -22,6 +22,7 @@ use rattler_digest::digest::typenum::Exp;
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
+use tokio_stream::{wrappers::ReadDirStream, StreamExt};
 use url::Url;
 
 use super::{find_executables, BinDir, EnvRoot};
@@ -79,7 +80,7 @@ struct ExposedData {
 }
 
 impl ExposedData {
-    pub(self) fn from_binary_path(path: &Path) -> miette::Result<Self> {
+    pub(self) async fn from_binary_path(path: &Path) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
@@ -117,7 +118,8 @@ impl ExposedData {
 
         let conda_meta = env_path.join("conda-meta");
 
-        let (platform, channel, package) = Self::package_from_conda_meta(&conda_meta, &binary)?;
+        let (platform, channel, package) =
+            Self::package_from_conda_meta(&conda_meta, &binary).await?;
 
         Ok(ExposedData {
             env,
@@ -157,7 +159,7 @@ impl ExposedData {
         )
     }
 
-    fn package_from_conda_meta(
+    async fn package_from_conda_meta(
         conda_meta: &Path,
         binary: &str,
     ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
@@ -165,10 +167,13 @@ impl ExposedData {
         let prefix = Prefix::new(conda_meta.parent().unwrap());
         let channel_config = default_channel_config();
 
-        for entry in std::fs::read_dir(conda_meta)
+        let read_dir = tokio::fs::read_dir(conda_meta)
+            .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?
-        {
+            .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?;
+        let mut entries = ReadDirStream::new(read_dir);
+
+        while let Some(entry) = entries.next().await {
             let path = entry
                 .into_diagnostic()
                 .wrap_err_with(|| {
@@ -296,7 +301,7 @@ impl Project {
         bin_dir: &BinDir,
         env_root: &EnvRoot,
     ) -> miette::Result<Self> {
-        let exposed_binaries: Vec<ExposedData> = bin_dir
+        let futures = bin_dir
             .files()
             .await?
             .into_iter()
@@ -305,8 +310,14 @@ impl Project {
                 Ok(false) => None,          // Success and isn't text, filter out
                 Err(e) => Some(Err(e)),     // Failure, continue with error
             })
-            .map(|result| result.and_then(|p| ExposedData::from_binary_path(&p)))
-            .collect::<miette::Result<_>>()?;
+            .map(|result| async move {
+                match result {
+                    Ok(p) => ExposedData::from_binary_path(&p).await,
+                    Err(e) => Err(e),
+                }
+            });
+
+        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await?;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
