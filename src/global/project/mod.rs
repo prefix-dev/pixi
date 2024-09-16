@@ -80,29 +80,37 @@ struct ExposedData {
 }
 
 impl ExposedData {
-    pub async fn from_binary_path(path: &Path) -> miette::Result<Self> {
+    /// Constructs an `ExposedData` instance from a exposed script path.
+    ///
+    /// This function extracts metadata from the exposed script path, including the
+    /// environment name, platform, channel, and package information, by reading
+    /// the associated `conda-meta` directory.
+    pub async fn from_exposed_path(path: &Path) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
             .and_then(ExposedKey::from_str)?;
-        let binary_path = Self::extract_bin_from_script(path)?;
+        let executable_path = Self::extract_executable_from_script(path)?;
 
-        let binary = binary_path
+        let executable = executable_path
             .file_stem()
             .and_then(OsStr::to_str)
             .map(String::from)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
-        let env_path = binary_path
+        let env_path = executable_path
             .parent()
             .ok_or_else(|| {
-                miette::miette!("binary_path '{}' has no parent", binary_path.display())
+                miette::miette!(
+                    "executable path '{}' has no parent",
+                    executable_path.display()
+                )
             })?
             .parent()
             .ok_or_else(|| {
                 miette::miette!(
-                    "binary_path's parent '{}' has no parent",
-                    binary_path.display()
+                    "executable path's parent '{}' has no parent",
+                    executable_path.display()
                 )
             })?;
         let env = env_path
@@ -110,8 +118,8 @@ impl ExposedData {
             .and_then(OsStr::to_str)
             .ok_or_else(|| {
                 miette::miette!(
-                    "binary_path's grandparent '{}' has no file name",
-                    binary_path.display()
+                    "executable path's grandparent '{}' has no file name",
+                    executable_path.display()
                 )
             })
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
@@ -119,19 +127,19 @@ impl ExposedData {
         let conda_meta = env_path.join("conda-meta");
 
         let (platform, channel, package) =
-            Self::package_from_conda_meta(&conda_meta, &binary).await?;
+            Self::package_from_conda_meta(&conda_meta, &executable).await?;
 
         Ok(ExposedData {
             env,
             platform,
             channel,
             package,
-            executable_name: binary,
+            executable_name: executable,
             exposed,
         })
     }
 
-    fn extract_bin_from_script(script: &Path) -> miette::Result<PathBuf> {
+    fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
         // Read the script file into a string
         let script_content = std::fs::read_to_string(script)
             .into_diagnostic()
@@ -152,16 +160,21 @@ impl ExposedData {
             }
         }
 
-        // Return an error if the binary path could not be extracted
+        // Return an error if the executable path could not be extracted
         miette::bail!(
-            "Failed to extract binary path from script {}",
+            "Failed to extract executable path from script {}",
             script.display()
         )
     }
 
+    /// Extracts package metadata from the `conda-meta` directory for a given executable.
+    ///
+    /// This function reads the `conda-meta` directory to find the package metadata
+    /// associated with the specified executable. It returns the platform, channel, and
+    /// package name of the executable.
     async fn package_from_conda_meta(
         conda_meta: &Path,
-        binary: &str,
+        executable: &str,
     ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
         // HACK: FIX ME
         let prefix = Prefix::new(conda_meta.parent().unwrap());
@@ -188,10 +201,9 @@ impl ExposedData {
                     .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
 
                 let binaries = find_executables(&prefix, &prefix_record);
-                let Some(found_binary) = binaries
-                    .iter()
-                    .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(binary))
-                else {
+                let Some(found_executable) = binaries.iter().find(|exe_path| {
+                    exe_path.file_stem().and_then(OsStr::to_str) == Some(executable)
+                }) else {
                     continue;
                 };
 
@@ -215,7 +227,7 @@ impl ExposedData {
             }
         }
 
-        miette::bail!("Could not find {binary} in {}", conda_meta.display())
+        miette::bail!("Could not find {executable} in {}", conda_meta.display())
     }
 }
 
@@ -312,7 +324,7 @@ impl Project {
             })
             .map(|result| async move {
                 match result {
-                    Ok(p) => ExposedData::from_binary_path(&p).await,
+                    Ok(p) => ExposedData::from_exposed_path(&p).await,
                     Err(e) => Err(e),
                 }
             });

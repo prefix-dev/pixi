@@ -203,7 +203,7 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 }
 
 /// For each executable provided, map it to the installation path for its global
-/// binary script.
+/// executable script.
 async fn map_executables_to_global_bin_scripts(
     package_executables: impl IntoIterator<Item = PathBuf>,
     bin_dir: &BinDir,
@@ -340,12 +340,12 @@ async fn create_executable_scripts(
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => eprintln!(
-                "{}Added binary '{}'.",
+                "{}Added executable '{}'.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 executable_name
             ),
             AddedOrChanged::Changed => eprintln!(
-                "{}Updated binary '{}'.",
+                "{}Updated executable '{}'.",
                 console::style(console::Emoji("~ ", "")).yellow(),
                 executable_name
             ),
@@ -427,7 +427,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
             eprintln!(
-                "{}Remove binary '{file_name}'.",
+                "{}Remove executable '{file_name}'.",
                 console::style(console::Emoji("✔ ", "")).green()
             );
         }

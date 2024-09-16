@@ -44,7 +44,7 @@ impl BinDir {
         Ok(Self(bin_dir))
     }
 
-    /// Asynchronously retrieves all files in the Binary Executable directory.
+    /// Asynchronously retrieves all files in the binary executable directory.
     ///
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the

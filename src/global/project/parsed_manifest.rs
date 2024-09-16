@@ -36,7 +36,7 @@ where
                 platform,
                 channel,
                 package,
-                executable_name: binary,
+                executable_name,
                 exposed,
             } = data;
             let mut parsed_environment = envs.entry(env).or_default();
@@ -45,7 +45,7 @@ where
             parsed_environment
                 .dependencies
                 .insert(package, PixiSpec::default());
-            parsed_environment.exposed.insert(exposed, binary);
+            parsed_environment.exposed.insert(exposed, executable_name);
         }
 
         Self { envs }
