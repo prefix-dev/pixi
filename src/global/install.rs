@@ -94,7 +94,7 @@ pub(crate) async fn expose_executables(
     // Construct the reusable activation script for the shell and generate an
     // invocation script for each executable added by the package to the
     // environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
+    let activation_script = create_activation_script(prefix, shell.clone())?;
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
@@ -109,7 +109,7 @@ pub(crate) async fn expose_executables(
     let executables: Vec<(String, PathBuf)> = prefix_records
         .into_iter()
         .filter(|record| packages.contains(&record.repodata_record.package_record.name))
-        .flat_map(|record| global::find_executables(&prefix, &record))
+        .flat_map(|record| global::find_executables(prefix, &record))
         .filter_map(|path| {
             path.file_stem()
                 .and_then(OsStr::to_str)
@@ -132,7 +132,7 @@ pub(crate) async fn expose_executables(
         })
         .collect::<miette::Result<Vec<_>>>()?;
 
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
+    create_executable_scripts(&script_mapping, prefix, &shell, activation_script).await
 }
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.

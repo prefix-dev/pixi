@@ -31,7 +31,7 @@ use super::{EnvironmentName, ExposedKey};
 pub struct BinDir(PathBuf);
 
 impl BinDir {
-    /// Create the Binary Executable directory
+    /// Create the binary executable directory from environment variables
     pub async fn from_env() -> miette::Result<Self> {
         let bin_dir = home_path()
             .map(|path| path.join("bin"))
@@ -127,16 +127,25 @@ impl BinDir {
 pub struct EnvRoot(PathBuf);
 
 impl EnvRoot {
-    pub async fn new(path: PathBuf) -> miette::Result<Self> {
-        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+    /// Create the environment root directory
+    #[cfg(test)]
+    pub(self) async fn new(path: PathBuf) -> miette::Result<Self> {
+        tokio::fs::create_dir_all(&path)
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
-    pub async fn from_env() -> miette::Result<Self> {
+    /// Create the environment root directory from environment variables
+    pub(crate) async fn from_env() -> miette::Result<Self> {
         let path = home_path()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Could not get home path"))?;
-        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        tokio::fs::create_dir_all(&path)
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
@@ -214,7 +223,7 @@ impl EnvDir {
     }
 
     /// Initialize the binary environment directory from an existing path
-    pub(crate) async fn from_existing(
+    pub(crate) fn from_existing(
         root: EnvRoot,
         environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
