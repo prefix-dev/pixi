@@ -59,6 +59,7 @@ jobs:
         continue-on-error: true
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
       - name: Write .summary.md to Github Summary
+        if: matrix.arch.name != 'Windows'
         continue-on-error: true
         shell: bash
         run: |
@@ -74,4 +75,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
+          include-hidden-files: true
           path: ${{ env.LOGS_DIR }}
