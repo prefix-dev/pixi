@@ -82,6 +82,7 @@ def pixi(pytestconfig):
         pytest.exit("PROJECT_ROOT environment variable is not set, run from pixi task")
 
     # Check if the target directory exists
+    # This assertion is for the type checker
     assert project_root
     project_root = pathlib.Path(project_root)
     target_dir = project_root.joinpath(".pixi/target/release")

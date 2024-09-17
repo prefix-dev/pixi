@@ -1,10 +1,10 @@
 from pathlib import Path
-from multiprocessing import Lock
 import toml
 from filelock import FileLock
 
-lock = Lock()
+# Path to the results file, containing test outcomes
 RESULTS_FILE = Path(__file__).parent / ".wheel_test_results.toml"
+# Lock file to ensure process-safe write access to the results file
 LOCK_FILE = RESULTS_FILE.with_suffix(".lock")
 
 

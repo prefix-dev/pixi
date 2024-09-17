@@ -7,6 +7,7 @@ def pytest_configure(config):
 
 
 def pytest_addoption(parser):
+    # Used to override the default path to the pixi executable
     parser.addoption("--pixi-exec", action="store", help="Path to the pixi executable")
 
 

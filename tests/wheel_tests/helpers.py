@@ -5,6 +5,7 @@ from typing import Any
 import toml
 
 StrPath = str | os.PathLike[str]
+LOG_DIR = pathlib.Path(__file__).parent / ".logs"
 
 
 def run(args: list[StrPath], cwd: StrPath | None = None) -> None:
@@ -23,16 +24,13 @@ def add_system_requirements(manifest_path: pathlib.Path, system_requirements: di
     add something like this:
         [system-requirements]
         libc = { family = "glibc", version = "2.17" }
-    to the manifest file
+    to the manifest file.
     """
     with manifest_path.open("r") as f:
         manifest = toml.load(f)
     manifest["system-requirements"] = system_requirements
     with manifest_path.open("w") as f:
         toml.dump(manifest, f)
-
-
-LOG_DIR = pathlib.Path(__file__).parent / ".logs"
 
 
 def setup_stdout_stderr_logging():
@@ -48,9 +46,11 @@ def setup_stdout_stderr_logging():
 def log_called_process_error(name: str, err: subprocess.CalledProcessError, std_err_only=False):
     """
     Log the output of a subprocess that failed
+    has the option to log only the stderr
     """
     if not LOG_DIR.exists():
         raise RuntimeError("Call setup_stdout_stderr_logging before logging")
+
     std_out_log = LOG_DIR / f"{name}.stdout"
     std_err_log = LOG_DIR / f"{name}.stderr"
     if err.returncode != 0:

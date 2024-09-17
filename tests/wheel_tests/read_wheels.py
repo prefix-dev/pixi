@@ -17,6 +17,9 @@ class PackageSpec:
     system_requirements: dict[str, Any] | None = None
 
     def target_iter(self) -> Iterable[str]:
+        """
+        Returns an iterable of the target platforms
+        """
         if isinstance(self.target, str):
             return [self.target]
         elif isinstance(self.target, list):
@@ -50,10 +53,16 @@ class Package:
     on how to install it.
     """
 
+    # Name of the package
     name: str
+    # Specification of the package
     spec: PackageSpec
 
     def to_add_cmd(self) -> str:
+        """
+        Converts the package to a command that can be consumed with the
+        `pixi add` command.
+        """
         cmd = f"{self.name}"
         if self.spec.extras:
             cmd = f"{cmd}[{self.spec.extras}]"
@@ -68,9 +77,13 @@ class WheelTest:
     A class to represent the `wheels.toml` file
     """
 
+    # Mapping of wheel names to installation specifications
     name: dict[str, list[PackageSpec] | PackageSpec]
 
     def to_packages(self) -> Iterable[Package]:
+        """
+        Converts to a list of installable packages
+        """
         for name, specs in self.name.items():
             if isinstance(specs, PackageSpec):
                 yield Package(name, specs)
