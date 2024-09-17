@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt::Display,
+    fmt::{Display, Formatter},
     ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
@@ -24,7 +24,8 @@ use rattler_conda_types::{
     ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
-    ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+    ConversionError, Package, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
+    UrlOrPath,
 };
 use thiserror::Error;
 use url::Url;
@@ -72,6 +73,47 @@ impl Display for IndexesMismatch {
 pub struct EditablePackagesMismatch {
     pub expected_editable: Vec<PackageName>,
     pub unexpected_editable: Vec<PackageName>,
+}
+
+#[derive(Debug, Error)]
+pub struct SourceTreeHashMismatch {
+    pub computed: PackageHashes,
+    pub locked: Option<PackageHashes>,
+}
+
+impl Display for SourceTreeHashMismatch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let computed_hash = self
+            .computed
+            .sha256()
+            .map(|hash| format!("{:x}", hash))
+            .or(self.computed.md5().map(|hash| format!("{:x}", hash)));
+        let locked_hash = self.locked.as_ref().and_then(|hash| {
+            hash.sha256()
+                .map(|hash| format!("{:x}", hash))
+                .or(hash.md5().map(|hash| format!("{:x}", hash)))
+        });
+
+        match (computed_hash, locked_hash) {
+            (None, None) => write!(f, "could not compute a source tree hash"),
+            (Some(computed), None) => {
+                write!(f,
+                "the computed source tree hash is '{}', but the lock-file does not contain a hash",
+                computed
+            )
+            }
+            (Some(computed), Some(locked)) => write!(
+                f,
+                "the computed source tree hash is '{}', but the lock-file contains '{}'",
+                computed, locked
+            ),
+            (None, Some(locked)) => write!(
+                f,
+                "could not compute a source tree hash, but the lock-file contains '{}'",
+                locked
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -142,7 +184,7 @@ pub enum PlatformUnsat {
     FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
 
     #[error("source tree hash for {0} does not match the hash in the lock-file")]
-    SourceTreeHashMismatch(PackageName),
+    SourceTreeHashMismatch(PackageName, #[source] SourceTreeHashMismatch),
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
@@ -163,7 +205,7 @@ impl PlatformUnsat {
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
                 | PlatformUnsat::EditablePackageMismatch(_)
-                | PlatformUnsat::SourceTreeHashMismatch(_),
+                | PlatformUnsat::SourceTreeHashMismatch(..),
         )
     }
 }
@@ -790,9 +832,13 @@ pub(crate) fn verify_package_platform_satisfiability(
                                         )
                                     })?
                                     .hash();
-                            if Some(hashable) != record.0.hash {
+                            if Some(&hashable) != record.0.hash.as_ref() {
                                 return Err(PlatformUnsat::SourceTreeHashMismatch(
                                     record.0.name.clone(),
+                                    SourceTreeHashMismatch {
+                                        computed: hashable,
+                                        locked: record.0.hash.clone(),
+                                    },
                                 ));
                             }
                         }

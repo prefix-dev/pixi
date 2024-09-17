@@ -14,7 +14,7 @@ pub enum PinnedSourceSpec {
     Path(PinnedPathSpec),
 }
 
-/// A pinned version of a [`pixi_spec::UrlSourceSpec`].
+/// A pinned url archive.
 #[derive(Debug, Clone)]
 pub struct PinnedUrlSpec {
     pub url: Url,
@@ -28,7 +28,7 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
     }
 }
 
-/// A pinned version of a [`pixi_spec::GitSpec`].
+/// A pinned version of a git checkout.
 #[derive(Debug, Clone)]
 pub struct PinnedGitSpec {
     pub git: Url,
@@ -55,7 +55,7 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
     }
 }
 
-/// A pinned version of a [`pixi_spec::PathSourceSpec`].
+/// A pinned version of a path based source dependency.
 #[derive(Debug, Clone)]
 pub struct PinnedPathSpec {
     pub path: Utf8TypedPathBuf,

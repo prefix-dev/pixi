@@ -966,7 +966,7 @@ mod tests {
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
             version: Version::from_str("2.3.0+cu121").unwrap(),
-            url_or_path: UrlOrPath::Url(url),
+            location: UrlOrPath::Url(url),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
