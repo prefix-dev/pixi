@@ -263,6 +263,6 @@ mod test {
         )
         .unwrap();
         let rendered_recipe = extract_rendered_recipes(&rendered_recipe).unwrap();
-        insta::assert_yaml_snapshot!(&rendered_recipe);
+        insta::assert_yaml_snapshot!(path, &rendered_recipe);
     }
 }

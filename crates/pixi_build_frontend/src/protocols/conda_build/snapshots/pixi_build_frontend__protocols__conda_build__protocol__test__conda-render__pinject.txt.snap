@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_build_frontend/src/conda_build.rs
+source: crates/pixi_build_frontend/src/protocols/conda_build/protocol.rs
 expression: "&rendered_recipe"
 ---
 - - hash_content: "{}"
