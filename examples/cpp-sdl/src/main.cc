@@ -1,7 +1,20 @@
 #include <iostream>
 #include <SDL.h>
+#ifdef _WIN32
+#    include <windows.h>
+#endif
 
 int main( int argc, char* args[] ) {
+#ifdef _WIN32
+    // Attach to the parent console if running from a console
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        // Redirect stdout to the console
+        FILE* fp;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+    }
+#endif
+
+    std::cout << "Starting..." << std::endl;
 
     // Initialize SDL
     if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
@@ -77,6 +90,13 @@ int main( int argc, char* args[] ) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    std::cout << "End." << std::endl;
+
+#ifdef _WIN32
+    // Detach from the console
+    FreeConsole();
+#endif
 
     return 0;
 }
