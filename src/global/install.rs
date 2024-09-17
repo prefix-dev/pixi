@@ -4,6 +4,7 @@ use std::{
     ffi::OsStr,
     iter,
     path::{Path, PathBuf},
+    str::FromStr,
     time,
 };
 
@@ -34,9 +35,8 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 use crate::{
-    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
-    global,
-    global::{channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
+    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs, project::platform},
+    global::{self, channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
     task::ExecutableTask,
@@ -58,11 +58,15 @@ pub(crate) async fn install_environment(
         .map(|channel| channel.clone().into_channel(config.global_channel_config()))
         .collect_vec();
 
+    let platform = parsed_environment
+        .platform()
+        .unwrap_or_else(Platform::current);
+
     let repodata = await_in_progress("querying repodata ", |_| async {
         gateway
             .query(
                 channels,
-                [parsed_environment.platform(), Platform::NoArch],
+                [platform, Platform::NoArch],
                 specs.values().cloned().collect_vec(),
             )
             .recursive(true)
@@ -107,7 +111,7 @@ pub(crate) async fn install_environment(
             .with_io_concurrency_limit(100)
             .with_execute_link_scripts(false)
             .with_package_cache(package_cache)
-            .with_target_platform(parsed_environment.platform())
+            .with_target_platform(platform)
             .with_reporter(
                 IndicatifReporter::builder()
                     .with_multi_progress(global_multi_progress())
@@ -480,8 +484,8 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         }
     }
 
-    for (env_name, environment) in project.environments() {
-        let specs = environment
+    for (env_name, parsed_environment) in project.environments() {
+        let specs = parsed_environment
             .dependencies
             .clone()
             .into_iter()
@@ -504,11 +508,11 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
 
         let prefix_records = prefix.find_installed_packages(Some(50)).await?;
 
-        if !specs_match_local_environment(&specs, prefix_records) {
+        if !specs_match_local_environment(&specs, prefix_records, parsed_environment.platform()) {
             install_environment(
                 &specs,
                 &env_name,
-                &environment,
+                &parsed_environment,
                 auth_client.clone(),
                 &prefix,
                 config,
@@ -519,7 +523,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
 
         expose_executables(
             &env_name,
-            &environment,
+            &parsed_environment,
             specs.keys().cloned().collect(),
             &prefix,
             &bin_dir,
@@ -538,6 +542,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
 fn specs_match_local_environment(
     specs: &IndexMap<PackageName, MatchSpec>,
     prefix_records: Vec<PrefixRecord>,
+    platform: Option<Platform>,
 ) -> bool {
     let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
         let Some(prefix_record) = prefix_records
@@ -549,6 +554,28 @@ fn specs_match_local_environment(
 
         spec.matches(&prefix_record.repodata_record)
     });
+
+    if !specs_in_manifest_are_present {
+        return false;
+    }
+
+    let platform_specs_match_env = prefix_records.iter().all(|record| {
+        let Ok(package_platform) =
+            Platform::from_str(&record.repodata_record.package_record.subdir)
+        else {
+            return true;
+        };
+
+        match package_platform {
+            Platform::NoArch => true,
+            p if Some(p) == platform => true,
+            _ => false,
+        }
+    });
+
+    if !platform_specs_match_env {
+        return false;
+    }
 
     fn prune_dependencies(
         remaining_prefix_records: Vec<PrefixRecord>,
@@ -591,7 +618,5 @@ fn specs_match_local_environment(
 
     // If there are no remaining prefix records, then this means that
     // the environment doesn't contain records that don't match the manifest
-    let env_doesnt_contain_records_not_in_the_manifest = remaining_prefix_records.is_empty();
-
-    specs_in_manifest_are_present && env_doesnt_contain_records_not_in_the_manifest
+    remaining_prefix_records.is_empty()
 }

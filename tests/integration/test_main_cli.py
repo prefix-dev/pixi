@@ -295,6 +295,35 @@ def test_global_sync_channels(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([python_injected, "-c", "import bionumpy"], ExitCode.SUCCESS, env=env)
 
 
+def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = """
+    [envs.test]
+    channels = ["conda-forge"]
+    platform = "linux-64"
+    [envs.test.dependencies]
+    binutils = "2.40"
+    [envs.test.exposed]
+    """
+    parsed_toml = tomllib.loads(toml)
+    manifest.write_text(toml)
+    # Exists on linux-64
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+
+    # Also exists on win-64
+    parsed_toml["envs"]["test"]["platform"] = "win-64"
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+
+    # Does not exist on osx-64
+    parsed_toml["envs"]["test"]["platform"] = "osx-64"
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env)
+
+
 def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")

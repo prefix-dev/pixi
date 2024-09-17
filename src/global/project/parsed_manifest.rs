@@ -116,12 +116,8 @@ pub(crate) struct ParsedEnvironment {
 
 impl ParsedEnvironment {
     // If `self.platform` is `None` is not given, the current platform is used
-    pub(crate) fn platform(&self) -> Platform {
-        if let Some(platform) = self.platform {
-            platform
-        } else {
-            Platform::current()
-        }
+    pub(crate) fn platform(&self) -> Option<Platform> {
+        self.platform
     }
 
     /// Returns the channels associated with this collection.
