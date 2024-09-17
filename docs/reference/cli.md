@@ -1183,8 +1183,8 @@ pixi project environment list
 Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
 
 ```shell
-pixi project export conda_environment <environment.yml>
-mamba create --name <env> --file <environment.yml>
+pixi project export conda-environment environment.yml
+mamba create --name <env> --file environment.yml
 ```
 
 ##### Arguments
@@ -1197,8 +1197,8 @@ mamba create --name <env> --file <environment.yml>
 - `--platform <PLATFORM> (-p)`: The platform to render.
 
 ```sh
-pixi project export conda_environment --environment lint
-pixi project export conda --platform linux-64 environment.linux-64.yml
+pixi project export conda-environment --environment lint
+pixi project export conda-environment --platform linux-64 environment.linux-64.yml
 ```
 
 ### `project export conda_explicit_spec`
