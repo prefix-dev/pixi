@@ -417,3 +417,9 @@ jobs:
     needs:
       - build
     uses: ./.github/workflows/test_downstream.yml
+
+  test_common_wheels:
+    name: "Test installation of common wheels"
+    needs:
+      - build
+    uses: ./.github/workflows/test_common_wheels.yml

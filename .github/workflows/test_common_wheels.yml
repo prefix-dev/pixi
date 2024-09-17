@@ -1,0 +1,77 @@
+name: "Test common wheel files for installation with pixi"
+
+on:
+  workflow_call:
+
+jobs:
+  test_common_wheels:
+    name: ${{ matrix.arch.name }} - Test Installation of Common Wheels
+    runs-on: ${{ matrix.arch.os }}
+    env:
+      TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
+      LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
+      SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
+      PYTHONIOENCODING: utf-8
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          # Linux
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: 8core_ubuntu_latest_runner,
+              name: "Linux",
+            }
+          # MacOS
+          - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+          - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-Arm" } # macOS-14 is the ARM chipset
+          # Windows
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              extension: .exe,
+              name: "Windows",
+            }
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download binary from build
+        uses: actions/download-artifact@v4
+        with:
+          name: pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}
+          path: pixi_bin
+      - name: Debug
+        run: |
+          pwd
+      - name: Create Directory and Move Executable to TARGET_RELEASE
+        if: matrix.arch.name != 'Windows'
+        run: |
+          mkdir -p ${{ env.TARGET_RELEASE }}
+          mv pixi_bin/pixi-${{ matrix.arch.target }} ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+      - name: Create Directory and Move Executable to TARGET_RELEASE
+        if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ env.TARGET_RELEASE }}"
+          Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
+        shell: pwsh
+      - name: Test common wheels
+        run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-common-wheels-ci
+      - name: Write .summary.md to Github Summary
+        if: ${{ matrix.arch.name != 'Windows' && always() }}
+        shell: bash
+        run: |
+          cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
+      - name: Write .summary.md to GitHub Summary (Windows)
+        if: ${{ matrix.arch.name == 'Windows' && always() }}
+        shell: pwsh
+        run: |
+          $resolvedPath = Resolve-Path $env:SUMMARY_FILE
+          Get-Content $resolvedPath | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+      - name: Upload Logs
+        uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: wheel-tests-logs-${{ matrix.arch.name }}
+          include-hidden-files: true
+          path: ${{ env.LOGS_DIR }}
