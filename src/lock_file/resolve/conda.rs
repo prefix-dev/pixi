@@ -93,10 +93,10 @@ fn unique_url(checkout: &SourceCheckout, source: &SourceRecord) -> Url {
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
-        .append_pair("name", &source.package_record.name.as_source().to_string())
-        .append_pair("version", &source.package_record.version.to_string())
-        .append_pair("build", &source.package_record.build.to_string())
-        .append_pair("subdir", &source.package_record.subdir.to_string());
+        .append_pair("name", source.package_record.name.as_source())
+        .append_pair("version", &source.package_record.version.as_str())
+        .append_pair("build", &source.package_record.build)
+        .append_pair("subdir", &source.package_record.subdir);
 
     url
 }

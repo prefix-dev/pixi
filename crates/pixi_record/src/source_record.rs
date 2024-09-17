@@ -1,6 +1,7 @@
-use crate::{ParseLockFileError, PinnedSourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_lock::CondaPackageData;
+
+use crate::{ParseLockFileError, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone)]
@@ -41,7 +42,7 @@ impl Matches<SourceRecord> for NamelessMatchSpec {
             return false;
         }
 
-        if let Some(_) = &self.channel {
+        if self.channel.is_some() {
             // We don't have a channel in a source record. So if a matchspec requires that
             // information it can't match.
             return false;
@@ -57,7 +58,7 @@ impl Matches<SourceRecord> for MatchSpec {
             return false;
         }
 
-        if let Some(_) = &self.channel {
+        if self.channel.is_some() {
             // We don't have a channel in a source record. So if a matchspec requires that
             // information it can't match.
             return false;

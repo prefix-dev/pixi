@@ -20,7 +20,6 @@ use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::PixiRecord;
-use pypi_mapping;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
@@ -263,7 +262,6 @@ impl<'p> LockFileDerivedData<'p> {
         let records = self.pixi_records(environment, platform).unwrap_or_default();
         let channel_urls = environment
             .channel_urls(&self.project.channel_config())
-            .into_iter()
             .collect_vec();
 
         // Update the prefix with conda packages.
@@ -746,7 +744,6 @@ impl<'p> UpdateContextBuilder<'p> {
                             env.clone(),
                             locked_env
                                 .pypi_packages()
-                                .into_iter()
                                 .map(|(platform, records)| {
                                     (
                                         platform,
@@ -1493,6 +1490,7 @@ enum TaskResult {
 }
 
 /// A task that solves the conda dependencies for a given environment.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
     existing_repodata_records: Arc<PixiRecordsByName>,

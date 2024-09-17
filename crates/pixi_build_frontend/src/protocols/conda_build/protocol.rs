@@ -157,7 +157,7 @@ fn convert_conda_render_output(
     Ok(CondaPackageMetadata {
         build: recipe.hash(),
         name: recipe.recipe.package.name,
-        version: recipe.recipe.package.version.into(),
+        version: recipe.recipe.package.version,
         build_number: recipe.recipe.build.number.unwrap_or(0),
         subdir: if recipe.recipe.build.noarch.is_none() {
             Platform::current()

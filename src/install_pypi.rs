@@ -607,7 +607,7 @@ pub async fn update_python_distributions(
     let tags = get_pypi_tags(
         platform,
         system_requirements,
-        &python_record.package_record(),
+        python_record.package_record(),
     )?;
 
     let index_locations = pypi_indexes

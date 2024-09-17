@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_build_frontend::{BackendOverrides, BuildFrontend, SetupRequest};
+use pixi_build_types::channel_configuration::ChannelConfiguration;
 use pixi_build_types::procedures::conda_metadata::CondaMetadataParams;
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use pixi_build_types::channel_configuration::ChannelConfiguration;
 
 /// CLI options for the build frontend. These are used to override values from
 /// a manifest to specify the build tool to use.

@@ -1,4 +1,4 @@
-use std::path::{Path};
+use std::path::Path;
 
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};

@@ -13,7 +13,7 @@ use pixi_build_types::{
     ChannelConfiguration,
 };
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, SourceRecord};
-use pixi_spec::{SourceSpec};
+use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -107,7 +107,7 @@ impl BuildContext {
                 },
             })
             .await
-            .map_err(|e| BuildError::BuildFrontendSetup(e))?;
+            .map_err(BuildError::BuildFrontendSetup)?;
 
         // Extract the conda metadata for the package.
         let build_result = protocol
@@ -244,7 +244,7 @@ impl BuildContext {
                 },
             })
             .await
-            .map_err(|e| BuildError::BuildFrontendSetup(e))?;
+            .map_err(BuildError::BuildFrontendSetup)?;
 
         // Extract the conda metadata for the package.
         let metadata = protocol

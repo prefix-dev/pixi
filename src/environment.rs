@@ -519,7 +519,8 @@ pub async fn update_prefix_conda(
             .with_context(|| {
                 format!(
                     "failed to build a conda package for {} {}",
-                    &source_record.package_record.name.as_source(), &source_record.package_record.version
+                    &source_record.package_record.name.as_source(),
+                    &source_record.package_record.version
                 )
             })?;
         repodata_records.push(built_source_record);

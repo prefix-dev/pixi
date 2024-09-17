@@ -8,11 +8,20 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
 pub use protocol::Protocol;
+
+/// A builder for constructing a [`protocol::Protocol`] instance.
 #[derive(Debug, Clone)]
 pub struct ProtocolBuilder {
+    /// The directory that contains the source files.
     source_dir: PathBuf,
+
+    /// The directory that contains the `meta.yaml` in the source directory.
     recipe_dir: PathBuf,
+
+    /// The backend tool to install.
     backend_spec: ToolSpec,
+
+    /// The channel configuration used by this instance.
     channel_config: ChannelConfig,
 }
 
