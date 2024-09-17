@@ -1,18 +1,18 @@
 import glob
 import json
 import tomllib
+from pathlib import Path
 
 import pytest
 import jsonschema
 
+HERE = Path(__file__).parent
+EXAMPLES = HERE / "examples"
+VALID = {ex.stem: ex for ex in (EXAMPLES / "valid").glob("*.toml")}
+INVALID = {ex.stem: ex for ex in (EXAMPLES / "invalid").glob("*.toml")}
 
-@pytest.fixture(
-    scope="module",
-    params=[
-        "minimal",
-        "full",
-    ],
-)
+
+@pytest.fixture(scope="module", params=VALID)
 def valid_manifest(request) -> str:
     manifest_name = request.param
     with open(f"examples/valid/{manifest_name}.toml") as f:
@@ -21,14 +21,7 @@ def valid_manifest(request) -> str:
     return manifest_toml
 
 
-@pytest.fixture(
-    scope="module",
-    params=[
-        "empty",
-        "no_channel",
-        "bad_env_variable",
-    ],
-)
+@pytest.fixture(scope="module", params=INVALID)
 def invalid_manifest(request) -> str:
     manifest_name = request.param
     with open(f"examples/invalid/{manifest_name}.toml") as f:

@@ -99,7 +99,7 @@ pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
 pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
 pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
 pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
-pixi add --pypi "project @ file:///absolute/path/to/project" --editable # (17)!
+pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
