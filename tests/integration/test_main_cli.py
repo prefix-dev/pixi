@@ -1,7 +1,8 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
-import tomli
+import tomllib
+import tomli_w
 
 PIXI_VERSION = "0.29.0"
 
@@ -215,7 +216,7 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_global_sync(pixi: Path, tmp_path: Path) -> None:
+def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -225,21 +226,35 @@ def test_global_sync(pixi: Path, tmp_path: Path) -> None:
     channels = ["conda-forge"]
     [envs.test.dependencies]
     python = "*"
-    numpy = "*"
 
     [envs.test.exposed]
     "python-injected" = "python"
     """
+    parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
     python_injected = tmp_path / "bin" / "python-injected"
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "--version"], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
+
+    # Add numpy
+    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "*"
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.SUCCESS, env=env)
 
+    # Remove numpy again
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
 
-def test_global_migrate(pixi: Path, tmp_path: Path) -> None:
+    # Remove python
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+    assert not python_injected.is_file()
+
+
+def test_global_sync_migrate(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -261,10 +276,10 @@ def test_global_migrate(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
 
     # Test migration from existing environments
-    original_manifest = tomli.loads(manifest.read_text())
+    original_manifest = tomllib.loads(manifest.read_text())
     manifest.unlink()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
-    migrated_manifest = tomli.loads(manifest.read_text())
+    migrated_manifest = tomllib.loads(manifest.read_text())
     assert original_manifest == migrated_manifest
 
 
