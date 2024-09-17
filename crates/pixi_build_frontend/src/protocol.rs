@@ -1,9 +1,9 @@
-use crate::{conda_build_protocol, pixi_protocol};
-use pixi_build_types::procedures::conda_build::CondaBuildParams;
 use pixi_build_types::procedures::{
-    conda_build::CondaBuildResult,
+    conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
+
+use crate::{conda_build_protocol, pixi_protocol};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error)]
@@ -32,7 +32,7 @@ pub enum DiscoveryError {
 /// communicate with it.
 ///
 ///
-/// The [`pixi::Protocol`] protocol is a generic implementation that uses a
+/// The [`Protocol`] protocol is a generic implementation that uses a
 /// client-server JSON-RPC interface to communicate with another tool.
 ///
 /// Using this JSON-RPC interface means we can evolve the backend and frontend
