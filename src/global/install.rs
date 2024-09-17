@@ -544,6 +544,7 @@ fn specs_match_local_environment(
     prefix_records: Vec<PrefixRecord>,
     platform: Option<Platform>,
 ) -> bool {
+    // Check whether all specs in the manifest are present in the installed environment
     let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
         let Some(prefix_record) = prefix_records
             .iter()
@@ -559,6 +560,7 @@ fn specs_match_local_environment(
         return false;
     }
 
+    // Check whether all packages in the installed environment have the correct package
     let platform_specs_match_env = prefix_records.iter().all(|record| {
         let Ok(package_platform) =
             Platform::from_str(&record.repodata_record.package_record.subdir)

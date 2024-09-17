@@ -321,7 +321,12 @@ def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
     # Does not exist on osx-64
     parsed_toml["envs"]["test"]["platform"] = "osx-64"
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env)
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found",
+    )
 
 
 def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
