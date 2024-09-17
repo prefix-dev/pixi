@@ -452,8 +452,14 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             })
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
-        let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
-        let prefix = Prefix::new(bin_env_dir.path());
+        let env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        {
+            // The installer doesn't seem to remove packages
+            // TODO: remove this workaround
+            tokio::fs::remove_dir_all(env_dir.path()).await.unwrap();
+            EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        }
+        let prefix = Prefix::new(env_dir.path());
 
         let prefix_records = prefix.find_installed_packages(Some(50)).await?;
         let all_specs_are_matched = specs.iter().all(|(name, spec)| {
