@@ -546,12 +546,13 @@ fn specs_match_local_environment(
     ) {
         let dependencies = matched_record.repodata_record.package_record.depends;
         for dependency in dependencies {
-            let Ok(dependency) = MatchSpec::from_str(&dependency, ParseStrictness::Lenient) else {
+            let Some(dependency_name) = MatchSpec::from_str(&dependency, ParseStrictness::Lenient)
+                .ok()
+                .and_then(|spec| spec.name)
+            else {
                 continue;
             };
-            let Some(dependency_name) = dependency.name else {
-                continue;
-            };
+
             if let Some(index) = remaining_prefix_records
                 .iter()
                 .position(|record| record.repodata_record.package_record.name == dependency_name)
