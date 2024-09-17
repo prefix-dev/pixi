@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dirs = { workspace = true }
+dunce = { workspace = true }
 file_url = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
@@ -21,7 +22,6 @@ thiserror = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 typed-path = { workspace = true }
 url = { workspace = true }
-dunce = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
