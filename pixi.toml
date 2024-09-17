@@ -12,7 +12,7 @@ channels = ["https://fast.prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [dependencies]
-python = ">=3.12.3,<4"
+python = "3.12.*"
 
 [tasks]
 build = "cargo build --release"
@@ -28,11 +28,22 @@ test-all = "cargo test --all-features"
 
 [feature.pytest.dependencies]
 mypy = ">=1.11,<1.12"
-pytest = ">=8.0.2,<9"
+# For detecting cpu cores with pytest-xdist
+psutil = ">=6.0.0,<7"
+# For running tests in parallel, use this instead of regular pytest
+filelock = ">=3.16.0,<4"
+pytest-rerunfailures = ">=14.0,<15"
+pytest-xdist = ">=3.6.1,<4"
+rich = ">=13.7.1,<14"
+toml = ">=0.10.2,<0.11"
 
 [feature.pytest.tasks]
-test-integration-ci = "pytest tests/integration"
-test-integration-dev = { cmd = "pytest tests/integration", depends-on = [
+test-common-wheels-ci = { cmd = "pytest -n logical tests/wheel_tests/" }
+test-common-wheels-dev = { cmd = "pytest -n logical tests/wheel_tests/", depends-on = [
+  "build",
+] }
+test-integration-ci = "pytest -n logical tests/integration"
+test-integration-dev = { cmd = "pytest -n logical tests/integration", depends-on = [
   "build",
 ] }
 typecheck-integration = "mypy --strict tests/integration"
