@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::{StdoutLock, Write};
 
 use ahash::{HashSet, HashSetExt};
 use clap::Parser;
@@ -93,10 +94,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!("Environment: {}", environment.name().fancy_display());
     }
 
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
     if args.invert {
-        print_inverted_dependency_tree(&invert_dep_map(&dep_map), &direct_deps, &args.regex)?;
+        print_inverted_dependency_tree(&mut handle, &invert_dep_map(&dep_map), &direct_deps, &args.regex)?;
     } else {
-        print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
+        print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)?;
     }
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
@@ -104,10 +107,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Filter and print an inverted dependency tree
 fn print_inverted_dependency_tree(
+    handle: &mut StdoutLock,
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     let regex = regex
         .as_ref()
         .ok_or("")
@@ -127,16 +131,17 @@ fn print_inverted_dependency_tree(
     for pkg_name in root_pkg_names {
         if let Some(pkg) = inverted_dep_map.get(pkg_name) {
             let visited = !visited_pkgs.insert(pkg_name.clone());
-            print_package("\n", pkg, direct_deps.contains(&pkg.name), visited);
+            print_package(handle,"\n", pkg, direct_deps.contains(&pkg.name), visited)?;
 
             if !visited {
                 print_inverted_leaf(
+                    handle,
                     pkg,
                     String::from(""),
                     inverted_dep_map,
                     direct_deps,
                     &mut visited_pkgs,
-                );
+                )?;
             }
         }
     }
@@ -146,12 +151,13 @@ fn print_inverted_dependency_tree(
 
 /// Recursively print inverted dependency tree leaf nodes
 fn print_inverted_leaf(
+    handle: &mut StdoutLock,
     pkg: &Package,
     prefix: String,
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     visited_pkgs: &mut HashSet<String>,
-) {
+) -> miette::Result<()> {
     let needed_count = pkg.needed_by.len();
     for (index, needed_name) in pkg.needed_by.iter().enumerate() {
         let last = index == needed_count - 1;
@@ -164,11 +170,12 @@ fn print_inverted_leaf(
         if let Some(needed_pkg) = inverted_dep_map.get(needed_name) {
             let visited = !visited_pkgs.insert(needed_pkg.name.clone());
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 needed_pkg,
                 direct_deps.contains(&needed_pkg.name),
                 visited,
-            );
+            )?;
 
             if !visited {
                 let new_prefix = if index == needed_count - 1 {
@@ -178,32 +185,35 @@ fn print_inverted_leaf(
                 };
 
                 print_inverted_leaf(
+                    handle,
                     needed_pkg,
                     new_prefix,
                     inverted_dep_map,
                     direct_deps,
                     visited_pkgs,
-                )
+                )?;
             }
         }
     }
+    Ok(())
 }
 
 /// Print a transitive dependency tree
 fn print_transitive_dependency_tree(
+    handle: &mut StdoutLock,
     dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     filtered_keys: Vec<String>,
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     let mut visited_pkgs = Vec::new();
 
     for pkg_name in filtered_keys.iter() {
         visited_pkgs.push(pkg_name.clone());
 
         if let Some(pkg) = dep_map.get(pkg_name) {
-            print_package("\n", pkg, direct_deps.contains(&pkg.name), false);
+            print_package(handle,"\n", pkg, direct_deps.contains(&pkg.name), false)?;
 
-            print_dependency_leaf(pkg, "".to_string(), dep_map, &mut visited_pkgs, direct_deps)
+            print_dependency_leaf(handle,pkg, "".to_string(), dep_map, &mut visited_pkgs, direct_deps)?;
         }
     }
     Ok(())
@@ -211,10 +221,11 @@ fn print_transitive_dependency_tree(
 
 /// Filter and print a top down dependency tree
 fn print_dependency_tree(
+    handle: &mut StdoutLock,
     dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     let mut filtered_deps = direct_deps.clone();
 
     if let Some(regex) = regex {
@@ -233,7 +244,7 @@ fn print_dependency_tree(
 
             tracing::info!("No top level dependencies matched the regular expression, showing matching transitive dependencies");
 
-            return print_transitive_dependency_tree(dep_map, direct_deps, filtered_keys);
+            return print_transitive_dependency_tree(handle, dep_map, direct_deps, filtered_keys);
         }
     }
 
@@ -251,11 +262,12 @@ fn print_dependency_tree(
         };
         if let Some(pkg) = dep_map.get(pkg_name) {
             print_package(
+                handle,
                 &format!("{symbol} "),
                 pkg,
                 direct_deps.contains(&pkg.name),
                 false,
-            );
+            )?;
 
             let prefix = if last {
                 UTF8_SYMBOLS.empty
@@ -263,12 +275,13 @@ fn print_dependency_tree(
                 UTF8_SYMBOLS.down
             };
             print_dependency_leaf(
+                handle,
                 pkg,
                 format!("{} ", prefix),
                 dep_map,
                 &mut visited_pkgs,
                 direct_deps,
-            )
+            )?;
         }
     }
     Ok(())
@@ -276,12 +289,13 @@ fn print_dependency_tree(
 
 /// Recursively print top down dependency tree nodes
 fn print_dependency_leaf(
+    handle: &mut StdoutLock,
     pkg: &Package,
     prefix: String,
     dep_map: &HashMap<String, Package>,
     visited_pkgs: &mut Vec<String>,
     direct_deps: &HashSet<String>,
-) {
+) -> miette::Result<()> {
     let dep_count = pkg.dependencies.len();
     for (index, dep_name) in pkg.dependencies.iter().enumerate() {
         let last = index == dep_count - 1;
@@ -296,11 +310,12 @@ fn print_dependency_leaf(
             visited_pkgs.push(dep.name.to_owned());
 
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 dep,
                 direct_deps.contains(&dep.name),
                 visited,
-            );
+            )?;
 
             if visited {
                 continue;
@@ -311,12 +326,14 @@ fn print_dependency_leaf(
             } else {
                 format!("{}{} ", prefix, UTF8_SYMBOLS.down)
             };
-            print_dependency_leaf(dep, new_prefix, dep_map, visited_pkgs, direct_deps);
+            print_dependency_leaf(handle, dep, new_prefix, dep_map, visited_pkgs, direct_deps)?;
+
         } else {
             let visited = visited_pkgs.contains(dep_name);
             visited_pkgs.push(dep_name.to_owned());
 
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 &Package {
                     name: dep_name.to_owned(),
@@ -327,17 +344,19 @@ fn print_dependency_leaf(
                 },
                 false,
                 visited,
-            )
+            )?;
         }
     }
+    Ok(())
 }
 
 /// Print package and style by attributes, like if are a direct dependency (name
 /// is green and bold), or by the source of the package (yellow version string
 /// for Conda, blue for PyPI). Packages that have already been visited and will
 /// not be recursed into again are marked with a star (*).
-fn print_package(prefix: &str, package: &Package, direct: bool, visited: bool) {
-    println!(
+fn print_package(handle: &mut StdoutLock, prefix: &str, package: &Package, direct: bool, visited: bool) -> miette::Result<()> {
+    if let Err(e) = writeln!(
+        handle,
         "{}{} {} {}",
         prefix,
         if direct {
@@ -350,7 +369,17 @@ fn print_package(prefix: &str, package: &Package, direct: bool, visited: bool) {
             PackageSource::Pypi => console::style(&package.version).fg(Color::Blue),
         },
         if visited { "(*)" } else { "" }
-    );
+    ) {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            // Exit gracefully
+            Ok(())
+        } else {
+            // Return the error wrapped in miette
+            Err(miette::miette!(e))
+        }
+    } else {
+        Ok(())
+    }
 }
 
 /// Extract the direct Conda and PyPI dependencies from the environment
