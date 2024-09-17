@@ -122,7 +122,7 @@ fn extract_rendered_recipes(
             .map(|recipe| {
                 (
                     CondaRenderRecipe {
-                        hash_content: hash.to_string(),
+                        hash_content: hash.to_string().replace("\r\n", "\n"),
                         recipe,
                     },
                     meta_yaml,

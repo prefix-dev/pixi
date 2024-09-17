@@ -61,7 +61,11 @@ extra:
   recipe-maintainers:
     - isuruf
 ---
-hash_content: "{'__unix': '__unix',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'ppc64le',\r\n 'level': '8'}"
+hash_content: |-
+  {'__unix': '__unix',
+   'channel_targets': 'conda-forge main',
+   'family': 'ppc64le',
+   'level': '8'}
 recipe:
   package:
     name: ppc64le-microarch-level
@@ -119,7 +123,11 @@ extra:
   recipe-maintainers:
     - isuruf
 ---
-hash_content: "{'__archspec': '__archspec 1=x86_64',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'x86_64',\r\n 'microarchitecture': 'x86_64'}"
+hash_content: |-
+  {'__archspec': '__archspec 1=x86_64',
+   'channel_targets': 'conda-forge main',
+   'family': 'x86_64',
+   'microarchitecture': 'x86_64'}
 recipe:
   package:
     name: _x86_64-microarch-level
