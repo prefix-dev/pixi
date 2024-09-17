@@ -79,7 +79,8 @@ impl<'p> TaskNode<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub fn full_command(&self) -> Option<String> {
+    #[cfg(test)]
+    pub(crate) fn full_command(&self) -> Option<String> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
@@ -128,7 +129,7 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 }
 
 impl<'p> TaskGraph<'p> {
-    pub fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Project {
         self.project
     }
 
@@ -346,12 +347,13 @@ pub enum TaskGraphError {
 mod test {
     use std::path::Path;
 
+    use pixi_manifest::EnvironmentName;
+    use rattler_conda_types::Platform;
+
     use crate::{
         task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
         Project,
     };
-    use pixi_manifest::EnvironmentName;
-    use rattler_conda_types::Platform;
 
     fn commands_in_order(
         project_str: &str,
@@ -362,7 +364,8 @@ mod test {
         let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
-        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
+        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform)
+            .with_ignore_system_requirements(true);
 
         let graph = TaskGraph::from_cmd_args(
             &project,

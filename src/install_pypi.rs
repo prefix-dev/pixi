@@ -2,46 +2,50 @@ use std::{
     borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
 
-use distribution_filename::WheelFilename;
+use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
-    RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    BuiltDist, CachedDist, Dist, IndexLocations, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
+    RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
 };
 use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use pep440_rs::Version;
+use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
-use pixi_manifest::{pyproject::PyProjectToml, SystemRequirements};
-use pypi_types::{
-    HashAlgorithm, HashDigest, ParsedDirectoryUrl, ParsedGitUrl, ParsedPathUrl, ParsedUrl,
-    ParsedUrlError, VerbatimParsedUrl,
+use pixi_consts::consts;
+use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
+use pixi_uv_conversions::{
+    isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
 };
-use rattler_conda_types::{Platform, RepoDataRecord};
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_types::{
+    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
+};
+use rattler_conda_types::Platform;
+use rattler_lock::{
+    PackageHashes, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
+};
 use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, IndexStrategy, PreviewMode, SetupPyStrategy};
+use uv_configuration::{ConfigSettings, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
 use uv_installer::{Preparer, SitePackages};
 use uv_normalize::PackageName;
+use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
-use uv_toolchain::{Interpreter, PythonEnvironment};
 use uv_types::HashStrategy;
 
-use crate::utils::uv::locked_indexes_to_index_locations;
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
     lock_file::UvResolutionContext,
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
-use pixi_consts::consts;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use pixi_record::PixiRecord;
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -85,17 +89,16 @@ struct PixiInstallPlan {
 }
 
 /// Converts our locked data to a file
-fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_types::File {
-    let url = match &pkg.url_or_path {
-        UrlOrPath::Url(url) if url.scheme() == "file" => distribution_types::FileLocation::Path(
-            url.to_file_path().expect("cannot convert to file path"),
-        ),
-        UrlOrPath::Url(url) => distribution_types::FileLocation::AbsoluteUrl(url.to_string()),
-        UrlOrPath::Path(path) => distribution_types::FileLocation::Path(path.clone()),
-    };
+fn locked_data_to_file(
+    url: &Url,
+    hash: Option<&PackageHashes>,
+    filename: &str,
+    requires_python: Option<VersionSpecifiers>,
+) -> distribution_types::File {
+    let url = distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
 
     // Convert PackageHashes to uv hashes
-    let hashes = if let Some(ref hash) = pkg.hash {
+    let hashes = if let Some(hash) = hash {
         match hash {
             rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
                 algorithm: HashAlgorithm::Md5,
@@ -124,7 +127,7 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
         filename: filename.to_string(),
         dist_info_metadata: false,
         hashes,
-        requires_python: pkg.requires_python.clone(),
+        requires_python,
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
@@ -157,10 +160,12 @@ fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
 enum ConvertToUvDistError {
     #[error("error creating ParsedUrl")]
     ParseUrl(#[from] Box<ParsedUrlError>),
-    #[error("uv conversion error")]
+    #[error("error creating uv Dist from url")]
     Uv(#[from] distribution_types::Error),
     #[error("error constructing verbatim url")]
     VerbatimUrl(#[from] VerbatimUrlError),
+    #[error("error extracting extension from {1}")]
+    Extension(#[source] ExtensionError, String),
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
@@ -169,7 +174,7 @@ fn convert_to_dist(
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
-    let dist = match &pkg.url_or_path {
+    let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             Dist::from_url(
@@ -193,7 +198,12 @@ fn convert_to_dist(
 
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
-            let file = locked_data_to_file(pkg, filename_decoded.as_ref());
+            let file = locked_data_to_file(
+                url,
+                pkg.hash.as_ref(),
+                filename_decoded.as_ref(),
+                pkg.requires_python.clone(),
+            );
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
@@ -226,40 +236,39 @@ fn convert_to_dist(
                     )),
                     // I don't think this really matters for the install
                     wheels: vec![],
+                    ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
+                        ConvertToUvDistError::Extension(e, filename_raw.to_string())
+                    })?,
                 }))
             }
         }
         UrlOrPath::Path(path) => {
+            let native_path = Path::new(path.as_str());
             let abs_path = if path.is_absolute() {
-                path.clone()
+                native_path.to_path_buf()
             } else {
-                lock_file_dir.join(path)
+                lock_file_dir.join(native_path)
             };
 
-            let parsed_url = if abs_path.is_dir() {
-                ParsedUrl::Directory(ParsedDirectoryUrl {
-                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
-                    install_path: abs_path.clone(),
-                    lock_path: path.clone(),
-                    editable: pkg.editable,
-                })
+            let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
+            if abs_path.is_dir() {
+                Dist::from_directory_url(
+                    pkg.name.clone(),
+                    absolute_url,
+                    &abs_path,
+                    pkg.editable,
+                    false,
+                )?
             } else {
-                ParsedUrl::Path(ParsedPathUrl {
-                    url: Url::from_file_path(&abs_path).expect("could not convert path to url"),
-                    install_path: abs_path.clone(),
-                    lock_path: path.clone(),
-                })
-            };
-
-            Dist::from_url(
-                pkg.name.clone(),
-                VerbatimParsedUrl {
-                    parsed_url,
-                    verbatim: VerbatimUrl::from_path(&abs_path)?
-                        .with_given(abs_path.display().to_string()),
-                },
-            )
-            .expect("could not convert path into uv dist")
+                Dist::from_file_url(
+                    pkg.name.clone(),
+                    absolute_url,
+                    &abs_path,
+                    DistExtension::from_path(&abs_path).map_err(|e| {
+                        ConvertToUvDistError::Extension(e, abs_path.to_string_lossy().to_string())
+                    })?,
+                )?
+            }
         }
     };
 
@@ -341,7 +350,7 @@ fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Check if the urls are different
-                            if Some(&url) == locked.url_or_path.as_url() {
+                            if Some(&url) == locked.location.as_url() {
                                 // Check cache freshness
                                 if !check_url_freshness(&url, installed)? {
                                     return Ok(ValidateInstall::Reinstall);
@@ -365,7 +374,7 @@ fn need_reinstall(
                     // Subdirectory is either in the url or not supported
                     subdirectory: _,
                 } => {
-                    let locked_url = match &locked.url_or_path {
+                    let locked_url = match &locked.location {
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url),
@@ -399,7 +408,7 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = match &locked.url_or_path {
+                    let git_url = match &locked.location {
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
@@ -410,8 +419,8 @@ fn need_reinstall(
                         Ok(git) => {
                             // Check the repository base url
                             if git.url.repository() != &url
-                            // Check the sha from the direct_url.json and the required sha
-                            // Use the uv git url to get the sha
+                                // Check the sha from the direct_url.json and the required sha
+                                // Use the uv git url to get the sha
                                 || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
                             {
                                 return Ok(ValidateInstall::Reinstall);
@@ -578,7 +587,7 @@ fn whats_the_plan<'a>(
 pub async fn update_python_distributions(
     lock_file_dir: &Path,
     prefix: &Prefix,
-    conda_package: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     python_packages: &[CombinedPypiPackageData],
     python_interpreter_path: &Path,
     system_requirements: &SystemRequirements,
@@ -586,19 +595,25 @@ pub async fn update_python_distributions(
     pypi_indexes: Option<&PypiIndexes>,
     environment_variables: &HashMap<String, String>,
     platform: Platform,
+    non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
     use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the current environment markers.
-    let python_record = conda_package
+    let python_record = pixi_records
         .iter()
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
-    let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
+    let tags = get_pypi_tags(
+        platform,
+        system_requirements,
+        python_record.package_record(),
+    )?;
 
     let index_locations = pypi_indexes
-        .map(locked_indexes_to_index_locations)
-        .unwrap_or_default();
+        .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
+        .unwrap_or_else(|| Ok(IndexLocations::default()))
+        .into_diagnostic()?;
 
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
@@ -633,12 +648,16 @@ pub async fn update_python_distributions(
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
     let venv = PythonEnvironment::from_interpreter(interpreter);
+    let non_isolated_packages =
+        isolated_names_to_packages(non_isolated_packages.as_deref()).into_diagnostic()?;
+    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
     let git_resolver = GitResolver::default();
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
+        &[],
         venv.interpreter(),
         &index_locations,
         &flat_index,
@@ -646,14 +665,13 @@ pub async fn update_python_distributions(
         &git_resolver,
         &uv_context.in_flight,
         IndexStrategy::default(),
-        SetupPyStrategy::default(),
         &config_settings,
-        uv_types::BuildIsolation::Isolated,
+        build_isolation,
         LinkMode::default(),
         &uv_context.build_options,
         None,
+        uv_context.source_strategy,
         uv_context.concurrency,
-        PreviewMode::Disabled,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -774,7 +792,6 @@ pub async fn update_python_distributions(
             registry_client.as_ref(),
             &build_dispatch,
             uv_context.concurrency.downloads,
-            PreviewMode::Disabled,
         );
 
         // Before hitting the network let's make sure the credentials are available to
@@ -788,6 +805,7 @@ pub async fn update_python_distributions(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
+            &uv_context.build_options,
             distribution_database,
         )
         .with_reporter(UvReporter::new(options));
@@ -886,7 +904,8 @@ pub async fn update_python_distributions(
             .with_link_mode(LinkMode::default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
-            .install(&wheels)
+            .install(wheels.clone())
+            .await
             .unwrap();
 
         let s = if wheels.len() == 1 { "" } else { "s" };
@@ -912,18 +931,19 @@ fn is_dynamic(path: &Path) -> bool {
     let Ok(contents) = fs::read_to_string(path.join("pyproject.toml")) else {
         return true;
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml_str(&contents) else {
+    let Ok(pyproject_toml) = PyProjectManifest::from_toml_str(&contents) else {
         return true;
     };
     // // If `[project]` is not present, we assume it's dynamic.
-    let Some(project) = pyproject_toml.project else {
+    let Some(project) = pyproject_toml.project() else {
         // ...unless it appears to be a Poetry project.
-        return pyproject_toml
-            .tool
-            .map_or(true, |tool| tool.poetry.is_none());
+        return pyproject_toml.poetry().is_none();
     };
     // `[project.dynamic]` must be present and non-empty.
-    project.dynamic.is_some_and(|dynamic| !dynamic.is_empty())
+    project
+        .dynamic
+        .as_ref()
+        .is_some_and(|dynamic| !dynamic.is_empty())
 }
 
 #[cfg(test)]
@@ -946,7 +966,7 @@ mod tests {
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
             version: Version::from_str("2.3.0+cu121").unwrap(),
-            url_or_path: UrlOrPath::Url(url),
+            location: UrlOrPath::Url(url),
             hash: None,
             requires_dist: vec![],
             requires_python: None,

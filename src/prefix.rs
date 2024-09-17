@@ -1,11 +1,15 @@
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
+use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, PrefixRecord};
-use rattler_shell::activation::{ActivationVariables, Activator};
-use rattler_shell::shell::ShellEnum;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use rattler_shell::{
+    activation::{ActivationVariables, Activator},
+    shell::ShellEnum,
+};
 use tokio::task::JoinHandle;
 
 /// Points to a directory that serves as a Conda prefix.
@@ -16,13 +20,13 @@ pub struct Prefix {
 
 impl Prefix {
     /// Constructs a new instance.
-    pub fn new(path: impl Into<PathBuf>) -> Self {
+    pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
         Self { root }
     }
 
     /// Returns the root directory of the prefix
-    pub fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.root
     }
 
@@ -40,15 +44,14 @@ impl Prefix {
             .context("failed to run activation")
     }
 
-    /// Scans the `conda-meta` directory of an environment and returns all the [`PrefixRecord`]s found
-    /// in there.
+    /// Scans the `conda-meta` directory of an environment and returns all the
+    /// [`PrefixRecord`]s found in there.
     pub async fn find_installed_packages(
         &self,
         concurrency_limit: Option<usize>,
     ) -> miette::Result<Vec<PrefixRecord>> {
         let concurrency_limit = concurrency_limit.unwrap_or(100);
-        let mut meta_futures =
-            FuturesUnordered::<JoinHandle<Result<PrefixRecord, std::io::Error>>>::new();
+        let mut meta_futures = FuturesUnordered::<JoinHandle<miette::Result<PrefixRecord>>>::new();
         let mut result = Vec::new();
         for entry in std::fs::read_dir(self.root.join("conda-meta"))
             .into_iter()
@@ -67,7 +70,7 @@ impl Prefix {
                     .await
                     .expect("we know there are pending futures")
                 {
-                    Ok(record) => result.push(record.into_diagnostic()?),
+                    Ok(record) => result.push(record?),
                     Err(e) => {
                         if let Ok(panic) = e.try_into_panic() {
                             std::panic::resume_unwind(panic);
@@ -79,13 +82,17 @@ impl Prefix {
             }
 
             // Spawn loading on another thread
-            let future = tokio::task::spawn_blocking(move || PrefixRecord::from_path(path));
+            let future = tokio::task::spawn_blocking(move || {
+                PrefixRecord::from_path(&path)
+                    .into_diagnostic()
+                    .with_context(move || format!("failed to parse '{}'", path.display()))
+            });
             meta_futures.push(future);
         }
 
         while let Some(record) = meta_futures.next().await {
             match record {
-                Ok(record) => result.push(record.into_diagnostic()?),
+                Ok(record) => result.push(record?),
                 Err(e) => {
                     if let Ok(panic) = e.try_into_panic() {
                         std::panic::resume_unwind(panic);

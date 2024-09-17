@@ -11,10 +11,12 @@ use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
-use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
+
+use crate::cli::cli_config::ProjectConfig;
 
 use crate::{task::TaskName, Project};
 use fancy_display::FancyDisplay;
@@ -33,9 +35,8 @@ pub struct Args {
     #[arg(long)]
     json: bool,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 }
 
 #[derive(Serialize)]
@@ -45,7 +46,6 @@ pub struct ProjectInfo {
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
     version: Option<String>,
-    configuration: Vec<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -170,6 +170,7 @@ pub struct Info {
     auth_dir: PathBuf,
     project_info: Option<ProjectInfo>,
     environments_info: Vec<EnvironmentInfo>,
+    config_locations: Vec<PathBuf>,
 }
 impl Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -212,6 +213,23 @@ impl Display for Info {
             self.auth_dir.to_string_lossy()
         )?;
 
+        let config_locations = self
+            .config_locations
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .join(" ");
+
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Config locations"),
+            if config_locations.is_empty() {
+                "No config files found"
+            } else {
+                &config_locations
+            }
+        )?;
+
         if let Some(pi) = self.project_info.as_ref() {
             writeln!(f, "\n{}", bold.apply_to("Project\n------------"))?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
@@ -223,19 +241,6 @@ impl Display for Info {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Manifest file"),
                 pi.manifest_path.to_string_lossy()
-            )?;
-
-            let config_locations = pi
-                .configuration
-                .iter()
-                .map(|p| p.to_string_lossy())
-                .join(", ");
-
-            writeln!(
-                f,
-                "{:>WIDTH$}: {}",
-                bold.apply_to("Config locations"),
-                config_locations
             )?;
 
             if let Some(update_time) = &pi.last_updated {
@@ -290,7 +295,7 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());
@@ -313,7 +318,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest_path: p.manifest_path(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
-        configuration: p.config().loaded_from.clone(),
         version: p.version().clone().map(|v| v.to_string()),
     });
 
@@ -356,7 +360,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unwrap_or_default();
 
-    let virtual_packages = VirtualPackage::current()
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .iter()
         .cloned()
@@ -385,17 +389,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         auth_dir: auth_file,
         project_info,
         environments_info,
+        config_locations: config.loaded_from.clone(),
     };
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
 
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     }
 }

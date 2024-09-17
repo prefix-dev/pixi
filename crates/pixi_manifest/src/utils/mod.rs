@@ -18,8 +18,37 @@ pub(crate) fn extract_directory_from_url(url: &Url) -> Option<String> {
 }
 
 #[cfg(test)]
-pub(crate) fn default_channel_config() -> rattler_conda_types::ChannelConfig {
-    rattler_conda_types::ChannelConfig::default_with_root_dir(
-        std::env::current_dir().expect("Could not retrieve the current directory"),
-    )
+mod test {
+    use rstest::*;
+    use url::Url;
+
+    use super::*;
+
+    #[rstest]
+    #[case(
+        "git+https://github.com/foobar.git@v1.0#subdirectory=pkg_dir",
+        Some("pkg_dir")
+    )]
+    #[case(
+        "git+ssh://gitlab.org/foobar.git@v1.0#egg=pkg&subdirectory=pkg_dir",
+        Some("pkg_dir")
+    )]
+    #[case("git+https://github.com/foobar.git@v1.0", None)]
+    #[case("git+https://github.com/foobar.git@v1.0#egg=pkg", None)]
+    #[case(
+        "git+https://github.com/foobar.git@v1.0#subdirectory=pkg_dir&other=val",
+        Some("pkg_dir")
+    )]
+    #[case(
+        "git+https://github.com/foobar.git@v1.0#other=val&subdirectory=pkg_dir",
+        Some("pkg_dir")
+    )]
+    #[case(
+        "git+https://github.com/foobar.git@v1.0#subdirectory=pkg_dir&subdirectory=another_dir",
+        Some("pkg_dir")
+    )]
+    fn test_get_subdirectory(#[case] url: Url, #[case] expected: Option<&str>) {
+        let subdirectory = extract_directory_from_url(&url);
+        assert_eq!(subdirectory.as_deref(), expected);
+    }
 }

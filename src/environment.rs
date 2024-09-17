@@ -1,36 +1,45 @@
-use crate::lock_file::UvResolutionContext;
-use crate::{
-    install_pypi,
-    lock_file::UpdateLockFileOptions,
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment},
-    Project,
+use std::{
+    collections::HashMap,
+    convert::identity,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
-use pixi_progress::{await_in_progress, global_multi_progress};
-
-use crate::project::HasProjectRef;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
-use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
+use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_record::PixiRecord;
 use rattler::{
-    install::{PythonInfo, Transaction},
+    install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
 };
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
-use std::convert::identity;
-use std::path::PathBuf;
-use std::{collections::HashMap, io::ErrorKind, path::Path};
+use tokio::sync::Semaphore;
+use url::Url;
 
-/// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
-/// Errors when there is a file system error or the path does not align with the defined prefix.
-/// Returns false when the file is not present.
+use crate::{
+    build::BuildContext,
+    install_pypi,
+    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
+};
+
+/// Verify the location of the prefix folder is not changed so the applied
+/// prefix path is still valid. Errors when there is a file system error or the
+/// path does not align with the defined prefix. Returns false when the file is
+/// not present.
 pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
         .join("conda-meta")
@@ -164,9 +173,10 @@ pub(crate) struct EnvironmentFile {
     pub(crate) environment_name: String,
     pub(crate) pixi_version: String,
 }
-/// Write information about the environment to a file in the environment directory.
-/// This can be useful for other tools that only know the environment directory to find the original project.
-pub fn write_environment_file(
+/// Write information about the environment to a file in the environment
+/// directory. This can be useful for other tools that only know the environment
+/// directory to find the original project.
+pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
@@ -225,7 +235,7 @@ pub enum LockFileUsage {
 
 impl LockFileUsage {
     /// Returns true if the lock-file should be updated if it is out of date.
-    pub fn allows_lock_file_updates(self) -> bool {
+    pub(crate) fn allows_lock_file_updates(self) -> bool {
         match self {
             LockFileUsage::Update => true,
             LockFileUsage::Locked | LockFileUsage::Frozen => false,
@@ -233,7 +243,7 @@ impl LockFileUsage {
     }
 
     /// Returns true if the lock-file should be checked if it is out of date.
-    pub fn should_check_if_out_of_date(self) -> bool {
+    pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked => true,
             LockFileUsage::Frozen => false,
@@ -241,18 +251,18 @@ impl LockFileUsage {
     }
 }
 
-/// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
-/// up-to-date it is updated.
+/// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
-/// The `sparse_repo_data` is used when the lock-file is update. We pass it into this function to
-/// make sure the data is not loaded twice since the repodata takes up a lot of memory and takes a
-/// while to load. If `sparse_repo_data` is `None` it will be downloaded. If the lock-file is not
-/// updated, the `sparse_repo_data` is ignored.
-pub async fn get_up_to_date_prefix(
+/// The `sparse_repo_data` is used when the lock-file is update. We pass it into
+/// this function to make sure the data is not loaded twice since the repodata
+/// takes up a lot of memory and takes a while to load. If `sparse_repo_data` is
+/// `None` it will be downloaded. If the lock-file is not updated, the
+/// `sparse_repo_data` is ignored.
+pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
-) -> miette::Result<Prefix> {
+) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
 
@@ -267,7 +277,7 @@ pub async fn get_up_to_date_prefix(
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
+        .update_lock_file(UpdateLockFileOptions {
             lock_file_usage,
             no_install,
             ..UpdateLockFileOptions::default()
@@ -275,11 +285,10 @@ pub async fn get_up_to_date_prefix(
         .await?;
 
     // Get the locked environment from the lock-file.
-    if no_install {
-        Ok(Prefix::new(environment.dir()))
-    } else {
-        lock_file.prefix(environment).await
+    if !no_install {
+        lock_file.prefix(environment).await?;
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -288,7 +297,7 @@ pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
     _platform: Platform,
-    conda_records: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
@@ -297,9 +306,11 @@ pub async fn update_prefix_pypi(
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
     platform: Platform,
+    non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
-    // If we have changed interpreter, we need to uninstall all site-packages from the old interpreter
-    // We need to do this before the pypi prefix update, because that requires a python interpreter.
+    // If we have changed interpreter, we need to uninstall all site-packages from
+    // the old interpreter We need to do this before the pypi prefix update,
+    // because that requires a python interpreter.
     let python_info = match status {
         // If the python interpreter is removed, we need to uninstall all `pixi-uv` site-packages.
         // And we don't need to continue with the rest of the pypi prefix update.
@@ -310,10 +321,11 @@ pub async fn update_prefix_pypi(
             }
             return Ok(());
         }
-        // If the python interpreter is changed, we need to uninstall all site-packages from the old interpreter.
-        // And we continue the function to update the pypi packages.
+        // If the python interpreter is changed, we need to uninstall all site-packages from the old
+        // interpreter. And we continue the function to update the pypi packages.
         PythonStatus::Changed { old, new } => {
-            // In windows the site-packages path stays the same, so we don't need to uninstall the site-packages ourselves.
+            // In windows the site-packages path stays the same, so we don't need to
+            // uninstall the site-packages ourselves.
             if old.site_packages_path != new.site_packages_path {
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
@@ -322,8 +334,9 @@ pub async fn update_prefix_pypi(
             }
             new
         }
-        // If the python interpreter is unchanged, and there are no pypi packages to install, we need to remove the site-packages.
-        // And we don't need to continue with the rest of the pypi prefix update.
+        // If the python interpreter is unchanged, and there are no pypi packages to install, we
+        // need to remove the site-packages. And we don't need to continue with the rest of
+        // the pypi prefix update.
         PythonStatus::Unchanged(info) | PythonStatus::Added { new: info } => {
             if pypi_records.is_empty() {
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
@@ -350,7 +363,7 @@ pub async fn update_prefix_pypi(
             install_pypi::update_python_distributions(
                 lock_file_dir,
                 prefix,
-                conda_records,
+                pixi_records,
                 pypi_records,
                 &python_info.path,
                 system_requirements,
@@ -358,15 +371,17 @@ pub async fn update_prefix_pypi(
                 pypi_indexes,
                 environment_variables,
                 platform,
+                non_isolated_packages,
             )
         },
     )
     .await
 }
 
-/// If the python interpreter is outdated, we need to uninstall all outdated site packages.
-/// from the old interpreter.
-/// TODO: optimize this by recording the installation of the site-packages to check if this is needed.
+/// If the python interpreter is outdated, we need to uninstall all outdated
+/// site packages. from the old interpreter.
+/// TODO: optimize this by recording the installation of the site-packages to
+/// check if this is needed.
 async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
     // Check if the old interpreter is outdated
     let mut installed = vec![];
@@ -433,7 +448,9 @@ pub enum PythonStatus {
 
 impl PythonStatus {
     /// Determine the [`PythonStatus`] from a [`Transaction`].
-    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
+    pub(crate) fn from_transaction(
+        transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    ) -> Self {
         match (
             transaction.current_python_info.as_ref(),
             transaction.python_info.as_ref(),
@@ -451,8 +468,9 @@ impl PythonStatus {
         }
     }
 
-    /// Returns the info of the current situation (e.g. after the transaction completed).
-    pub fn current_info(&self) -> Option<&PythonInfo> {
+    /// Returns the info of the current situation (e.g. after the transaction
+    /// completed).
+    pub(crate) fn current_info(&self) -> Option<&PythonInfo> {
         match self {
             PythonStatus::Changed { new, .. }
             | PythonStatus::Unchanged(new)
@@ -461,8 +479,9 @@ impl PythonStatus {
         }
     }
 
-    /// Returns the location of the python interpreter relative to the root of the prefix.
-    pub fn location(&self) -> Option<&Path> {
+    /// Returns the location of the python interpreter relative to the root of
+    /// the prefix.
+    pub(crate) fn location(&self) -> Option<&Path> {
         Some(&self.current_info()?.path)
     }
 }
@@ -474,18 +493,46 @@ pub async fn update_prefix_conda(
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
-    repodata_records: Vec<RepoDataRecord>,
+    pixi_records: Vec<PixiRecord>,
+    channels: Vec<Url>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
+    io_concurrency_limit: Arc<Semaphore>,
+    build_context: BuildContext,
 ) -> miette::Result<PythonStatus> {
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
+
+    let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
+        .into_iter()
+        .partition_map(|record| match record {
+            PixiRecord::Binary(record) => Either::Left(record),
+            PixiRecord::Source(record) => Either::Right(record),
+        });
+
+    // Build conda packages out of the source records
+    for source_record in source_records {
+        let built_source_record = build_context
+            .build_source_record(&source_record, &channels, platform)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to build a conda package for {} {}",
+                    &source_record.package_record.name.as_source(),
+                    &source_record.package_record.version
+                )
+            })?;
+        repodata_records.push(built_source_record);
+    }
+
     // Execute the operations that are returned by the solver.
     let result = await_in_progress(
         format!("{progress_bar_prefix}{progress_bar_message}",),
         |pb| async {
             Installer::new()
                 .with_download_client(authenticated_client)
-                .with_io_concurrency_limit(100)
+                .with_io_concurrency_semaphore(io_concurrency_limit)
                 .with_execute_link_scripts(false)
                 .with_installed_packages(installed_packages)
                 .with_target_platform(platform)

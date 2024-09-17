@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -31,7 +32,7 @@ pub enum CurrentEnvVarBehavior {
 
 impl Project {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+    pub(crate) fn get_metadata_env(&self) -> HashMap<String, String> {
         let mut map = HashMap::from_iter([
             (
                 format!("{PROJECT_PREFIX}ROOT"),
@@ -68,14 +69,14 @@ const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
 
 impl Environment<'_> {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+    pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
                 format!("{}:{}", self.project().name(), name)
             }
             EnvironmentName::Default => self.project().name().to_string(),
         };
-        let mut map = HashMap::from_iter([
+        let mut map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
@@ -83,6 +84,8 @@ impl Environment<'_> {
             ),
             ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
         ]);
+
+        // Add the activation environment variables
         map.extend(self.activation_env(Some(Platform::current())));
         map
     }
@@ -92,7 +95,7 @@ impl Environment<'_> {
 /// This method will create an activator for the environment and add the activation scripts from the project.
 /// The activator will be created for the current platform and the default shell.
 /// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
-pub fn get_activator<'p>(
+pub(crate) fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
 ) -> Result<Activator<ShellEnum>, ActivationError> {
@@ -211,14 +214,12 @@ pub async fn run_activation(
 }
 
 /// Get the environment variables that are statically generated from the project and the environment.
-pub fn get_static_environment_variables<'p>(
+/// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it.
+pub(crate) fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
-) -> HashMap<String, String> {
-    // Get environment variables from the project
+) -> IndexMap<String, String> {
+    // Get environment variables from the pixi project meta data
     let project_env = environment.project().get_metadata_env();
-
-    // Get environment variables from the environment
-    let environment_env = environment.get_metadata_env();
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
@@ -228,17 +229,20 @@ pub fn get_static_environment_variables<'p>(
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
 
+    // Get environment variables from the pixi environment
+    let environment_env = environment.get_metadata_env();
+
     // Combine the environments
     project_env
         .into_iter()
-        .chain(environment_env)
         .chain(shell_env)
+        .chain(environment_env)
         .collect()
 }
 
 /// Get the environment variables that are set in the current shell
 /// and strip them down to the minimal set required to run a command.
-pub fn get_clean_environment_variables() -> HashMap<String, String> {
+pub(crate) fn get_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
 
     let unix_keys = if cfg!(unix) {
@@ -376,7 +380,38 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "unix")]
+    fn test_metadata_project_env_order() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = [""]
+        platforms = ["linux-64", "osx-64", "win-64"]
+
+        [activation.env]
+        ABC = "123test123"
+        ZZZ = "123test123"
+        ZAB = "123test123"
+        "#;
+        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let env = get_static_environment_variables(&project.default_environment());
+
+        // Make sure the user defined environment variables are at the end.
+        assert!(
+            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
+                < env.keys().position(|key| key == "ABC")
+        );
+        assert!(
+            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
+                < env.keys().position(|key| key == "ZZZ")
+        );
+
+        // Make sure the user defined environment variables are sorted by input order.
+        assert!(env.keys().position(|key| key == "ABC") < env.keys().position(|key| key == "ZZZ"));
+        assert!(env.keys().position(|key| key == "ZZZ") < env.keys().position(|key| key == "ZAB"));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
     fn test_get_linux_clean_environment_variables() {
         let env = get_clean_environment_variables();
         // Make sure that the environment variables are set.

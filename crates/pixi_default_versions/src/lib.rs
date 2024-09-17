@@ -7,7 +7,7 @@ pub fn default_glibc_version() -> Version {
 
 /// The default linux version to use. This is used when no system requirements are specified.
 pub fn default_linux_version() -> Version {
-    "5.10".parse().unwrap()
+    "4.18".parse().unwrap()
 }
 
 /// Returns the default Mac OS version for the specified platform. The platform must refer to a

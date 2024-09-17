@@ -20,10 +20,7 @@ For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/
 The minimally required information in the `project` table is:
 
 ```toml
-[project]
-name = "project-name"
-channels = ["conda-forge"]
-platforms = ["linux-64"]
+--8<-- "docs/source_files/pixi_tomls/simple_pixi.toml:project"
 ```
 
 ### `name`
@@ -31,7 +28,7 @@ platforms = ["linux-64"]
 The name of the project.
 
 ```toml
-name = "project-name"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
 ```
 
 ### `channels`
@@ -40,19 +37,19 @@ This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on `anaconda.org` you only need to use the name of the channel directly.
 
 ```toml
-channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
+--8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_long"
 ```
 
 Channels situated on the file system are also supported with **absolute** file paths:
 
 ```toml
-channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
+--8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_path"
 ```
 
 To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 
 ```toml
-channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_channels"
 ```
 
 ### `platforms`
@@ -61,10 +58,16 @@ Defines the list of platforms that the project supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+
+!!! tip "Special macOS behavior"
+    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
+    To support both, include both in your platforms list.
+    Fallback: If `osx-arm64` can't resolve, use `osx-64`.
+    Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
 
 ### `version` (optional)
 
@@ -73,7 +76,7 @@ This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
 ```toml
-version = "1.2.3"
+-8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
 ```
 
 ### `authors` (optional)
@@ -81,7 +84,7 @@ version = "1.2.3"
 This is a list of authors of the project.
 
 ```toml
-authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_authors"
 ```
 
 ### `description` (optional)
@@ -89,7 +92,7 @@ authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
 This should contain a short description of the project.
 
 ```toml
-description = "A simple description"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_description"
 ```
 
 ### `license` (optional)
@@ -97,7 +100,7 @@ description = "A simple description"
 The license as a valid [SPDX](https://spdx.org/licenses/) string (e.g. MIT AND Apache-2.0)
 
 ```toml
-license = "MIT"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_license"
 ```
 
 ### `license-file` (optional)
@@ -121,7 +124,7 @@ readme = "README.md"
 URL of the project homepage.
 
 ```toml
-homepage = "https://pixi.sh"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_homepage"
 ```
 
 ### `repository` (optional)
@@ -129,7 +132,7 @@ homepage = "https://pixi.sh"
 URL of the project source repository.
 
 ```toml
-repository = "https://github.com/prefix-dev/pixi"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_repository"
 ```
 
 ### `documentation` (optional)
@@ -137,7 +140,7 @@ repository = "https://github.com/prefix-dev/pixi"
 URL of the project documentation.
 
 ```toml
-documentation = "https://pixi.sh"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_documentation"
 ```
 
 ### `conda-pypi-map` (optional)
@@ -211,6 +214,7 @@ alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
@@ -234,7 +238,7 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Linux"
     ```toml title="default system requirements for linux"
     [system-requirements]
-    linux = "5.10"
+    linux = "4.18"
     libc = { family="glibc", version="2.28" }
     ```
 
@@ -261,7 +265,7 @@ For example, when installing environments on old versions of linux.
 You may encounter the following error:
 
 ```
-× The current system has a mismatching virtual package. The project requires '__linux' to be at least version '5.10' but the system has version '4.12.14'
+× The current system has a mismatching virtual package. The project requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
 ```
 
 This suggests that the system requirements for the project should be lowered.
@@ -288,16 +292,30 @@ This informs the solver that cuda is going to be available, so it can lock it in
 The `pypi-options` table is used to define options that are specific to PyPI registries.
 These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
 
-### Alternative registries
-
-Currently the main reason to use this table is to define alternative registries.
-We support:
+The options that can be defined are:
 
 - `index-url`: replaces the main index url.
-   Only one `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url.
+- `find-links`: similar to `--find-links` option in `pip`.
+- `no-build-isolation`: disables build isolation, can only be set per package.
+- `index-strategy`: allows for specifying the index strategy to use.
+
+These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
+
+
+### Alternative registries
+
+!!! info "Strict Index Priority"
+    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
+    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [uv docs](https://docs.astral.sh/uv/pip/compatibility/#packages-that-exist-on-multiple-indexes)
+
+Often you might want to use an alternative or extra index for your project. This can be done by adding the `pypi-options` table to your `pixi.toml` file, the following options are available:
+
+- `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
+   **Only one** `index-url` can be defined per environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
 
 An example:
 
@@ -308,12 +326,49 @@ extra-index-urls = ["https://example.com/simple"]
 find-links = [{path = './links'}]
 ```
 
-There are some examples in the pixi repository that make use of this feature.
-To read about existing authentication methods, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
 
-!!! info "Strict Index Priority"
-    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
-    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [UV Readme](https://github.com/astral-sh/uv/blob/main/PIP_COMPATIBILITY.md#packages-that-exist-on-multiple-indexes)
+!!! tip "Authentication Methods"
+    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+
+
+### No Build Isolation
+Even though build isolation is a good default.
+One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
+This is convenient if you want to use `torch` or something similar for your build-process.
+
+
+```toml
+[dependencies]
+pytorch = "2.4.0"
+
+[pypi-options]
+no-build-isolation = ["detectron2"]
+
+[pypi-dependencies]
+detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
+```
+
+!!! tip "Conda dependencies define the build environment"
+    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+
+### Index Strategy
+
+The strategy to use when resolving against multiple index URLs. Description modified from the [uv](https://docs.astral.sh/uv/reference/settings/#index-strategy) documentation:
+
+By default, `uv` and thus `pixi`, will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents *dependency confusion* attacks, whereby an attack can upload a malicious package under the same name to a secondary index.
+
+!!! warning "One index strategy per environment"
+    Only one `index-strategy` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"first-index"**: Only use results from the first index that returns a match for a given package name
+- **"unsafe-first-match"**: Search for every package name across all indexes, exhausting the versions from the first index before moving on to the next. Meaning if the package `a` is available on index `x` and `y`, it will prefer the version from `x` unless you've requested a package version that is **only** available on `y`.
+- **"unsafe-best-match"**: Search for every package name across all indexes, preferring the *best* version found. If a package version is in multiple indexes, only look at the entry for the first index. So given index, `x` and `y` that both contain package `a`, it will take the *best* version from either `x` or `y`, but should **that version** be available on both indexes it will prefer `x`.
+
+!!! info "PyPI only"
+    The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
 ## The `dependencies` table(s)
 
@@ -384,7 +439,6 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitation**: Currently, pixi doesn't support private PyPI repositories
 
 #### Version specification:
 
@@ -464,7 +518,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-py-rattler = { git = "ssh://git@github.com:mamba-org/rattler.git", subdirectory = "py-rattler" }
+py-rattler = { git = "ssh://git@github.com/mamba-org/rattler.git", subdirectory = "py-rattler" }
 ```
 
 ##### `path`
@@ -572,6 +626,14 @@ scripts = ["env_setup.bat"]
 
 [target.linux-64.activation.env]
 ENV_VAR = "linux-value"
+
+# You can also reference existing environment variables, but this has
+# to be done separately for unix-like operating systems and Windows
+[target.unix.activation.env]
+ENV_VAR = "$OTHER_ENV_VAR/unix-value"
+
+[target.win.activation.env]
+ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 ```
 
 ## The `target` table
@@ -648,7 +710,7 @@ This will create an environment called `test` that has `pytest` installed.
 The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
-- `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
+- `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).

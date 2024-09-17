@@ -1,15 +1,17 @@
 mod outdated;
 mod package_identifier;
 mod records_by_name;
+mod reporter;
 mod resolve;
 mod satisfiability;
 mod update;
 mod utils;
 
+use crate::Project;
 use miette::{IntoDiagnostic, WrapErr};
 pub use outdated::OutdatedEnvironments;
 pub use package_identifier::PypiPackageIdentifier;
-use rattler_conda_types::RepoDataRecord;
+use pixi_record::PixiRecord;
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
 pub use resolve::{
@@ -19,10 +21,8 @@ pub use satisfiability::{verify_environment_satisfiability, verify_platform_sati
 pub use update::{LockFileDerivedData, UpdateContext, UpdateLockFileOptions};
 pub use utils::filter_lock_file;
 
-use crate::Project;
-
 /// A list of conda packages that are locked for a specific platform.
-pub type LockedCondaPackages = Vec<RepoDataRecord>;
+pub type LockedCondaPackages = Vec<PixiRecord>;
 
 /// A list of Pypi packages that are locked for a specific platform.
 pub type LockedPypiPackages = Vec<PypiRecord>;

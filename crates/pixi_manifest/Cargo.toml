@@ -17,6 +17,7 @@ lazy_static = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_spec = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
@@ -38,14 +39,14 @@ rattler_solve = { workspace = true, features = ["serde"] }
 rattler_virtual_packages = { workspace = true }
 
 # TODO: Remove these dependencies
-console = "0.15.8"
+console = { workspace = true }
 miette = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
+glob = "0.3.1"
 insta = { workspace = true, features = ["yaml"] }
-pixi_consts = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

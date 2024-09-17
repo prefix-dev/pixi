@@ -2,7 +2,7 @@ use std::{borrow::Borrow, fmt::Display};
 
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
-use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
+use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
 use thiserror::Error;
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
@@ -18,22 +18,24 @@ pub enum DependencyError {
     NoDependency(String),
     #[error("No Pypi dependencies.")]
     NoPyPiDependencies,
+    #[error(transparent)]
+    Pep508ToPyPiRequirementError(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
 #[derive(Error, Debug)]
 pub enum RequirementConversionError {
     #[error("Invalid package name error")]
     InvalidPackageNameError(#[from] InvalidPackageNameError),
-    #[error("Failed to parse specification")]
-    ParseError(#[from] ParseMatchSpecError),
+    #[error("Failed to parse version")]
+    InvalidVersion(#[from] ParseVersionSpecError),
 }
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum TomlError {
-    #[error("{0}")]
+    #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("Missing field `project`")]
-    NoProjectTable,
+    #[error("Missing table `[tool.pixi]`")]
+    NoPixiTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
@@ -44,15 +46,16 @@ pub enum TomlError {
         table_name: String,
     },
     #[error("Could not convert pep508 to pixi pypi requirement")]
-    Conversion(#[from] Pep508ToPyPiRequirementError),
+    Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
 impl TomlError {
     pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
         if let Some(span) = self.span() {
             Err(miette::miette!(
-                labels = vec![LabeledSpan::at(span, self.message())],
-                "failed to parse project manifest"
+                labels = vec![LabeledSpan::new_primary_with_span(None, span)],
+                "{}",
+                self.message(),
             )
             .with_source_code(NamedSource::new(file_name, contents.into())))
         } else {
@@ -63,17 +66,15 @@ impl TomlError {
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             TomlError::Error(e) => e.span(),
-            TomlError::NoProjectTable => Some(0..1),
+            TomlError::NoPixiTable => Some(0..1),
             TomlError::NoProjectName(span) => span.clone(),
             _ => None,
         }
     }
-    fn message(&self) -> &str {
+    fn message(&self) -> String {
         match self {
-            TomlError::Error(e) => e.message(),
-            TomlError::NoProjectTable => "Missing field `project`",
-            TomlError::NoProjectName(_) => "Missing field `name`",
-            _ => "",
+            TomlError::Error(e) => e.message().to_owned(),
+            _ => self.to_string(),
         }
     }
 

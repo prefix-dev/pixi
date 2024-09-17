@@ -1,0 +1,70 @@
+---
+source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
+expression: snapshot
+---
+- input:
+    ver: 1.2.3
+  result:
+    error: "ERROR: unknown field `ver`, expected one of `version`, `extras`, `path`, `editable`, `git`, `branch`, `tag`, `rev`, `url`, `subdirectory`"
+- input:
+    path: foobar
+    version: "==1.2.3"
+  result:
+    error: "ERROR: `version` cannot be used with `path`"
+- input:
+    version: //
+  result:
+    error: "ERROR: Failed to parse version: Unexpected end of version specifier, expected operator:\n//\n^^\n"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: v1
+  result:
+    error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: v1
+    rev: "123456"
+  result:
+    error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    rev: v1
+  result:
+    error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    tag: v1
+    rev: "123456"
+  result:
+    error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
+- input:
+    git: "ssh://github.com:conda-forge/21cmfast-feedstock"
+  result:
+    error: "ERROR: invalid value: string \"ssh://github.com:conda-forge/21cmfast-feedstock\", expected invalid port number"
+- input:
+    branch: main
+    tag: v1
+    rev: "123456"
+  result:
+    error: "ERROR: `branch`, `rev`, and `tag` are only valid when `git` is specified"
+- input: /path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"/path/style\" }'"
+- input: "./path/style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"./path/style\" }'"
+- input: "\\path\\style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"\\path\\style\" }'"
+- input: ~/path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"~/path/style\" }'"
+- input: "https://example.com"
+  result:
+    error: "ERROR: it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{ url = \"https://example.com\" }'"
+- input: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    error: "ERROR: it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{ git = \"https://github.com/conda-forge/21cmfast-feedstock\" }'"

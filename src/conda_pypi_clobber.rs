@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use distribution_types::CachedDist;
 use rattler_conda_types::PrefixRecord;
-use uv_toolchain::PythonEnvironment;
+use uv_python::PythonEnvironment;
 
 use crate::install_wheel::get_wheel_info;
 
@@ -17,7 +17,7 @@ pub(crate) struct PypiCondaClobberRegistry {
 impl PypiCondaClobberRegistry {
     /// Register the paths of the installed conda packages
     /// to later check if they are going to be clobbered by the installation of the wheels
-    pub fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
+    pub(crate) fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
         for record in conda_packages {
             for path in &record.paths_data.paths {
@@ -37,7 +37,7 @@ impl PypiCondaClobberRegistry {
     /// this allow to warn the user about the overwriting of already installed packages
     /// in case of wrong mapping data
     /// or malicious packages
-    pub fn clobber_on_installation(
+    pub(crate) fn clobber_on_installation(
         self,
         wheels: Vec<CachedDist>,
         venv: &PythonEnvironment,

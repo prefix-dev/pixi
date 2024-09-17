@@ -78,7 +78,7 @@ Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-
 ### Fish
 
 ```fish
-echo 'pixi completion --shell | source' >> ~/.config/fish/completions/pixi.fish
+echo 'pixi completion --shell fish | source' > ~/.config/fish/completions/pixi.fish
 ```
 
 ### Nushell
@@ -149,7 +149,7 @@ its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try
 
     | Variable             | Description                                                                        | Default Value         |
     |----------------------|------------------------------------------------------------------------------------|-----------------------|
-    | `VERSION`            | The version of pixi getting installed, can be used to up- or down-grade.           | `latest`              |
+    | `PIXI_VERSION`       | The version of pixi getting installed, can be used to up- or down-grade.           | `latest`              |
     | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
     | `PIXI_ARCH`          | The architecture the pixi version was built for.                                   | `uname -m`            |
     | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
@@ -157,11 +157,11 @@ its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
-    PIXI_ARCH=x86_64 curl -fsSL https://pixi.sh/install.sh | bash
+    curl -fsSL https://pixi.sh/install.sh | PIXI_ARCH=x86_64 bash
     ```
     Or set the version
     ```shell
-    PIXI_VERSION=v0.18.0 curl -fsSL https://pixi.sh/install.sh | bash
+    curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.18.0 bash
     ```
 
 === "Windows"

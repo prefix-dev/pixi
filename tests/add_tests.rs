@@ -1,17 +1,17 @@
 mod common;
 
-use crate::common::builders::HasDependencyConfig;
-use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::LockFileExt;
-use crate::common::PixiControl;
+use std::str::FromStr;
+
+use crate::common::{
+    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 use pixi::{DependencyType, Project};
 use pixi_consts::consts;
-use pixi_manifest::pypi::PyPiPackageName;
-use pixi_manifest::FeaturesExt;
-use pixi_manifest::SpecType;
+use pixi_manifest::pypi::VersionOrStar;
+use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
-use serial_test::serial;
-use std::str::FromStr;
 use tempfile::TempDir;
 use uv_normalize::ExtraName;
 
@@ -90,6 +90,11 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
+    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+        .without_lockfile_update()
+        .await
+        .unwrap();
+
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
@@ -98,10 +103,21 @@ async fn add_with_channel() {
 
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
-    assert_eq!(spec.channel.unwrap().name(), "conda-forge");
+    assert_eq!(
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
+        "conda-forge"
+    );
+
+    let (name, spec) = specs.next().unwrap();
+    assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
+    assert_eq!(
+        spec.into_detailed().unwrap().channel.unwrap().as_str(),
+        "https://prefix.dev/conda-forge"
+    );
 }
 
-/// Test that we get the union of all packages in the lockfile for the run, build and host
+/// Test that we get the union of all packages in the lockfile for the run,
+/// build and host
 #[tokio::test]
 async fn add_functionality_union() {
     let mut package_database = PackageDatabase::default();
@@ -223,14 +239,13 @@ async fn add_functionality_os() {
 /// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[serial]
 async fn add_pypi_functionality() {
     let pixi = PixiControl::new().unwrap();
 
     pixi.init().await.unwrap();
 
     // Add python
-    pixi.add("python")
+    pixi.add("python~=3.12.0")
         .set_type(DependencyType::CondaDependency(SpecType::Run))
         .with_install(false)
         .await
@@ -295,7 +310,8 @@ async fn add_pypi_functionality() {
         Platform::Linux64,
         pep508_rs::Requirement::from_str("pytest").unwrap(),
     ));
-    // Test that the dev extras are added, mock is a test dependency of `pytest==8.3.2`
+    // Test that the dev extras are added, mock is a test dependency of
+    // `pytest==8.3.2`
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
@@ -342,10 +358,94 @@ async fn add_pypi_functionality() {
     ));
 }
 
+/// Test the `pixi add --pypi` functionality with extras
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn add_pypi_extra_functionality() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    // Add python
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("black")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Add dep with extra
+    pixi.add("black[cli]")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras are added
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(spec.extras(), &[ExtraName::from_str("cli").unwrap()]);
+            }
+        });
+
+    // Remove extras
+    pixi.add("black")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras are removed
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(spec.extras(), &[]);
+            }
+        });
+
+    // Add dep with extra and version
+    pixi.add("black[cli]==24.8.0")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check if the extras added and the version is set
+    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PyPiPackageName::from_str("black").unwrap() {
+                assert_eq!(
+                    spec,
+                    PyPiRequirement::Version {
+                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                        extras: vec![ExtraName::from_str("cli").unwrap()],
+                    }
+                );
+            }
+        });
+}
+
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-#[serial]
 async fn add_sdist_functionality() {
     let pixi = PixiControl::new().unwrap();
 
@@ -364,4 +464,54 @@ async fn add_sdist_functionality() {
         .with_install(true)
         .await
         .unwrap();
+}
+
+#[rstest::rstest]
+#[tokio::test]
+async fn add_unconstrainted_dependency() {
+    // Create a channel with a single package
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foobar").await.unwrap();
+    pixi.add("bar").with_feature("unreferenced").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `foobar` package
+    let foo_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("foobar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    // Get the specs for the `bar` package
+    let bar_spec = project
+        .manifest()
+        .feature("unreferenced")
+        .expect("feature 'unreferenced' is missing")
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    insta::assert_snapshot!(format!("foobar = {foo_spec}\nbar = {bar_spec}"), @r###"
+    foobar = ">=1,<2"
+    bar = "*"
+    "###);
 }

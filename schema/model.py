@@ -26,31 +26,39 @@ SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
 
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
+Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
+Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
-Platform = (
-    Literal["linux-32"]
-    | Literal["linux-64"]
-    | Literal["linux-aarch64"]
-    | Literal["linux-armv6l"]
-    | Literal["linux-armv7l"]
-    | Literal["linux-ppc64le"]
-    | Literal["linux-ppc64"]
-    | Literal["linux-s390x"]
-    | Literal["linux-riscv32"]
-    | Literal["linux-riscv64"]
-    | Literal["osx-64"]
-    | Literal["osx-arm64"]
-    | Literal["win-32"]
-    | Literal["win-64"]
-    | Literal["win-arm64"]
-    | Literal["emscripten-wasm32"]
-    | Literal["wasi-wasm32"]
-)
+
+
+class Platform(str, Enum):
+    """A supported operating system and processor architecture pair."""
+
+    emscripten_wasm32 = "emscripten-wasm32"
+    linux_32 = "linux-32"
+    linux_64 = "linux-64"
+    linux_aarch64 = "linux-aarch64"
+    linux_armv6l = "linux-armv6l"
+    linux_armv7l = "linux-armv7l"
+    linux_ppc64 = "linux-ppc64"
+    linux_ppc64le = "linux-ppc64le"
+    linux_riscv32 = "linux-riscv32"
+    linux_riscv64 = "linux-riscv64"
+    linux_s390x = "linux-s390x"
+    noarch = "noarch"
+    osx_64 = "osx-64"
+    osx_arm64 = "osx-arm64"
+    unknown = "unknown"
+    wasi_wasm32 = "wasi-wasm32"
+    win_32 = "win-32"
+    win_64 = "win-64"
+    win_arm64 = "win-arm64"
+    zos_z = "zos-z"
 
 
 class StrictBaseModel(BaseModel):
@@ -147,21 +155,37 @@ class MatchspecTable(StrictBaseModel):
         description="The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
     )
     build: NonEmptyStr | None = Field(None, description="The build string of the package")
+    build_number: NonEmptyStr | None = Field(
+        None,
+        alias="build-number",
+        description="The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
+    )
+    file_name: NonEmptyStr | None = Field(
+        None, alias="file-name", description="The file name of the package"
+    )
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
         examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
     )
+    subdir: NonEmptyStr | None = Field(
+        None, description="The subdir of the package, also known as platform"
+    )
+
+    path: NonEmptyStr | None = Field(None, description="The path to the package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
 
 
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
-
-
-# { version = "sdfds" extras = ["sdf"] }
-# { git = "sfds", rev = "fssd" }
-# { path = "asfdsf" }
-# { url = "asdfs" }
 
 
 class _PyPIRequirement(StrictBaseModel):
@@ -179,7 +203,7 @@ class _PyPiGitRequirement(_PyPIRequirement):
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to sue")
+    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
@@ -406,7 +430,7 @@ class Feature(StrictBaseModel):
         "- 'strict': only take the package from the channel it exist in first."
         "- 'disabled': group all dependencies together as if there is no channel difference.",
     )
-    platforms: list[NonEmptyStr] | None = Field(
+    platforms: list[Platform] | None = Field(
         None,
         description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
     )
@@ -459,12 +483,12 @@ class FindLinksURL(StrictBaseModel):
 
 
 class PyPIOptions(StrictBaseModel):
-    """Options related to PyPI indexes"""
+    """Options that determine the behavior of PyPI package resolution and installation"""
 
     index_url: NonEmptyStr | None = Field(
         None,
         alias="index-url",
-        description="Alternative PyPI registry that should be used as the main index",
+        description="PyPI registry that should be used as the primary index",
         examples=["https://pypi.org/simple"],
     )
     extra_index_urls: list[NonEmptyStr] | None = Field(
@@ -478,6 +502,20 @@ class PyPIOptions(StrictBaseModel):
         alias="find-links",
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
+    )
+    no_build_isolation: list[PyPIPackageName] = Field(
+        None,
+        alias="no-build-isolation",
+        description="Packages that should NOT be isolated during the build process",
+        examples=[["numpy"]],
+    )
+    index_strategy: (
+        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
+    ) = Field(
+        None,
+        alias="index-strategy",
+        description="The strategy to use when resolving packages from multiple indexes",
+        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
     )
 
 

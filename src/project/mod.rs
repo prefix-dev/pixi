@@ -19,29 +19,27 @@ use std::{
 
 use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
+pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
-use miette::{IntoDiagnostic, NamedSource};
+use itertools::Itertools;
+use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
+use pixi_config::Config;
+use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectToml, EnvironmentName, Environments, Manifest, ParsedManifest, SpecType,
+    pyproject::PyProjectManifest, EnvironmentName, Environments, HasManifestRef, Manifest,
+    ParsedManifest, SpecType,
 };
-use rattler_conda_types::{ChannelConfig, Version};
+use pixi_utils::reqwest::build_reqwest_clients;
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
+use rattler_conda_types::{Channel, ChannelConfig, Version};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    project::grouped_environment::GroupedEnvironment,
-    utils::reqwest::build_reqwest_clients,
-};
-use pixi_config::Config;
-use pixi_consts::consts;
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-
-pub use has_project_ref::HasProjectRef;
+use crate::activation::{initialize_env_variables, CurrentEnvVarBehavior};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -54,7 +52,7 @@ pub enum DependencyType {
 
 impl DependencyType {
     /// Convert to a name used in the manifest
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             DependencyType::CondaDependency(dep) => dep.name(),
             DependencyType::PypiDependency => consts::PYPI_DEPENDENCIES,
@@ -72,7 +70,7 @@ pub struct EnvironmentVars {
 
 impl EnvironmentVars {
     /// Create a new instance with empty AsyncCells
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             clean: Arc::new(AsyncCell::new()),
             pixi_only: Arc::new(AsyncCell::new()),
@@ -81,17 +79,17 @@ impl EnvironmentVars {
     }
 
     /// Get the clean environment variables
-    pub fn clean(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+    pub(crate) fn clean(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
         &self.clean
     }
 
     /// Get the pixi_only environment variables
-    pub fn pixi_only(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+    pub(crate) fn pixi_only(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
         &self.pixi_only
     }
 
     /// Get the full environment variables
-    pub fn full(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
+    pub(crate) fn full(&self) -> &Arc<AsyncCell<HashMap<String, String>>> {
         &self.full
     }
 }
@@ -138,7 +136,7 @@ impl Borrow<ParsedManifest> for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         let root = manifest
@@ -178,7 +176,7 @@ impl Project {
     /// the parent directories, or use the manifest specified by the
     /// environment. This will also set the current working directory to the
     /// project root.
-    pub fn discover() -> miette::Result<Self> {
+    pub(crate) fn discover() -> miette::Result<Self> {
         let project_toml = find_project_manifest();
 
         if std::env::var("PIXI_IN_SHELL").is_ok() {
@@ -208,12 +206,6 @@ impl Project {
         Self::from_path(&project_toml)
     }
 
-    /// Returns the source code of the project as [`NamedSource`].
-    /// Used in error reporting.
-    pub fn manifest_named_source(&self) -> NamedSource<String> {
-        NamedSource::new(self.manifest.file_name(), self.manifest.contents.clone())
-    }
-
     /// Loads a project from manifest file.
     pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
@@ -232,7 +224,7 @@ impl Project {
 
     /// Warns if Pixi is using a manifest from an environment variable rather
     /// than a discovered version
-    pub fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
+    pub(crate) fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
         if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
             let discover_path = find_project_manifest();
             let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
@@ -249,7 +241,7 @@ impl Project {
         }
     }
 
-    pub fn with_cli_config<C>(mut self, config: C) -> Self
+    pub(crate) fn with_cli_config<C>(mut self, config: C) -> Self
     where
         C: Into<Config>,
     {
@@ -273,12 +265,12 @@ impl Project {
     }
 
     /// Returns the description of the project
-    pub fn description(&self) -> &Option<String> {
+    pub(crate) fn description(&self) -> &Option<String> {
         &self.manifest.parsed.project.description
     }
 
     /// Returns the root directory of the project
-    pub fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.root
     }
 
@@ -303,12 +295,12 @@ impl Project {
 
     /// Returns the default environment directory without interacting with
     /// config.
-    pub fn default_environments_dir(&self) -> PathBuf {
+    pub(crate) fn default_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the environment directory
-    pub fn environments_dir(&self) -> PathBuf {
+    pub(crate) fn environments_dir(&self) -> PathBuf {
         let default_envs_dir = self.default_environments_dir();
 
         // Early out if detached-environments is not set
@@ -322,7 +314,6 @@ impl Project {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-
                 #[cfg(not(windows))]
                 if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
                     tracing::warn!(
@@ -353,13 +344,12 @@ impl Project {
 
     /// Returns the default solve group environments directory, without
     /// interacting with config
-    pub fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.default_environments_dir()
-            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    pub(crate) fn default_solve_group_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
-    pub fn solve_group_environments_dir(&self) -> PathBuf {
+    pub(crate) fn solve_group_environments_dir(&self) -> PathBuf {
         // If the detached-environments path is set, use it instead of the default
         // directory.
         if let Some(detached_environments_path) = self.detached_environments_path() {
@@ -369,18 +359,18 @@ impl Project {
     }
 
     /// Returns the path to the manifest file.
-    pub fn manifest_path(&self) -> PathBuf {
+    pub(crate) fn manifest_path(&self) -> PathBuf {
         self.manifest.path.clone()
     }
 
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
-    pub fn lock_file_path(&self) -> PathBuf {
+    pub(crate) fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
 
     /// Save back changes
-    pub fn save(&mut self) -> miette::Result<()> {
+    pub(crate) fn save(&mut self) -> miette::Result<()> {
         self.manifest.save()
     }
 
@@ -391,15 +381,15 @@ impl Project {
 
     /// Returns the environment with the given name or `None` if no such
     /// environment exists.
-    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<Environment<'_>>
+    pub fn environment<Q>(&self, name: &Q) -> Option<Environment<'_>>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         Some(Environment::new(self, self.manifest.environment(name)?))
     }
 
     /// Returns the environments in this project.
-    pub fn environments(&self) -> Vec<Environment> {
+    pub(crate) fn environments(&self) -> Vec<Environment> {
         self.manifest
             .parsed
             .environments
@@ -410,7 +400,7 @@ impl Project {
 
     /// Returns an environment in this project based on a name or an environment
     /// variable.
-    pub fn environment_from_name_or_env_var(
+    pub(crate) fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment> {
@@ -456,7 +446,7 @@ impl Project {
         }
     }
     /// Returns all the solve groups in the project.
-    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+    pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
             .parsed
             .solve_groups
@@ -470,7 +460,7 @@ impl Project {
 
     /// Returns the solve group with the given name or `None` if no such group
     /// exists.
-    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+    pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
         self.manifest
             .parsed
             .solve_groups
@@ -481,33 +471,8 @@ impl Project {
             })
     }
 
-    /// Return the grouped environments, which are all solve-groups and the
-    /// environments that need to be solved.
-    pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
-        let mut environments = HashSet::new();
-        environments.extend(
-            self.environments()
-                .into_iter()
-                .filter(|env| env.solve_group().is_none())
-                .map(GroupedEnvironment::from),
-        );
-        environments.extend(
-            self.solve_groups()
-                .into_iter()
-                .map(GroupedEnvironment::from),
-        );
-        environments.into_iter().collect()
-    }
-
-    /// Returns true if the project contains any reference pypi dependencies.
-    /// Even if just `[pypi-dependencies]` is specified without any
-    /// requirements this will return true.
-    pub fn has_pypi_dependencies(&self) -> bool {
-        self.manifest.has_pypi_dependencies()
-    }
-
     /// Returns the reqwest client used for http networking
-    pub fn client(&self) -> &reqwest::Client {
+    pub(crate) fn client(&self) -> &reqwest::Client {
         &self.client_and_authenticated_client().0
     }
 
@@ -522,13 +487,13 @@ impl Project {
             .get_or_init(|| build_reqwest_clients(Some(&self.config)))
     }
 
-    pub fn config(&self) -> &Config {
+    pub(crate) fn config(&self) -> &Config {
         &self.config
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
     /// ensures that the root directory is set correctly.
-    pub fn channel_config(&self) -> ChannelConfig {
+    pub(crate) fn channel_config(&self) -> ChannelConfig {
         ChannelConfig {
             root_dir: self.root.clone(),
             ..self.config.global_channel_config().clone()
@@ -542,50 +507,71 @@ impl Project {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> &MappingSource {
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
         fn build_pypi_name_mapping_source(
             manifest: &Manifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
             match manifest.parsed.project.conda_pypi_map.clone() {
-                Some(url) => {
-                    // transform user defined channels into rattler::Channel
-                    let channels = url
-                        .keys()
-                        .map(|channel_str| {
-                            (
-                                channel_str,
-                                channel_str
-                                    .clone()
-                                    .into_channel(channel_config)
-                                    .canonical_name(),
-                            )
+                Some(map) => {
+                    let channel_to_location_map = map
+                        .into_iter()
+                        .map(|(key, value)| {
+                            let key = key.into_channel(channel_config);
+                            Ok((key, value))
                         })
-                        .collect::<Vec<_>>();
+                        .collect::<miette::Result<HashMap<Channel, String>>>()?;
 
-                    let project_channels = manifest
+                    // User can disable the mapping by providing an empty map
+                    if channel_to_location_map.is_empty() {
+                        return Ok(MappingSource::Disabled);
+                    }
+
+                    let project_channels: HashSet<_> = manifest
                         .parsed
                         .project
                         .channels
                         .iter()
-                        .map(|pc| pc.channel.to_string())
-                        .collect::<HashSet<_>>();
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
 
-                    // Throw a warning for each missing channel from project table
-                    channels.iter().for_each(|(_, channel_canonical_name)| {
-                        if !project_channels.contains(channel_canonical_name) {
-                            tracing::warn!(
-                                "Defined custom mapping channel {} is missing from project channels",
-                                channel_canonical_name
+                    let feature_channels: HashSet<_> = manifest
+                        .parsed
+                        .features
+                        .values()
+                        .flat_map(|feature| feature.channels.iter())
+                        .flatten()
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
+
+                    let project_and_feature_channels: HashSet<_> =
+                        project_channels.union(&feature_channels).collect();
+
+                    for channel in channel_to_location_map.keys() {
+                        if !project_and_feature_channels.contains(channel) {
+                            let channels = project_and_feature_channels
+                                .iter()
+                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .sorted()
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            miette::bail!(
+                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
+                                console::style(
+                                    channel
+                                        .name
+                                        .clone()
+                                        .unwrap_or_else(|| channel.base_url.to_string())
+                                )
+                                .bold(),
+                                channels
                             );
                         }
-                    });
+                    }
 
-                    let mapping = channels
+                    let mapping = channel_to_location_map
                         .iter()
-                        .map(|(channel_str, channel)| {
-                            let mapping_location = url.get(channel_str).unwrap();
-
+                        .map(|(channel, mapping_location)| {
                             let url_or_path = match Url::parse(mapping_location) {
                                 Ok(url) => MappingLocation::Url(url),
                                 Err(err) => {
@@ -597,7 +583,7 @@ impl Project {
                                 }
                             };
 
-                            Ok((channel.trim_end_matches('/').into(), url_or_path))
+                            Ok((channel.canonical_name().trim_end_matches('/').into(), url_or_path))
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
@@ -606,18 +592,27 @@ impl Project {
                 None => Ok(MappingSource::Prefix),
             }
         }
-
-        self.mapping_source.get_or_init(|| {
+        self.mapping_source.get_or_try_init(|| {
             build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
-                .expect("mapping source should be ok")
         })
+    }
+
+    /// Returns the manifest of the project
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+}
+
+impl<'source> HasManifestRef<'source> for &'source Project {
+    fn manifest(&self) -> &'source Manifest {
+        Project::manifest(self)
     }
 }
 
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub fn find_project_manifest() -> Option<PathBuf> {
+pub(crate) fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
         [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
@@ -628,7 +623,7 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                     match *manifest {
                         consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
                         consts::PYPROJECT_MANIFEST
-                            if PyProjectToml::from_path(&path)
+                            if PyProjectManifest::from_path(&path)
                                 .is_ok_and(|project| project.is_pixi()) =>
                         {
                             Some(path.to_path_buf())
@@ -722,12 +717,11 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::FeatureName;
+    use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
 
     use super::*;
-    use pixi_manifest::FeaturesExt;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -780,7 +774,7 @@ mod tests {
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
-            .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
             .join("\n")
     }
 
@@ -925,5 +919,87 @@ mod tests {
             .manifest
             .tasks(Some(Platform::Linux64), &FeatureName::Default)
             .unwrap());
+    }
+
+    #[test]
+    fn test_mapping_location() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        let mapping = project.pypi_name_mapping_source().unwrap();
+        let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
+        let canonical_name = channel.canonical_name();
+
+        let canonical_channel_name = canonical_name.trim_end_matches('/');
+
+        assert_eq!(mapping.custom().unwrap().mapping.get(canonical_channel_name).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+
+        // Check url channel as map key
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["https://prefix.dev/test-channel"]
+            platforms = []
+            conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        let mapping = project.pypi_name_mapping_source().unwrap();
+        assert_eq!(
+            mapping
+                .custom()
+                .unwrap()
+                .mapping
+                .get(
+                    Channel::from_str("https://prefix.dev/test-channel", &project.channel_config())
+                        .unwrap()
+                        .canonical_name()
+                        .trim_end_matches('/')
+                )
+                .unwrap(),
+            &MappingLocation::Path(PathBuf::from("mapping.json"))
+        );
+    }
+
+    #[test]
+    fn test_mapping_ensure_feature_channels_also_checked() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {custom-feature-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+
+            [feature.a]
+            channels = ["custom-feature-channel"]
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert!(project.pypi_name_mapping_source().is_ok());
+
+        let non_existing_channel = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        // We output error message with bold channel name,
+        // so we need to disable colors for snapshot
+        console::set_colors_enabled(false);
+
+        insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
     }
 }

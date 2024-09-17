@@ -6,6 +6,7 @@ use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::cli::cli_config::ProjectConfig;
 use clap::Parser;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
@@ -24,11 +25,11 @@ pub enum Command {
 /// Use the `cache` subcommand to clean the cache.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
     #[command(subcommand)]
     command: Option<Command>,
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
 
     /// The environment directory to remove.
     #[arg(long, short, conflicts_with = "command")]
@@ -46,9 +47,21 @@ pub struct CacheArgs {
     #[arg(long)]
     pub conda: bool,
 
-    /// Answer yes to all questions.
+    /// Clean only the mapping cache.
     #[arg(long)]
-    pub yes: bool,
+    pub mapping: bool,
+
+    /// Clean only `exec` cache
+    #[arg(long)]
+    pub exec: bool,
+
+    /// Clean only the repodata cache.
+    #[arg(long)]
+    pub repodata: bool,
+
+    /// Answer yes to all questions.
+    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    assume_yes: bool,
     // TODO: Would be amazing to have a --unused flag to clean only the unused cache.
     //       By searching the inode count of the packages and removing based on that.
     // #[arg(long)]
@@ -59,7 +72,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::Cache(args)) => clean_cache(args).await?,
         None => {
-            let project = Project::load_or_else_discover(args.manifest_path.as_deref())?; // Extract the passed in environment name.
+            let project =
+                Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
 
             let explicit_environment = args
                 .environment
@@ -99,7 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 remove_folder_with_progress(project.task_cache_folder(), false).await?;
             }
 
-            Project::warn_on_discovered_from_env(args.manifest_path.as_deref())
+            Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
         }
     }
     Ok(())
@@ -114,9 +128,18 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
     }
     if args.conda {
-        dirs.push(cache_dir.join("pkgs"));
+        dirs.push(cache_dir.join(consts::CONDA_PACKAGE_CACHE_DIR));
     }
-    if dirs.is_empty() && (args.yes || dialoguer::Confirm::new()
+    if args.repodata {
+        dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
+    }
+    if args.mapping {
+        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+    }
+    if args.exec {
+        dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
+    }
+    if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
                 .interact_opt()
                 .into_diagnostic()?

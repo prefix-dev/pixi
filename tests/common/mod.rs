@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod builders;
+pub mod client;
 pub mod package_database;
 
 use std::{
@@ -9,33 +10,37 @@ use std::{
     str::FromStr,
 };
 
+use indicatif::ProgressDrawTarget;
+use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::{
+    cli::{
+        add,
+        cli_config::{PrefixUpdateConfig, ProjectConfig},
+        init,
+        install::Args,
+        project, remove, run,
+        task::{self, AddArgs, AliasArgs},
+        update, LockFileUsageArgs,
+    },
+    task::{
+        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName,
+    },
+    Project, UpdateLockFileOptions,
+};
+use pixi_consts::consts;
+use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_progress::global_multi_progress;
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
+use rattler_lock::{LockFile, Package};
+use tempfile::TempDir;
+use thiserror::Error;
+
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
-use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::task::{
-    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
-};
-use pixi::{
-    cli::{
-        add, init,
-        install::Args,
-        project, remove, run,
-        run::get_task_env,
-        task::{self, AddArgs, AliasArgs},
-        update, LockFileUsageArgs,
-    },
-    task::TaskName,
-    Project, UpdateLockFileOptions,
-};
-use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeatureName};
-use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, Package};
-use tempfile::TempDir;
-use thiserror::Error;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -45,6 +50,11 @@ pub struct PixiControl {
 
 pub struct RunResult {
     output: Output,
+}
+
+/// Hides the progress bars for the tests
+fn hide_progress_bars() {
+    global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
 }
 
 impl RunResult {
@@ -84,6 +94,13 @@ pub trait LockFileExt {
         platform: Platform,
         requirement: pep508_rs::Requirement,
     ) -> bool;
+
+    fn get_pypi_package_version(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<String>;
 }
 
 impl LockFileExt for LockFile {
@@ -108,7 +125,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(Package::into_pypi)
-            .any(|pkg| pkg.data().package.name.as_ref() == name);
+            .any(|pkg| pkg.package_data().name.as_ref() == name);
         package_found
     }
 
@@ -148,12 +165,29 @@ impl LockFileExt for LockFile {
             .any(move |p| p.satisfies(&requirement));
         package_found
     }
+
+    fn get_pypi_package_version(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<String> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.packages(platform)
+                    .and_then(|mut packages| packages.find(|p| p.name() == package))
+            })
+            .map(|p| p.version().to_string())
+    }
 }
 
 impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> miette::Result<PixiControl> {
         let tempdir = tempfile::tempdir().into_diagnostic()?;
+        // Hide the progress bars for the tests
+        // Otherwise the override the test output
+        hide_progress_bars();
         Ok(PixiControl { tmpdir: tempdir })
     }
 
@@ -193,7 +227,25 @@ impl PixiControl {
     }
 
     pub fn manifest_path(&self) -> PathBuf {
-        self.project_path().join(consts::PROJECT_MANIFEST)
+        // Either pixi.toml or pyproject.toml
+        if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        } else if self
+            .project_path()
+            .join(consts::PYPROJECT_MANIFEST)
+            .exists()
+        {
+            return self.project_path().join(consts::PYPROJECT_MANIFEST);
+        } else {
+            return self.project_path().join(consts::PROJECT_MANIFEST);
+        }
+    }
+
+    /// Get the manifest contents
+    pub fn manifest_contents(&self) -> miette::Result<String> {
+        std::fs::read_to_string(self.manifest_path())
+            .into_diagnostic()
+            .context("failed to read manifest")
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
@@ -207,7 +259,8 @@ impl PixiControl {
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
-                pyproject: false,
+                format: None,
+                pyproject_toml: false,
             },
         }
     }
@@ -223,7 +276,8 @@ impl PixiControl {
                 channels: None,
                 platforms,
                 env_file: None,
-                pyproject: false,
+                format: None,
+                pyproject_toml: false,
             },
         }
     }
@@ -239,11 +293,15 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    specs,
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(specs),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
                 editable: false,
             },
         }
@@ -253,11 +311,15 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                dependency_config: AddBuilder::dependency_config_with_specs(
-                    vec![spec],
-                    self.manifest_path(),
-                ),
-                config: Default::default(),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    config: Default::default(),
+                },
             },
         }
     }
@@ -289,7 +351,10 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
+        args.project_config.manifest_path = args
+            .project_config
+            .manifest_path
+            .or_else(|| Some(self.manifest_path()));
 
         // Load the project
         let project = self.project()?;
@@ -308,7 +373,7 @@ impl PixiControl {
 
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
-            .up_to_date_lock_file(UpdateLockFileOptions {
+            .update_lock_file(UpdateLockFileOptions {
                 lock_file_usage: args.lock_file_usage.into(),
                 ..UpdateLockFileOptions::default()
             })
@@ -335,8 +400,8 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    let env =
-                        get_task_env(&mut lock_file, &task.run_environment, args.clean_env).await?;
+                    lock_file.prefix(&task.run_environment).await?;
+                    let env = get_task_env(&task.run_environment, args.clean_env).await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,
@@ -360,7 +425,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 lock_file_usage: LockFileUsageArgs {
                     frozen: false,
                     locked: false,
@@ -377,7 +444,9 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
-                manifest_path: Some(self.manifest_path()),
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),
@@ -389,7 +458,7 @@ impl PixiControl {
     /// Load the current lock-file.
     ///
     /// If you want to lock-file to be up-to-date with the project call
-    /// [`Self::up_to_date_lock_file`].
+    /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
@@ -397,10 +466,10 @@ impl PixiControl {
 
     /// Load the current lock-file and makes sure that its up to date with the
     /// project.
-    pub async fn up_to_date_lock_file(&self) -> miette::Result<LockFile> {
+    pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.project()?;
         Ok(project
-            .up_to_date_lock_file(UpdateLockFileOptions::default())
+            .update_lock_file(UpdateLockFileOptions::default())
             .await?
             .lock_file)
     }
@@ -448,7 +517,9 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
-            manifest_path: Some(self.pixi.manifest_path()),
+            project_config: ProjectConfig {
+                manifest_path: Some(self.pixi.manifest_path()),
+            },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],
                 platform,

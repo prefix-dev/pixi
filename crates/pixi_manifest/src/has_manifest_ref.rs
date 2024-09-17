@@ -5,3 +5,9 @@ pub trait HasManifestRef<'source> {
     /// Returns access to the original pixi manifest
     fn manifest(&self) -> &'source crate::Manifest;
 }
+
+impl<'source> HasManifestRef<'source> for &'source crate::Manifest {
+    fn manifest(&self) -> &'source crate::Manifest {
+        self
+    }
+}

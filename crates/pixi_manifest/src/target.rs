@@ -2,9 +2,10 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Deserializer};
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde_with::serde_as;
 
 use super::error::DependencyError;
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
 #[derive(Default, Debug, Clone)]
 pub struct Target {
     /// Dependencies for this target.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, NamelessMatchSpec>>,
+    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
 
     /// Specific python dependencies
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -35,17 +36,17 @@ pub struct Target {
 
 impl Target {
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
+    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
@@ -63,7 +64,7 @@ impl Target {
     pub fn dependencies(
         &self,
         spec_type: Option<SpecType>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         if let Some(spec_type) = spec_type {
             self.dependencies.get(&spec_type).map(Cow::Borrowed)
         } else {
@@ -81,7 +82,7 @@ impl Target {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
@@ -113,7 +114,7 @@ impl Target {
         &self,
         dep_name: &PackageName,
         spec_type: Option<SpecType>,
-        exact: Option<&NamelessMatchSpec>,
+        exact: Option<&PixiSpec>,
     ) -> bool {
         let current_dependency = self
             .dependencies(spec_type)
@@ -133,7 +134,7 @@ impl Target {
         &mut self,
         dep_name: &PackageName,
         spec_type: SpecType,
-    ) -> Result<(PackageName, NamelessMatchSpec), DependencyError> {
+    ) -> Result<(PackageName, PixiSpec), DependencyError> {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
             return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
@@ -145,12 +146,7 @@ impl Target {
     /// Adds a dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_dependency(
-        &mut self,
-        dep_name: &PackageName,
-        spec: &NamelessMatchSpec,
-        spec_type: SpecType,
-    ) {
+    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
         self.dependencies
             .entry(spec_type)
             .or_default()
@@ -164,13 +160,13 @@ impl Target {
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
-        spec: &NamelessMatchSpec,
+        spec: &PixiSpec,
         spec_type: SpecType,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, Some(spec_type), None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if spec.version.is_none() => {
+                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
                     return Ok(false)
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
@@ -197,7 +193,12 @@ impl Target {
                 *r == PyPiRequirement::try_from(requirement.clone())
                     .expect("could not convert pep508 requirement")
             }
-            (Some(_), false) => true,
+            (Some(r), false) => {
+                if r.extras() != requirement.extras {
+                    return false;
+                }
+                true
+            }
             (None, _) => false,
         }
     }
@@ -220,31 +221,17 @@ impl Target {
     /// Adds a pypi dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(
-        &mut self,
-        requirement: &pep508_rs::Requirement,
-        editable: Option<bool>,
-    ) {
-        // TODO: add proper error handling for this
-        let mut pypi_requirement = PyPiRequirement::try_from(requirement.clone())
-            .expect("could not convert pep508 requirement");
-        if let Some(editable) = editable {
-            pypi_requirement.set_editable(editable);
-        }
-
+    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
-            .insert(
-                PyPiPackageName::from_normalized(requirement.name.clone()),
-                pypi_requirement,
-            );
+            .insert(name, requirement);
     }
 
     /// Adds a pypi dependency to a target
     ///
     /// This will return an error if the exact same dependency already exist
     /// This will overwrite any existing dependency of the same name
-    pub fn try_add_pypi_dependency(
+    pub fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
@@ -264,7 +251,15 @@ impl Target {
                 _ => {}
             }
         }
-        self.add_pypi_dependency(requirement, editable);
+
+        // Convert to an internal representation
+        let name = PyPiPackageName::from_normalized(requirement.name.clone());
+        let mut requirement = PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+        if let Some(editable) = editable {
+            requirement.set_editable(editable);
+        }
+
+        self.add_pypi_dependency(name, requirement);
         Ok(true)
     }
 }
@@ -295,14 +290,14 @@ impl TargetSelector {
     }
 }
 
-impl ToString for TargetSelector {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for TargetSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelector::Platform(p) => p.to_string(),
-            TargetSelector::Linux => "linux".to_string(),
-            TargetSelector::Unix => "unix".to_string(),
-            TargetSelector::Win => "win".to_string(),
-            TargetSelector::MacOs => "osx".to_string(),
+            TargetSelector::Platform(p) => write!(f, "{}", p),
+            TargetSelector::Linux => write!(f, "linux"),
+            TargetSelector::Unix => write!(f, "unix"),
+            TargetSelector::Win => write!(f, "win"),
+            TargetSelector::MacOs => write!(f, "osx"),
         }
     }
 }
@@ -342,16 +337,13 @@ impl<'de> Deserialize<'de> for Target {
         #[serde(deny_unknown_fields)]
         pub struct TomlTarget {
             #[serde(default)]
-            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
-            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+            dependencies: IndexMap<PackageName, PixiSpec>,
 
             #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -561,7 +553,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
 
-    use crate::manifest::Manifest;
+    use crate::manifests::manifest::Manifest;
 
     #[test]
     fn test_targets_overwrite_order() {
@@ -595,7 +587,7 @@ mod tests {
             .dependencies(None)
             .unwrap_or_default()
             .iter()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
             .join("\n"), @r###"
         run = ==2.0
         host = ==2.0

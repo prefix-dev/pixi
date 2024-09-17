@@ -1,25 +1,27 @@
-use std::{
-    cmp::Ordering,
-    io::{self, Write},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::future::{Future, IntoFuture};
+use std::io::{self, Write};
+use std::str::FromStr;
 
 use clap::Parser;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord};
-use rattler_repodata_gateway::sparse::SparseRepoData;
+use pixi_config::default_channel_config;
+use pixi_progress::await_in_progress;
+use pixi_utils::reqwest::build_reqwest_clients;
+use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
-use tokio::task::spawn_blocking;
+use url::Url;
 
-use crate::utils::default_channel_config;
-use crate::{repodata::fetch_sparse_repodata, utils::reqwest::build_reqwest_clients, Project};
+use crate::cli::cli_config::ProjectConfig;
+use crate::Project;
 use pixi_config::Config;
-use pixi_manifest::FeaturesExt;
-use pixi_progress::await_in_progress;
+
+use super::cli_config::ChannelsConfig;
 
 /// Search a conda package
 ///
@@ -31,14 +33,11 @@ pub struct Args {
     #[arg(required = true)]
     pub package: String,
 
-    /// Channel to specifically search package, defaults to
-    /// project channels or conda-forge
-    #[clap(short, long)]
-    channel: Option<Vec<NamedChannelOrUrl>>,
+    #[clap(flatten)]
+    channels: ChannelsConfig,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 
     /// The platform to search for, defaults to current platform
     #[arg(short, long, default_value_t = Platform::current())]
@@ -49,44 +48,50 @@ pub struct Args {
     limit: Option<usize>,
 }
 
-/// fetch packages from `repo_data` based on `filter_func`
-fn search_package_by_filter<F>(
+/// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
+async fn search_package_by_filter<F, QF, FR>(
     package: &PackageName,
-    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    all_package_names: Vec<PackageName>,
+    repodata_query_func: QF,
     filter_func: F,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
-    F: Fn(&str, &PackageName) -> bool,
+    F: Fn(&PackageName, &PackageName) -> bool,
+    QF: Fn(Vec<MatchSpec>) -> FR,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
 {
-    let similar_packages = repo_data
+    let similar_packages = all_package_names
         .iter()
-        .flat_map(|(_, repo)| {
-            repo.package_names()
-                .filter(|&name| filter_func(name, package))
-        })
-        .unique()
-        .collect::<Vec<&str>>();
+        .filter(|&name| filter_func(name, package))
+        .cloned()
+        .collect_vec();
 
-    let mut latest_packages = Vec::new();
+    // Transform the package names into `MatchSpec`s
 
-    // search for `similar_packages` in all platform's repodata
-    // add the latest version of the fetched package to latest_packages vector
-    for package in similar_packages {
-        let mut records = Vec::new();
+    let specs = similar_packages
+        .iter()
+        .cloned()
+        .map(MatchSpec::from)
+        .collect();
 
-        for repo in repo_data.values() {
-            records.extend(
-                repo.load_records(&PackageName::new_unchecked(package))
-                    .into_diagnostic()?,
-            );
-        }
+    let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
 
-        // sort records by version, get the latest one
-        records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-        let latest_package = records.last().cloned();
-        if let Some(latest_package) = latest_package {
-            latest_packages.push(latest_package);
-        }
+    let mut latest_packages: Vec<RepoDataRecord> = Vec::new();
+
+    for repo in repos {
+        // sort records by version, get the latest one of each package
+        let records_of_repo: HashMap<String, RepoDataRecord> = repo
+            .into_iter()
+            .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+            .map(|record| {
+                (
+                    record.package_record.name.as_normalized().to_string(),
+                    record.clone(),
+                )
+            })
+            .collect();
+
+        latest_packages.extend(records_of_repo.into_values().collect_vec());
     }
 
     Ok(latest_packages)
@@ -94,90 +99,47 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
-    let channels = match (args.channel, project.as_ref()) {
-        // if user passes channels through the channel flag
-        (Some(c), Some(p)) => {
-            let channels = if c.is_empty() {
-                p.config().default_channels()
-            } else {
-                c
-            };
-            eprintln!(
-                "Using channels from arguments ({}): {:?}",
-                p.name(),
-                channels.iter().format(", ")
-            );
-            let channel_config = p.channel_config();
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(&channel_config))
-                .collect_vec()
-        }
-        // No project -> use the global config
-        (Some(c), None) => {
-            let config = Config::load_global();
-            let channels = if c.is_empty() {
-                config.default_channels()
-            } else {
-                c
-            };
-            eprintln!(
-                "Using channels from arguments: {}",
-                channels.iter().format(", ")
-            );
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(config.global_channel_config()))
-                .collect_vec()
-        }
-        // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => {
-            let c = p.default_environment().channels();
-            eprintln!(
-                "Using channels from project ({}): {}",
-                p.name(),
-                c.iter().format(", ")
-            );
-            let channel_config = p.channel_config();
-            c.into_iter()
-                .cloned()
-                .map(|c| c.into_channel(&channel_config))
-                .collect_vec()
-        }
-        // if user doesn't pass channels and we are not in project
-        (None, None) => {
-            let config = Config::load_global();
-            let channels = config.default_channels();
-            eprintln!(
-                "Using channels from global config: {}",
-                channels.iter().format(", ")
-            );
-            channels
-                .into_iter()
-                .map(|c| c.into_channel(config.global_channel_config()))
-                .collect_vec()
-        }
-    };
+    // Resolve channels from project / CLI args
+    let channels = args.channels.resolve_from_project(project.as_ref());
+    eprintln!(
+        "Using channels: {}",
+        channels.iter().map(|c| c.name()).format(", ")
+    );
 
     let package_name_filter = args.package;
 
-    let client = if let Some(project) = project.as_ref() {
-        project.authenticated_client().clone()
-    } else {
-        build_reqwest_clients(None).1
-    };
+    let client = project
+        .as_ref()
+        .map(|p| p.authenticated_client().clone())
+        .unwrap_or_else(|| build_reqwest_clients(None).1);
 
-    let repo_data = Arc::new(
-        fetch_sparse_repodata(
-            channels.iter(),
-            [args.platform],
-            &client,
-            project.as_ref().map(|p| p.config()),
-        )
-        .await?,
-    );
+    let config = Config::load_global();
+
+    // Fetch the all names from the repodata using gateway
+    let gateway = config.gateway(client.clone());
+
+    let all_names = await_in_progress("loading all package names", |_| async {
+        gateway
+            .names(channels.clone(), [args.platform, Platform::NoArch])
+            .await
+    })
+    .await
+    .into_diagnostic()?;
+
+    // Compute the repodata query function that will be used to fetch the repodata for
+    // filtered package names
+
+    let repodata_query_func = |some_specs: Vec<MatchSpec>| {
+        gateway
+            .query(
+                channels.clone(),
+                [args.platform, Platform::NoArch],
+                some_specs.clone(),
+            )
+            .into_future()
+    };
 
     // When package name filter contains * (wildcard), it will search and display a
     // list of packages matching this filter
@@ -188,7 +150,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         search_package_by_wildcard(
             package_name,
             &package_name_filter,
-            repo_data,
+            all_names,
+            repodata_query_func,
             args.limit,
             stdout,
         )
@@ -198,28 +161,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-        search_exact_package(package_name, repo_data, stdout).await?;
+
+        search_exact_package(package_name, all_names, repodata_query_func, stdout).await?;
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
-async fn search_exact_package<W: Write>(
+async fn search_exact_package<W: Write, QF, FR>(
     package_name: PackageName,
-    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    all_repodata_names: Vec<PackageName>,
+    repodata_query_func: QF,
     out: W,
-) -> miette::Result<()> {
+) -> miette::Result<()>
+where
+    QF: Fn(Vec<MatchSpec>) -> FR,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
+{
     let package_name_search = package_name.clone();
-    let packages = await_in_progress("searching packages", |_| {
-        spawn_blocking(move || {
-            search_package_by_filter(&package_name_search, repo_data, |pn, n| {
-                pn == n.as_normalized()
-            })
-        })
-    })
-    .await
-    .into_diagnostic()??;
+    let packages = search_package_by_filter(
+        &package_name_search,
+        all_repodata_names,
+        repodata_query_func,
+        |pn, n| pn == n,
+    )
+    .await?;
 
     if packages.is_empty() {
         let normalized_package_name = package_name.as_normalized();
@@ -342,41 +309,47 @@ fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Res
     Ok(())
 }
 
-async fn search_package_by_wildcard<W: Write>(
+async fn search_package_by_wildcard<W: Write, QF, FR>(
     package_name: PackageName,
     package_name_filter: &str,
-    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    all_package_names: Vec<PackageName>,
+    repodata_query_func: QF,
     limit: Option<usize>,
     out: W,
-) -> miette::Result<()> {
+) -> miette::Result<()>
+where
+    QF: Fn(Vec<MatchSpec>) -> FR + Clone,
+    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
+{
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
-    let mut packages = await_in_progress("searching packages", |_| {
-        spawn_blocking(move || {
-            let packages =
-                search_package_by_filter(&package_name_search, repo_data.clone(), |pn, _| {
-                    wildcard_pattern.is_match(pn)
-                });
-            match packages {
-                Ok(packages) => {
-                    if packages.is_empty() {
-                        let similarity = 0.6;
-                        return search_package_by_filter(
-                            &package_name_search,
-                            repo_data,
-                            |pn, n| jaro(pn, n.as_normalized()) > similarity,
-                        );
-                    }
-                    Ok(packages)
-                }
-                Err(e) => Err(e),
-            }
-        })
+
+    let mut packages = await_in_progress("searching packages", |_| async {
+        let packages = search_package_by_filter(
+            &package_name_search,
+            all_package_names.clone(),
+            repodata_query_func.clone(),
+            |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
+        )
+        .await?;
+
+        if !packages.is_empty() {
+            return Ok(packages);
+        }
+
+        tracing::info!("No packages found with wildcard search, trying with fuzzy search.");
+        let similarity = 0.85;
+        search_package_by_filter(
+            &package_name_search,
+            all_package_names,
+            repodata_query_func,
+            |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
+        )
+        .await
     })
-    .await
-    .into_diagnostic()??;
+    .await?;
 
     let normalized_package_name = package_name.as_normalized();
     packages.sort_by(|a, b| {
@@ -435,14 +408,11 @@ fn print_matching_packages<W: Write>(
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel_name = if let Some(channel) = package
-            .channel
-            .strip_prefix(channel_config.channel_alias.as_str())
-        {
-            channel.trim_end_matches('/')
-        } else {
-            package.channel.as_str()
-        };
+
+        let channel_name = Url::from_str(&package.channel)
+            .ok()
+            .and_then(|url| channel_config.strip_channel_alias(&url))
+            .unwrap_or_else(|| package.channel.to_string());
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 

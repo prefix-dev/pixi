@@ -9,7 +9,10 @@ type WheelInfo = (Vec<RecordEntry>, PathBuf);
 /// (`purelib`, `platlib` or `unknown`).
 ///
 /// This function is used to detect if Python wheels will clobber already installed Conda packages
-pub fn get_wheel_info(whl: &Path, venv: &PythonEnvironment) -> miette::Result<Option<WheelInfo>> {
+pub(crate) fn get_wheel_info(
+    whl: &Path,
+    venv: &PythonEnvironment,
+) -> miette::Result<Option<WheelInfo>> {
     let dist_info_prefix = find_dist_info(whl)?;
     // Read the RECORD file.
     let mut record_file =
@@ -63,7 +66,7 @@ fn find_dist_info(path: impl AsRef<Path>) -> miette::Result<String> {
 
 /// Reads the record file
 /// <https://www.python.org/dev/peps/pep-0376/#record>
-pub fn read_record_file(record: &mut impl Read) -> miette::Result<Vec<RecordEntry>> {
+pub(crate) fn read_record_file(record: &mut impl Read) -> miette::Result<Vec<RecordEntry>> {
     ReaderBuilder::new()
         .has_headers(false)
         .escape(Some(b'"'))
@@ -80,7 +83,10 @@ pub fn read_record_file(record: &mut impl Read) -> miette::Result<Vec<RecordEntr
         .collect()
 }
 
-pub fn get_wheel_kind(wheel_path: &Path, dist_info_prefix: String) -> miette::Result<LibKind> {
+pub(crate) fn get_wheel_kind(
+    wheel_path: &Path,
+    dist_info_prefix: String,
+) -> miette::Result<LibKind> {
     // We're going step by step though
     // https://packaging.python.org/en/latest/specifications/binary-distribution-format/#installing-a-wheel-distribution-1-0-py32-none-any-whl
     // > 1.a Parse distribution-1.0.dist-info/WHEEL.
@@ -100,7 +106,7 @@ use std::{
 
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
-use uv_toolchain::PythonEnvironment;
+use uv_python::PythonEnvironment;
 
 /// Line in a RECORD file
 /// <https://www.python.org/dev/peps/pep-0376/#record>

@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     sync::Arc,
 };
 
@@ -13,13 +14,12 @@ use super::{
     CustomMapping, PurlSource, Reporter,
 };
 
-pub async fn fetch_mapping_from_url<T>(
+pub type CompressedMapping = HashMap<String, Option<String>>;
+
+pub async fn fetch_mapping_from_url(
     client: &ClientWithMiddleware,
     url: &Url,
-) -> miette::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
+) -> miette::Result<CompressedMapping> {
     let response = client
         .get(url.clone())
         .send()
@@ -37,9 +37,24 @@ where
         ));
     }
 
-    let mapping_by_name: T = response.json().await.into_diagnostic().context(format!(
+    let mapping_by_name = response.json().await.into_diagnostic().context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
         url
+    ))?;
+
+    Ok(mapping_by_name)
+}
+
+pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
+    let file = std::fs::File::open(path)
+        .into_diagnostic()
+        .context(format!("failed to open file {}", path.display()))?;
+    let reader = std::io::BufReader::new(file);
+    let mapping_by_name = serde_json::from_reader(reader)
+        .into_diagnostic()
+        .context(format!(
+        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
+        path.display()
     ))?;
 
     Ok(mapping_by_name)
@@ -49,14 +64,18 @@ where
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
     mapping_url: &CustomMapping,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    trim_conda_packages_channel_url_suffix(conda_packages);
-    let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
+    let mut conda_packages = conda_packages.into_iter().collect::<Vec<_>>();
+
+    for package in conda_packages.iter_mut() {
+        package.channel = package.channel.trim_end_matches('/').to_string();
+    }
+    let packages_for_prefix_mapping: Vec<_> = conda_packages
         .iter()
         .filter(|package| !mapping_url.mapping.contains_key(&package.channel))
-        .cloned()
+        .map(|p| (**p).clone())
         .collect();
 
     let custom_mapping = mapping_url.fetch_custom_mapping(client).await?;
@@ -65,7 +84,9 @@ pub async fn amend_pypi_purls(
     // to request from the prefix_mapping. This will avoid fetching unwanted
     // URLs, e.g. behind corporate firewalls
     if packages_for_prefix_mapping.is_empty() {
-        _amend_only_custom_pypi_purls(conda_packages, &custom_mapping)?;
+        for record in conda_packages {
+            amend_pypi_purls_for_record(record, &custom_mapping)?;
+        }
     } else {
         let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
             client,
@@ -76,7 +97,7 @@ pub async fn amend_pypi_purls(
         let compressed_mapping =
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
-        for record in conda_packages.iter_mut() {
+        for record in conda_packages {
             if !mapping_url.mapping.contains_key(&record.channel) {
                 prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                     record,
@@ -99,7 +120,7 @@ pub async fn amend_pypi_purls(
 /// the record refers to a conda-forge package.
 fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
-    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
+    custom_mapping: &HashMap<String, CompressedMapping>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -147,20 +168,4 @@ fn amend_pypi_purls_for_record(
     package_purls.extend(purls);
 
     Ok(())
-}
-
-pub fn _amend_only_custom_pypi_purls(
-    conda_packages: &mut [RepoDataRecord],
-    custom_mapping: &HashMap<String, HashMap<String, Option<String>>>,
-) -> miette::Result<()> {
-    for record in conda_packages.iter_mut() {
-        amend_pypi_purls_for_record(record, custom_mapping)?;
-    }
-    Ok(())
-}
-
-fn trim_conda_packages_channel_url_suffix(conda_packages: &mut [RepoDataRecord]) {
-    for package in conda_packages {
-        package.channel = package.channel.trim_end_matches('/').to_string();
-    }
 }

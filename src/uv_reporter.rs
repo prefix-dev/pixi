@@ -25,7 +25,7 @@ pub struct UvReporterOptions {
 }
 
 impl UvReporterOptions {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             length: None,
             top_level_message: "",
@@ -35,27 +35,27 @@ impl UvReporterOptions {
         }
     }
 
-    pub fn with_length(mut self, length: u64) -> Self {
+    pub(crate) fn with_length(mut self, length: u64) -> Self {
         self.length = Some(length);
         self
     }
 
-    pub fn with_top_level_message(mut self, message: &'static str) -> Self {
+    pub(crate) fn with_top_level_message(mut self, message: &'static str) -> Self {
         self.top_level_message = message;
         self
     }
 
-    pub fn with_existing(mut self, progress_bar: ProgressBar) -> Self {
+    pub(crate) fn with_existing(mut self, progress_bar: ProgressBar) -> Self {
         self.progress_bar = Some(progress_bar);
         self
     }
 
-    pub fn with_capacity(mut self, capacity: usize) -> Self {
+    pub(crate) fn with_capacity(mut self, capacity: usize) -> Self {
         self.capacity = Some(capacity);
         self
     }
 
-    pub fn with_starting_tasks(mut self, tasks: impl Iterator<Item = String>) -> Self {
+    pub(crate) fn with_starting_tasks(mut self, tasks: impl Iterator<Item = String>) -> Self {
         self.starting_tasks = tasks.collect_vec();
         self
     }
@@ -72,7 +72,7 @@ pub struct UvReporter {
 impl UvReporter {
     /// Create a new instance that will report on the progress the given uv reporter
     /// This uses a set size and message
-    pub fn new(options: UvReporterOptions) -> Self {
+    pub(crate) fn new(options: UvReporterOptions) -> Self {
         // Use a new progress bar if none was provided.
         let pb = if let Some(pb) = options.progress_bar {
             pb
@@ -110,14 +110,14 @@ impl UvReporter {
         self.scoped_tasks.lock().expect("progress lock poison")
     }
 
-    pub fn start_sync(&self, message: String) -> usize {
+    pub(crate) fn start_sync(&self, message: String) -> usize {
         let task = self.fmt.start_sync(message);
         let mut lock = self.lock();
         lock.push(Some(task));
         lock.len() - 1
     }
 
-    pub fn finish(&self, id: usize) {
+    pub(crate) fn finish(&self, id: usize) {
         let mut lock = self.lock();
         let len = lock.len();
         let task = lock
@@ -129,11 +129,11 @@ impl UvReporter {
         }
     }
 
-    pub fn finish_all(&self) {
+    pub(crate) fn finish_all(&self) {
         self.pb.finish_and_clear()
     }
 
-    pub fn increment_progress(&self) {
+    pub(crate) fn increment_progress(&self) {
         self.pb.inc(1);
     }
 }

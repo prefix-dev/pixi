@@ -1,20 +1,21 @@
 use std::io;
 use std::io::{stdout, Write};
-use std::path::PathBuf;
 
 use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::utils::uv::pypi_options_to_index_locations;
 use crate::Project;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
+use pixi_uv_conversions::pypi_options_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{Package, UrlOrPath};
+use rattler_lock::Package;
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -52,20 +53,18 @@ pub struct Args {
     #[arg(long, default_value = "name", value_enum)]
     pub sort_by: SortBy,
 
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
-    #[arg(long)]
-    pub no_install: bool,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// Only list packages that are explicitly defined in the project.
     #[arg(short = 'x', long)]
@@ -90,7 +89,7 @@ struct PackageToOutput {
 }
 
 /// Get directory size
-pub fn get_dir_size<P>(path: P) -> std::io::Result<u64>
+pub(crate) fn get_dir_size<P>(path: P) -> std::io::Result<u64>
 where
     P: AsRef<std::path::Path>,
 {
@@ -112,13 +111,13 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
-            no_install: args.no_install,
+        .update_lock_file(UpdateLockFileOptions {
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -144,7 +143,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_project(&project)?;
-            index_locations = pypi_options_to_index_locations(&environment.pypi_options());
+            index_locations =
+                pypi_options_to_index_locations(&environment.pypi_options(), project.root())
+                    .into_diagnostic()?;
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),
@@ -217,7 +218,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{}No packages found.",
             console::style(console::Emoji("✘ ", "")).red(),
         );
-        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
 
@@ -234,7 +235,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
-    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
@@ -320,7 +321,7 @@ fn create_package_to_output<'a, 'b>(
     let size_bytes = match p {
         Package::Conda(pkg) => pkg.package_record().size,
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index.as_mut().and_then(|registry| {
                 let version = registry.get_version(&package_data.name, &package_data.version)?;
                 get_dir_size(&version.path).ok()
@@ -329,9 +330,9 @@ fn create_package_to_output<'a, 'b>(
     };
 
     let source = match p {
-        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
+        Package::Conda(pkg) => pkg.location().file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index
                 .as_mut()
                 .and_then(|registry| {
@@ -339,17 +340,14 @@ fn create_package_to_output<'a, 'b>(
                         registry.get_version(&package_data.name, &package_data.version)?;
                     Some(version.filename.to_string())
                 })
-                .or_else(|| match &package_data.url_or_path {
-                    UrlOrPath::Url(url) => Some(url.to_string()),
-                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
-                })
+                .or_else(|| Some(package_data.location.to_string()))
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
     let is_editable = match p {
         Package::Conda(_) => false,
-        Package::Pypi(p) => p.data().package.editable,
+        Package::Pypi(p) => p.package_data().editable,
     };
 
     PackageToOutput {

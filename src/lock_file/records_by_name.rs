@@ -1,45 +1,76 @@
-use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::Hash,
+};
+
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
-use std::borrow::Borrow;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::hash::Hash;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<PackageName, RepoDataRecord>;
-pub type PypiRecordsByName = DependencyRecordsByName<uv_normalize::PackageName, PypiRecord>;
+use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use pixi_record::PixiRecord;
+
+pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
+pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
+pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
-pub(crate) trait HasNameVersion<N> {
-    fn name(&self) -> &N;
-    fn version(&self) -> &impl PartialOrd;
+pub(crate) trait HasNameVersion {
+    // Name type of the dependency
+    type N: Hash + Eq + Clone;
+    // Version type of the dependency
+    type V: PartialOrd + ToString;
+
+    /// Returns the name of the dependency
+    fn name(&self) -> &Self::N;
+    /// Returns the version of the dependency
+    fn version(&self) -> &Self::V;
 }
 
-impl HasNameVersion<uv_normalize::PackageName> for PypiRecord {
+impl HasNameVersion for PypiRecord {
+    type N = uv_normalize::PackageName;
+    type V = pep440_rs::Version;
+
     fn name(&self) -> &uv_normalize::PackageName {
         &self.0.name
     }
-    fn version(&self) -> &pep440_rs::Version {
+    fn version(&self) -> &Self::V {
         &self.0.version
     }
 }
-impl HasNameVersion<PackageName> for RepoDataRecord {
+impl HasNameVersion for RepoDataRecord {
+    type N = PackageName;
+    type V = VersionWithSource;
+
     fn name(&self) -> &PackageName {
         &self.package_record.name
     }
-    fn version(&self) -> &VersionWithSource {
+    fn version(&self) -> &Self::V {
         &self.package_record.version
     }
 }
 
-/// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
-#[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<N: Hash + Eq + Clone, D: HasNameVersion<N>> {
-    pub records: Vec<D>,
-    by_name: HashMap<N, usize>,
+impl HasNameVersion for PixiRecord {
+    type N = PackageName;
+    type V = VersionWithSource;
+
+    fn name(&self) -> &Self::N {
+        &self.package_record().name
+    }
+
+    fn version(&self) -> &Self::V {
+        &self.package_record().version
+    }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> Default for DependencyRecordsByName<N, D> {
+/// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from
+/// name to index.
+#[derive(Clone, Debug)]
+pub struct DependencyRecordsByName<D: HasNameVersion> {
+    pub records: Vec<D>,
+    by_name: HashMap<D::N, usize>,
+}
+
+impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
     fn default() -> Self {
         Self {
             records: Vec::new(),
@@ -48,7 +79,7 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> Default for DependencyRecordsBy
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyRecordsByName<N, D> {
+impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
     fn from(records: Vec<D>) -> Self {
         let by_name = records
             .iter()
@@ -59,48 +90,43 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> From<Vec<D>> for DependencyReco
     }
 }
 
-impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
-    /// Returns the record with the given name or `None` if no such record exists.
-    pub fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&D>
-    where
-        N: Borrow<Q>,
-        Q: Hash + Eq,
-    {
+impl<D: HasNameVersion> DependencyRecordsByName<D> {
+    /// Returns the record with the given name or `None` if no such record
+    /// exists.
+    pub(crate) fn by_name(&self, key: &D::N) -> Option<&D> {
         self.by_name.get(key).map(|idx| &self.records[*idx])
     }
 
-    /// Returns the index of the record with the given name or `None` if no such record exists.
-    pub fn index_by_name<Q: ?Sized>(&self, key: &Q) -> Option<usize>
-    where
-        N: Borrow<Q>,
-        Q: Hash + Eq,
-    {
+    /// Returns the index of the record with the given name or `None` if no such
+    /// record exists.
+    pub(crate) fn index_by_name(&self, key: &D::N) -> Option<usize> {
         self.by_name.get(key).copied()
     }
     /// Returns true if there are no records stored in this instance
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
 
     /// Returns the number of entries in the mapping.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.records.len()
     }
 
     /// Converts this instance into the internally stored records.
-    pub fn into_inner(self) -> Vec<D> {
+    pub(crate) fn into_inner(self) -> Vec<D> {
         self.records
     }
 
-    /// Returns an iterator over the names of the records stored in this instance.
-    pub fn names(&self) -> impl Iterator<Item = &N> {
+    /// Returns an iterator over the names of the records stored in this
+    /// instance.
+    pub(crate) fn names(&self) -> impl Iterator<Item = &D::N> {
         // Iterate over the records to retain the index of the original record.
         self.records.iter().map(|r| r.name())
     }
 
-    /// Constructs a new instance from an iterator of pypi records. If multiple records exist
-    /// for the same package name an error is returned.
-    pub fn from_unique_iter<I: IntoIterator<Item = D>>(iter: I) -> Result<Self, Box<D>> {
+    /// Constructs a new instance from an iterator of pypi records. If multiple
+    /// records exist for the same package name an error is returned.
+    pub(crate) fn from_unique_iter<I: IntoIterator<Item = D>>(iter: I) -> Result<Self, Box<D>> {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
         let mut by_name = HashMap::with_capacity(min_size);
@@ -120,9 +146,10 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
         Ok(Self { records, by_name })
     }
 
-    /// Constructs a new instance from an iterator of repodata records. The records are
-    /// deduplicated where the record with the highest version wins.
-    pub fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
+    /// Constructs a new instance from an iterator of repodata records. The
+    /// records are deduplicated where the record with the highest version
+    /// wins.
+    pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
         let mut by_name = HashMap::with_capacity(min_size);
@@ -149,23 +176,66 @@ impl<N: Hash + Eq + Clone, D: HasNameVersion<N>> DependencyRecordsByName<N, D> {
 }
 
 impl RepoDataRecordsByName {
-    /// Returns the record that represents the python interpreter or `None` if no such record exists.
-    pub fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
+    /// Returns the record that represents the python interpreter or `None` if
+    /// no such record exists.
+    pub(crate) fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
         self.records.iter().find(|record| is_python_record(*record))
     }
 
-    /// Convert the records into a map of pypi package identifiers mapped to the records they were
-    /// extracted from.
-    pub fn by_pypi_name(
+    /// Convert the records into a map of pypi package identifiers mapped to the
+    /// records they were extracted from.
+    pub(crate) fn by_pypi_name(
         &self,
     ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
         self.records
             .iter()
             .enumerate()
             .filter_map(|(idx, record)| {
-                PypiPackageIdentifier::from_record(record)
+                PypiPackageIdentifier::from_repodata_record(record)
                     .ok()
                     .map(move |identifiers| (idx, record, identifiers))
+            })
+            .flat_map(|(idx, record, identifiers)| {
+                identifiers.into_iter().map(move |identifier| {
+                    (
+                        identifier.name.as_normalized().clone(),
+                        (identifier, idx, record),
+                    )
+                })
+            })
+            .collect()
+    }
+}
+
+impl PixiRecordsByName {
+    /// Returns the record that represents the python interpreter or `None` if
+    /// no such record exists.
+    pub(crate) fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
+        self.records.iter().find_map(|record| match record {
+            PixiRecord::Binary(record) if is_python_record(record) => Some(record),
+            _ => None,
+        })
+    }
+
+    /// Convert the records into a map of pypi package identifiers mapped to the
+    /// records they were extracted from.
+    pub(crate) fn by_pypi_name(
+        &self,
+    ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &PixiRecord)> {
+        self.records
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, record)| match record {
+                PixiRecord::Binary(repodata_record) => {
+                    PypiPackageIdentifier::from_repodata_record(repodata_record)
+                        .ok()
+                        .map(move |identifiers| (idx, record, identifiers))
+                }
+                PixiRecord::Source(source_record) => {
+                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                        .ok()
+                        .map(move |identifiers| (idx, record, identifiers))
+                }
             })
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {

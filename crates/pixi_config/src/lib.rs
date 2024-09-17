@@ -15,13 +15,13 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
+#[cfg(feature = "rattler_repodata_gateway")]
+use rattler_repodata_gateway::{Gateway, SourceConfig};
+#[cfg(feature = "rattler_repodata_gateway")]
+use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
-#[cfg(feature = "rattler_repodata_gateway")]
-pub mod gateway;
-
-/// TODO: maybe remove this duplicate from `src/util.rs` at some point
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
@@ -271,6 +271,7 @@ impl PinningStrategy {
     ) -> Option<VersionSpec> {
         let (min_version, max_version) = versions.clone().into_iter().minmax().into_option()?;
         let lower_bound = min_version.clone();
+        let num_segments = max_version.segment_count();
 
         let constraint = match self {
             Self::ExactVersion => VersionSpec::Group(
@@ -284,7 +285,7 @@ impl PinningStrategy {
             Self::Major => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(2)
+                    .pop_segments(num_segments.saturating_sub(1))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Major)
                     .ok()?;
@@ -299,7 +300,7 @@ impl PinningStrategy {
             Self::Minor => {
                 let upper_bound = max_version
                     .clone()
-                    .pop_segments(1)
+                    .pop_segments(num_segments.saturating_sub(2))
                     .unwrap_or(max_version.to_owned())
                     .bump(VersionBumpType::Minor)
                     .ok()?;
@@ -443,6 +444,33 @@ impl From<ConfigCliPrompt> for Config {
         let mut config: Config = cli.config.into();
         config.change_ps1 = cli.change_ps1;
         config
+    }
+}
+#[cfg(feature = "rattler_repodata_gateway")]
+impl From<Config> for rattler_repodata_gateway::ChannelConfig {
+    fn from(config: Config) -> Self {
+        rattler_repodata_gateway::ChannelConfig::from(&config)
+    }
+}
+
+#[cfg(feature = "rattler_repodata_gateway")]
+impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
+    fn from(config: &Config) -> Self {
+        let default_source_config = config
+            .repodata_config
+            .as_ref()
+            .map(|config| SourceConfig {
+                jlap_enabled: !config.disable_jlap.unwrap_or(false),
+                zstd_enabled: !config.disable_zstd.unwrap_or(false),
+                bz2_enabled: !config.disable_bzip2.unwrap_or(false),
+                cache_action: Default::default(),
+            })
+            .unwrap_or_default();
+
+        rattler_repodata_gateway::ChannelConfig {
+            default: default_source_config,
+            per_channel: Default::default(),
+        }
     }
 }
 
@@ -865,6 +893,23 @@ impl Config {
             .into_diagnostic()
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
+
+    /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
+    #[cfg(feature = "rattler_repodata_gateway")]
+    pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
+        // Determine the cache directory and fall back to sane defaults otherwise.
+        let cache_dir = get_cache_dir().unwrap_or_else(|e| {
+            tracing::error!("failed to determine repodata cache directory: {e}");
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
+        });
+
+        // Construct the gateway
+        Gateway::builder()
+            .with_client(client)
+            .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
+            .with_channel_config(self.into())
+            .finish()
+    }
 }
 
 /// Returns the path to the system-level pixi config file.
@@ -923,7 +968,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
-        assert!(unused.contains(&"UNUSED".to_string()));
+        assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml).unwrap();
@@ -1248,6 +1293,7 @@ UNUSED = "unused"
             vec!["1.2"],
             vec!["1.2", "2"],
             vec!["1.2", "1!2.0"],
+            vec!["24.2"],
         ];
 
         // We could use `strum` for this, but it requires another dependency

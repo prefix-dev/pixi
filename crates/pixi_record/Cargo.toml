@@ -1,0 +1,19 @@
+[package]
+authors.workspace = true
+description = "Defines a superset of conda repodata records which can also represent dependencies from source"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_record"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+file_url = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
+thiserror = { workspace = true }
+typed-path = { workspace = true }
+url = { workspace = true }

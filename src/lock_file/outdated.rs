@@ -37,13 +37,13 @@ pub struct DisregardLockedContent<'p> {
 impl<'p> DisregardLockedContent<'p> {
     /// Returns true if the conda locked content should be ignored for the given
     /// environment.
-    pub fn should_disregard_conda(&self, env: &Environment<'p>) -> bool {
+    pub(crate) fn should_disregard_conda(&self, env: &Environment<'p>) -> bool {
         self.conda.contains(env)
     }
 
     /// Returns true if the pypi locked content should be ignored for the given
     /// environment.
-    pub fn should_disregard_pypi(&self, env: &Environment<'p>) -> bool {
+    pub(crate) fn should_disregard_pypi(&self, env: &Environment<'p>) -> bool {
         self.conda.contains(env) || self.pypi.contains(env)
     }
 }
@@ -51,7 +51,7 @@ impl<'p> DisregardLockedContent<'p> {
 impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and lock-file and finding
     /// any mismatches.
-    pub fn from_project_and_lock_file(project: &'p Project, lock_file: &LockFile) -> Self {
+    pub(crate) fn from_project_and_lock_file(project: &'p Project, lock_file: &LockFile) -> Self {
         let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
         let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
         let mut disregard_locked_content = DisregardLockedContent::default();
@@ -114,7 +114,7 @@ impl<'p> OutdatedEnvironments<'p> {
 
     /// Returns true if the lock-file is up-to-date with the project (e.g. there are no
     /// outdated targets).
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.conda.is_empty() && self.pypi.is_empty()
     }
 }
@@ -305,22 +305,26 @@ fn find_inconsistent_solve_groups<'p>(
                     Package::Conda(pkg) => {
                         match conda_packages_by_name.get(&pkg.package_record().name) {
                             None => {
-                                conda_packages_by_name
-                                    .insert(pkg.package_record().name.clone(), pkg.url().clone());
+                                conda_packages_by_name.insert(
+                                    pkg.package_record().name.clone(),
+                                    pkg.location().clone(),
+                                );
                             }
-                            Some(url) if pkg.url() != url => {
+                            Some(url) if pkg.location() != url => {
                                 conda_package_mismatch = true;
                             }
                             _ => {}
                         }
                     }
                     Package::Pypi(pkg) => {
-                        match pypi_packages_by_name.get(&pkg.data().package.name) {
+                        match pypi_packages_by_name.get(&pkg.package_data().name) {
                             None => {
-                                pypi_packages_by_name
-                                    .insert(pkg.data().package.name.clone(), pkg.url().clone());
+                                pypi_packages_by_name.insert(
+                                    pkg.package_data().name.clone(),
+                                    pkg.location().clone(),
+                                );
                             }
-                            Some(url) if pkg.url() != url => {
+                            Some(url) if pkg.location() != url => {
                                 pypi_package_mismatch = true;
                             }
                             _ => {}

@@ -1,0 +1,27 @@
+[project]
+authors = []
+channels = ["conda-forge"]
+description = "test environments"
+name = "testenv"
+platforms = ["osx-64", "linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.12.5,<4"
+
+[pypi-dependencies]
+rich = ">=13.8.0, <14"
+
+[target.linux-64.dependencies]
+requests = ">=2.32.3,<3"
+
+[target.osx-64.dependencies]
+pyyaml = ">=6.0.2,<7"
+
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"]
