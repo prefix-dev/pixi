@@ -960,7 +960,7 @@ mod tests {
         let parsed = pep508_rs::Requirement::from_str(
             "ribasim@git+https://github.com/Deltares/Ribasim.git#subdirectory=python/ribasim",
         )
-            .unwrap();
+        .unwrap();
         assert_eq!(
             PyPiRequirement::try_from(parsed).unwrap(),
             PyPiRequirement::Git {
