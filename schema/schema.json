@@ -391,8 +391,7 @@
           "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/Platform"
           }
         },
         "pypi-dependencies": {
@@ -632,6 +631,33 @@
         }
       }
     },
+    "Platform": {
+      "title": "Platform",
+      "description": "A supported operating system and processor architecture pair.",
+      "type": "string",
+      "enum": [
+        "emscripten-wasm32",
+        "linux-32",
+        "linux-64",
+        "linux-aarch64",
+        "linux-armv6l",
+        "linux-armv7l",
+        "linux-ppc64",
+        "linux-ppc64le",
+        "linux-riscv32",
+        "linux-riscv64",
+        "linux-s390x",
+        "noarch",
+        "osx-64",
+        "osx-arm64",
+        "unknown",
+        "wasi-wasm32",
+        "win-32",
+        "win-64",
+        "win-arm64",
+        "zos-z"
+      ]
+    },
     "Project": {
       "title": "Project",
       "description": "The project's metadata information.",
@@ -744,59 +770,7 @@
           "description": "The platforms that the project supports",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "const": "linux-32"
-              },
-              {
-                "const": "linux-64"
-              },
-              {
-                "const": "linux-aarch64"
-              },
-              {
-                "const": "linux-armv6l"
-              },
-              {
-                "const": "linux-armv7l"
-              },
-              {
-                "const": "linux-ppc64le"
-              },
-              {
-                "const": "linux-ppc64"
-              },
-              {
-                "const": "linux-s390x"
-              },
-              {
-                "const": "linux-riscv32"
-              },
-              {
-                "const": "linux-riscv64"
-              },
-              {
-                "const": "osx-64"
-              },
-              {
-                "const": "osx-arm64"
-              },
-              {
-                "const": "win-32"
-              },
-              {
-                "const": "win-64"
-              },
-              {
-                "const": "win-arm64"
-              },
-              {
-                "const": "emscripten-wasm32"
-              },
-              {
-                "const": "wasi-wasm32"
-              }
-            ]
+            "$ref": "#/$defs/Platform"
           }
         },
         "pypi-options": {
@@ -852,6 +826,12 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -880,6 +860,12 @@
           "description": "A `git` SHA revision to use",
           "type": "string",
           "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -900,6 +886,12 @@
         "git": {
           "title": "Git",
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
           "type": "string",
           "minLength": 1
         },
@@ -1018,6 +1010,12 @@
         "path": {
           "title": "Path",
           "description": "A path to a local source or wheel",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
           "type": "string",
           "minLength": 1
         }

@@ -99,7 +99,7 @@ pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
 pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
 pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
 pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
-pixi add --pypi "project @ file:///absolute/path/to/project" --editable # (17)!
+pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -1176,6 +1176,29 @@ List the environments in the manifest file.
 
 ```shell
 pixi project environment list
+```
+
+### `project export conda_environment`
+
+Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
+
+```shell
+pixi project export conda-environment environment.yml
+mamba create --name <env> --file environment.yml
+```
+
+##### Arguments
+
+1. `<OUTPUT_PATH>`: Optional path to render environment.yml to. Otherwise it will be printed to standard out.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: Environment to render.
+- `--platform <PLATFORM> (-p)`: The platform to render.
+
+```sh
+pixi project export conda-environment --environment lint
+pixi project export conda-environment --platform linux-64 environment.linux-64.yml
 ```
 
 ### `project export conda_explicit_spec`
