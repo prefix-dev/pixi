@@ -55,6 +55,8 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
         )
         # Log the error
         log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
+        # Re-raise the exception to fail the test
+        raise e
 
 
 def pytest_generate_tests(metafunc):

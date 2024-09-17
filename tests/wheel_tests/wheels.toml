@@ -37,6 +37,7 @@ target = "linux-64"
 version = "*"
 
 [rerun-sdk]
+target = "linux-64"
 version = "*"
 # Use these system requirements
 # because the wheel requires a higher version of glibc than the conda counterpart
