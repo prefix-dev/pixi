@@ -20,8 +20,10 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform,
+    PrefixRecord, RepoDataRecord,
 };
+use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
@@ -42,13 +44,58 @@ use crate::{
 
 /// Installs global environment records
 pub(crate) async fn install_environment(
+    specs: &IndexMap<PackageName, MatchSpec>,
     env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
-    packages: Vec<PackageName>,
-    records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     prefix: &Prefix,
+    config: &Config,
+    gateway: &Gateway,
 ) -> miette::Result<()> {
+    let channels = parsed_environment
+        .channels()
+        .into_iter()
+        .map(|channel| channel.clone().into_channel(config.global_channel_config()))
+        .collect_vec();
+
+    let repodata = await_in_progress("querying repodata ", |_| async {
+        gateway
+            .query(
+                channels,
+                [parsed_environment.platform(), Platform::NoArch],
+                specs.values().cloned().collect_vec(),
+            )
+            .recursive(true)
+            .await
+            .into_diagnostic()
+    })
+    .await?;
+
+    // Determine virtual packages of the current platform
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .iter()
+        .cloned()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
+    // Solve the environment
+    let solver_specs = specs.clone();
+    let solved_records = tokio::task::spawn_blocking(move || {
+        wrap_in_progress("solving environment", move || {
+            Solver.solve(SolverTask {
+                specs: solver_specs.values().cloned().collect_vec(),
+                virtual_packages,
+                ..SolverTask::from_iter(&repodata)
+            })
+        })
+        .into_diagnostic()
+        .context("failed to solve environment")
+    })
+    .await
+    .into_diagnostic()??;
+
     try_increase_rlimit_to_sensible();
 
     // Install the environment
@@ -69,7 +116,7 @@ pub(crate) async fn install_environment(
                     .clear_when_done(true)
                     .finish(),
             )
-            .install(prefix.root(), records)
+            .install(prefix.root(), solved_records)
     })
     .await
     .into_diagnostic()?;
@@ -453,78 +500,19 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
         let env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
-        {
-            // The installer doesn't seem to remove packages
-            // TODO: remove this workaround
-            tokio::fs::remove_dir_all(env_dir.path()).await.unwrap();
-            EnvDir::new(env_root.clone(), env_name.clone()).await?;
-        }
         let prefix = Prefix::new(env_dir.path());
 
         let prefix_records = prefix.find_installed_packages(Some(50)).await?;
-        let all_specs_are_matched = specs.iter().all(|(name, spec)| {
-            let Some(prefix_record) = prefix_records
-                .iter()
-                .find(|record| record.repodata_record.package_record.name == *name)
-            else {
-                return false;
-            };
 
-            spec.matches(&prefix_record.repodata_record)
-        });
-        if !all_specs_are_matched {
-            let channels = environment
-                .channels()
-                .into_iter()
-                .map(|channel| channel.clone().into_channel(config.global_channel_config()))
-                .collect_vec();
-
-            let repodata = await_in_progress("querying repodata ", |_| async {
-                gateway
-                    .query(
-                        channels,
-                        [environment.platform(), Platform::NoArch],
-                        specs.values().cloned().collect_vec(),
-                    )
-                    .recursive(true)
-                    .await
-                    .into_diagnostic()
-            })
-            .await?;
-
-            // Determine virtual packages of the current platform
-            let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
-                .into_diagnostic()
-                .context("failed to determine virtual packages")?
-                .iter()
-                .cloned()
-                .map(GenericVirtualPackage::from)
-                .collect();
-
-            // Solve the environment
-            let solver_specs = specs.clone();
-            let solved_records = tokio::task::spawn_blocking(move || {
-                wrap_in_progress("solving environment", move || {
-                    Solver.solve(SolverTask {
-                        specs: solver_specs.values().cloned().collect_vec(),
-                        virtual_packages,
-                        ..SolverTask::from_iter(&repodata)
-                    })
-                })
-                .into_diagnostic()
-                .context("failed to solve environment")
-            })
-            .await
-            .into_diagnostic()??;
-
-            let packages = specs.keys().cloned().collect();
+        if !specs_match_local_environment(&specs, prefix_records) {
             install_environment(
+                &specs,
                 &env_name,
                 &environment,
-                packages,
-                solved_records.clone(),
                 auth_client.clone(),
                 &prefix,
+                config,
+                &gateway,
             )
             .await?;
         }
@@ -540,4 +528,61 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
     }
 
     Ok(())
+}
+
+/// Checks if the local environment matches the given specifications.
+///
+/// This function verifies that all the given specifications are present in the
+/// local environment's prefix records and that there are no extra entries in
+/// the prefix records that do not match any of the specifications.
+fn specs_match_local_environment(
+    specs: &IndexMap<PackageName, MatchSpec>,
+    prefix_records: Vec<PrefixRecord>,
+) -> bool {
+    /// Remove dependencies of the matched entry
+    fn remove_dependencies(
+        remaining_prefix_records: &mut Vec<PrefixRecord>,
+        matched_record: PrefixRecord,
+    ) {
+        let dependencies = matched_record.repodata_record.package_record.depends;
+        for dependency in dependencies {
+            let Ok(dependency) = MatchSpec::from_str(&dependency, ParseStrictness::Lenient) else {
+                continue;
+            };
+            let Some(dependency_name) = dependency.name else {
+                continue;
+            };
+            if let Some(index) = remaining_prefix_records
+                .iter()
+                .position(|record| record.repodata_record.package_record.name == dependency_name)
+            {
+                let matched_record = remaining_prefix_records.remove(index);
+                remove_dependencies(remaining_prefix_records, matched_record)
+            }
+        }
+    }
+
+    let mut remaining_prefix_records = prefix_records;
+
+    // Make sure that all specs are present in the manifest
+    // If yes, remove all records of itself and its manifests
+    let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
+        if let Some(index) = remaining_prefix_records.iter().position(|record| {
+            record.repodata_record.package_record.name == *name
+                && spec.matches(&record.repodata_record)
+        }) {
+            // Remove the matched entry
+            let matched_record = remaining_prefix_records.remove(index);
+            remove_dependencies(&mut remaining_prefix_records, matched_record);
+            true
+        } else {
+            false
+        }
+    });
+
+    // If there are no remaining prefix records, then this means that
+    // the environment doesn't contain records that don't match the manifest
+    let env_doesnt_contain_records_not_in_the_manifest = remaining_prefix_records.is_empty();
+
+    specs_in_manifest_are_present && env_doesnt_contain_records_not_in_the_manifest
 }
