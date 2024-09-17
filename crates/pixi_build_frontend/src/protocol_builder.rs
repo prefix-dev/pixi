@@ -35,7 +35,6 @@ impl ProtocolBuilder {
             return Err(DiscoveryError::NotFound(source_dir.display().to_string()));
         }
 
-        // TODO: get rid of the converted miette error
         // Try to discover as a pixi project
         if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)
             .map_err(|e| DiscoveryError::ManifestError(e.to_string()))?
