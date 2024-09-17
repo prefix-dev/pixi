@@ -124,8 +124,9 @@ fn render_env_platform(
                     );
                 } else {
                     miette::bail!(
-                        "PyPI packages are not supported. Specify `--ignore-pypi-errors` to ignore this error \
-                        or `--write-pypi-requirements` to write pypi requirements to a separate requirements.txt file"
+                        "PyPI packages are not supported in a conda explicit spec. \
+                        Specify `--ignore-pypi-errors` to ignore this error and create \
+                        a spec file containing only the conda dependencies from the lockfile."
                     );
                 }
             }

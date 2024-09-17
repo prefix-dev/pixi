@@ -414,14 +414,18 @@ pub(crate) fn pypi_satifisfies_editable(
                 url.to_string(),
             )),
             UrlOrPath::Path(path) => {
-                // sometimes the path is relative, so we need to join it with the project root
+                // Most of the times the path will be relative to the project root
                 let absolute_path = if path.is_absolute() {
                     Cow::Borrowed(Path::new(path.as_str()))
                 } else {
                     Cow::Owned(project_root.join(Path::new(path.as_str())))
                 };
+                // Absolute paths can have symbolic links, so we canonicalize
+                let canocalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
+                    PlatformUnsat::FailedToCanonicalizePath(absolute_path.to_path_buf(), e)
+                })?;
 
-                if install_path != &absolute_path {
+                if &canocalized_path != install_path {
                     return Err(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
