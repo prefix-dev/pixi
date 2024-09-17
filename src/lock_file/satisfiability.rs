@@ -816,22 +816,14 @@ pub(crate) fn verify_package_platform_satisfiability(
                         };
 
                         if absolute_path.is_dir() {
-                            let canonicalized_path =
-                                dunce::canonicalize(&absolute_path).map_err(|e| {
-                                    PlatformUnsat::FailedToCanonicalizePath(
-                                        absolute_path.into_owned(),
+                            let hashable = PypiSourceTreeHashable::from_directory(&absolute_path)
+                                .map_err(|e| {
+                                    PlatformUnsat::FailedToDetermineSourceTreeHash(
+                                        record.0.name.clone(),
                                         e,
                                     )
-                                })?;
-                            let hashable =
-                                PypiSourceTreeHashable::from_directory(canonicalized_path)
-                                    .map_err(|e| {
-                                        PlatformUnsat::FailedToDetermineSourceTreeHash(
-                                            record.0.name.clone(),
-                                            e,
-                                        )
-                                    })?
-                                    .hash();
+                                })?
+                                .hash();
                             if Some(&hashable) != record.0.hash.as_ref() {
                                 return Err(PlatformUnsat::SourceTreeHashMismatch(
                                     record.0.name.clone(),
