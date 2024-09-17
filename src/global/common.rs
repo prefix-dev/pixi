@@ -204,14 +204,14 @@ impl EnvRoot {
     }
 }
 
-/// Global binary environments directory
+/// A global environment directory
 pub(crate) struct EnvDir {
     root: EnvRoot,
     path: PathBuf,
 }
 
 impl EnvDir {
-    /// Create the binary environment directory
+    /// Create a global environment directory
     pub(crate) async fn new(
         root: EnvRoot,
         environment_name: EnvironmentName,
@@ -222,7 +222,7 @@ impl EnvDir {
         Ok(Self { root, path })
     }
 
-    /// Initialize the binary environment directory from an existing path
+    /// Initialize a global environment directory from an existing path
     pub(crate) fn try_from_existing(
         root: EnvRoot,
         environment_name: EnvironmentName,
