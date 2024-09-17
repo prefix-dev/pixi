@@ -446,3 +446,9 @@ jobs:
     needs: export-filter
     if: needs.export-filter.outputs.exports == 'true'
     uses: ./.github/workflows/test_exports.yml
+
+  test_common_wheels:
+    name: "Test installation of common wheels"
+    needs:
+      - build
+    uses: ./.github/workflows/test_common_wheels.yml

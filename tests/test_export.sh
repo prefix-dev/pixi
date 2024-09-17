@@ -35,7 +35,7 @@ rm test-env-source-deps.yml
 cd ../..
 
 echo "Export an environment.yml with custom pip registry"
-cd examples/pypi-custom-registry/
+cd examples/pypi-custom-registry
 pixi project export conda-environment | tee test-env-custom-registry.yml
 echo "Creating the custom pip registry test environment with micromamba"
 micromamba create -y -f test-env-custom-registry.yml -n export-test-custom-registry
@@ -45,7 +45,7 @@ rm test-env-custom-registry.yml
 cd ../..
 
 echo "Export an environment.yml with pip find links"
-cd  examples/pypi-find-links/
+cd  examples/pypi-find-links
 pixi project export conda-environment | tee test-env-find-links.yml
 echo "Creating the pip find links test environment with micromamba"
 micromamba create -y -f test-env-find-links.yml -n export-test-find-links
@@ -55,7 +55,7 @@ rm test-env-find-links.yml
 cd ../..
 
 echo "Export an environment.yml from a pyproject.toml that has caused panics"
-cd examples/docker/
+cd examples/docker
 pixi project export conda-environment | tee test-env-pyproject-panic.yml
 echo "Creating the pyproject.toml panic test environment with micromamba"
 micromamba create -y -f test-env-pyproject-panic.yml -n export-test-pyproject-panic
