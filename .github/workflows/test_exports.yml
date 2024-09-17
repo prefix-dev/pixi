@@ -9,25 +9,25 @@ jobs:
         name: ${{ matrix.arch.name }} - Export Tests
         runs-on: ${{ matrix.arch.os }}
         strategy:
-        fail-fast: false
-        matrix:
-            arch:
-            # Linux
-            - {
-                target: x86_64-unknown-linux-musl,
-                os: ubuntu-20.04,
-                name: "Linux",
-                }
-            # MacOS
-            - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
-            - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
-            # # Windows
-            # - {
-            #     target: x86_64-pc-windows-msvc,
-            #     os: windows-latest,
-            #     extension: .exe,
-            #     name: "Windows",
-            #   }
+            fail-fast: false
+            matrix:
+                arch:
+                # Linux
+                - {
+                    target: x86_64-unknown-linux-musl,
+                    os: ubuntu-20.04,
+                    name: "Linux",
+                    }
+                # MacOS
+                - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+                - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
+                # # Windows
+                # - {
+                #     target: x86_64-pc-windows-msvc,
+                #     os: windows-latest,
+                #     extension: .exe,
+                #     name: "Windows",
+                #   }
         steps:
         - name: checkout repo
           uses: actions/checkout@v4
