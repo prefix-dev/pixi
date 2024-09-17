@@ -21,6 +21,7 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
 pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pixi_config::Config;
@@ -534,15 +535,28 @@ impl Project {
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
                         .collect();
 
+                    let feature_channels: HashSet<_> = manifest
+                        .parsed
+                        .features
+                        .values()
+                        .flat_map(|feature| feature.channels.iter())
+                        .flatten()
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
+
+                    let project_and_feature_channels: HashSet<_> =
+                        project_channels.union(&feature_channels).collect();
+
                     for channel in channel_to_location_map.keys() {
-                        if !project_channels.contains(channel) {
-                            let channels = project_channels
+                        if !project_and_feature_channels.contains(channel) {
+                            let channels = project_and_feature_channels
                                 .iter()
                                 .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .sorted()
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             miette::bail!(
-                                "Defined conda-pypi-map channel: {} is missing from the channels, which are: {}",
+                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
                                 console::style(
                                     channel
                                         .name
@@ -953,5 +967,39 @@ mod tests {
                 .unwrap(),
             &MappingLocation::Path(PathBuf::from("mapping.json"))
         );
+    }
+
+    #[test]
+    fn test_mapping_ensure_feature_channels_also_checked() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {custom-feature-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+
+            [feature.a]
+            channels = ["custom-feature-channel"]
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert!(project.pypi_name_mapping_source().is_ok());
+
+        let non_existing_channel = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        // We output error message with bold channel name,
+        // so we need to disable colors for snapshot
+        console::set_colors_enabled(false);
+
+        insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
     }
 }
