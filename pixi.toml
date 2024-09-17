@@ -32,6 +32,7 @@ mypy = ">=1.11,<1.12"
 psutil = ">=6.0.0,<7"
 # For running tests in parallel, use this instead of regular pytest
 filelock = ">=3.16.0,<4"
+pytest-rerunfailures = ">=14.0,<15"
 pytest-xdist = ">=3.6.1,<4"
 rich = ">=13.7.1,<14"
 toml = ">=0.10.2,<0.11"

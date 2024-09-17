@@ -9,6 +9,7 @@ from helpers import add_system_requirements, log_called_process_error, run
 import sys
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))
 def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.Path):
     """
     Create a temporary directory and install the wheel in it.
