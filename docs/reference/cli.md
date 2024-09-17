@@ -1178,6 +1178,29 @@ List the environments in the manifest file.
 pixi project environment list
 ```
 
+### `project export conda_environment`
+
+Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
+
+```shell
+pixi project export conda-environment environment.yml
+mamba create --name <env> --file environment.yml
+```
+
+##### Arguments
+
+1. `<OUTPUT_PATH>`: Optional path to render environment.yml to. Otherwise it will be printed to standard out.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: Environment to render.
+- `--platform <PLATFORM> (-p)`: The platform to render.
+
+```sh
+pixi project export conda-environment --environment lint
+pixi project export conda-environment --platform linux-64 environment.linux-64.yml
+```
+
 ### `project export conda_explicit_spec`
 
 Render a platform-specific conda [explicit specification file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments)
