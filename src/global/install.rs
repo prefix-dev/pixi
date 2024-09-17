@@ -539,46 +539,54 @@ fn specs_match_local_environment(
     specs: &IndexMap<PackageName, MatchSpec>,
     prefix_records: Vec<PrefixRecord>,
 ) -> bool {
-    /// Remove dependencies of the matched entry
-    fn remove_dependencies(
-        remaining_prefix_records: &mut Vec<PrefixRecord>,
-        matched_record: PrefixRecord,
-    ) {
-        let dependencies = matched_record.repodata_record.package_record.depends;
-        for dependency in dependencies {
-            let Some(dependency_name) = MatchSpec::from_str(&dependency, ParseStrictness::Lenient)
-                .ok()
-                .and_then(|spec| spec.name)
-            else {
-                continue;
-            };
+    let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
+        let Some(prefix_record) = prefix_records
+            .iter()
+            .find(|record| record.repodata_record.package_record.name == *name)
+        else {
+            return false;
+        };
 
-            if let Some(index) = remaining_prefix_records
-                .iter()
-                .position(|record| record.repodata_record.package_record.name == dependency_name)
-            {
-                let matched_record = remaining_prefix_records.remove(index);
-                remove_dependencies(remaining_prefix_records, matched_record)
-            }
-        }
+        spec.matches(&prefix_record.repodata_record)
+    });
+
+    fn prune_dependencies(
+        remaining_prefix_records: Vec<PrefixRecord>,
+        matched_record: &PrefixRecord,
+    ) -> Vec<PrefixRecord> {
+        let dependencies = &matched_record.repodata_record.package_record.depends;
+        dependencies
+            .iter()
+            .fold(remaining_prefix_records, |mut acc, dependency| {
+                let Some(dependency_name) =
+                    MatchSpec::from_str(dependency, ParseStrictness::Lenient)
+                        .ok()
+                        .and_then(|d| d.name)
+                else {
+                    return acc;
+                };
+
+                let Some(index) = acc.iter().position(|record| {
+                    record.repodata_record.package_record.name == dependency_name
+                }) else {
+                    return acc;
+                };
+
+                let matched_record = acc.remove(index);
+                prune_dependencies(acc, &matched_record)
+            })
     }
 
-    let mut remaining_prefix_records = prefix_records;
-
-    // Make sure that all specs are present in the manifest
-    // If yes, remove all records of itself and its manifests
-    let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
-        if let Some(index) = remaining_prefix_records.iter().position(|record| {
+    // Process each spec and remove matched entries and their dependencies
+    let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, (name, spec)| {
+        let Some(index) = acc.iter().position(|record| {
             record.repodata_record.package_record.name == *name
                 && spec.matches(&record.repodata_record)
-        }) {
-            // Remove the matched entry
-            let matched_record = remaining_prefix_records.remove(index);
-            remove_dependencies(&mut remaining_prefix_records, matched_record);
-            true
-        } else {
-            false
-        }
+        }) else {
+            return acc;
+        };
+        let matched_record = acc.remove(index);
+        prune_dependencies(acc, &matched_record)
     });
 
     // If there are no remaining prefix records, then this means that
