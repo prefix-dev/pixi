@@ -1,36 +1,136 @@
 ---
 source: crates/pixi_build_frontend/src/protocols/conda_build/protocol.rs
-expression: "&rendered_recipe"
+expression: rendered_recipe
 ---
-- - hash_content: "{'__unix': '__unix',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'ppc64le',\r\n 'level': '8'}"
-    recipe:
-      package:
-        name: ppc64le-microarch-level
-        version: "8"
-      build:
-        number: 2
-        string: "2"
-        noarch: generic
-      requirements:
-        run:
-          - __unix
-        run_constrained: []
-      about:
-        license: BSD-3-Clause
-  - "package:\r\n  name: ppc64le-microarch-level\r\n  version: '8'\r\nbuild:\r\n  noarch: generic\r\n  number: 2\r\n  run_exports:\r\n    strong:\r\n      - _ppc64le-microarch-level >=8\r\n  string: '2'\r\nrequirements:\r\n  build: []\r\n  run:\r\n    - __unix\r\nabout:\r\n  description: 'Use the meta-package ppc64le-microarch-level in requirements/build\r\n    in conda\r\n\r\n    recipes to set up the compiler flags and set up the virtual package\r\n\r\n    requirements in the run requirements.\r\n\r\n\r\n    When building packages on CI, level=4 will not be guaranteed, so\r\n\r\n    you can only use level<=3 to build.\r\n\r\n\r\n    The run_exports only has a lower bound and therefore a level=2\r\n\r\n    build can be installed on a level=3 user system. A tighter bound\r\n\r\n    is not added because we want to be able to test both level=2 and\r\n\r\n    level=3 on a CI machine with level=3.\r\n\r\n    Therefore in order to prioritise the highest level, use the build\r\n\r\n    number to prioritise the level.\r\n\r\n\r\n    Only supported on Linux and macOS.\r\n\r\n    '\r\n  home: https://github.com/conda-forge/microarch-level-feedstock\r\n  license: BSD-3-Clause\r\n  license_file: LICENSE.txt\r\n  summary: Meta package to build conda recipes with microarchitecture levels\r\nextra:\r\n  copy_test_source_files: true\r\n  feedstock-name: microarch-level\r\n  final: true\r\n  parent_recipe:\r\n    name: microarch-level-split\r\n    path: F:\\projects\\microarch-level-feedstock\\recipe\r\n    version: '8'\r\n  recipe-maintainers:\r\n    - isuruf"
-- - hash_content: "{'__archspec': '__archspec 1=x86_64',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'x86_64',\r\n 'microarchitecture': 'x86_64'}"
-    recipe:
-      package:
-        name: _x86_64-microarch-level
-        version: "1"
-      build:
-        number: 2
-        string: 2_x86_64
-        noarch: generic
-      requirements:
-        run:
-          - __archspec 1=x86_64
-        run_constrained: []
-      about:
-        license: BSD-3-Clause
-  - "package:\r\n  name: _x86_64-microarch-level\r\n  version: '1'\r\nbuild:\r\n  noarch: generic\r\n  number: 2\r\n  string: 2_x86_64\r\nrequirements:\r\n  build: []\r\n  run:\r\n    - __archspec 1=x86_64\r\nabout:\r\n  description: 'The meta-package _x86_64-microarch-level enforces the microarchitecture\r\n    in the\r\n\r\n    user system.\r\n\r\n\r\n    Note that a user would need the archspec conda package installed\r\n\r\n    in the base environment where conda/mamba is run from.\r\n\r\n\r\n    See x86_64-microarch-level for using this in conda recipes\r\n\r\n    '\r\n  home: https://github.com/conda-forge/microarch-level-feedstock\r\n  license: BSD-3-Clause\r\n  license_file: LICENSE.txt\r\n  summary: Meta package to build conda recipes with microarchitecture levels\r\nextra:\r\n  copy_test_source_files: true\r\n  feedstock-name: microarch-level\r\n  final: true\r\n  parent_recipe:\r\n    name: microarch-level-split\r\n    path: F:\\projects\\microarch-level-feedstock\\recipe\r\n    version: '1'\r\n  recipe-maintainers:\r\n    - isuruf"
+package:
+  name: ppc64le-microarch-level
+  version: '8'
+build:
+  noarch: generic
+  number: 2
+  run_exports:
+    strong:
+      - _ppc64le-microarch-level >=8
+  string: '2'
+requirements:
+  build: []
+  run:
+    - __unix
+about:
+  description: 'Use the meta-package ppc64le-microarch-level in requirements/build
+    in conda
+
+    recipes to set up the compiler flags and set up the virtual package
+
+    requirements in the run requirements.
+
+
+    When building packages on CI, level=4 will not be guaranteed, so
+
+    you can only use level<=3 to build.
+
+
+    The run_exports only has a lower bound and therefore a level=2
+
+    build can be installed on a level=3 user system. A tighter bound
+
+    is not added because we want to be able to test both level=2 and
+
+    level=3 on a CI machine with level=3.
+
+    Therefore in order to prioritise the highest level, use the build
+
+    number to prioritise the level.
+
+
+    Only supported on Linux and macOS.
+
+    '
+  home: https://github.com/conda-forge/microarch-level-feedstock
+  license: BSD-3-Clause
+  license_file: LICENSE.txt
+  summary: Meta package to build conda recipes with microarchitecture levels
+extra:
+  copy_test_source_files: true
+  feedstock-name: microarch-level
+  final: true
+  parent_recipe:
+    name: microarch-level-split
+    path: F:\projects\microarch-level-feedstock\recipe
+    version: '8'
+  recipe-maintainers:
+    - isuruf
+---
+hash_content: "{'__unix': '__unix',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'ppc64le',\r\n 'level': '8'}"
+recipe:
+  package:
+    name: ppc64le-microarch-level
+    version: '8'
+  build:
+    number: 2
+    string: '2'
+    noarch: generic
+  requirements:
+    run:
+    - __unix
+    run_constrained: []
+  about:
+    license: BSD-3-Clause
+
+===
+package:
+  name: _x86_64-microarch-level
+  version: '1'
+build:
+  noarch: generic
+  number: 2
+  string: 2_x86_64
+requirements:
+  build: []
+  run:
+    - __archspec 1=x86_64
+about:
+  description: 'The meta-package _x86_64-microarch-level enforces the microarchitecture
+    in the
+
+    user system.
+
+
+    Note that a user would need the archspec conda package installed
+
+    in the base environment where conda/mamba is run from.
+
+
+    See x86_64-microarch-level for using this in conda recipes
+
+    '
+  home: https://github.com/conda-forge/microarch-level-feedstock
+  license: BSD-3-Clause
+  license_file: LICENSE.txt
+  summary: Meta package to build conda recipes with microarchitecture levels
+extra:
+  copy_test_source_files: true
+  feedstock-name: microarch-level
+  final: true
+  parent_recipe:
+    name: microarch-level-split
+    path: F:\projects\microarch-level-feedstock\recipe
+    version: '1'
+  recipe-maintainers:
+    - isuruf
+---
+hash_content: "{'__archspec': '__archspec 1=x86_64',\r\n 'channel_targets': 'conda-forge main',\r\n 'family': 'x86_64',\r\n 'microarchitecture': 'x86_64'}"
+recipe:
+  package:
+    name: _x86_64-microarch-level
+    version: '1'
+  build:
+    number: 2
+    string: 2_x86_64
+    noarch: generic
+  requirements:
+    run:
+    - __archspec 1=x86_64
+    run_constrained: []
+  about:
+    license: BSD-3-Clause

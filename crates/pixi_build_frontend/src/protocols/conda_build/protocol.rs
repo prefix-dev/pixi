@@ -248,6 +248,7 @@ struct RenderedAbout {
 mod test {
     use std::path::Path;
 
+    use itertools::Itertools;
     use rstest::*;
 
     use super::*;
@@ -262,7 +263,16 @@ mod test {
                 .join(path),
         )
         .unwrap();
-        let rendered_recipe = extract_rendered_recipes(&rendered_recipe).unwrap();
-        insta::assert_yaml_snapshot!(path, &rendered_recipe);
+        let rendered_recipe = extract_rendered_recipes(&rendered_recipe)
+            .into_iter()
+            .flatten()
+            .format_with("\n===\n", |(recipe, meta_yaml), formatter| {
+                formatter(&format_args!(
+                    "{meta_yaml}\n---\n{}",
+                    serde_yaml::to_string(&recipe).unwrap()
+                ))
+            })
+            .to_string();
+        insta::assert_snapshot!(path, rendered_recipe);
     }
 }
