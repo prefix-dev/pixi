@@ -421,6 +421,8 @@ jobs:
   export-filter:
     name: Only run example tests if relevant code or manifests have changed
     runs-on: ubuntu-20.04
+    needs:
+      - build
     outputs:
       exports: ${{ steps.filter.outputs.exports }}
 
