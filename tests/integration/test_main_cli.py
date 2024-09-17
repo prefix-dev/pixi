@@ -246,12 +246,20 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.SUCCESS, env=env)
 
     # Remove numpy again
+    del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
 
     # Remove python
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not python_injected.is_file()
+    del parsed_toml["envs"]["test"]["dependencies"]["python"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Could not find python in test",
+    )
 
 
 def test_global_sync_migrate(pixi: Path, tmp_path: Path) -> None:
