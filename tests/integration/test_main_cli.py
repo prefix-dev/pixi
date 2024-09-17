@@ -264,6 +264,37 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_global_sync_channels(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = """
+    [envs.test]
+    channels = ["conda-forge"]
+    [envs.test.dependencies]
+    python = "*"
+    bionumpy = "*"
+
+    [envs.test.exposed]
+    "python-injected" = "python"
+    """
+    parsed_toml = tomllib.loads(toml)
+    manifest.write_text(toml)
+    python_injected = tmp_path / "bin" / "python-injected"
+
+    # Test basic commands
+    verify_cli_command(
+        [pixi, "global", "sync"], ExitCode.FAILURE, env=env, stderr_contains="bionumpy"
+    )
+
+    # Add bioconda channel
+    parsed_toml["envs"]["test"]["channels"].append("bioconda")
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_injected, "-c", "import bionumpy"], ExitCode.SUCCESS, env=env)
+
+
 def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
