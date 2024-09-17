@@ -220,13 +220,13 @@ jobs:
           # MacOS
           - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
           - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
-          # Windows
-          - {
-              target: x86_64-pc-windows-msvc,
-              os: windows-latest,
-              extension: .exe,
-              name: "Windows",
-            }
+          # # Windows
+          # - {
+          #     target: x86_64-pc-windows-msvc,
+          #     os: windows-latest,
+          #     extension: .exe,
+          #     name: "Windows",
+          #   }
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
