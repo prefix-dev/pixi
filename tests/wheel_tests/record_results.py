@@ -1,5 +1,6 @@
 from pathlib import Path
-import toml
+import tomllib
+import tomli_w
 from filelock import FileLock
 
 # Path to the results file, containing test outcomes
@@ -22,8 +23,8 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
 
         # Get the existing results
         if RESULTS_FILE.exists():
-            with RESULTS_FILE.open("r") as f:
-                data = toml.load(f)
+            with RESULTS_FILE.open("rb") as f:
+                data = tomllib.load(f)
                 # If this doesn't hold, don't use the recorded data
                 if "id" in data and data["id"] == test_id:
                     test = data
@@ -38,5 +39,5 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
             test["results"] = [result]
 
         # Write the results back to the file
-        with RESULTS_FILE.open("w") as f:
-            toml.dump(test, f)
+        with RESULTS_FILE.open("wb") as f:
+            tomli_w.dump(test, f)

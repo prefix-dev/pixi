@@ -1,5 +1,5 @@
 from record_results import RESULTS_FILE
-import toml
+import tomllib
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
@@ -16,8 +16,8 @@ def terminal_summary():
         print("Error: No test results found.")
         return
 
-    with results_file.open("r") as f:
-        results = toml.load(f)["results"]
+    with results_file.open("rb") as f:
+        results = tomllib.load(f)["results"]
 
     packages = read_wheel_file()
 
@@ -103,8 +103,8 @@ pixi r test-common-wheels-dev -k "jax[cuda12]"
         f.write("| :--- | ---: | ---: | --- |\n")
 
         results_file = RESULTS_FILE
-        with results_file.open("r") as r:
-            results = toml.load(r)["results"]
+        with results_file.open("rb") as r:
+            results = tomllib.load(r)["results"]
             for result in results:
                 outcome = (
                     '<span style="color: green">Passed</span>'
