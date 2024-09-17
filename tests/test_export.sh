@@ -1,5 +1,6 @@
 # Run from the root of the project using `bash tests/test_export.sh`
 set -e
+set -x
 echo "Running test_export.sh"
 
 echo "Exporting the export test environment"
