@@ -14,6 +14,7 @@ use tokio_util::io::ReaderStream;
 
 use pixi_progress;
 
+#[allow(rustdoc::bare_urls)]
 /// Upload a conda package
 ///
 /// With this command, you can upload a conda package to a channel.
