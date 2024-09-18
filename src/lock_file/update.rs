@@ -18,7 +18,7 @@ use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, Tr
 use indexmap::IndexSet;
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
@@ -30,6 +30,7 @@ use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
+use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use url::Url;
@@ -65,6 +66,14 @@ impl Project {
     ) -> miette::Result<LockFileDerivedData<'_>> {
         update::update_lock_file(self, options).await
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+enum UpdateError {
+    #[error("the lockfile is not up-to-date with requested environment: '{}'", .0.fancy_display())]
+    LockFileMissingEnv(EnvironmentName),
+    #[error("the lockfile is not up-to-date with the requested platform: '{}'", .0)]
+    LockFileMissingPlatform(Platform),
 }
 
 /// Options to pass to [`Project::update_lock_file`].
@@ -138,8 +147,12 @@ impl<'p> LockFileDerivedData<'p> {
         let (prefix, python_status) = self.conda_prefix(environment).await?;
         let repodata_records = self
             .repodata_records(environment, platform)
+            .into_diagnostic()?
             .unwrap_or_default();
-        let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
+        let pypi_records = self
+            .pypi_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
 
         // No `uv` support for WASM right now
         if platform.arch() == Some(Arch::Wasm32) {
@@ -171,7 +184,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            self.pypi_indexes(environment).as_ref(),
+            self.pypi_indexes(environment).into_diagnostic()?.as_ref(),
             env_variables,
             self.project.root(),
             environment.best_platform(),
@@ -196,32 +209,38 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
+    ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        locked_env.pypi_packages_for_platform(platform)
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+
+        Ok(locked_env.pypi_packages_for_platform(platform))
     }
 
-    fn pypi_indexes(&self, environment: &Environment<'p>) -> Option<PypiIndexes> {
+    fn pypi_indexes(
+        &self,
+        environment: &Environment<'p>,
+    ) -> Result<Option<PypiIndexes>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        locked_env.pypi_indexes().cloned()
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        Ok(locked_env.pypi_indexes().cloned())
     }
 
     fn repodata_records(
         &self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<Vec<RepoDataRecord>> {
+    ) -> Result<Option<Vec<RepoDataRecord>>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        locked_env.conda_repodata_records_for_platform(platform).expect("since the lock-file is up to date we should be able to extract the repodata records from it")
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        locked_env
+            .conda_repodata_records_for_platform(platform)
+            .map_err(|_| UpdateError::LockFileMissingPlatform(platform))
     }
 
     async fn conda_prefix(
@@ -250,6 +269,7 @@ impl<'p> LockFileDerivedData<'p> {
         // Get the locked environment from the lock-file.
         let records = self
             .repodata_records(environment, platform)
+            .into_diagnostic()?
             .unwrap_or_default();
 
         // Update the prefix with conda packages.
