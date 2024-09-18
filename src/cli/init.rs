@@ -1,10 +1,4 @@
-use std::{
-    cmp::PartialEq,
-    fs,
-    io::{Error, ErrorKind, Write},
-    path::{Path, PathBuf},
-};
-use std::str::FromStr;
+use crate::Project;
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
@@ -15,10 +9,16 @@ use pixi_manifest::{
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use std::str::FromStr;
+use std::{
+    cmp::PartialEq,
+    fs,
+    io::{Error, ErrorKind, Write},
+    path::{Path, PathBuf},
+};
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
-use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
