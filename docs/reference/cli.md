@@ -768,7 +768,7 @@ Upload a package to a prefix.dev channel
 2. `<PACKAGE_FILE>`: The package file to upload.
 
 ```shell
-pixi upload repo.prefix.dev/my_channel my_package.conda
+pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
 ```
 
 ## `auth`
