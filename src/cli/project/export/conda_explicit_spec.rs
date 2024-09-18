@@ -6,7 +6,6 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
 use crate::cli::cli_config::PrefixUpdateConfig;
-use crate::cli::LockFileUsageArgs;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
 use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
