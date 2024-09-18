@@ -6,7 +6,6 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
 use crate::cli::cli_config::PrefixUpdateConfig;
-use crate::cli::LockFileUsageArgs;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
 use rattler_conda_types::Platform;
@@ -27,13 +26,9 @@ pub struct Args {
     #[arg(short, long)]
     pub platform: Option<Vec<Platform>>,
 
-    /// Conda dependencies are not supported in pip requirements files.
-    /// This flag allows creating the requirements file even if Conda dependencies are present.
-    #[arg(long, default_value = "false")]
-    pub ignore_conda_errors: bool,
-
-    #[clap(flatten)]
-    pub lock_file_usage: LockFileUsageArgs,
+    /// Create a separate requirements.txt for dependencies that do not have an associated hash
+    #[arg(long, default_value = "true")]
+    pub split_reqs_no_hashes: bool,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -132,7 +127,7 @@ fn render_env_platform(
     env_name: &str,
     env: &Environment,
     platform: &Platform,
-    ignore_conda_errors: bool,
+    split_nohash: bool,
 ) -> miette::Result<()> {
     let packages = env.packages(*platform).ok_or(miette::miette!(
         "platform '{platform}' not found for env {}",
@@ -145,28 +140,25 @@ fn render_env_platform(
         match package {
             Package::Pypi(p) => pypi_packages.push(PypiPackageReqData::from_pypi_package(&p)),
             Package::Conda(cp) => {
-                if ignore_conda_errors {
-                    tracing::warn!(
-                        "ignoring Conda package {} since Conda packages are not supported in requirements.txt",
-                        cp.package_record().name.as_normalized()
-                    );
-                } else {
-                    miette::bail!(
-                        "Conda packages are not supported. Specify `--ignore-conda-errors` to ignore this error \
-                        and create a requirements file containing only the pypi dependencies from the lockfile."
-                    );
-                }
+                tracing::warn!(
+                    "ignoring Conda package {} since Conda packages are not supported in requirements.txt",
+                    cp.package_record().name.as_normalized()
+                );
             }
         }
     }
 
-    // Split package list based on presence of hash since pip currently treats requirements files
-    // containing any hashes as if `--require-hashes` has been supplied. The only known workaround
-    // is to split the dependencies, which are typically from vcs sources into a separate
-    // requirements.txt and to install it separately.
-    let (base, nohash): (Vec<PypiPackageReqData>, Vec<PypiPackageReqData>) = pypi_packages
-        .into_iter()
-        .partition(|p| p.editable || p.hash_flag.is_some());
+    let (base, nohash) = if split_nohash {
+        // Split package list based on presence of hash since pip currently treats requirements files
+        // containing any hashes as if `--require-hashes` has been supplied. The only known workaround
+        // is to split the dependencies, which are typically from vcs sources into a separate
+        // requirements.txt and to install it separately.
+        pypi_packages
+            .into_iter()
+            .partition(|p| p.editable || p.hash_flag.is_some())
+    } else {
+        (pypi_packages, vec![])
+    };
 
     tracing::info!("Creating requirements file for env: {env_name} platform: {platform}");
     let target = output_dir
@@ -248,9 +240,84 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
             &env_name,
             &env,
             &plat,
-            args.ignore_conda_errors,
+            args.split_reqs_no_hashes,
         )?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use rattler_lock::LockFile;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_render_pypi_requirements() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/cli/project/export/test-data/testenv-pypi/pixi.lock");
+        let lockfile = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lockfile.environments() {
+            for platform in env.platforms() {
+                render_env_platform(output_dir.path(), env_name, &env, &platform, true).unwrap();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{}_{}_requirements.txt", env_name, platform));
+                insta::assert_snapshot!(
+                    format!("test_render_pypi_requirements_{}_{}", env_name, platform),
+                    fs::read_to_string(file_path).unwrap()
+                );
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{}_{}_requirements_nohash.txt", env_name, platform));
+                insta::assert_snapshot!(
+                    format!(
+                        "test_render_pypi_requirements_nohash_{}_{}",
+                        env_name, platform
+                    ),
+                    fs::read_to_string(file_path).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_render_pypi_requirements_nosplit() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/cli/project/export/test-data/testenv-pypi/pixi.lock");
+        let lockfile = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lockfile.environments() {
+            for platform in env.platforms() {
+                render_env_platform(output_dir.path(), env_name, &env, &platform, false).unwrap();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{}_{}_requirements.txt", env_name, platform));
+                insta::assert_snapshot!(
+                    format!(
+                        "test_render_pypi_requirements_nosplit_{}_{}",
+                        env_name, platform
+                    ),
+                    fs::read_to_string(file_path).unwrap()
+                );
+
+                // Check to make sure no "nohash" file is created
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{}_{}_requirements_nohash.txt", env_name, platform));
+                assert!(!file_path.exists());
+            }
+        }
+    }
 }

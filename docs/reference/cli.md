@@ -1227,6 +1227,31 @@ pixi project export conda_explicit_spec output
 pixi project export conda_explicit_spec -e default -e test -p linux-64 output
 ```
 
+### `project export pypi_requirements`
+
+Exports a [requirements.txt](https://pip.pypa.io/en/stable/reference/requirements-file-format/) for a project's pypi dependencies. Entries in the `requirements.txt`
+are based on the urls found in the `pixi.lock`. As pixi environments always contain conda packages, which are not exported by this command,
+these files do not represent the complete environment. The resulting files can be installed into either a conda environment or a venv using `pip` or `uv`.
+
+```shell
+pip install -r <requirements file>
+```
+
+##### Arguments
+
+1. `<OUTPUT_DIR>`:  Output directory for `requirements.txt` files.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: Environment to render. Can be repeated for multiple envs. Defaults to all environments.
+- `--platform <PLATFORM> (-p)`: The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments.
+- `--ignore-pypi-errors`: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present.
+- `--split-reqs-no-hashes`: Create a separate requirements.txt for dependencies that do not have an associated hash
+
+```sh
+pixi project export pypi_requirements output
+pixi project export pypi_requirements -e default -e test -p linux-64 output
+```
 
 ### `project platform add`
 
