@@ -27,8 +27,7 @@ use once_cell::sync::OnceCell;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, EnvironmentName, Environments, HasManifestRef, Manifest,
-    ParsedManifest, SpecType,
+    EnvironmentName, Environments, HasManifestRef, Manifest, ParsedManifest, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -614,27 +613,24 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
 pub(crate) fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
-    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
-        [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
-            .iter()
-            .find_map(|manifest| {
-                let path = dir.join(manifest);
-                if path.is_file() {
-                    match *manifest {
-                        consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        consts::PYPROJECT_MANIFEST
-                            if PyProjectManifest::from_path(&path)
-                                .is_ok_and(|project| project.is_pixi()) =>
-                        {
-                            Some(path.to_path_buf())
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
-            })
-    })
+    let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
+
+    for dir in current_dir.ancestors() {
+        for manifest in &manifests {
+            let path = dir.join(manifest);
+            if !path.is_file() {
+                continue;
+            }
+
+            match *manifest {
+                consts::PROJECT_MANIFEST => return Some(path),
+                consts::PYPROJECT_MANIFEST => return Some(path),
+                _ => {}
+            }
+        }
+    }
+
+    None
 }
 
 /// Create a symlink from the directory to the custom target directory
@@ -713,15 +709,18 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::Write;
     use std::str::FromStr;
 
+    use super::*;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use libc::mkdir;
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
-
-    use super::*;
+    use tempfile::tempdir;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1001,5 +1000,62 @@ mod tests {
         console::set_colors_enabled(false);
 
         insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
+    }
+
+    #[test]
+    fn test_find_project_manifest_in_current_dir() {
+        for manifest in &[consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST] {
+            let dir = tempdir().unwrap();
+            let project_manifest_path = dir.path().join(manifest);
+
+            // Create manifest
+            let mut file = File::create(&project_manifest_path).unwrap();
+            writeln!(file, "[project]").unwrap();
+
+            // Change directory to the temp directory
+            std::env::set_current_dir(&dir).unwrap();
+
+            assert_eq!(find_project_manifest(), Some(project_manifest_path));
+        }
+    }
+
+    #[test]
+    fn test_find_project_manifest_with_multiple() {
+        let dir = tempdir().unwrap();
+        let manifest_path = dir.path().join(consts::PROJECT_MANIFEST);
+        let pyproject_manifest_path = dir.path().join(consts::PYPROJECT_MANIFEST);
+
+        // Create manifests
+        let mut file = File::create(&manifest_path).unwrap();
+        writeln!(file, "[project]").unwrap();
+        let mut file = File::create(&pyproject_manifest_path).unwrap();
+        writeln!(file, "[project]").unwrap();
+
+        // Change directory to the temp directory
+        std::env::set_current_dir(&dir).unwrap();
+
+        assert_eq!(find_project_manifest(), Some(manifest_path));
+    }
+
+    #[test]
+    fn test_find_manifest_closest_to_current_dir() {
+        for manifest in &[consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST] {
+            let dir = tempdir().unwrap();
+            let manifest_path_root = dir.path().join(manifest);
+            let manifest_path_child = dir.path().join("child").join(manifest);
+
+            // Create manifests
+            let mut file = File::create(&manifest_path_root).unwrap();
+            writeln!(file, "[project]").unwrap();
+
+            std::fs::create_dir_all(manifest_path_child.parent().unwrap()).unwrap();
+            let mut file = File::create(&manifest_path_child).unwrap();
+            writeln!(file, "[project]").unwrap();
+
+            // Change directory to the temp directory
+            std::env::set_current_dir(&dir).unwrap();
+
+            assert_eq!(find_project_manifest(), Some(manifest_path_root));
+        }
     }
 }

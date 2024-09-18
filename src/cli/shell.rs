@@ -229,6 +229,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .or_else(ShellEnum::from_env)
         .unwrap_or_default();
 
+    tracing::info!("Starting shell: {:?}", interactive_shell);
+
     let prompt = if project.config().change_ps1() {
         match interactive_shell {
             ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
