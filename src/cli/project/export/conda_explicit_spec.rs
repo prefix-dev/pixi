@@ -33,9 +33,6 @@ pub struct Args {
     pub ignore_pypi_errors: bool,
 
     #[clap(flatten)]
-    pub lock_file_usage: LockFileUsageArgs,
-
-    #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 }
 
