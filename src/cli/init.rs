@@ -137,7 +137,7 @@ platforms = {{ platforms }}
 {%- endif %}
 
 [tool.pixi.pypi-dependencies]
-{{ name }} = { path = ".", editable = true }
+{{ pypi_package_name }} = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 
@@ -334,12 +334,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
+            // Python package names cannot contain '-', so we replace them with '_'
+            let pypi_package_name = default_name.replace("-", "_");
+
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
                     NEW_PYROJECT_TEMPLATE,
                     context! {
                         name => default_name,
+                        pypi_package_name,
                         version,
                         author,
                         channels,
@@ -350,7 +354,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )
                 .unwrap();
             save_manifest_file(&pyproject_manifest_path, rv)?;
-            let src_dir = dir.join("src").join(default_name);
+
+            let src_dir = dir.join("src").join(pypi_package_name);
             tokio::fs::create_dir_all(&src_dir)
                 .await
                 .into_diagnostic()
