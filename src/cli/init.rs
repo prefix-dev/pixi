@@ -4,7 +4,7 @@ use std::{
     io::{Error, ErrorKind, Write},
     path::{Path, PathBuf},
 };
-
+use std::str::FromStr;
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
@@ -17,7 +17,7 @@ use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tokio::fs::OpenOptions;
 use url::Url;
-
+use uv_normalize::PackageName;
 use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -335,7 +335,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
             // Python package names cannot contain '-', so we replace them with '_'
-            let pypi_package_name = default_name.replace("-", "_");
+            let pypi_package_name = PackageName::from_str(&default_name)
+                .map(|name| name.as_dist_info_name().to_string())
+                .unwrap_or_else(|_| default_name.clone());
 
             let rv = env
                 .render_named_str(
