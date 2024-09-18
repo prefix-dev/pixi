@@ -176,7 +176,7 @@ impl Project {
     /// environment. This will also set the current working directory to the
     /// project root.
     pub(crate) fn discover() -> miette::Result<Self> {
-        let project_toml = find_project_manifest();
+        let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
 
         if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
@@ -225,16 +225,18 @@ impl Project {
     /// than a discovered version
     pub(crate) fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
         if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
-            let discover_path = find_project_manifest();
-            let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
+            if let Ok(current_dir) = std::env::current_dir() {
+                let discover_path = find_project_manifest(current_dir);
+                let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
 
-            if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
-                if env_path.as_str() != discover_path.to_str().unwrap() {
-                    tracing::warn!(
-                        "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
-                        env_path,
-                        discover_path.to_string_lossy()
-                    );
+                if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
+                    if env_path.as_str() != discover_path.to_str().unwrap() {
+                        tracing::warn!(
+                            "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            env_path,
+                            discover_path.to_string_lossy()
+                        );
+                    }
                 }
             }
         }
@@ -611,8 +613,7 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest() -> Option<PathBuf> {
-    let current_dir = std::env::current_dir().ok()?;
+pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
     let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
 
     for dir in current_dir.ancestors() {
@@ -624,7 +625,13 @@ pub(crate) fn find_project_manifest() -> Option<PathBuf> {
 
             match *manifest {
                 consts::PROJECT_MANIFEST => return Some(path),
-                consts::PYPROJECT_MANIFEST => return Some(path),
+                consts::PYPROJECT_MANIFEST => {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if content.contains("[tool.pixi") {
+                            return Some(path);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -716,7 +723,6 @@ mod tests {
     use super::*;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use libc::mkdir;
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
@@ -1011,11 +1017,14 @@ mod tests {
             // Create manifest
             let mut file = File::create(&project_manifest_path).unwrap();
             writeln!(file, "[project]").unwrap();
+            if manifest == &consts::PYPROJECT_MANIFEST {
+                writeln!(file, "[tool.pixi.project]").unwrap();
+            }
 
-            // Change directory to the temp directory
-            std::env::set_current_dir(&dir).unwrap();
-
-            assert_eq!(find_project_manifest(), Some(project_manifest_path));
+            assert_eq!(
+                find_project_manifest(dir.into_path()),
+                Some(project_manifest_path)
+            );
         }
     }
 
@@ -1030,32 +1039,63 @@ mod tests {
         writeln!(file, "[project]").unwrap();
         let mut file = File::create(&pyproject_manifest_path).unwrap();
         writeln!(file, "[project]").unwrap();
+        writeln!(file, "[tool.pixi.project]").unwrap();
 
-        // Change directory to the temp directory
-        std::env::set_current_dir(&dir).unwrap();
-
-        assert_eq!(find_project_manifest(), Some(manifest_path));
+        assert_eq!(find_project_manifest(dir.into_path()), Some(manifest_path));
     }
 
     #[test]
     fn test_find_manifest_closest_to_current_dir() {
-        for manifest in &[consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST] {
-            let dir = tempdir().unwrap();
-            let manifest_path_root = dir.path().join(manifest);
-            let manifest_path_child = dir.path().join("child").join(manifest);
+        // Create a file structure like:
+        // root
+        // ├── child
+        // │   └── pyproject.toml
+        // ├── non-pixi-child
+        // │   └── pyproject.toml
+        // └── pixi.toml
+        //
+        // And verify that the correct manifest is found in each directory
 
-            // Create manifests
-            let mut file = File::create(&manifest_path_root).unwrap();
-            writeln!(file, "[project]").unwrap();
+        let dir = tempdir().unwrap();
+        let pixi_child_dir = dir.path().join("child");
+        let non_pixi_child_dir = dir.path().join("non-pixi-child");
 
-            std::fs::create_dir_all(manifest_path_child.parent().unwrap()).unwrap();
-            let mut file = File::create(&manifest_path_child).unwrap();
-            writeln!(file, "[project]").unwrap();
+        let manifest_path_root = dir.path().join(consts::PROJECT_MANIFEST);
+        let manifest_path_pixi_child = pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
+        let manifest_path_non_pixi_child = non_pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
 
-            // Change directory to the temp directory
-            std::env::set_current_dir(&dir).unwrap();
+        // Create manifests
+        // Root manifest is normal pixi.toml
+        let mut file = File::create(&manifest_path_root).unwrap();
+        writeln!(file, "[project]").unwrap();
 
-            assert_eq!(find_project_manifest(), Some(manifest_path_root));
-        }
+        // Pixi child manifest is pyproject.toml with pixi tool
+        std::fs::create_dir_all(&pixi_child_dir).unwrap();
+        let mut file = File::create(&manifest_path_pixi_child).unwrap();
+        writeln!(file, "[project]").unwrap();
+        writeln!(file, "[tool.pixi.project]").unwrap();
+
+        // Non pixi child manifest is pyproject.toml without pixi tool
+        std::fs::create_dir_all(&non_pixi_child_dir).unwrap();
+        let mut file = File::create(&manifest_path_non_pixi_child).unwrap();
+        writeln!(file, "[project]").unwrap();
+
+        // In root use root manifest
+        assert_eq!(
+            find_project_manifest(dir.into_path()),
+            Some(manifest_path_root.clone())
+        );
+
+        // In pixi child use pixi child manifest
+        assert_eq!(
+            find_project_manifest(pixi_child_dir),
+            Some(manifest_path_pixi_child)
+        );
+
+        // In non pixi child use root manifest
+        assert_eq!(
+            find_project_manifest(non_pixi_child_dir),
+            Some(manifest_path_root)
+        );
     }
 }
