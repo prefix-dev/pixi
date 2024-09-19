@@ -98,21 +98,8 @@ impl ExposedData {
             .and_then(OsStr::to_str)
             .map(String::from)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
-        let env_path = executable_path
-            .parent()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "executable path '{}' has no parent",
-                    executable_path.display()
-                )
-            })?
-            .parent()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "executable path's parent '{}' has no parent",
-                    executable_path.display()
-                )
-            })?;
+
+        let env_path = determine_env_path(&executable_path, env_root.path())?;
         let env_name = env_path
             .file_name()
             .and_then(OsStr::to_str)
@@ -172,6 +159,23 @@ fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
     miette::bail!(
         "Failed to extract executable path from script {}",
         script.display()
+    )
+}
+
+fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result<PathBuf> {
+    let mut current_path = executable_path;
+
+    while let Some(parent) = current_path.parent() {
+        if parent == env_root {
+            return Ok(current_path.to_owned());
+        }
+        current_path = parent;
+    }
+
+    miette::bail!(
+        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
+        executable_path.display(),
+        env_root.display()
     )
 }
 
