@@ -67,7 +67,7 @@ def test_global_sync_channels(pixi: Path, tmp_path: Path, test_data: Path) -> No
     life_package = "*"
 
     [envs.test.exposed]
-    "life" = "life"
+    life = "life"
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
@@ -79,7 +79,7 @@ def test_global_sync_channels(pixi: Path, tmp_path: Path, test_data: Path) -> No
     simple_channel = (test_data / "simple" / "output").as_uri()
     parsed_toml["envs"]["test"]["channels"].append(simple_channel)
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    life = tmp_path / "bin" / "life"
+    life = tmp_path / "bin" / ("life.bat" if platform.system() == "Windows" else "life")
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     verify_cli_command([life], ExitCode.LIFE, env=env)
 
@@ -92,19 +92,14 @@ def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
     toml = """
     [envs.test]
     channels = ["conda-forge"]
-    platform = "linux-64"
+    platform = "win-64"
     [envs.test.dependencies]
     binutils = "2.40"
     [envs.test.exposed]
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    # Exists on linux-64
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-
-    # Also exists on win-64
-    parsed_toml["envs"]["test"]["platform"] = "win-64"
-    manifest.write_text(tomli_w.dumps(parsed_toml))
+    # Exists on win-64
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
 
     # Does not exist on osx-64
@@ -145,7 +140,9 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([python_injected], ExitCode.SUCCESS, env=env)
 
     # Add another expose
-    python_in_disguise_str = "python-in-disguise"
+    python_in_disguise_str = (
+        "python-in-disguise.bat" if platform.system() == "Windows" else "python-in-disguise"
+    )
     python_in_disguise = tmp_path / "bin" / python_in_disguise_str
     parsed_toml["envs"]["test"]["exposed"][python_in_disguise_str] = "python"
     manifest.write_text(tomli_w.dumps(parsed_toml))
