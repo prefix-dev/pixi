@@ -6,7 +6,7 @@ package:
   version: ${{ version }}
 
 source:
-  path: life.v127.com
+  path: .
 
 build:
   noarch: generic

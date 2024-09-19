@@ -8,13 +8,13 @@
       "build": "h4616a5c_0",
       "build_number": 0,
       "depends": [],
-      "md5": "c0137dc54a237eee8d5448e89823b53d",
+      "md5": "4200a27139962d8da270f1f52cf66915",
       "name": "life_package",
       "noarch": "generic",
-      "sha256": "ec0cb7a00ed772fb34df628013516e21995780ca50fe2f666bc6f479387cfaf5",
-      "size": 25163,
+      "sha256": "13591c85d5a85e474e38a83822f77d7f141ec18e0656e25253705d43d5c58859",
+      "size": 42505,
       "subdir": "noarch",
-      "timestamp": 1726746667874,
+      "timestamp": 1726752421810,
       "version": "1.2.7"
     }
   },
