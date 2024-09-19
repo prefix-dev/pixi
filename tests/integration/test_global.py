@@ -21,7 +21,7 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    exposed_exec = "python-injected.bat" if platform.system() == "Windows" else "python-injected"
     python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
@@ -76,7 +76,7 @@ def test_global_sync_channels(pixi: Path, tmp_path: Path, test_data: Path) -> No
     verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env, stderr_contains="life")
 
     # Add bioconda channel
-    simple_channel = f"file://{test_data}/simple/output"
+    simple_channel = (test_data / "simple" / "output").as_uri()
     parsed_toml["envs"]["test"]["channels"].append(simple_channel)
     manifest.write_text(tomli_w.dumps(parsed_toml))
     life = tmp_path / "bin" / "life"
@@ -134,7 +134,7 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    exposed_exec = "python-injected.bat" if platform.system() == "Windows" else "python-injected"
     python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
@@ -150,7 +150,7 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     parsed_toml["envs"]["test"]["exposed"][python_in_disguise_str] = "python"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command([python_in_disguise], ExitCode.SUCCESS, env=env)
+    verify_cli_command([python_in_disguise, "--version"], ExitCode.SUCCESS, env=env)
 
     # Remove expose again
     del parsed_toml["envs"]["test"]["exposed"][python_in_disguise_str]
@@ -174,7 +174,7 @@ def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path) -> None:
     "python-injected" = "python"
     """
     manifest.write_text(toml)
-    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    exposed_exec = "python-injected.bat" if platform.system() == "Windows" else "python-injected"
     python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
@@ -209,7 +209,7 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path) -> None:
     [envs.test.exposed]
     rg = "rg"
     grep = "rg"
-    python = "python3"
+    python = "python"
     python3 = "python"
     """
     manifest.write_text(toml)
