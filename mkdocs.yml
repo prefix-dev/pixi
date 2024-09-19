@@ -120,6 +120,7 @@ nav:
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
       - Lockfile: features/lockfile.md
+      - System Requirements: features/system_requirements.md
   - Design Proposals:
       - Pixi Global Manifest: design_proposals/pixi_global_manifest.md
   - Advanced:

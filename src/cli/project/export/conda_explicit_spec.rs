@@ -6,7 +6,6 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
 use crate::cli::cli_config::PrefixUpdateConfig;
-use crate::cli::LockFileUsageArgs;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
 use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
@@ -31,9 +30,6 @@ pub struct Args {
     /// This flag allows creating the spec file even if PyPI dependencies are present.
     #[arg(long, default_value = "false")]
     pub ignore_pypi_errors: bool,
-
-    #[clap(flatten)]
-    pub lock_file_usage: LockFileUsageArgs,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,

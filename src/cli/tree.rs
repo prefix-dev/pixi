@@ -1,17 +1,20 @@
 use std::collections::HashMap;
+use std::io::{StdoutLock, Write};
 
 use ahash::{HashSet, HashSetExt};
 use clap::Parser;
 use console::Color;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use miette::{IntoDiagnostic, WrapErr};
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
+use regex::Regex;
 
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
     lock_file::UpdateLockFileOptions,
-    Project,
+    project::{Environment, Project},
 };
 
 /// Show a tree of project dependencies
@@ -56,7 +59,6 @@ struct Symbols {
     down: &'static str,
     tee: &'static str,
     ell: &'static str,
-    // right: &'static str,
     empty: &'static str,
 }
 
@@ -64,20 +66,26 @@ static UTF8_SYMBOLS: Symbols = Symbols {
     down: "│  ",
     tee: "├──",
     ell: "└──",
-    // right: "───",
     empty: "   ",
 };
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
+        .wrap_err("Failed to load project")?;
+
+    let environment = project
+        .environment_from_name_or_env_var(args.environment)
+        .wrap_err("Environment not found")?;
+
     let lock_file = project
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
             ..UpdateLockFileOptions::default()
         })
-        .await?;
+        .await
+        .wrap_err("Failed to update lock file")?;
+
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
         .lock_file
@@ -93,10 +101,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!("Environment: {}", environment.name().fancy_display());
     }
 
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
     if args.invert {
-        print_inverted_dependency_tree(&invert_dep_map(&dep_map), &direct_deps, &args.regex)?;
+        print_inverted_dependency_tree(
+            &mut handle,
+            &invert_dep_map(&dep_map),
+            &direct_deps,
+            &args.regex,
+        )
+        .wrap_err("Couldn't print the inverted dependency tree")?;
     } else {
-        print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
+        print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)
+            .wrap_err("Couldn't print the dependency tree")?;
     }
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
@@ -104,39 +121,45 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Filter and print an inverted dependency tree
 fn print_inverted_dependency_tree(
+    handle: &mut StdoutLock,
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     let regex = regex
         .as_ref()
-        .ok_or("")
-        .map_err(|_| miette::miette!("The -i flag requires a package name."))?;
-    let regex = regex::Regex::new(regex).map_err(|_| miette::miette!("Invalid regex pattern"))?;
+        .ok_or_else(|| miette::miette!("The -i flag requires a package name."))?;
 
-    let mut root_pkg_names = inverted_dep_map.keys().collect_vec();
-    root_pkg_names.retain(|p| regex.is_match(p));
+    let regex = Regex::new(regex)
+        .into_diagnostic()
+        .wrap_err("Invalid regular expression")?;
+
+    let root_pkg_names: Vec<_> = inverted_dep_map
+        .keys()
+        .filter(|p| regex.is_match(p))
+        .collect();
 
     if root_pkg_names.is_empty() {
-        Err(miette::miette!(
-            "Nothing depends on the given regular expression",
-        ))?;
+        return Err(miette::miette!(
+            "Nothing depends on the given regular expression"
+        ));
     }
 
     let mut visited_pkgs = HashSet::new();
     for pkg_name in root_pkg_names {
         if let Some(pkg) = inverted_dep_map.get(pkg_name) {
             let visited = !visited_pkgs.insert(pkg_name.clone());
-            print_package("\n", pkg, direct_deps.contains(&pkg.name), visited);
+            print_package(handle, "\n", pkg, direct_deps.contains(&pkg.name), visited)?;
 
             if !visited {
                 print_inverted_leaf(
+                    handle,
                     pkg,
                     String::from(""),
                     inverted_dep_map,
                     direct_deps,
                     &mut visited_pkgs,
-                );
+                )?;
             }
         }
     }
@@ -146,12 +169,13 @@ fn print_inverted_dependency_tree(
 
 /// Recursively print inverted dependency tree leaf nodes
 fn print_inverted_leaf(
+    handle: &mut StdoutLock,
     pkg: &Package,
     prefix: String,
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     visited_pkgs: &mut HashSet<String>,
-) {
+) -> miette::Result<()> {
     let needed_count = pkg.needed_by.len();
     for (index, needed_name) in pkg.needed_by.iter().enumerate() {
         let last = index == needed_count - 1;
@@ -164,84 +188,103 @@ fn print_inverted_leaf(
         if let Some(needed_pkg) = inverted_dep_map.get(needed_name) {
             let visited = !visited_pkgs.insert(needed_pkg.name.clone());
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 needed_pkg,
                 direct_deps.contains(&needed_pkg.name),
                 visited,
-            );
+            )?;
 
             if !visited {
-                let new_prefix = if index == needed_count - 1 {
+                let new_prefix = if last {
                     format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
                 } else {
                     format!("{}{} ", prefix, UTF8_SYMBOLS.down)
                 };
 
                 print_inverted_leaf(
+                    handle,
                     needed_pkg,
                     new_prefix,
                     inverted_dep_map,
                     direct_deps,
                     visited_pkgs,
-                )
+                )?;
             }
-        }
-    }
-}
-
-/// Print a transitive dependency tree
-fn print_transitive_dependency_tree(
-    dep_map: &HashMap<String, Package>,
-    direct_deps: &HashSet<String>,
-    filtered_keys: Vec<String>,
-) -> Result<(), miette::Error> {
-    let mut visited_pkgs = Vec::new();
-
-    for pkg_name in filtered_keys.iter() {
-        visited_pkgs.push(pkg_name.clone());
-
-        if let Some(pkg) = dep_map.get(pkg_name) {
-            print_package("\n", pkg, direct_deps.contains(&pkg.name), false);
-
-            print_dependency_leaf(pkg, "".to_string(), dep_map, &mut visited_pkgs, direct_deps)
         }
     }
     Ok(())
 }
 
-/// Filter and print a top down dependency tree
+/// Print a transitive dependency tree
+fn print_transitive_dependency_tree(
+    handle: &mut StdoutLock,
+    dep_map: &HashMap<String, Package>,
+    direct_deps: &HashSet<String>,
+    filtered_keys: Vec<String>,
+) -> miette::Result<()> {
+    let mut visited_pkgs = HashSet::new();
+
+    for pkg_name in filtered_keys.iter() {
+        if !visited_pkgs.insert(pkg_name.clone()) {
+            continue;
+        }
+
+        if let Some(pkg) = dep_map.get(pkg_name) {
+            print_package(handle, "\n", pkg, direct_deps.contains(&pkg.name), false)?;
+
+            print_dependency_leaf(
+                handle,
+                pkg,
+                "".to_string(),
+                dep_map,
+                &mut visited_pkgs,
+                direct_deps,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Filter and print a top-down dependency tree
 fn print_dependency_tree(
+    handle: &mut StdoutLock,
     dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     let mut filtered_deps = direct_deps.clone();
 
     if let Some(regex) = regex {
-        let regex = regex::Regex::new(regex).map_err(|_| miette::miette!("Invalid regex"))?;
+        let regex = Regex::new(regex)
+            .into_diagnostic()
+            .wrap_err("Invalid regular expression")?;
+
         filtered_deps.retain(|p| regex.is_match(p));
 
         if filtered_deps.is_empty() {
-            let mut filtered_keys = dep_map.keys().map(|p| p.to_owned()).collect_vec();
+            let mut filtered_keys = dep_map.keys().cloned().collect_vec();
             filtered_keys.retain(|p| regex.is_match(p));
 
             if filtered_keys.is_empty() {
-                Err(miette::miette!(
+                return Err(miette::miette!(
                     "No dependencies matched the given regular expression"
-                ))?;
+                ));
             }
 
-            tracing::info!("No top level dependencies matched the regular expression, showing matching transitive dependencies");
+            tracing::info!("No top-level dependencies matched the regular expression, showing matching transitive dependencies");
 
-            return print_transitive_dependency_tree(dep_map, direct_deps, filtered_keys);
+            return print_transitive_dependency_tree(handle, dep_map, direct_deps, filtered_keys);
         }
     }
 
-    let mut visited_pkgs = Vec::new();
+    let mut visited_pkgs = HashSet::new();
     let direct_dep_count = filtered_deps.len();
 
     for (index, pkg_name) in filtered_deps.iter().enumerate() {
-        visited_pkgs.push(pkg_name.to_owned());
+        if !visited_pkgs.insert(pkg_name.clone()) {
+            continue;
+        }
 
         let last = index == direct_dep_count - 1;
         let symbol = if last {
@@ -251,11 +294,12 @@ fn print_dependency_tree(
         };
         if let Some(pkg) = dep_map.get(pkg_name) {
             print_package(
+                handle,
                 &format!("{symbol} "),
                 pkg,
                 direct_deps.contains(&pkg.name),
                 false,
-            );
+            )?;
 
             let prefix = if last {
                 UTF8_SYMBOLS.empty
@@ -263,25 +307,27 @@ fn print_dependency_tree(
                 UTF8_SYMBOLS.down
             };
             print_dependency_leaf(
+                handle,
                 pkg,
                 format!("{} ", prefix),
                 dep_map,
                 &mut visited_pkgs,
                 direct_deps,
-            )
+            )?;
         }
     }
     Ok(())
 }
 
-/// Recursively print top down dependency tree nodes
+/// Recursively print top-down dependency tree nodes
 fn print_dependency_leaf(
+    handle: &mut StdoutLock,
     pkg: &Package,
     prefix: String,
     dep_map: &HashMap<String, Package>,
-    visited_pkgs: &mut Vec<String>,
+    visited_pkgs: &mut HashSet<String>,
     direct_deps: &HashSet<String>,
-) {
+) -> miette::Result<()> {
     let dep_count = pkg.dependencies.len();
     for (index, dep_name) in pkg.dependencies.iter().enumerate() {
         let last = index == dep_count - 1;
@@ -292,15 +338,15 @@ fn print_dependency_leaf(
         };
 
         if let Some(dep) = dep_map.get(dep_name) {
-            let visited = visited_pkgs.contains(&dep.name);
-            visited_pkgs.push(dep.name.to_owned());
+            let visited = !visited_pkgs.insert(dep.name.clone());
 
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 dep,
                 direct_deps.contains(&dep.name),
                 visited,
-            );
+            )?;
 
             if visited {
                 continue;
@@ -311,12 +357,12 @@ fn print_dependency_leaf(
             } else {
                 format!("{}{} ", prefix, UTF8_SYMBOLS.down)
             };
-            print_dependency_leaf(dep, new_prefix, dep_map, visited_pkgs, direct_deps);
+            print_dependency_leaf(handle, dep, new_prefix, dep_map, visited_pkgs, direct_deps)?;
         } else {
-            let visited = visited_pkgs.contains(dep_name);
-            visited_pkgs.push(dep_name.to_owned());
+            let visited = !visited_pkgs.insert(dep_name.clone());
 
             print_package(
+                handle,
                 &format!("{prefix}{symbol} "),
                 &Package {
                     name: dep_name.to_owned(),
@@ -327,17 +373,22 @@ fn print_dependency_leaf(
                 },
                 false,
                 visited,
-            )
+            )?;
         }
     }
+    Ok(())
 }
 
-/// Print package and style by attributes, like if are a direct dependency (name
-/// is green and bold), or by the source of the package (yellow version string
-/// for Conda, blue for PyPI). Packages that have already been visited and will
-/// not be recursed into again are marked with a star (*).
-fn print_package(prefix: &str, package: &Package, direct: bool, visited: bool) {
-    println!(
+/// Print package and style by attributes
+fn print_package(
+    handle: &mut StdoutLock,
+    prefix: &str,
+    package: &Package,
+    direct: bool,
+    visited: bool,
+) -> miette::Result<()> {
+    writeln!(
+        handle,
         "{}{} {} {}",
         prefix,
         if direct {
@@ -350,12 +401,22 @@ fn print_package(prefix: &str, package: &Package, direct: bool, visited: bool) {
             PackageSource::Pypi => console::style(&package.version).fg(Color::Blue),
         },
         if visited { "(*)" } else { "" }
-    );
+    )
+    .map_err(|e| {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            // Exit gracefully
+            std::process::exit(0);
+        } else {
+            e
+        }
+    })
+    .into_diagnostic()
+    .wrap_err("Failed to write package information")
 }
 
 /// Extract the direct Conda and PyPI dependencies from the environment
 fn direct_dependencies(
-    environment: &crate::project::Environment<'_>,
+    environment: &Environment<'_>,
     platform: &Platform,
     dep_map: &HashMap<String, Package>,
 ) -> HashSet<String> {
@@ -403,71 +464,95 @@ struct Package {
     source: PackageSource,
 }
 
-/// Builds a hashmap of dependencies, with names, versions, and what they depend
-/// on
+/// Simplified package information extracted from the lock file
+struct PackageInfo {
+    name: String,
+    dependencies: Vec<String>,
+    source: PackageSource,
+}
+
+/// Helper function to extract package information
+fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> {
+    if let Some(conda_package) = package.as_conda() {
+        // Extract name
+        let name = conda_package
+            .package_record()
+            .name
+            .as_normalized()
+            .to_string();
+
+        // Extract dependencies
+        let dependencies: Vec<String> = conda_package
+            .package_record()
+            .depends
+            .iter()
+            .map(|d| {
+                d.split_once(' ')
+                    .map_or_else(|| d.to_string(), |(dep_name, _)| dep_name.to_string())
+            })
+            .collect();
+
+        Some(PackageInfo {
+            name,
+            dependencies,
+            source: PackageSource::Conda,
+        })
+    } else if let Some(pypi_package) = package.as_pypi() {
+        // Extract name
+        let name = pypi_package
+            .data()
+            .package
+            .name
+            .as_dist_info_name()
+            .into_owned();
+
+        // Extract dependencies
+        let dependencies = pypi_package
+            .data()
+            .package
+            .requires_dist
+            .iter()
+            .filter_map(|p| {
+                if p.marker.is_true() {
+                    Some(p.name.as_dist_info_name().into_owned())
+                } else {
+                    tracing::info!(
+                        "Skipping {} specified by {} due to marker {:?}",
+                        p.name,
+                        name,
+                        p.marker
+                    );
+                    None
+                }
+            })
+            .collect();
+
+        Some(PackageInfo {
+            name,
+            dependencies,
+            source: PackageSource::Pypi,
+        })
+    } else {
+        None
+    }
+}
+
+/// Generate a map of dependencies from a list of locked packages
 fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<String, Package> {
     let mut package_dependencies_map = HashMap::new();
 
     for package in locked_deps {
         let version = package.version().into_owned();
 
-        if let Some(conda_package) = package.as_conda() {
-            let name = conda_package
-                .package_record()
-                .name
-                .as_normalized()
-                .to_string();
-            // Parse the dependencies of the package
-            let dependencies: Vec<String> = conda_package
-                .package_record()
-                .depends
-                .iter()
-                .map(|d| {
-                    d.split_once(' ')
-                        .map_or_else(|| d.to_string(), |(dep_name, _)| dep_name.to_string())
-                })
-                .collect();
-
+        if let Some(package_info) = extract_package_info(package) {
             package_dependencies_map.insert(
-                name.clone(),
+                package_info.name.clone(),
                 Package {
-                    name: name.clone(),
-                    version,
-                    dependencies: dependencies.into_iter().unique().collect(),
+                    name: package_info.name,
+                    version: version.clone(),
+                    dependencies: package_info.dependencies.into_iter().unique().collect(),
                     needed_by: Vec::new(),
-                    source: PackageSource::Conda,
-                },
-            );
-        } else if let Some(pypi_package) = package.as_pypi() {
-            let name = pypi_package
-                .data()
-                .package
-                .name
-                .as_dist_info_name()
-                .into_owned();
-
-            let mut dependencies = Vec::new();
-            for p in pypi_package.data().package.requires_dist.iter() {
-                // If this is not true, it means that the marker does not hold for every environment
-                if !&p.marker.is_true() {
-                    tracing::info!(
-                        "Extra and environment markers currently cannot be parsed on {} which is specified by {}, skipping. {:?}",
-                        p.name,
-                        name,
-                        p.marker
-                    );
-                } else {
-                    dependencies.push(p.name.as_dist_info_name().into_owned())
-                }
-            }
-            package_dependencies_map.insert(
-                name.clone(),
-                Package {
-                    name: name.clone(),
-                    version,
-                    dependencies: dependencies.into_iter().unique().collect(),
-                    needed_by: Vec::new(),
-                    source: PackageSource::Pypi,
+                    source: package_info.source,
                 },
             );
         }
@@ -475,8 +560,7 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
     package_dependencies_map
 }
 
-/// Given a map of dependencies, invert it so that it has what a package is
-/// needed by, rather than what it depends on
+/// Given a map of dependencies, invert it
 fn invert_dep_map(dep_map: &HashMap<String, Package>) -> HashMap<String, Package> {
     let mut inverted_deps = dep_map.clone();
 

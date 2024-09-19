@@ -83,6 +83,10 @@ pub struct PrefixUpdateConfig {
     #[clap(long, conflicts_with = "no_install")]
     pub no_lockfile_update: bool,
 
+    /// Lock file usage from the CLI
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
+
     /// Don't modify the environment, only modify the lock-file.
     #[arg(long)]
     pub no_install: bool,
@@ -91,8 +95,10 @@ pub struct PrefixUpdateConfig {
     pub config: ConfigCli,
 }
 impl PrefixUpdateConfig {
-    pub(crate) fn lock_file_usage(&self) -> LockFileUsage {
-        if self.no_lockfile_update {
+    pub fn lock_file_usage(&self) -> LockFileUsage {
+        if self.lock_file_usage.locked {
+            LockFileUsage::Locked
+        } else if self.lock_file_usage.frozen || self.no_lockfile_update {
             LockFileUsage::Frozen
         } else {
             LockFileUsage::Update
