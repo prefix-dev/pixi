@@ -24,14 +24,13 @@ impl From<NamedChannelOrUrl> for PrioritizedChannel {
 }
 
 impl From<(NamedChannelOrUrl, Option<i32>)> for PrioritizedChannel {
-    fn from((value, priority): (NamedChannelOrUrl, Option<i32>)) -> Self {
+    fn from((value, prio): (NamedChannelOrUrl, Option<i32>)) -> Self {
         Self {
             channel: value,
-            priority: priority,
+            priority: prio,
         }
     }
 }
-
 
 pub enum TomlPrioritizedChannelStrOrMap {
     Map(PrioritizedChannel),

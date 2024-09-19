@@ -334,6 +334,7 @@ impl PixiControl {
                 channel: vec![],
                 no_install: true,
                 feature: None,
+                priority: None,
             },
         }
     }

@@ -27,7 +27,7 @@ pub struct AddRemoveArgs {
     pub channel: Vec<NamedChannelOrUrl>,
 
     /// Specify the channel priority
-    #[clap(long, num_args=1)]
+    #[clap(long, num_args = 1)]
     pub priority: Option<i32>,
 
     /// Don't update the environment, only modify the manifest and the
@@ -42,7 +42,10 @@ pub struct AddRemoveArgs {
 
 impl AddRemoveArgs {
     fn prioritized_channels(&self) -> impl IntoIterator<Item = PrioritizedChannel> + '_ {
-        self.channel.iter().cloned().map(|channel| PrioritizedChannel::from((channel, self.priority)))
+        self.channel
+            .iter()
+            .cloned()
+            .map(|channel| PrioritizedChannel::from((channel, self.priority)))
     }
 
     fn feature_name(&self) -> FeatureName {

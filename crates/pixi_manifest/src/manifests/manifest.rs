@@ -12,14 +12,11 @@ use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version
-};
-use serde::Deserialize;
-use toml_edit::{DocumentMut, Table, Value};
+use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use toml_edit::{DocumentMut, Table};
 
 use crate::{
     consts,
-    channel::TomlPrioritizedChannelStrOrMap,
     error::{DependencyError, TomlError, UnknownFeature},
     manifests::{ManifestSource, TomlManifest},
     pypi::PyPiPackageName,
@@ -534,51 +531,34 @@ impl Manifest {
         };
         let to_add: IndexSet<_> = channels.into_iter().collect();
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-        let new_channels: IndexSet<_> = new.clone().into_iter().map(|channel| channel.channel).collect();
+        let new_channels: IndexSet<_> = new
+            .clone()
+            .into_iter()
+            .map(|channel| channel.channel)
+            .collect();
 
         // clear channels with modified priority
-        current.retain(|c| ! new_channels.contains(&c.channel));
+        current.retain(|c| !new_channels.contains(&c.channel));
 
         // Add the updated channels to the manifest
         current.extend(new.clone());
+        let current_clone = current.clone();
 
         // Then to the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
-
-        for channel in new.iter() {
-            // lookup index for changed priority and update in-place
-            // is there an easier lookup for deserialize to use here?
-            let index = channels.iter().map(
-                |value| {
-                    let deserializer = value.to_string().trim().parse::<toml_edit::de::ValueDeserializer>().unwrap();
-                    TomlPrioritizedChannelStrOrMap::deserialize(deserializer)
-            }
-            ).position(
-                |c| match c {
-                    Ok(c) => c.into_prioritized_channel().channel == channel.channel,
-                    Err(_) => false,
-                }
-            );
-
-            // push if not found, remove & insert if found
-            let mut push = |item: Value| {
-                if index.is_some() {
-                    channels.remove(index.unwrap());
-                    channels.insert(index.unwrap(), item);
-                } else {
-                    channels.push(item);
-                }
-            };
+        // clear and recreate from current list
+        channels.clear();
+        for channel in current_clone.iter() {
             match channel.priority {
                 Some(priority) => {
                     let mut table = Table::new().into_inline_table();
                     table.insert("channel", channel.channel.to_string().into());
                     table.insert("priority", i64::from(priority).into());
-                    push(table.into());
-                },
+                    channels.push(table);
+                }
                 None => {
-                    push(channel.channel.to_string().into());
-                },
+                    channels.push(channel.channel.to_string());
+                }
             }
         }
 
@@ -609,24 +589,34 @@ impl Manifest {
             })
             .collect::<Result<_, _>>()?;
 
-        let retained: IndexSet<_> = current.iter().filter(
-            |channel| ! to_remove.contains(&channel.channel)).cloned().collect();
+        let retained: IndexSet<_> = current
+            .iter()
+            .filter(|channel| !to_remove.contains(&channel.channel))
+            .cloned()
+            .collect();
 
         // Remove channels from the manifest
         current.retain(|c| retained.contains(c));
+        let current_clone = current.clone();
 
         // And from the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        channels.retain(
-            |value| {
-                let deserializer = value.to_string().trim().parse::<toml_edit::de::ValueDeserializer>().unwrap();
-                let parsed = TomlPrioritizedChannelStrOrMap::deserialize(deserializer);
-                match parsed {
-                    Ok(c) => retained.contains(&c.into_prioritized_channel()),
-                    Err(_) => false,
+        // clear and recreate from current list
+        // to preserve order and priority
+        channels.clear();
+        for channel in current_clone.iter() {
+            match channel.priority {
+                Some(priority) => {
+                    let mut table = Table::new().into_inline_table();
+                    table.insert("channel", channel.channel.to_string().into());
+                    table.insert("priority", i64::from(priority).into());
+                    channels.push(table);
+                }
+                None => {
+                    channels.push(channel.channel.to_string());
                 }
             }
-        );
+        }
 
         Ok(())
     }
