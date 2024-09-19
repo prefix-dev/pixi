@@ -32,3 +32,6 @@ start = "python -m flask --app flask_hello_world_pyproject.app:app run --port=50
 
 [tool.pixi.feature.test.tasks]
 test = "pytest -v tests/*"
+
+[tool.pixi.host-dependencies]
+hatchling = "*"

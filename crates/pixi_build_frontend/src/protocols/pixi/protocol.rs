@@ -43,6 +43,7 @@ impl ProtocolError {
             Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
                 Self::MethodNotImplemented(method.to_string())
             }
+            Error::ParseError(err) => Self::ParseError(method.to_string(), err),
             e => Self::JsonRpc(e),
         }
     }
@@ -52,6 +53,8 @@ impl ProtocolError {
 pub enum ProtocolError {
     #[error(transparent)]
     JsonRpc(ClientError),
+    #[error("received invalid response from backend when calling '{0}'")]
+    ParseError(String, #[source] serde_json::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     BackendError(#[from] BackendError),
