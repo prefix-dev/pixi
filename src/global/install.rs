@@ -546,14 +546,9 @@ fn specs_match_local_environment(
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed environment
     let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
-        let Some(prefix_record) = prefix_records
+        prefix_records
             .iter()
-            .find(|record| record.repodata_record.package_record.name == *name)
-        else {
-            return false;
-        };
-
-        spec.matches(&prefix_record.repodata_record)
+            .any(|record| spec.matches(&record.repodata_record))
     });
 
     if !specs_in_manifest_are_present {
@@ -587,17 +582,15 @@ fn specs_match_local_environment(
         dependencies
             .iter()
             .fold(remaining_prefix_records, |mut acc, dependency| {
-                let Some(dependency_name) =
-                    MatchSpec::from_str(dependency, ParseStrictness::Lenient)
-                        .ok()
-                        .and_then(|d| d.name)
+                let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
                 else {
                     return acc;
                 };
 
-                let Some(index) = acc.iter().position(|record| {
-                    record.repodata_record.package_record.name == dependency_name
-                }) else {
+                let Some(index) = acc
+                    .iter()
+                    .position(|record| match_spec.matches(&record.repodata_record.package_record))
+                else {
                     return acc;
                 };
 
@@ -614,7 +607,7 @@ fn specs_match_local_environment(
         }) else {
             return acc;
         };
-        let matched_record = acc.remove(index);
+        let matched_record = acc.swap_remove(index);
         prune_dependencies(acc, &matched_record)
     });
 
