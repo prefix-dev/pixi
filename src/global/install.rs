@@ -625,7 +625,7 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
 #[cfg(test)]
 mod tests {
     use indexmap::IndexMap;
-    use rattler_lock::Package;
+    use rattler_lock::{LockFile, Package};
     use url::Url;
 
     use super::*;
@@ -647,6 +647,10 @@ mod tests {
             url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
             channel: "dummy-channel".to_owned(),
         }];
+
+        // let lock_file = LockFile::default();
+        // let environment = lock_file.default_environment().unwrap();
+        // let records = environment.conda_repodata_records_for_platform(Platform::Linux64).unwrap().unwrap();
 
         assert!(specs_match_local_environment(
             &specs,
