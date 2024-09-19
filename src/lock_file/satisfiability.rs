@@ -8,12 +8,13 @@ use std::{
 };
 
 use distribution_filename::DistExtension;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
-use pixi_spec::{PixiSpec, SpecConversionError};
+use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_types::{
@@ -24,16 +25,18 @@ use rattler_conda_types::{
     ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
-    ConversionError, Package, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
+    Package, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
 };
 use thiserror::Error;
 use url::Url;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
-use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
+use super::{PypiRecord, PypiRecordsByName};
+use crate::{
+    lock_file::records_by_name::PixiRecordsByName,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -121,6 +124,12 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
 
+    #[error("no package named exists '{0}' (required by '{1}')")]
+    SourcePackageMissing(String, String),
+
+    #[error("required source package '{0}' is locked as binary (required by '{1}')")]
+    RequiredSourceIsBinary(String, String),
+
     #[error("failed to convert the requirement for '{0}'")]
     FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
 
@@ -143,7 +152,7 @@ pub enum PlatformUnsat {
     MissingPurls,
 
     #[error("corrupted lock-file entry for '{0}'")]
-    CorruptedEntry(String, ConversionError),
+    CorruptedEntry(String, ParseLockFileError),
 
     #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
     TooManyPypiPackages(Vec<PackageName>),
@@ -191,6 +200,9 @@ pub enum PlatformUnsat {
 
     #[error("source dependencies are currently always considered out of date")]
     SourceDependency,
+
+    #[error("the requested path '{1}' does not match the locked path '{2}' for '{0}'")]
+    SourcePathMismatch(String, String, String),
 }
 
 impl PlatformUnsat {
@@ -357,14 +369,16 @@ pub fn verify_platform_satisfiability(
     project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
     // Convert the lock file into a list of conda and pypi packages
-    let mut conda_packages: Vec<RepoDataRecord> = Vec::new();
+    let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
     for package in locked_environment.packages(platform).into_iter().flatten() {
         match package {
             Package::Conda(conda) => {
                 let url = conda.location().clone();
-                conda_packages.push(
+                pixi_records.push(
                     conda
+                        .package_data()
+                        .clone()
                         .try_into()
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
@@ -380,9 +394,10 @@ pub fn verify_platform_satisfiability(
     // if all conda packages have empty purls
     if environment.has_pypi_dependencies()
         && pypi_packages.is_empty()
-        && !conda_packages
+        && pixi_records
             .iter()
-            .any(|record| record.package_record.purls.is_some())
+            .filter_map(PixiRecord::as_binary)
+            .all(|record| record.package_record.purls.is_none())
     {
         {
             return Err(PlatformUnsat::MissingPurls);
@@ -391,11 +406,11 @@ pub fn verify_platform_satisfiability(
 
     // Create a lookup table from package name to package record. Returns an error
     // if we find a duplicate entry for a record
-    let repodata_records_by_name = match RepoDataRecordsByName::from_unique_iter(conda_packages) {
-        Ok(conda_packages) => conda_packages,
+    let pixi_records_by_name = match PixiRecordsByName::from_unique_iter(pixi_records) {
+        Ok(pixi_records) => pixi_records,
         Err(duplicate) => {
             return Err(PlatformUnsat::DuplicateEntry(
-                duplicate.package_record.name.as_source().to_string(),
+                duplicate.package_record().name.as_source().to_string(),
             ))
         }
     };
@@ -403,13 +418,13 @@ pub fn verify_platform_satisfiability(
     // Create a lookup table from package name to package record. Returns an error
     // if we find a duplicate entry for a record
     let pypi_records_by_name = match PypiRecordsByName::from_unique_iter(pypi_packages) {
-        Ok(conda_packages) => conda_packages,
+        Ok(pypi_packages) => pypi_packages,
         Err(duplicate) => return Err(PlatformUnsat::DuplicateEntry(duplicate.0.name.to_string())),
     };
 
     verify_package_platform_satisfiability(
         environment,
-        &repodata_records_by_name,
+        &pixi_records_by_name,
         &pypi_records_by_name,
         platform,
         project_root,
@@ -581,7 +596,7 @@ pub(crate) fn pypi_satifisfies_requirement(
 #[allow(clippy::result_large_err)]
 pub(crate) fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
-    locked_conda_packages: &RepoDataRecordsByName,
+    locked_pixi_records: &PixiRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
     project_root: &Path,
@@ -589,13 +604,13 @@ pub(crate) fn verify_package_platform_satisfiability(
     let channel_config = environment.project().channel_config();
 
     // Determine the dependencies requested by the environment
-    let conda_specs = environment
+    let environment_dependencies = environment
         .dependencies(None, Some(platform))
         .into_specs()
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
-    if conda_specs.is_empty() && !locked_conda_packages.is_empty() {
+    if environment_dependencies.is_empty() && !locked_pixi_records.is_empty() {
         return Err(PlatformUnsat::TooManyCondaPackages);
     }
 
@@ -633,7 +648,7 @@ pub(crate) fn verify_package_platform_satisfiability(
     // refers to the locked python interpreter, it might not match the specs
     // from the environment. That is ok because we will find that out when we
     // check all the records.
-    let python_interpreter_record = locked_conda_packages.python_interpreter_record();
+    let python_interpreter_record = locked_pixi_records.python_interpreter_record();
 
     // Determine the marker environment from the python interpreter package.
     let marker_environment = python_interpreter_record
@@ -656,7 +671,7 @@ pub(crate) fn verify_package_platform_satisfiability(
     };
 
     // Determine the pypi packages provided by the locked conda packages.
-    let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name();
+    let locked_conda_pypi_packages = locked_pixi_records.by_pypi_name();
 
     // Keep a list of all conda packages that we have already visisted
     let mut conda_packages_visited = HashSet::new();
@@ -672,19 +687,20 @@ pub(crate) fn verify_package_platform_satisfiability(
     // Iterate over all packages. First iterate over all conda matchspecs and then
     // over all pypi requirements. We want to ensure we always check the conda
     // packages first.
-    let mut conda_queue = conda_specs;
+    let mut conda_queue = environment_dependencies;
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
-                let spec = match spec.try_into_nameless_match_spec(&channel_config) {
-                    Ok(Some(spec)) => MatchSpec::from_nameless(spec, Some(name)),
-                    Ok(None) => {
+                let spec = match spec.into_source_or_binary(&channel_config) {
+                    Ok(Either::Left(source_spec)) => {
                         // TODO(baszalmstra): Add support for checking the source dependencies
+
                         return Err(PlatformUnsat::SourceDependency);
                     }
+                    Ok(Either::Right(spec)) => MatchSpec::from_nameless(spec, Some(name)),
                     Err(e) => {
                         let parse_channel_err: ParseMatchSpecError = match e {
                             SpecConversionError::NonAbsoluteRootDir(p) => {
@@ -703,15 +719,13 @@ pub(crate) fn verify_package_platform_satisfiability(
                         ));
                     }
                 };
-                match find_matching_package(locked_conda_packages, &virtual_packages, spec, source)?
-                {
+                match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
                     Some(pkg) => pkg,
                     None => continue,
                 }
             }
             Dependency::Conda(spec, source) => {
-                match find_matching_package(locked_conda_packages, &virtual_packages, spec, source)?
-                {
+                match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
                     Some(pkg) => pkg,
                     None => continue,
                 }
@@ -787,13 +801,13 @@ pub(crate) fn verify_package_platform_satisfiability(
                     continue;
                 }
 
-                let record = &locked_conda_packages.records[idx];
-                for depends in &record.package_record.depends {
+                let record = &locked_pixi_records.records[idx];
+                for depends in &record.package_record().depends {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
                     conda_queue.push(Dependency::Conda(
                         spec,
-                        Cow::Owned(record.file_name.clone()),
+                        Cow::Owned(record.package_record().name.as_source().to_string()),
                     ));
                 }
             }
@@ -882,7 +896,7 @@ pub(crate) fn verify_package_platform_satisfiability(
     }
 
     // Check if all locked packages have also been visisted
-    if conda_packages_visited.len() != locked_conda_packages.len() {
+    if conda_packages_visited.len() != locked_pixi_records.len() {
         return Err(PlatformUnsat::TooManyCondaPackages);
     }
 
@@ -931,7 +945,7 @@ enum FoundPackage {
 
 #[allow(clippy::result_large_err)]
 fn find_matching_package(
-    locked_conda_packages: &RepoDataRecordsByName,
+    locked_pixi_records: &PixiRecordsByName,
     virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
     spec: MatchSpec,
     source: Cow<str>,
@@ -939,10 +953,10 @@ fn find_matching_package(
     let found_package = match &spec.name {
         None => {
             // No name means we have to find any package that matches the spec.
-            match locked_conda_packages
+            match locked_pixi_records
                 .records
                 .iter()
-                .position(|record| record.matches(&spec))
+                .position(|record| spec.matches(record))
             {
                 None => {
                     // No records match the spec.
@@ -955,11 +969,11 @@ fn find_matching_package(
             }
         }
         Some(name) => {
-            match locked_conda_packages
+            match locked_pixi_records
                 .index_by_name(name)
-                .map(|idx| (idx, &locked_conda_packages.records[idx]))
+                .map(|idx| (idx, &locked_pixi_records.records[idx]))
             {
-                Some((idx, record)) if record.matches(&spec) => FoundPackage::Conda(idx),
+                Some((idx, record)) if spec.matches(record) => FoundPackage::Conda(idx),
                 Some(_) => {
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
@@ -999,26 +1013,48 @@ fn find_matching_package(
     Ok(Some(found_package))
 }
 
-trait MatchesMatchspec {
-    fn matches(&self, spec: &MatchSpec) -> bool;
-}
+#[allow(clippy::result_large_err)]
+fn find_matching_source_package(
+    locked_pixi_records: &PixiRecordsByName,
+    name: rattler_conda_types::PackageName,
+    source_spec: SourceSpec,
+    source: Cow<str>,
+) -> Result<Option<FoundPackage>, PlatformUnsat> {
+    // Find the package that matches the source spec.
+    let Some((idx, package)) = locked_pixi_records
+        .index_by_name(&name)
+        .map(|idx| (idx, &locked_pixi_records.records[idx]))
+    else {
+        // The record does not match the spec, the lock-file is
+        // inconsistent.
+        return Err(PlatformUnsat::SourcePackageMissing(
+            name.as_source().to_string(),
+            source.into_owned(),
+        ));
+    };
 
-impl MatchesMatchspec for RepoDataRecord {
-    fn matches(&self, spec: &MatchSpec) -> bool {
-        if !spec.matches(&self.package_record) {
-            return false;
-        }
+    let PixiRecord::Source(source_package) = package else {
+        return Err(PlatformUnsat::RequiredSourceIsBinary(
+            name.as_source().to_string(),
+            source.into_owned(),
+        ));
+    };
 
-        // TODO: We should really move this into rattler
-        // Check the channel
-        if let Some(channel) = &spec.channel {
-            if !self.url.as_str().starts_with(channel.base_url.as_str()) {
-                return false;
+    match (source_spec, source_package) {
+        (SourceSpec::Path(requested), SourceSpec::Path(locked)) => {
+            if requested.path != locked.path {
+                return Err(PlatformUnsat::SourcePathMismatch(
+                    name.as_source().to_string(),
+                    requested.path.to_string(),
+                    locked.path.to_string(),
+                ));
             }
         }
-
-        true
     }
+}
+
+trait MatchesMatchspec {
+    fn matches(&self, spec: &MatchSpec) -> bool;
 }
 
 impl MatchesMatchspec for GenericVirtualPackage {

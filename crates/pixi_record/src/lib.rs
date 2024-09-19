@@ -1,16 +1,18 @@
+mod input_hash;
 mod pinned_source;
 mod source_record;
+
+pub use input_hash::{InputHash, InputHashError};
+pub use pinned_source::{
+    ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
+};
 use rattler_conda_types::{
     package::ArchiveIdentifier, MatchSpec, Matches, NamelessMatchSpec, PackageRecord,
     RepoDataRecord,
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
-use thiserror::Error;
-
-pub use pinned_source::{
-    ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
-};
 pub use source_record::SourceRecord;
+use thiserror::Error;
 
 /// A record of a conda package that is either something installable from a
 /// binary file or something that still requires building.

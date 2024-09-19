@@ -12,7 +12,7 @@ use pixi_build_types::{
     },
     ChannelConfiguration,
 };
-use pixi_record::{PinnedPathSpec, PinnedSourceSpec, SourceRecord};
+use pixi_record::{InputHash, InputHashError, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use thiserror::Error;
@@ -38,6 +38,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     FrontendError(Box<dyn Diagnostic + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    InputHash(#[from] InputHashError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -258,12 +261,17 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
+        // Compute the input globs for the source repository.
+        let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
+        let input_hash = InputHash::from_globs(&source.path, input_globs)?;
+
         // Convert the metadata to repodata
-        Ok(metadata
+        let packages = metadata
             .packages
             .into_iter()
             .map(|p| {
                 SourceRecord {
+                    input_hash: input_hash.clone(),
                     source: source.pinned.clone(),
                     package_record: PackageRecord {
                         // We cannot now these values from the metadata because no actual package
@@ -306,7 +314,9 @@ impl BuildContext {
                     },
                 }
             })
-            .collect())
+            .collect();
+
+        Ok(packages)
     }
 }
 

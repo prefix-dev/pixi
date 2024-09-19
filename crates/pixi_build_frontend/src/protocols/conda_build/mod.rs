@@ -71,7 +71,7 @@ impl ProtocolBuilder {
         Protocol {
             channel_config: self.channel_config,
             tool,
-            _source_dir: self.source_dir,
+            source_dir: self.source_dir,
             recipe_dir: self.recipe_dir,
         }
     }

@@ -69,6 +69,15 @@ impl From<conda_build_protocol::Protocol> for Protocol {
 }
 
 impl Protocol {
+    /// Returns the root manifest files of the source directory. These indicate
+    /// the files that are used to determine the build configuration.
+    pub fn manifests(&self) -> Vec<String> {
+        match self {
+            Self::Pixi(protocol) => protocol.manifests(),
+            Self::CondaBuild(protocol) => protocol.manifests(),
+        }
+    }
+
     pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,

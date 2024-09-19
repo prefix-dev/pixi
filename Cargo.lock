@@ -1410,7 +1410,6 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.5"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -1716,6 +1715,17 @@ dependencies = [
  "log",
  "regex-automata 0.4.7",
  "regex-syntax 0.8.4",
+]
+
+[[package]]
+name = "globwalk"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bf760ebf69878d9fd8f110c89703d90ce35095324d1f1edcb595c63945ee757"
+dependencies = [
+ "bitflags 2.6.0",
+ "ignore",
+ "walkdir",
 ]
 
 [[package]]
@@ -3724,6 +3734,7 @@ dependencies = [
  "pixi_consts",
  "pixi_manifest",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_repodata_gateway",
  "rattler_solve",
  "regex",
@@ -3747,6 +3758,7 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
+ "rattler_digest",
  "serde",
  "serde_with",
  "url",
@@ -3854,6 +3866,8 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
+ "globwalk",
+ "itertools 0.13.0",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
@@ -3870,6 +3884,7 @@ dependencies = [
  "dunce",
  "file_url",
  "insta",
+ "itertools 0.13.0",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -4283,7 +4298,6 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.27.11"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "anyhow",
  "clap",
@@ -4300,7 +4314,7 @@ dependencies = [
  "memmap2 0.9.4",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.3 (git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path)",
+ "rattler_cache 0.2.3",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4310,7 +4324,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.5",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path)",
+ "simple_spawn_blocking 1.0.0",
  "smallvec",
  "tempfile",
  "thiserror",
@@ -4318,6 +4332,32 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "rattler_cache"
+version = "0.2.3"
+dependencies = [
+ "anyhow",
+ "dashmap",
+ "digest",
+ "dirs",
+ "fs4",
+ "futures",
+ "fxhash",
+ "itertools 0.13.0",
+ "parking_lot 0.12.3",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_networking",
+ "rattler_package_streaming",
+ "reqwest 0.12.5",
+ "reqwest-middleware",
+ "simple_spawn_blocking 1.0.0",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -4349,36 +4389,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rattler_cache"
-version = "0.2.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
-dependencies = [
- "anyhow",
- "dashmap",
- "digest",
- "dirs",
- "fs4",
- "futures",
- "fxhash",
- "itertools 0.13.0",
- "parking_lot 0.12.3",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "reqwest 0.12.5",
- "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path)",
- "thiserror",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "rattler_conda_types"
 version = "0.27.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "chrono",
  "dirs",
@@ -4413,7 +4425,6 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "blake2",
  "digest",
@@ -4429,7 +4440,6 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.24"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "chrono",
  "file_url",
@@ -4453,7 +4463,6 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "quote",
  "syn 2.0.72",
@@ -4462,7 +4471,6 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.21.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4489,7 +4497,6 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4516,7 +4523,6 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -4526,7 +4532,6 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.13"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4553,7 +4558,7 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.3 (git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path)",
+ "rattler_cache 0.2.3",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4564,7 +4569,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path)",
+ "simple_spawn_blocking 1.0.0",
  "superslice",
  "tempfile",
  "thiserror",
@@ -4579,7 +4584,6 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.3.0",
@@ -4596,7 +4600,6 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.0.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "chrono",
  "futures",
@@ -4614,7 +4617,6 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "1.1.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
 dependencies = [
  "archspec",
  "libloading",
@@ -5695,8 +5697,6 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
 dependencies = [
  "tokio",
 ]
@@ -5704,7 +5704,8 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/conda_url_or_path#0fdd0a166bc709a2ac398734958ec21f5b0cf90d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
 dependencies = [
  "tokio",
 ]

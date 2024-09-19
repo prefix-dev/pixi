@@ -1,7 +1,7 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_lock::CondaPackageData;
 
-use crate::{ParseLockFileError, PinnedSourceSpec};
+use crate::{input_hash::InputHash, ParseLockFileError, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone)]
@@ -12,6 +12,10 @@ pub struct SourceRecord {
 
     /// Exact definition of the source of the package.
     pub source: PinnedSourceSpec,
+
+    /// The hash of the input that was used to build the metadata of the
+    /// package.
+    pub input_hash: InputHash,
 }
 
 impl From<SourceRecord> for CondaPackageData {
@@ -21,6 +25,10 @@ impl From<SourceRecord> for CondaPackageData {
             location: value.source.into(),
             file_name: None,
             channel: None,
+            input: Some(rattler_lock::InputHash {
+                hash: value.input_hash.hash,
+                globs: value.input_hash.globs,
+            }),
         }
     }
 }
@@ -32,6 +40,12 @@ impl TryFrom<CondaPackageData> for SourceRecord {
         Ok(Self {
             package_record: value.package_record,
             source: value.location.try_into()?,
+            input_hash: value
+                .input
+                .map_or_else(InputHash::default, |hash| InputHash {
+                    hash: hash.hash,
+                    globs: hash.globs,
+                }),
         })
     }
 }

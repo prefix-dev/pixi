@@ -17,3 +17,5 @@ rattler_lock = { workspace = true }
 thiserror = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+itertools = { workspace = true }
+globwalk = { workspace = true }

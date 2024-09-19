@@ -65,11 +65,15 @@ pub struct Protocol {
     pub(super) _channel_config: ChannelConfig,
     pub(super) client: Client,
 
+    /// The path to the manifest relative to the source directory.
+    relative_manifest_path: PathBuf,
+
     _backend_capabilities: BackendCapabilities,
 }
 
 impl Protocol {
     pub(crate) async fn setup(
+        source_dir: PathBuf,
         manifest_path: PathBuf,
         channel_config: ChannelConfig,
         tool: Tool,
@@ -90,15 +94,21 @@ impl Protocol {
         // Construct a JSON-RPC client to communicate with the backend process.
         let (tx, rx) = stdio_transport(stdin, stdout);
 
-        Self::setup_with_transport(manifest_path, channel_config, tx, rx).await
+        Self::setup_with_transport(source_dir, manifest_path, channel_config, tx, rx).await
     }
 
     pub async fn setup_with_transport(
+        source_dir: PathBuf,
         manifest_path: PathBuf,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
     ) -> Result<Self, InitializeError> {
+        let relative_manifest_path = manifest_path
+            .strip_prefix(source_dir)
+            .unwrap_or(&manifest_path)
+            .to_path_buf();
+
         let client: Client = ClientBuilder::default()
             // Set 24hours for request timeout because the backend may be long-running.
             .request_timeout(std::time::Duration::from_secs(86400))
@@ -122,7 +132,17 @@ impl Protocol {
             _channel_config: channel_config,
             client,
             _backend_capabilities: result.capabilities,
+            relative_manifest_path,
         })
+    }
+
+    /// Returns the relative path from the source directory to the recipe.
+    pub fn manifests(&self) -> Vec<String> {
+        self.relative_manifest_path
+            .to_str()
+            .into_iter()
+            .map(ToString::to_string)
+            .collect()
     }
 
     /// Extract metadata from the recipe.
