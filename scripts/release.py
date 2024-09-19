@@ -77,7 +77,6 @@ def print_summary():
 
 atexit.register(print_summary)
 
-global release_version
 
 
 def main():
