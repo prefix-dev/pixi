@@ -1,6 +1,7 @@
 from enum import IntEnum
 from pathlib import Path
 import subprocess
+import os
 
 PIXI_VERSION = "0.29.0"
 
@@ -18,8 +19,10 @@ def verify_cli_command(
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> None:
-    process = subprocess.run(command, capture_output=True, text=True)
+    complete_env = os.environ if env is None else os.environ | env
+    process = subprocess.run(command, capture_output=True, text=True, env=complete_env)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
