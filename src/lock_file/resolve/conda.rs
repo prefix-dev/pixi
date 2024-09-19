@@ -2,9 +2,7 @@ use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_record::{PixiRecord, SourceRecord};
-use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, RepoDataRecord,
-};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use url::Url;
