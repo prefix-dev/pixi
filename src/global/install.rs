@@ -575,28 +575,31 @@ fn specs_match_local_environment(
     }
 
     fn prune_dependencies(
-        remaining_prefix_records: Vec<PrefixRecord>,
+        mut remaining_prefix_records: Vec<PrefixRecord>,
         matched_record: &PrefixRecord,
     ) -> Vec<PrefixRecord> {
-        let dependencies = &matched_record.repodata_record.package_record.depends;
-        dependencies
-            .iter()
-            .fold(remaining_prefix_records, |mut acc, dependency| {
+        let mut work_queue = Vec::from([matched_record.clone()]);
+
+        while let Some(current_record) = work_queue.pop() {
+            let dependencies = &current_record.repodata_record.package_record.depends;
+            for dependency in dependencies {
                 let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
                 else {
-                    return acc;
+                    continue;
                 };
-
-                let Some(index) = acc
+                let Some(index) = remaining_prefix_records
                     .iter()
                     .position(|record| match_spec.matches(&record.repodata_record.package_record))
                 else {
-                    return acc;
+                    continue;
                 };
 
-                let matched_record = acc.remove(index);
-                prune_dependencies(acc, &matched_record)
-            })
+                let matched_record = remaining_prefix_records.remove(index);
+                work_queue.push(matched_record);
+            }
+        }
+
+        remaining_prefix_records
     }
 
     // Process each spec and remove matched entries and their dependencies
