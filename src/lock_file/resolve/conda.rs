@@ -1,7 +1,10 @@
 use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
+use pixi_record::{PixiRecord, SourceRecord};
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, RepoDataRecord,
+};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use url::Url;
@@ -10,8 +13,6 @@ use crate::{
     build::{SourceCheckout, SourceMetadata},
     lock_file::LockedCondaPackages,
 };
-
-use pixi_record::{PixiRecord, SourceRecord};
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a
@@ -40,7 +41,12 @@ pub async fn resolve_conda(
                 let repodata_record = RepoDataRecord {
                     package_record: record.package_record.clone(),
                     url: url.clone(),
-                    file_name: String::new(),
+                    file_name: format!(
+                        "{}-{}-{}.source",
+                        record.package_record.name.as_normalized(),
+                        &record.package_record.version,
+                        &record.package_record.build
+                    ),
                     channel: String::new(),
                 };
                 url_to_source_package.insert(url, (record, repodata_record));
