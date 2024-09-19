@@ -354,7 +354,10 @@ async fn create_executable_scripts(
             // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the
             // script and to prevent leaking environment variables into the
             // parent shell (e.g. PATH would grow longer and longer)
-            script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
+            script = format!(
+                "@echo off\nsetlocal\n{}\nset exitcode=%ERRORLEVEL%\nendlocal\nexit %exitcode%",
+                script.trim()
+            );
         }
 
         let added_or_changed = if global_script_path.exists() {
@@ -544,7 +547,8 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
     prefix_records: Vec<T>,
     platform: Option<Platform>,
 ) -> bool {
-    // Check whether all specs in the manifest are present in the installed environment
+    // Check whether all specs in the manifest are present in the installed
+    // environment
     let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
         prefix_records
             .iter()
@@ -555,7 +559,8 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
         return false;
     }
 
-    // Check whether all packages in the installed environment have the correct platform
+    // Check whether all packages in the installed environment have the correct
+    // platform
     let platform_specs_match_env = prefix_records.iter().all(|record| {
         let Ok(package_platform) = Platform::from_str(&record.as_ref().package_record.subdir)
         else {
@@ -619,10 +624,11 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indexmap::IndexMap;
     use rattler_lock::Package;
     use url::Url;
+
+    use super::*;
 
     #[test]
     fn test_specs_match_local_environment() {
