@@ -300,6 +300,7 @@ impl PixiControl {
                 prefix_update_config: PrefixUpdateConfig {
                     no_lockfile_update: false,
                     no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
                 },
                 editable: false,
@@ -318,6 +319,7 @@ impl PixiControl {
                 prefix_update_config: PrefixUpdateConfig {
                     no_lockfile_update: false,
                     no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
                 },
             },
@@ -374,7 +376,7 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_usage.into(),
+                lock_file_usage: args.prefix_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
             })
             .await?;

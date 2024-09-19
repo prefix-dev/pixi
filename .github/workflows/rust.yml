@@ -418,6 +418,35 @@ jobs:
       - build
     uses: ./.github/workflows/test_downstream.yml
 
+  export-filter:
+    name: Only run example tests if relevant code or manifests have changed
+    runs-on: ubuntu-20.04
+    needs:
+      - build
+    outputs:
+      exports: ${{ steps.filter.outputs.exports }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            exports:
+              - src/cli/project/export/conda_environment.rs
+              - src/cli/project/export/test-data/testenv/*
+              - examples/pypi-source-deps/*
+              - examples/pypi-custom-registry/*
+              - examples/pypi-find-links/*
+              - examples/docker/*
+
+  export_tests:
+    name: "Export tests"
+    needs: export-filter
+    if: ${{ needs.export-filter.outputs.exports == 'true' }}
+    uses: ./.github/workflows/test_exports.yml
+
   test_common_wheels:
     name: "Test installation of common wheels"
     needs:
