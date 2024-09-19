@@ -1,0 +1,96 @@
+.md-header__topic {
+  font-family: 'Dosis', sans-serif;
+}
+
+[data-md-color-primary=prefix] {
+  --md-primary-fg-color: #F9C405;
+  --md-primary-fg-color--light: #ffee57;
+  --md-primary-fg-color--dark: #F9C405;
+  --md-primary-bg-color: #000000de;
+  --md-primary-bg-color--light: #0000008a
+}
+
+[data-md-color-accent=prefix] {
+  --md-accent-fg-color: #fa0;
+  --md-accent2-fg-color: #eab308;
+  --md-accent-fg-color--transparent: #ffaa001a;
+  --md-accent-bg-color: #000000de;
+  --md-accent-bg-color--light: #0000008a
+}
+
+
+[data-md-color-primary=prefix-light] {
+  --md-primary-fg-color: #000000de;
+  --md-primary-fg-color--light: #ffee57;
+  --md-primary-fg-color--dark: #F9C405;
+  --md-primary-bg-color: #F9C405;
+  --md-primary-bg-color--light: #F9C405;
+  --md-code-bg-color: rgba(0, 0, 0, 0.04);
+}
+
+[data-md-color-accent=prefix-light] {
+  --md-accent-fg-color: #2e2400;
+  --md-accent2-fg-color: #19116f;
+  --md-accent-fg-color--transparent: #ffaa001a;
+  --md-accent-bg-color: #000000de;
+  --md-accent-bg-color--light: #0000008a
+}
+
+.md-typeset a {
+  color: var(--md-accent2-fg-color);
+}
+
+.md-nav__item .md-nav__link--active, .md-nav__item .md-nav__link--active code {
+  color: var(--md-accent-fg-color);
+  font-weight: bold;
+}
+
+.md-header__topic:first-child {
+  font-weight: normal;
+}
+
+.md-typeset h1 {
+  color: var(--md-accent-fg-color);
+}
+.md-typeset h1, .md-typeset h2, .md-typeset h3, .md-typeset h4, .md-typeset h5, .md-typeset h6 {
+  font-family: 'Dosis', sans-serif;
+  font-weight: 500;
+  color: var(--md-accent-fg-color);
+}
+
+.md-typeset p {
+  /* kerning */
+  text-rendering: optimizeLegibility;
+}
+
+:root > * {
+  --md-code-hl-string-color: var(--md-accent-fg-color);
+}
+
+.md-header__button.md-logo {
+  padding: 0;
+  margin: 0;
+}
+
+.md-header__button.md-logo img, .md-header__button.md-logo svg {
+  height: 2.1rem;
+}
+
+[dir=ltr] .md-header__title {
+  margin-left: 0.5rem;
+}
+
+.md-footer-meta__item--prefix-logo {
+  height: 2rem;
+  margin: 0.5rem 0;
+  display: flex;
+}
+
+.md-footer-meta__item--prefix-logo img {
+  height: 100%;
+}
+
+table code {
+  white-space: nowrap;
+  word-break: keep-all;
+}
