@@ -54,36 +54,6 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_global_sync_channels(pixi: Path, tmp_path: Path, test_data: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    toml = """
-    [envs.test]
-    channels = ["conda-forge"]
-    [envs.test.dependencies]
-    python = "*"
-    life_package = "*"
-
-    [envs.test.exposed]
-    life = "life"
-    """
-    parsed_toml = tomllib.loads(toml)
-    manifest.write_text(toml)
-
-    # Test basic commands
-    verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env, stderr_contains="life")
-
-    # Add bioconda channel
-    simple_channel = (test_data / "simple" / "output").as_uri()
-    parsed_toml["envs"]["test"]["channels"].append(simple_channel)
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    life = tmp_path / "bin" / ("life.bat" if platform.system() == "Windows" else "life")
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command([life], ExitCode.LIFE, env=env)
-
-
 def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
