@@ -10,6 +10,7 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     FAILURE = 1
     INCORRECT_USAGE = 2
+    LIFE = 42
 
 
 def verify_cli_command(
