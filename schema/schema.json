@@ -826,6 +826,12 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -854,6 +860,12 @@
           "description": "A `git` SHA revision to use",
           "type": "string",
           "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -874,6 +886,12 @@
         "git": {
           "title": "Git",
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
           "type": "string",
           "minLength": 1
         },
@@ -992,6 +1010,12 @@
         "path": {
           "title": "Path",
           "description": "A path to a local source or wheel",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "The subdirectory in the repo, a path from the root of the repo.",
           "type": "string",
           "minLength": 1
         }
