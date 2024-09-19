@@ -2,6 +2,7 @@ from pathlib import Path
 import tomllib
 import tomli_w
 from .common import verify_cli_command, ExitCode
+import platform
 
 
 def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
@@ -20,7 +21,8 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / "python-injected"
+    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
@@ -132,7 +134,8 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / "python-injected"
+    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
@@ -171,7 +174,8 @@ def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path) -> None:
     "python-injected" = "python"
     """
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / "python-injected"
+    exposed_exec = "python_injected.bat" if platform.system() == "Windows" else "python-injected"
+    python_injected = tmp_path / "bin" / exposed_exec
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
