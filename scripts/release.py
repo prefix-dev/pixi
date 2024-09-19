@@ -77,6 +77,8 @@ def print_summary():
 
 atexit.register(print_summary)
 
+global release_version
+
 
 def main():
     steps = [
@@ -122,10 +124,9 @@ def main():
             )
             status.append("Checked main branch and CI status")
 
-        if start_step <= 3:
-            release_version = get_release_version()
-            os.environ["RELEASE_VERSION"] = release_version
-            status.append(f"Release version set to {release_version}")
+        release_version = get_release_version()
+        os.environ["RELEASE_VERSION"] = release_version
+        status.append(f"Release version set to {release_version}")
 
         if start_step <= 4:
             colored_print("\nCreating a new branch for the release...", "yellow")
