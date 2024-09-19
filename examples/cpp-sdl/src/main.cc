@@ -37,10 +37,6 @@ int main( int argc, char* args[] ) {
     squareRect.w = 300;
     squareRect.h = 300;
 
-    // Square position: In the middle of the screen
-    squareRect.x = 400 - squareRect.w / 2;
-    squareRect.y = 300 - squareRect.h / 2;
-
     // Event loop exit flag
     bool quit = false;
 
@@ -57,6 +53,15 @@ int main( int argc, char* args[] ) {
         {
             quit = true;
         }
+
+	// Get mouse position
+	int mouseX, mouseY;
+	SDL_GetMouseState(&mouseX, &mouseY);
+
+	// Update square position to follow the mouse cursor
+	squareRect.x = mouseX - squareRect.w / 2;
+	squareRect.y = mouseY - squareRect.h / 2;
+
 
         // Initialize renderer color white for the background
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);

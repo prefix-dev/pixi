@@ -1,13 +1,13 @@
 # see https://github.com/conda/constructor/blob/main/CONSTRUCT.md
-name: MyInstaller
-version: 0.0.1
+name: {{ environ["PIXI_PROJECT_NAME"].title().replace(' ', '') }}
+version: {{ environ["PIXI_PROJECT_VERSION"] }}
 company: My Company
-license_file: LICENSE
+license_file: ../LICENSE
 
 channels:
   - conda-forge
 
-environment_file: "./specs/installer_{{ os.environ.CC_PLATFORM }}.conda_spec.txt"
+environment_file: "./specs/installer_{{ os.environ.CC_PLATFORM }}_conda_spec.txt"
 
 write_condarc: True
 initialize_conda: True

@@ -34,7 +34,8 @@ impl TryFrom<Url> for ParsedGitUrl {
 
         // Strip the git+ from the url.
         let url_without_git = url.as_str().strip_prefix("git+").unwrap_or(url.as_str());
-        let url = Url::parse(url_without_git)?;
+        let mut url = Url::parse(url_without_git)?;
+        url.set_fragment(None);
 
         // Split the repository url and the rev.
         let (repository_url, rev) = if let Some((prefix, suffix)) = url
@@ -953,6 +954,25 @@ mod tests {
             Err(Pep508ToPyPiRequirementError::ParseGitRev(
                 GitRevParseError::InvalidCharacters(characters)
             )) if characters == "main"
+        );
+
+        // With subdirectory
+        let parsed = pep508_rs::Requirement::from_str(
+            "ribasim@git+https://github.com/Deltares/Ribasim.git#subdirectory=python/ribasim",
+        )
+        .unwrap();
+        assert_eq!(
+            PyPiRequirement::try_from(parsed).unwrap(),
+            PyPiRequirement::Git {
+                url: ParsedGitUrl {
+                    git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
+                    branch: None,
+                    tag: None,
+                    rev: None,
+                    subdirectory: Some("python/ribasim".to_string()),
+                },
+                extras: vec![],
+            }
         );
     }
 
