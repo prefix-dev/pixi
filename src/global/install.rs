@@ -539,26 +539,25 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
 /// This function verifies that all the given specifications are present in the
 /// local environment's prefix records and that there are no extra entries in
 /// the prefix records that do not match any of the specifications.
-fn specs_match_local_environment(
+fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
     specs: &IndexMap<PackageName, MatchSpec>,
-    prefix_records: Vec<PrefixRecord>,
+    prefix_records: Vec<T>,
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed environment
     let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
         prefix_records
             .iter()
-            .any(|record| spec.matches(&record.repodata_record))
+            .any(|record| spec.matches(record.as_ref()))
     });
 
     if !specs_in_manifest_are_present {
         return false;
     }
 
-    // Check whether all packages in the installed environment have the correct package
+    // Check whether all packages in the installed environment have the correct platform
     let platform_specs_match_env = prefix_records.iter().all(|record| {
-        let Ok(package_platform) =
-            Platform::from_str(&record.repodata_record.package_record.subdir)
+        let Ok(package_platform) = Platform::from_str(&record.as_ref().package_record.subdir)
         else {
             return true;
         };
@@ -574,14 +573,14 @@ fn specs_match_local_environment(
         return false;
     }
 
-    fn prune_dependencies(
-        mut remaining_prefix_records: Vec<PrefixRecord>,
-        matched_record: &PrefixRecord,
-    ) -> Vec<PrefixRecord> {
-        let mut work_queue = Vec::from([matched_record.clone()]);
+    fn prune_dependencies<T: AsRef<RepoDataRecord>>(
+        mut remaining_prefix_records: Vec<T>,
+        matched_record: &T,
+    ) -> Vec<T> {
+        let mut work_queue = Vec::from([matched_record.as_ref().clone()]);
 
         while let Some(current_record) = work_queue.pop() {
-            let dependencies = &current_record.repodata_record.package_record.depends;
+            let dependencies = &current_record.as_ref().depends;
             for dependency in dependencies {
                 let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
                 else {
@@ -589,12 +588,12 @@ fn specs_match_local_environment(
                 };
                 let Some(index) = remaining_prefix_records
                     .iter()
-                    .position(|record| match_spec.matches(&record.repodata_record.package_record))
+                    .position(|record| match_spec.matches(&record.as_ref().package_record))
                 else {
                     continue;
                 };
 
-                let matched_record = remaining_prefix_records.remove(index);
+                let matched_record = remaining_prefix_records.remove(index).as_ref().clone();
                 work_queue.push(matched_record);
             }
         }
@@ -605,8 +604,7 @@ fn specs_match_local_environment(
     // Process each spec and remove matched entries and their dependencies
     let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, (name, spec)| {
         let Some(index) = acc.iter().position(|record| {
-            record.repodata_record.package_record.name == *name
-                && spec.matches(&record.repodata_record)
+            record.as_ref().package_record.name == *name && spec.matches(record.as_ref())
         }) else {
             return acc;
         };
