@@ -41,7 +41,7 @@ impl From<PrioritizedChannel> for Value {
                 table.insert("channel", channel.channel.to_string().into());
                 table.insert("priority", i64::from(priority).into());
                 Value::InlineTable(table)
-            },
+            }
             None => Value::String(toml_edit::Formatted::new(channel.channel.to_string())),
         }
     }

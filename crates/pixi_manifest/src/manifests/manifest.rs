@@ -566,22 +566,21 @@ impl Manifest {
             FeatureName::Default => &mut self.parsed.project.channels,
             FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
         };
-
         // Get the channels to remove, while checking if they exist
         let to_remove: IndexSet<_> = channels
             .into_iter()
             .map(|c| {
                 current
                     .iter()
-                    .position(|x| x.channel == c.channel)
+                    .position(|x| x.channel.to_string() == c.channel.to_string())
                     .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.as_str()))
-                    .map(|_| c.channel)
+                    .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
 
         let retained: IndexSet<_> = current
             .iter()
-            .filter(|channel| !to_remove.contains(&channel.channel))
+            .filter(|channel| !to_remove.contains(&channel.channel.to_string()))
             .cloned()
             .collect();
 
