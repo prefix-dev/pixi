@@ -143,7 +143,8 @@ platforms = {{ platforms }}
 
 "#;
 
-const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
+const GITIGNORE_TEMPLATE: &str = r#"
+# pixi environments
 .pixi
 *.egg-info
 "#;
