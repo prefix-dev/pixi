@@ -50,7 +50,7 @@ pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
+    /// Do not insert `CONDA_PREFIX`, `PATH` modifications into the installed executable script.
     #[clap(long)]
     no_activation: bool,
 }
