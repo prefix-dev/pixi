@@ -1088,9 +1088,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#specifying-which-binaries-to-expose" class="md-nav__link">
+  <a href="#specifying-which-executables-to-expose" class="md-nav__link">
     <span class="md-ellipsis">
-      Specifying which binaries to expose
+      Specifying which executables to expose
     </span>
   </a>
   
@@ -1643,9 +1643,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#specifying-which-binaries-to-expose" class="md-nav__link">
+  <a href="#specifying-which-executables-to-expose" class="md-nav__link">
     <span class="md-ellipsis">
-      Specifying which binaries to expose
+      Specifying which executables to expose
     </span>
   </a>
   
@@ -1742,7 +1742,7 @@ The next iteration of this feature should fulfill the following needs:</p>
 <ul>
 <li>Shareable global environments.</li>
 <li>Managing complex environments with multiple packages as dependencies</li>
-<li>Flexible exposure of binaries</li>
+<li>Flexible exposure of executables</li>
 </ul>
 <h2 id="design-considerations">Design Considerations<a class="headerlink" href="#design-considerations" title="Permanent link">#</a></h2>
 <p>There are a few things we wanted to keep in mind in the design:</p>
@@ -1783,30 +1783,30 @@ The motivation for the location is discussed <a href="#multiple-manifests">furth
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="s2">&quot;python3.10&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python&quot;</span>
 </span></code></pre></div>
 <h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">#</a></h2>
-<p>Install one or more packages <code>PACKAGE</code> and expose their binaries.
+<p>Install one or more packages <code>PACKAGE</code> and expose their executables.
 If <code>--environment</code> has been given, all packages will be installed in the same environment.
 If the environment already exists, the command will return with an error.
 <code>--expose</code> can be given if <code>--environment</code> is given as well or if only a single <code>PACKAGE</code> will be installed.
-The syntax for <code>MAPPING</code> is <code>exposed_name=binary_name</code>, so for example <code>python3.10=python</code>.
+The syntax for <code>MAPPING</code> is <code>exposed_name=executable_name</code>, so for example <code>python3.10=python</code>.
 <code>--platform</code> sets the platform of the environment to <code>PLATFORM</code>
 Multiple channels can be specified by using <code>--channel</code> multiple times.
 By default, if no channel is provided, the <code>default-channels</code> key in the pixi configuration is used, which again defaults to "conda-forge".</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... &lt;PACKAGE&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... PACKAGE...
 </span></code></pre></div>
 <p>Remove environments <code>ENV</code>.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi global uninstall &lt;ENV&gt;...
 </span></code></pre></div></p>
-<p>Update <code>PACKAGE_NAME</code> if <code>--package</code> is given. If not, all packages in environments <code>ENV</code> will be updated.
-If the update leads to binaries being removed, it will offer to remove the mappings.
+<p>Update <code>PACKAGE</code> if <code>--package</code> is given. If not, all packages in environments <code>ENV</code> will be updated.
+If the update leads to executables being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
-If the update leads to binaries being added, it will offer for each binary individually to expose it.
+If the update leads to executables being added, it will offer for each binary individually to expose it.
 <code>--assume-yes</code> will assume yes as answer for every question that would otherwise be asked interactively.
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi global update [--package PACKAGE_NAME] [--assume-yes] &lt;ENV&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi global update [--package PACKAGE] [--assume-yes] &lt;ENV&gt;...
 </span></code></pre></div></p>
 <p>Updates all packages in all environments.
-If the update leads to binaries being removed, it will offer to remove the mappings.
+If the update leads to executables being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
-If the update leads to binaries being added, it will offer for each binary individually to expose it.
+If the update leads to executables being added, it will offer for each binary individually to expose it.
 <code>--assume-yes</code> will assume yes as answer for every question that would otherwise be asked interactively.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi global update-all [--assume-yes]
 </span></code></pre></div>
@@ -1814,17 +1814,17 @@ If the update leads to binaries being added, it will offer for each binary indiv
 If environment <code>ENV</code> does not exist, it will return with an error.
 Without <code>--expose</code> no binary will be exposed.
 If you don't mention a spec like <code>python=3.8.*</code>, the spec will be unconstrained with <code>*</code>.
-The syntax for <code>MAPPING</code> is <code>exposed_name=binary_name</code>, so for example <code>python3.10=python</code>.</p>
+The syntax for <code>MAPPING</code> is <code>exposed_name=executable_name</code>, so for example <code>python3.10=python</code>.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi global add --environment ENV [--expose MAPPING] &lt;PACKAGE&gt;...
 </span></code></pre></div>
-<p>Remove package <code>PACKAGE_NAME</code> from environment <code>ENV</code>.
+<p>Remove package <code>PACKAGE</code> from environment <code>ENV</code>.
 If that was the last package remove the whole environment and print that information in the console.
-If this leads to binaries being removed, it will offer to remove the mappings.
+If this leads to executables being removed, it will offer to remove the mappings.
 If the user declines the remove process will stop.
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global remove --environment ENV PACKAGE_NAME
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global remove --environment ENV PACKAGE
 </span></code></pre></div></p>
-<p>Add one or more <code>MAPPING</code> for environment <code>ENV</code> which describe which binaries are exposed.
-The syntax for <code>MAPPING</code> is <code>exposed_name=binary_name</code>, so for example <code>python3.10=python</code>.
+<p>Add one or more <code>MAPPING</code> for environment <code>ENV</code> which describe which executables are exposed.
+The syntax for <code>MAPPING</code> is <code>exposed_name=executable_name</code>, so for example <code>python3.10=python</code>.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi global expose add --environment ENV  &lt;MAPPING&gt;...
 </span></code></pre></div></p>
 <p>Remove one or more exposed <code>BINARY</code> from environment <code>ENV</code>
@@ -1836,7 +1836,7 @@ Only if there's no manifest, will the data from existing environments be used to
 <code>pixi global sync</code> is implied by most other <code>pixi global</code> commands.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi global sync
 </span></code></pre></div>
-<p>List all environments, their specs and exposed binaries
+<p>List all environments, their specs and exposed executables
 <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi global list
 </span></code></pre></div></p>
 <p>Set the channels <code>CHANNEL</code> for a certain environment <code>ENV</code> in the pixi global manifest.
@@ -1846,7 +1846,7 @@ Only if there's no manifest, will the data from existing environments be used to
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi global platform set --environment ENV PLATFORM
 </span></code></pre></div></p>
 <h3 id="simple-workflow">Simple workflow<a class="headerlink" href="#simple-workflow" title="Permanent link">#</a></h3>
-<p>Create environment <code>python</code>, install package <code>python=3.10.*</code> and expose all binaries of that package
+<p>Create environment <code>python</code>, install package <code>python=3.10.*</code> and expose all executables of that package
 <div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi global install python=3.10.*
 </span></code></pre></div></p>
 <p>Update all packages in environment <code>python</code>
@@ -1855,18 +1855,18 @@ Only if there's no manifest, will the data from existing environments be used to
 <p>Remove environment <code>python</code>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi global uninstall python
 </span></code></pre></div></p>
-<p>Create environment <code>python</code> and <code>pip</code>, install corresponding packages and expose all binaries of that packages
+<p>Create environment <code>python</code> and <code>pip</code>, install corresponding packages and expose all executables of that packages
 <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi global install python pip
 </span></code></pre></div></p>
 <p>Remove environments <code>python</code> and <code>pip</code>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi global uninstall python pip
 </span></code></pre></div></p>
-<p>Create environment <code>python-pip</code>, install <code>python</code> and <code>pip</code> in the same environment and expose all binaries of these packages
+<p>Create environment <code>python-pip</code>, install <code>python</code> and <code>pip</code> in the same environment and expose all executables of these packages
 <div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi global install --environment python-pip python pip
 </span></code></pre></div></p>
 <h3 id="adding-dependencies">Adding dependencies<a class="headerlink" href="#adding-dependencies" title="Permanent link">#</a></h3>
-<p>Create environment <code>python</code>, install package <code>python</code> and expose all binaries of that package.
-Then add package <code>hypercorn</code> to environment <code>python</code> but doesn't expose its binaries.</p>
+<p>Create environment <code>python</code>, install package <code>python</code> and expose all executables of that package.
+Then add package <code>hypercorn</code> to environment <code>python</code> but doesn't expose its executables.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi global install python
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi global add --environment python hypercorn
 </span></code></pre></div>
@@ -1876,7 +1876,7 @@ Then add package <code>hypercorn</code> to environment <code>python</code> but d
 <p>Then remove <code>hypercorn</code> again.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi global remove --environment python hypercorn
 </span></code></pre></div></p>
-<h3 id="specifying-which-binaries-to-expose">Specifying which binaries to expose<a class="headerlink" href="#specifying-which-binaries-to-expose" title="Permanent link">#</a></h3>
+<h3 id="specifying-which-executables-to-expose">Specifying which executables to expose<a class="headerlink" href="#specifying-which-executables-to-expose" title="Permanent link">#</a></h3>
 <p>Make a new environment <code>python3-10</code> with package <code>python=3.10</code> and expose the <code>python</code> executable as <code>python3.10</code>.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi global install --environment python3-10 --expose &quot;python3.10=python&quot; python=3.10
 </span></code></pre></div></p>
