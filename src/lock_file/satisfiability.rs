@@ -1232,6 +1232,7 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
+    use tokio::runtime::Handle;
 
     use super::*;
     use crate::Project;
@@ -1317,20 +1318,22 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
-
-        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::from_path(path).unwrap();
-            let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-            let err = verify_lockfile_satisfiability(&project, &lock_file)
-                .await
-                .expect_err("expected failing satisfiability");
-
-            let mut s = String::new();
-            report_handler.render_report(&mut s, &err).unwrap();
-            insta::assert_snapshot!(s);
+        tokio::task::block_in_place(|| {
+            insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
+                let project = Project::from_path(path).unwrap();
+                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+                let err = Handle::current().block_on(async {
+                    verify_lockfile_satisfiability(&project, &lock_file)
+                        .await
+                        .expect_err("expected failing satisfiability")
+                });
+                let mut s = String::new();
+                report_handler.render_report(&mut s, &err).unwrap();
+                insta::assert_snapshot!(s);
+            });
         });
     }
 
