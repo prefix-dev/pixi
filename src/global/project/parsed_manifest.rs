@@ -116,9 +116,9 @@ impl ExposedKey {
         &self.0
     }
 
-    pub fn from_str(value: &str) -> Result<Self, ParseExposedKeyError> {
-        value.parse()
-    }
+    // pub fn from_str(value: &str) -> Result<Self, ParseExposedKeyError> {
+    //     value.parse()
+    // }
 }
 
 impl fmt::Display for ExposedKey {

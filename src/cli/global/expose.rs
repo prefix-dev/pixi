@@ -4,9 +4,10 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
+use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_shell::shell::ShellEnum;
 
-use crate::global::{expose_add, expose_remove};
+use crate::global::{expose_add, expose_remove, BinDir, EnvRoot};
 
 use crate::{
     global::{
@@ -70,14 +71,43 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     // should we do a sync first?
-    let project = global::Project::discover()?.with_cli_config(args.config);
+    let mut project = global::Project::discover()?.with_cli_config(args.config);
     let env_name: EnvironmentName = args.environment.parse()?;
-    expose_add(project, env_name, args.name).await
+    expose_add(&mut project, env_name, args.name).await?;
+
+    let config = project.config();
+
+    // after https://github.com/prefix-dev/pixi/pull/1975 PR lands
+    // this can be simplified by just passing the project
+    let (_, auth_client) = build_reqwest_clients(Some(&config));
+
+    let gateway = config.gateway(auth_client.clone());
+
+    let env_root = EnvRoot::from_env().await?;
+    let bin_dir = BinDir::from_env().await?;
+
+
+    global::sync(&env_root, &project, &bin_dir, config, &gateway, &auth_client).await
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     // should we do a sync first?
-    let project = global::Project::discover()?.with_cli_config(args.config);
+    let mut project = global::Project::discover()?.with_cli_config(args.config);
     let env_name: EnvironmentName = args.environment.parse()?;
-    expose_remove(project, env_name, args.name).await
+    expose_remove(&mut project, env_name, args.name).await?;
+
+    let config = project.config();
+
+    // after https://github.com/prefix-dev/pixi/pull/1975 PR lands
+    // this can be simplified by just passing the project
+    let (_, auth_client) = build_reqwest_clients(Some(&config));
+
+    let gateway = config.gateway(auth_client.clone());
+
+    let env_root = EnvRoot::from_env().await?;
+    let bin_dir = BinDir::from_env().await?;
+
+
+    global::sync(&env_root, &project, &bin_dir, config, &gateway, &auth_client).await
+
 }

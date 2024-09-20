@@ -8,7 +8,7 @@ use std::{
 
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
-use manifest::Manifest;
+pub(crate) use manifest::Manifest;
 use miette::IntoDiagnostic;
 pub(crate) use parsed_manifest::ExposedKey;
 use parsed_manifest::ParsedEnvironment;
@@ -55,7 +55,7 @@ impl Debug for Project {
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
         let root = manifest
             .path
             .parent()
@@ -129,6 +129,10 @@ impl Project {
     /// Returns a specific environment based by name.
     pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
         self.manifest.parsed.environments().get(name)
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
     }
 }
 
