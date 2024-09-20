@@ -429,7 +429,9 @@ pub(crate) fn prompt_user_to_continue(
     Ok(true)
 }
 
-pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette::Error> {
+// Syncs the manifest with the local environment
+// Returns true if the global installation had to be updated
+pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miette::Error> {
     // Create directories
     let bin_dir = BinDir::from_env().await?;
     let env_root = EnvRoot::from_env().await?;
@@ -476,6 +478,8 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         }
     }
 
+    let mut updated_env = false;
+
     for (env_name, parsed_environment) in project.environments() {
         let specs = parsed_environment
             .dependencies
@@ -505,8 +509,15 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             .map(|r| r.repodata_record)
             .collect_vec();
 
-        if !local_environment_matches_spec(repodata_records, &specs, parsed_environment.platform())
-        {
+        let install_env = !local_environment_matches_spec(
+            repodata_records,
+            &specs,
+            parsed_environment.platform(),
+        );
+
+        updated_env |= install_env;
+
+        if install_env {
             install_environment(
                 &specs,
                 &parsed_environment,
@@ -518,7 +529,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             .await?;
         }
 
-        expose_executables(
+        updated_env |= expose_executables(
             &env_name,
             &parsed_environment,
             specs.keys().cloned().collect(),
@@ -528,7 +539,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         .await?;
     }
 
-    Ok(())
+    Ok(updated_env)
 }
 
 /// Checks if the local environment matches the given specifications.

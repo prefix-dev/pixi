@@ -16,5 +16,14 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
 
-    global::sync(&config, args.assume_yes).await
+    let updated_env = global::sync(&config, args.assume_yes).await?;
+
+    if !updated_env {
+        eprintln!(
+            "{} Nothing to do. The pixi global installation is already up-to-date",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
+    }
+
+    Ok(())
 }
