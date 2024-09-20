@@ -4,12 +4,6 @@ expression: env_yaml.unwrap().to_yaml_string()
 ---
 name: default
 channels:
-- conda-forge
-- nodefaults
+- main
 dependencies:
-- python ==3.12
-- pip
-- pip:
-  - --index-url https://pypi.org/simple
-  - --find-links ./links
-  - requests==2.31.0
+- python ==3.9
