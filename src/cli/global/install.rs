@@ -231,7 +231,7 @@ pub(super) async fn create_executable_scripts(
             }
         } else {
             activation_script.clone()
-        }
+        };
 
         shell
             .run_command(

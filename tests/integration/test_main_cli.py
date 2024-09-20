@@ -195,20 +195,8 @@ def test_global_install(pixi: Path) -> None:
     # Upgrade
     verify_cli_command([pixi, "global", "upgrade", "rattler-build"], ExitCode.SUCCESS)
 
-    # Upgrade with --no-activation
-    verify_cli_command(
-        [pixi, "global", "upgrade", "rattler-build", "--no-activation"],
-        ExitCode.SUCCESS,
-    )
-
     # Upgrade all
     verify_cli_command([pixi, "global", "upgrade-all"], ExitCode.SUCCESS)
-
-    # Upgrade all with --no-activation
-    verify_cli_command(
-        [pixi, "global", "upgrade-all", "--no-activation"],
-        ExitCode.SUCCESS,
-    )
 
     # List
     verify_cli_command([pixi, "global", "list"], ExitCode.SUCCESS, stderr_contains="rattler-build")

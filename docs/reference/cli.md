@@ -1001,7 +1001,6 @@ This command upgrades a globally installed package (to the latest version by def
   Defaults to `conda-forge`. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to upgrade the package for. (default: current platform)
-- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
 
 ```shell
 pixi global upgrade ruff
@@ -1013,9 +1012,6 @@ pixi global upgrade -c conda-forge -c bioconda trackplot
 # You can specify the version to upgrade to when you don't want the latest version
 # or you can even use it to downgrade a globally installed package
 pixi global upgrade python=3.10
-
-# Upgrade without inserting activation code into the executable script
-pixi global upgrade ruff --no-activation
 ```
 
 ### `global upgrade-all`
@@ -1027,15 +1023,12 @@ This command upgrades all globally installed packages to their latest version.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
   Defaults to `conda-forge`. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)
-- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable scripts.
 
 ```shell
 pixi global upgrade-all
 pixi global upgrade-all --channel conda-forge --channel bioconda
 # Or in a more concise form
 pixi global upgrade-all -c conda-forge -c bioconda trackplot
-# Upgrade all without inserting activation code into the executable scripts
-pixi global upgrade-all --no-activation
 ```
 
 ### `global remove`
