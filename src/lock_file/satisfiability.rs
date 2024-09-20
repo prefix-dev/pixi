@@ -1262,11 +1262,15 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(&env, &locked_env, platform, project.root())
-                    .await
-                    .map_err(|e| {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
-                    })?;
+                verify_platform_satisfiability(
+                    &env,
+                    &locked_env,
+                    platform,
+                    project.root(),
+                    Default::default(),
+                )
+                .await
+                .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;
             }
         }
         Ok(())
@@ -1314,7 +1318,7 @@ mod tests {
     }
 
     #[tokio::test]
-    fn test_failing_satisiability() {
+    async fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
