@@ -1,33 +1,26 @@
 use std::{
-    env,
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use manifest::Manifest;
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
-use pixi_config::{default_channel_config, home_path, Config};
+use pixi_config::{home_path, Config};
 use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
-use rattler_digest::digest::typenum::Exp;
-use rattler_repodata_gateway::Gateway;
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use regex::Regex;
-use reqwest_middleware::ClientWithMiddleware;
 use tokio_stream::{wrappers::ReadDirStream, StreamExt};
-use url::Url;
 
-use super::{find_executables, BinDir, EnvRoot};
+use super::{BinDir, EnvRoot};
 use crate::{
-    global::{common::is_text, EnvDir},
+    global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
 
@@ -47,12 +40,6 @@ pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 pub struct Project {
     /// Root folder of the project
     root: PathBuf,
-    /// Reqwest client shared for this project.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
-    /// The repodata gateway to use for answering queries about repodata.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
@@ -189,8 +176,6 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let channel_config = default_channel_config();
-
     let read_dir = tokio::fs::read_dir(conda_meta)
         .await
         .into_diagnostic()
@@ -206,35 +191,32 @@ async fn package_from_conda_meta(
             .path();
         // Check if the entry is a file and has a .json extension
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
-            let content = std::fs::read_to_string(&path).into_diagnostic()?;
             let prefix_record = PrefixRecord::from_path(&path)
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
 
-            let binaries = find_executables(prefix, &prefix_record);
-            let Some(found_executable) = binaries
+            if find_executables(prefix, &prefix_record)
                 .iter()
-                .find(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(executable))
-            else {
-                continue;
-            };
-
-            let platform =
-                match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
+                .any(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(executable))
+            {
+                let platform = match Platform::from_str(
+                    &prefix_record.repodata_record.package_record.subdir,
+                ) {
                     Ok(Platform::NoArch) => None,
                     Ok(platform) if platform == Platform::current() => None,
                     Err(_) => None,
                     Ok(p) => Some(p),
                 };
 
-            let channel: PrioritizedChannel =
-                NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-                    .into_diagnostic()?
-                    .into();
+                let channel: PrioritizedChannel =
+                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
+                        .into_diagnostic()?
+                        .into();
 
-            let name = prefix_record.repodata_record.package_record.name;
+                let name = prefix_record.repodata_record.package_record.name;
 
-            return Ok((platform, channel, name));
+                return Ok((platform, channel, name));
+            }
         }
     }
 
@@ -254,8 +236,6 @@ impl Project {
 
         Self {
             root,
-            client: Default::default(),
-            repodata_gateway: Default::default(),
             manifest,
             config,
         }
@@ -286,7 +266,6 @@ impl Project {
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
         if !manifest_path.exists() {
-            let warn = console::style(console::Emoji("⚠️ ", "")).yellow();
             let prompt = format!(
                 "{} You don't have a global manifest yet.\n\
                 Do you want to create one based on your existing installation?\n\

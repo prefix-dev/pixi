@@ -1,19 +1,9 @@
-use std::{
-    borrow::Borrow,
-    collections::HashMap,
-    ffi::OsStr,
-    iter,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time,
-};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
 
-use clap::Parser;
-use distribution_types::Diagnostic;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{bail, Context, IntoDiagnostic};
-use pixi_config::{self, default_channel_config, Config, ConfigCli};
+use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, default_channel_config, Config};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
@@ -22,7 +12,7 @@ use rattler::{
 };
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform,
-    PrefixRecord, RepoDataRecord,
+    RepoDataRecord,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
@@ -35,17 +25,14 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 use crate::{
-    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs, project::platform},
-    global::{self, channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
+    global::{self, BinDir, EnvDir},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
-    task::ExecutableTask,
 };
 
 /// Installs global environment records
 pub(crate) async fn install_environment(
     specs: &IndexMap<PackageName, MatchSpec>,
-    env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
     authenticated_client: ClientWithMiddleware,
     prefix: &Prefix,
@@ -163,7 +150,7 @@ pub(crate) async fn expose_executables(
                 .map(|name| (name.to_string(), path.clone()))
         })
         // Filters tuples to include only those whose names are in the `exposed` values
-        .filter(|(name, path)| parsed_environment.exposed.values().contains(&name))
+        .filter(|(name, _)| parsed_environment.exposed.values().contains(&name))
         .collect();
 
     let script_mapping = parsed_environment
@@ -255,6 +242,7 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 
 /// For each executable provided, map it to the installation path for its global
 /// executable script.
+#[allow(unused)]
 async fn map_executables_to_global_bin_scripts(
     package_executables: impl IntoIterator<Item = PathBuf>,
     bin_dir: &BinDir,
@@ -409,6 +397,7 @@ async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
+#[allow(unused)]
 pub(crate) fn prompt_user_to_continue(
     packages: &IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<bool> {
@@ -514,7 +503,6 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         if !specs_match_local_environment(&specs, prefix_records, parsed_environment.platform()) {
             install_environment(
                 &specs,
-                &env_name,
                 &parsed_environment,
                 auth_client.clone(),
                 &prefix,
@@ -549,7 +537,7 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
-    let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
+    let specs_in_manifest_are_present = specs.values().all(|spec| {
         prefix_records
             .iter()
             .any(|record| spec.matches(record.as_ref()))

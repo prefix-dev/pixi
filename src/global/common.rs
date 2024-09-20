@@ -5,24 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_progress::{await_in_progress, global_multi_progress};
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
-use rattler_conda_types::{
-    Channel, ChannelConfig, PackageName, Platform, PrefixRecord, RepoDataRecord,
-};
-use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
-    shell::ShellEnum,
-};
-use reqwest_middleware::ClientWithMiddleware;
-use tokio::io::AsyncReadExt;
 
-use crate::{
-    cli::project::environment, prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible,
-};
 use pixi_config::home_path;
 
 use super::{EnvironmentName, ExposedKey};
@@ -84,7 +67,7 @@ impl BinDir {
         executable_script_path
     }
 
-    pub(crate) async fn print_executables_available(
+    pub async fn print_executables_available(
         &self,
         executables: Vec<PathBuf>,
     ) -> miette::Result<()> {
@@ -206,7 +189,6 @@ impl EnvRoot {
 
 /// A global environment directory
 pub(crate) struct EnvDir {
-    root: EnvRoot,
     path: PathBuf,
 }
 
@@ -219,23 +201,7 @@ impl EnvDir {
         let path = root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
-        Ok(Self { root, path })
-    }
-
-    /// Initialize a global environment directory from an existing path
-    pub(crate) fn try_from_existing(
-        root: EnvRoot,
-        environment_name: EnvironmentName,
-    ) -> miette::Result<Self> {
-        let path = root.path().join(environment_name.as_str());
-        if !path.is_dir() {
-            return Err(miette::miette!(
-                "Directory does not exist: {}",
-                path.display()
-            ));
-        }
-
-        Ok(Self { root, path })
+        Ok(Self { path })
     }
 
     /// Construct the path to the env directory for the environment
@@ -243,36 +209,6 @@ impl EnvDir {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
-}
-
-/// Get the friendly channel name of a [`PrefixRecord`]
-///
-/// # Returns
-///
-/// The friendly channel name of the given prefix record
-pub(crate) fn channel_name_from_prefix(
-    prefix_package: &PrefixRecord,
-    channel_config: &ChannelConfig,
-) -> String {
-    Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
-        .map(|ch| repodata::friendly_channel_name(&ch))
-        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
-}
-
-/// Find the designated package in the given [`Prefix`]
-///
-/// # Returns
-///
-/// The PrefixRecord of the designated package
-pub(crate) async fn find_designated_package(
-    prefix: &Prefix,
-    package_name: &PackageName,
-) -> miette::Result<PrefixRecord> {
-    let prefix_records = prefix.find_installed_packages(None).await?;
-    prefix_records
-        .into_iter()
-        .find(|r| r.repodata_record.package_record.name == *package_name)
-        .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
 }
 
 /// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
@@ -298,7 +234,7 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+
     use tempfile::tempdir;
 
     #[tokio::test]

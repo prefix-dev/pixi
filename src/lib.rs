@@ -13,7 +13,6 @@ pub mod task;
 
 mod uv_reporter;
 
-mod repodata;
 mod rlimit;
 
 pub use lock_file::load_lock_file;
