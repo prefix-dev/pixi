@@ -91,7 +91,7 @@ pixi global install ruff
 
 ### Using the --no-activation option
 
-When installing packages globally, you can use the `--no-activation` option to prevent the insertion of environment activation code into the installed executable scripts. This means that when you run the installed executable, it won't automatically activate the environment.
+When installing packages globally, you can use the `--no-activation` option to prevent the insertion of environment activation code into the installed executable scripts. This means that when you run the installed executable, it won't modify the `PATH` or `CONDA_PREFIX` environment variables beforehand.
 
 Example:
 
