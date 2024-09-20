@@ -24,11 +24,14 @@ pub enum InputHashError {
     #[error("failed to access {}", .0.display())]
     IoError(PathBuf, #[source] std::io::Error),
 
-    #[error("unexpected io error occured while accessing {}", .0.display())]
+    #[error("unexpected io error occurred while accessing {}", .0.display())]
     UnexpectedIoError(PathBuf),
 
     #[error(transparent)]
     WalkError(WalkError),
+
+    #[error("the operation was cancelled")]
+    Cancelled,
 }
 
 impl InputHash {
@@ -53,6 +56,16 @@ impl InputHash {
 
         let mut hasher = Sha256::default();
         for entry in entries {
+            // Construct a normalized file path to ensure consistent hashing across
+            // platforms. And add it to the hash.
+            let normalized_file_path = entry
+                .strip_prefix(root_dir)
+                .unwrap_or(&entry)
+                .to_string_lossy()
+                .replace("\\", "/");
+            rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
+
+            // Concatenate the contents of the file to the hash.
             File::open(&entry)
                 .and_then(|mut f| std::io::copy(&mut f, &mut hasher))
                 .map_err(|e| InputHashError::IoError(entry.clone(), e))?;

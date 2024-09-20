@@ -14,8 +14,8 @@ pub struct SourceRecord {
     pub source: PinnedSourceSpec,
 
     /// The hash of the input that was used to build the metadata of the
-    /// package.
-    pub input_hash: InputHash,
+    /// package. This can be used to verify that the metadata is still valid.
+    pub input_hash: Option<InputHash>,
 }
 
 impl From<SourceRecord> for CondaPackageData {
@@ -25,9 +25,9 @@ impl From<SourceRecord> for CondaPackageData {
             location: value.source.into(),
             file_name: None,
             channel: None,
-            input: Some(rattler_lock::InputHash {
-                hash: value.input_hash.hash,
-                globs: value.input_hash.globs,
+            input: value.input_hash.map(|i| rattler_lock::InputHash {
+                hash: i.hash,
+                globs: i.globs,
             }),
         }
     }
@@ -40,12 +40,10 @@ impl TryFrom<CondaPackageData> for SourceRecord {
         Ok(Self {
             package_record: value.package_record,
             source: value.location.try_into()?,
-            input_hash: value
-                .input
-                .map_or_else(InputHash::default, |hash| InputHash {
-                    hash: hash.hash,
-                    globs: hash.globs,
-                }),
+            input_hash: value.input.map(|hash| InputHash {
+                hash: hash.hash,
+                globs: hash.globs,
+            }),
         })
     }
 }

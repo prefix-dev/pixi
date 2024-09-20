@@ -1,3 +1,6 @@
+use std::path::{Path, PathBuf};
+
+use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use thiserror::Error;
@@ -12,6 +15,56 @@ pub enum PinnedSourceSpec {
     Url(PinnedUrlSpec),
     Git(PinnedGitSpec),
     Path(PinnedPathSpec),
+}
+
+impl PinnedSourceSpec {
+    pub fn as_path(&self) -> Option<&PinnedPathSpec> {
+        match self {
+            PinnedSourceSpec::Path(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    pub fn as_url(&self) -> Option<&PinnedUrlSpec> {
+        match self {
+            PinnedSourceSpec::Url(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    pub fn as_git(&self) -> Option<&PinnedGitSpec> {
+        match self {
+            PinnedSourceSpec::Git(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    pub fn into_path(self) -> Option<PinnedPathSpec> {
+        match self {
+            PinnedSourceSpec::Path(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    pub fn into_url(self) -> Option<PinnedUrlSpec> {
+        match self {
+            PinnedSourceSpec::Url(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    pub fn into_git(self) -> Option<PinnedGitSpec> {
+        match self {
+            PinnedSourceSpec::Git(spec) => Some(spec),
+            _ => None,
+        }
+    }
+
+    /// Returns true if the pinned source will never change. This can be useful
+    /// for caching purposes.
+    pub fn is_immutable(&self) -> bool {
+        !matches!(self, PinnedSourceSpec::Path(_))
+    }
 }
 
 /// A pinned url archive.
@@ -36,19 +89,6 @@ pub struct PinnedGitSpec {
     pub rev: Option<GitReference>,
 }
 
-/// A reference to a specific commit in a git repository.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum GitReference {
-    /// The HEAD commit of a branch.
-    Branch(String),
-
-    /// A specific tag.
-    Tag(String),
-
-    /// A specific commit.
-    Rev(String),
-}
-
 impl From<PinnedGitSpec> for PinnedSourceSpec {
     fn from(value: PinnedGitSpec) -> Self {
         PinnedSourceSpec::Git(value)
@@ -59,6 +99,18 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 #[derive(Debug, Clone)]
 pub struct PinnedPathSpec {
     pub path: Utf8TypedPathBuf,
+}
+
+impl PinnedPathSpec {
+    /// Resolves the path to an absolute path.
+    pub fn resolve(&self, project_root: &Path) -> PathBuf {
+        let native_path = Path::new(self.path.as_str());
+        if native_path.is_absolute() {
+            native_path.to_path_buf()
+        } else {
+            project_root.join(native_path)
+        }
+    }
 }
 
 impl From<PinnedPathSpec> for PinnedSourceSpec {
@@ -105,6 +157,125 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
         match value {
             UrlOrPath::Url(_) => unimplemented!(),
             UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SourceMismatchError {
+    #[error("the locked path '{locked}' does not match the requested path '{requested}'")]
+    PathMismatch {
+        locked: Utf8TypedPathBuf,
+        requested: Utf8TypedPathBuf,
+    },
+
+    #[error("the locked url '{locked}' does not match the requested url '{requested}'")]
+    UrlMismatch { locked: Url, requested: Url },
+
+    #[error("the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})")]
+    UrlHashMismatch {
+        hash: &'static str,
+        url: Url,
+        locked: String,
+        requested: String,
+    },
+
+    #[error("the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'")]
+    GitRevMismatch {
+        git: Url,
+        locked: String,
+        requested: String,
+    },
+
+    #[error("the locked source type does not match the requested type")]
+    SourceTypeMismatch,
+}
+
+impl PinnedPathSpec {
+    #[allow(clippy::result_large_err)]
+    pub fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
+        if spec.path != self.path {
+            return Err(SourceMismatchError::PathMismatch {
+                locked: self.path.clone(),
+                requested: spec.path.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl PinnedUrlSpec {
+    #[allow(clippy::result_large_err)]
+    pub fn satisfies(&self, spec: &UrlSourceSpec) -> Result<(), SourceMismatchError> {
+        if spec.url != self.url {
+            return Err(SourceMismatchError::UrlMismatch {
+                locked: self.url.clone(),
+                requested: spec.url.clone(),
+            });
+        }
+        if let Some(sha256) = &spec.sha256 {
+            if *sha256 != self.sha256 {
+                return Err(SourceMismatchError::UrlHashMismatch {
+                    hash: "sha256",
+                    url: self.url.clone(),
+                    locked: format!("{:x}", self.sha256),
+                    requested: format!("{:x}", sha256),
+                });
+            }
+        }
+        if let Some(md5) = &spec.md5 {
+            if Some(md5) != self.md5.as_ref() {
+                return Err(SourceMismatchError::UrlHashMismatch {
+                    hash: "md5",
+                    url: self.url.clone(),
+                    locked: self
+                        .md5
+                        .map_or("None".to_string(), |md5| format!("{:x}", md5)),
+                    requested: format!("{:x}", md5),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PinnedGitSpec {
+    #[allow(clippy::result_large_err)]
+    pub fn satisfies(&self, spec: &GitSpec) -> Result<(), SourceMismatchError> {
+        // TODO: Normalize the git urls before comparing.
+        if spec.git != self.git {
+            return Err(SourceMismatchError::UrlMismatch {
+                locked: self.git.clone(),
+                requested: spec.git.clone(),
+            });
+        }
+
+        let locked_git_ref = self
+            .rev
+            .clone()
+            .unwrap_or_else(|| GitReference::Rev(self.commit.clone()));
+
+        if let Some(requested_ref) = &spec.rev {
+            if requested_ref != &locked_git_ref {
+                return Err(SourceMismatchError::GitRevMismatch {
+                    git: self.git.clone(),
+                    locked: locked_git_ref.to_string(),
+                    requested: requested_ref.to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PinnedSourceSpec {
+    #[allow(clippy::result_large_err)]
+    pub fn satisfies(&self, spec: &SourceSpec) -> Result<(), SourceMismatchError> {
+        match (self, spec) {
+            (PinnedSourceSpec::Path(locked), SourceSpec::Path(spec)) => locked.satisfies(spec),
+            (PinnedSourceSpec::Url(locked), SourceSpec::Url(spec)) => locked.satisfies(spec),
+            (PinnedSourceSpec::Git(locked), SourceSpec::Git(spec)) => locked.satisfies(spec),
+            (_, _) => Err(SourceMismatchError::SourceTypeMismatch),
         }
     }
 }

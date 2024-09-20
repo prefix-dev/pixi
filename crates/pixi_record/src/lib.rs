@@ -4,7 +4,7 @@ mod source_record;
 
 pub use input_hash::{InputHash, InputHashError};
 pub use pinned_source::{
-    ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
+    ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
 use rattler_conda_types::{
     package::ArchiveIdentifier, MatchSpec, Matches, NamelessMatchSpec, PackageRecord,

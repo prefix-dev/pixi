@@ -11,11 +11,12 @@ version = "0.1.0"
 
 [dependencies]
 file_url = { workspace = true }
+globwalk = { workspace = true }
+itertools = { workspace = true }
+pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 thiserror = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
-itertools = { workspace = true }
-globwalk = { workspace = true }

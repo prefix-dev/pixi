@@ -1410,6 +1410,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.5"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -3619,6 +3620,7 @@ dependencies = [
  "console",
  "crossbeam-channel",
  "csv",
+ "dashmap",
  "deno_task_shell",
  "dialoguer",
  "dirs",
@@ -3868,6 +3870,7 @@ dependencies = [
  "file_url",
  "globwalk",
  "itertools 0.13.0",
+ "pixi_spec",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
@@ -4298,6 +4301,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.27.11"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "anyhow",
  "clap",
@@ -4314,7 +4318,7 @@ dependencies = [
  "memmap2 0.9.4",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.3",
+ "rattler_cache 0.2.3 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4324,7 +4328,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.5",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0",
+ "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "smallvec",
  "tempfile",
  "thiserror",
@@ -4332,32 +4336,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "rattler_cache"
-version = "0.2.3"
-dependencies = [
- "anyhow",
- "dashmap",
- "digest",
- "dirs",
- "fs4",
- "futures",
- "fxhash",
- "itertools 0.13.0",
- "parking_lot 0.12.3",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "reqwest 0.12.5",
- "reqwest-middleware",
- "simple_spawn_blocking 1.0.0",
- "thiserror",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -4389,8 +4367,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_cache"
+version = "0.2.3"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
+dependencies = [
+ "anyhow",
+ "dashmap",
+ "digest",
+ "dirs",
+ "fs4",
+ "futures",
+ "fxhash",
+ "itertools 0.13.0",
+ "parking_lot 0.12.3",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_networking",
+ "rattler_package_streaming",
+ "reqwest 0.12.5",
+ "reqwest-middleware",
+ "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "rattler_conda_types"
 version = "0.27.6"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "chrono",
  "dirs",
@@ -4425,6 +4431,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.2"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "blake2",
  "digest",
@@ -4440,6 +4447,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.24"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "chrono",
  "file_url",
@@ -4463,6 +4471,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.2"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "quote",
  "syn 2.0.72",
@@ -4471,6 +4480,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.21.4"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4497,6 +4507,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.7"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4523,6 +4534,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.2"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -4532,6 +4544,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.13"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4558,7 +4571,7 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.3",
+ "rattler_cache 0.2.3 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4569,7 +4582,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "simple_spawn_blocking 1.0.0",
+ "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "superslice",
  "tempfile",
  "thiserror",
@@ -4584,6 +4597,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.3.0",
@@ -4600,6 +4614,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.0.7"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "chrono",
  "futures",
@@ -4617,6 +4632,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "1.1.4"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "archspec",
  "libloading",
@@ -5697,6 +5713,8 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
 dependencies = [
  "tokio",
 ]
@@ -5704,8 +5722,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#ba27ec62aacf14672c079f2df96fb1327d9056cb"
 dependencies = [
  "tokio",
 ]

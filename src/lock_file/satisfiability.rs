@@ -13,7 +13,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{InputHashError, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -22,7 +22,7 @@ use pypi_types::{
 };
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
-    ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
+    ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     Package, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
@@ -34,6 +34,7 @@ use uv_normalize::{ExtraName, PackageName};
 
 use super::{PypiRecord, PypiRecordsByName};
 use crate::{
+    build::{InputHashCache, InputHashKey},
     lock_file::records_by_name::PixiRecordsByName,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
 };
@@ -130,6 +131,9 @@ pub enum PlatformUnsat {
     #[error("required source package '{0}' is locked as binary (required by '{1}')")]
     RequiredSourceIsBinary(String, String),
 
+    #[error("the locked source package '{0}' does not match the requested source package, {1}")]
+    SourcePackageMismatch(String, SourceMismatchError),
+
     #[error("failed to convert the requirement for '{0}'")]
     FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
 
@@ -198,11 +202,11 @@ pub enum PlatformUnsat {
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
 
-    #[error("source dependencies are currently always considered out of date")]
-    SourceDependency,
+    #[error(transparent)]
+    FailedToComputeInputHash(#[from] InputHashError),
 
-    #[error("the requested path '{1}' does not match the locked path '{2}' for '{0}'")]
-    SourcePathMismatch(String, String, String),
+    #[error("the input hash for '{0}' does not match the hash in the lock-file")]
+    InputHashMismatch(String),
 }
 
 impl PlatformUnsat {
@@ -362,12 +366,13 @@ pub fn verify_environment_satisfiability(
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
 #[allow(clippy::result_large_err)]
-pub fn verify_platform_satisfiability(
+pub async fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
     platform: Platform,
     project_root: &Path,
-) -> Result<(), PlatformUnsat> {
+    input_hash_cache: InputHashCache,
+) -> Result<(), Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
@@ -400,7 +405,7 @@ pub fn verify_platform_satisfiability(
             .all(|record| record.package_record.purls.is_none())
     {
         {
-            return Err(PlatformUnsat::MissingPurls);
+            return Err(Box::new(PlatformUnsat::MissingPurls));
         }
     }
 
@@ -409,9 +414,9 @@ pub fn verify_platform_satisfiability(
     let pixi_records_by_name = match PixiRecordsByName::from_unique_iter(pixi_records) {
         Ok(pixi_records) => pixi_records,
         Err(duplicate) => {
-            return Err(PlatformUnsat::DuplicateEntry(
+            return Err(Box::new(PlatformUnsat::DuplicateEntry(
                 duplicate.package_record().name.as_source().to_string(),
-            ))
+            )))
         }
     };
 
@@ -419,7 +424,11 @@ pub fn verify_platform_satisfiability(
     // if we find a duplicate entry for a record
     let pypi_records_by_name = match PypiRecordsByName::from_unique_iter(pypi_packages) {
         Ok(pypi_packages) => pypi_packages,
-        Err(duplicate) => return Err(PlatformUnsat::DuplicateEntry(duplicate.0.name.to_string())),
+        Err(duplicate) => {
+            return Err(Box::new(PlatformUnsat::DuplicateEntry(
+                duplicate.0.name.to_string(),
+            )))
+        }
     };
 
     verify_package_platform_satisfiability(
@@ -428,7 +437,9 @@ pub fn verify_platform_satisfiability(
         &pypi_records_by_name,
         platform,
         project_root,
+        input_hash_cache,
     )
+    .await
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -449,7 +460,7 @@ pub(crate) fn pypi_satifisfies_editable(
     spec: &pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
-) -> Result<(), PlatformUnsat> {
+) -> Result<(), Box<PlatformUnsat>> {
     // We dont match on spec.is_editable() != locked_data.editable
     // as it will happen later in verify_package_platform_satisfiability
     // TODO: could be a potential refactoring opportunity
@@ -466,10 +477,10 @@ pub(crate) fn pypi_satifisfies_editable(
         RequirementSource::Directory { install_path, .. } => match &locked_data.location {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satifsfy
-            UrlOrPath::Url(url) => Err(PlatformUnsat::EditablePackageIsUrl(
+            UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
                 spec.name.clone(),
                 url.to_string(),
-            )),
+            ))),
             UrlOrPath::Path(path) => {
                 // Most of the times the path will be relative to the project root
                 let absolute_path = if path.is_absolute() {
@@ -479,15 +490,18 @@ pub(crate) fn pypi_satifisfies_editable(
                 };
                 // Absolute paths can have symbolic links, so we canonicalize
                 let canocalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
-                    PlatformUnsat::FailedToCanonicalizePath(absolute_path.to_path_buf(), e)
+                    Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                        absolute_path.to_path_buf(),
+                        e,
+                    ))
                 })?;
 
                 if &canocalized_path != install_path {
-                    return Err(PlatformUnsat::EditablePackagePathMismatch(
+                    return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
                         install_path.clone(),
-                    ));
+                    )));
                 }
                 Ok(())
             }
@@ -593,14 +607,14 @@ pub(crate) fn pypi_satifisfies_requirement(
     }
 }
 
-#[allow(clippy::result_large_err)]
-pub(crate) fn verify_package_platform_satisfiability(
+pub(crate) async fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_pixi_records: &PixiRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
     project_root: &Path,
-) -> Result<(), PlatformUnsat> {
+    input_hash_cache: InputHashCache,
+) -> Result<(), Box<PlatformUnsat>> {
     let channel_config = environment.project().channel_config();
 
     // Determine the dependencies requested by the environment
@@ -611,7 +625,7 @@ pub(crate) fn verify_package_platform_satisfiability(
         .collect_vec();
 
     if environment_dependencies.is_empty() && !locked_pixi_records.is_empty() {
-        return Err(PlatformUnsat::TooManyCondaPackages);
+        return Err(Box::new(PlatformUnsat::TooManyCondaPackages));
     }
 
     // Transform from PyPiPackage name into UV Requirement type
@@ -620,9 +634,12 @@ pub(crate) fn verify_package_platform_satisfiability(
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
-                Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
+                Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
                     as_uv_req(req, name.as_source(), project_root).map_err(|e| {
-                        PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
+                        Box::new(PlatformUnsat::AsPep508Error(
+                            name.as_normalized().clone(),
+                            e,
+                        ))
                     })?,
                     "<environment>".into(),
                 ))
@@ -631,9 +648,9 @@ pub(crate) fn verify_package_platform_satisfiability(
         .collect::<Result<Vec<_>, _>>()?;
 
     if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
-        return Err(PlatformUnsat::TooManyPypiPackages(
+        return Err(Box::new(PlatformUnsat::TooManyPypiPackages(
             locked_pypi_environment.names().cloned().collect(),
-        ));
+        )));
     }
 
     // Create a list of virtual packages by name
@@ -654,7 +671,11 @@ pub(crate) fn verify_package_platform_satisfiability(
     let marker_environment = python_interpreter_record
         .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
         .transpose()
-        .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()));
+        .map_err(|err| {
+            Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
+                err.into(),
+            ))
+        });
 
     // We cannot determine the marker environment, for example if installing
     // `wasm32` dependencies. However, it also doesn't really matter if we don't
@@ -694,13 +715,24 @@ pub(crate) fn verify_package_platform_satisfiability(
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
-                let spec = match spec.into_source_or_binary(&channel_config) {
-                    Ok(Either::Left(source_spec)) => {
-                        // TODO(baszalmstra): Add support for checking the source dependencies
-
-                        return Err(PlatformUnsat::SourceDependency);
+                match spec.into_source_or_binary(&channel_config) {
+                    Ok(Either::Left(source_spec)) => find_matching_source_package(
+                        locked_pixi_records,
+                        name,
+                        source_spec,
+                        source,
+                    )?,
+                    Ok(Either::Right(spec)) => {
+                        match find_matching_package(
+                            locked_pixi_records,
+                            &virtual_packages,
+                            MatchSpec::from_nameless(spec, Some(name)),
+                            source,
+                        )? {
+                            Some(pkg) => pkg,
+                            None => continue,
+                        }
                     }
-                    Ok(Either::Right(spec)) => MatchSpec::from_nameless(spec, Some(name)),
                     Err(e) => {
                         let parse_channel_err: ParseMatchSpecError = match e {
                             SpecConversionError::NonAbsoluteRootDir(p) => {
@@ -713,15 +745,11 @@ pub(crate) fn verify_package_platform_satisfiability(
                                 ParseChannelError::InvalidPath(p).into()
                             }
                         };
-                        return Err(PlatformUnsat::FailedToParseMatchSpec(
+                        return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
                             name.as_source().to_string(),
                             parse_channel_err,
-                        ));
+                        )));
                     }
-                };
-                match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
-                    Some(pkg) => pkg,
-                    None => continue,
                 }
             }
             Dependency::Conda(spec, source) => {
@@ -736,30 +764,36 @@ pub(crate) fn verify_package_platform_satisfiability(
                     locked_conda_pypi_packages.get(&requirement.name)
                 {
                     if requirement.is_editable() {
-                        return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
-                            requirement.name.clone(),
-                            Box::new(requirement.source),
+                        return Err(Box::new(
+                            PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
+                                requirement.name.clone(),
+                                Box::new(requirement.source),
+                            ),
                         ));
                     }
 
                     if matches!(requirement.source, RequirementSource::Url { .. }) {
-                        return Err(PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
-                            requirement.name.clone(),
+                        return Err(Box::new(
+                            PlatformUnsat::DirectUrlDependencyOnCondaInstalledPackage(
+                                requirement.name.clone(),
+                            ),
                         ));
                     }
 
                     if matches!(requirement.source, RequirementSource::Git { .. }) {
-                        return Err(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
-                            requirement.name.clone(),
+                        return Err(Box::new(
+                            PlatformUnsat::GitDependencyOnCondaInstalledPackage(
+                                requirement.name.clone(),
+                            ),
                         ));
                     }
 
                     if !identifier.satisfies(&requirement) {
                         // The record does not match the spec, the lock-file is inconsistent.
-                        return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
+                        return Err(Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
                             Box::new(requirement.clone()),
                             source.into_owned(),
-                        ));
+                        )));
                     }
                     FoundPackage::Conda(*repodata_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
@@ -775,19 +809,19 @@ pub(crate) fn verify_package_platform_satisfiability(
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
                         if !pypi_satifisfies_requirement(&requirement, &record.0, project_root) {
-                            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                            return Err(Box::new(PlatformUnsat::UnsatisfiableRequirement(
                                 Box::new(requirement),
                                 source.into_owned(),
-                            ));
+                            )));
                         }
                         FoundPackage::PyPi(idx, requirement.extras)
                     }
                 } else {
                     // The record does not match the spec, the lock-file is inconsistent.
-                    return Err(PlatformUnsat::UnsatisfiableRequirement(
+                    return Err(Box::new(PlatformUnsat::UnsatisfiableRequirement(
                         Box::new(requirement),
                         source.into_owned(),
-                    ));
+                    )));
                 }
             }
         };
@@ -816,7 +850,7 @@ pub(crate) fn verify_package_platform_satisfiability(
 
                 // If there is no marker environment there is no python version
                 let Some(marker_environment) = marker_environment.as_ref() else {
-                    return Err(PlatformUnsat::MissingPythonInterpreter);
+                    return Err(Box::new(PlatformUnsat::MissingPythonInterpreter));
                 };
 
                 if pypi_packages_visited.insert(idx) {
@@ -839,13 +873,13 @@ pub(crate) fn verify_package_platform_satisfiability(
                                 })?
                                 .hash();
                             if Some(&hashable) != record.0.hash.as_ref() {
-                                return Err(PlatformUnsat::SourceTreeHashMismatch(
+                                return Err(Box::new(PlatformUnsat::SourceTreeHashMismatch(
                                     record.0.name.clone(),
                                     SourceTreeHashMismatch {
                                         computed: hashable,
                                         locked: record.0.hash.clone(),
                                     },
-                                ));
+                                )));
                             }
                         }
                     }
@@ -855,7 +889,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                         if !python_version
                             .contains(&marker_environment.python_full_version().version)
                         {
-                            return Err(PlatformUnsat::PythonVersionMismatch(
+                            return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
                                 python_version.clone(),
                                 marker_environment
@@ -863,7 +897,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                                     .version
                                     .clone()
                                     .into(),
-                            ));
+                            )));
                         }
                     }
                 }
@@ -871,10 +905,10 @@ pub(crate) fn verify_package_platform_satisfiability(
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
                     let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
-                        PlatformUnsat::FailedToConvertRequirement(
+                        Box::new(PlatformUnsat::FailedToConvertRequirement(
                             record.0.name.clone(),
                             Box::new(e),
-                        )
+                        ))
                     })?;
                     // Skip this requirement if it does not apply.
                     if !requirement.evaluate_markers(Some(marker_environment), &extras) {
@@ -897,11 +931,11 @@ pub(crate) fn verify_package_platform_satisfiability(
 
     // Check if all locked packages have also been visisted
     if conda_packages_visited.len() != locked_pixi_records.len() {
-        return Err(PlatformUnsat::TooManyCondaPackages);
+        return Err(Box::new(PlatformUnsat::TooManyCondaPackages));
     }
 
     if pypi_packages_visited.len() != locked_pypi_environment.len() {
-        return Err(PlatformUnsat::TooManyPypiPackages(
+        return Err(Box::new(PlatformUnsat::TooManyPypiPackages(
             locked_pypi_environment
                 .names()
                 .enumerate()
@@ -913,7 +947,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                     }
                 })
                 .collect(),
-        ));
+        )));
     }
 
     // Check if all packages that should be editable are actually editable and vice
@@ -927,12 +961,50 @@ pub(crate) fn verify_package_platform_satisfiability(
     let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
     let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);
     if !expected_editable.is_empty() || !unexpected_editable.is_empty() {
-        return Err(PlatformUnsat::EditablePackageMismatch(
+        return Err(Box::new(PlatformUnsat::EditablePackageMismatch(
             EditablePackagesMismatch {
                 expected_editable: expected_editable.into_iter().sorted().collect(),
                 unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
             },
-        ));
+        )));
+    }
+
+    // Check if all source packages are still up-to-date.
+    for source_record in locked_pixi_records
+        .records
+        .iter()
+        .filter_map(PixiRecord::as_source)
+    {
+        let Some(path_record) = source_record.source.as_path() else {
+            continue;
+        };
+
+        let Some(locked_input_hash) = &source_record.input_hash else {
+            continue;
+        };
+
+        let source_dir = path_record.resolve(project_root);
+        let source_dir = source_dir.canonicalize().map_err(|e| {
+            Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                path_record.path.as_str().into(),
+                e,
+            ))
+        })?;
+
+        let input_hash = input_hash_cache
+            .compute_hash(InputHashKey {
+                root: source_dir,
+                globs: locked_input_hash.globs.clone(),
+            })
+            .await
+            .map_err(PlatformUnsat::FailedToComputeInputHash)
+            .map_err(Box::new)?;
+
+        if input_hash != locked_input_hash.hash {
+            return Err(Box::new(PlatformUnsat::InputHashMismatch(
+                path_record.path.to_string(),
+            )));
+        }
     }
 
     Ok(())
@@ -943,13 +1015,12 @@ enum FoundPackage {
     PyPi(usize, Vec<ExtraName>),
 }
 
-#[allow(clippy::result_large_err)]
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
     virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
     spec: MatchSpec,
     source: Cow<str>,
-) -> Result<Option<FoundPackage>, PlatformUnsat> {
+) -> Result<Option<FoundPackage>, Box<PlatformUnsat>> {
     let found_package = match &spec.name {
         None => {
             // No name means we have to find any package that matches the spec.
@@ -960,10 +1031,10 @@ fn find_matching_package(
             {
                 None => {
                     // No records match the spec.
-                    return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                    return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                         spec,
                         source.into_owned(),
-                    ));
+                    )));
                 }
                 Some(idx) => FoundPackage::Conda(idx),
             }
@@ -977,10 +1048,10 @@ fn find_matching_package(
                 Some(_) => {
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
-                    return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                    return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                         spec,
                         source.into_owned(),
-                    ));
+                    )));
                 }
                 None => {
                     // Check if there is a virtual package by that name
@@ -992,18 +1063,18 @@ fn find_matching_package(
                         } else {
                             // The record does not match the spec, the lock-file is
                             // inconsistent.
-                            return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                            return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                                 spec,
                                 source.into_owned(),
-                            ));
+                            )));
                         }
                     } else {
                         // The record does not match the spec, the lock-file is
                         // inconsistent.
-                        return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                        return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                             spec,
                             source.into_owned(),
-                        ));
+                        )));
                     }
                 }
             }
@@ -1013,13 +1084,12 @@ fn find_matching_package(
     Ok(Some(found_package))
 }
 
-#[allow(clippy::result_large_err)]
 fn find_matching_source_package(
     locked_pixi_records: &PixiRecordsByName,
     name: rattler_conda_types::PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
-) -> Result<Option<FoundPackage>, PlatformUnsat> {
+) -> Result<FoundPackage, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
     let Some((idx, package)) = locked_pixi_records
         .index_by_name(&name)
@@ -1027,30 +1097,25 @@ fn find_matching_source_package(
     else {
         // The record does not match the spec, the lock-file is
         // inconsistent.
-        return Err(PlatformUnsat::SourcePackageMissing(
+        return Err(Box::new(PlatformUnsat::SourcePackageMissing(
             name.as_source().to_string(),
             source.into_owned(),
-        ));
+        )));
     };
 
     let PixiRecord::Source(source_package) = package else {
-        return Err(PlatformUnsat::RequiredSourceIsBinary(
+        return Err(Box::new(PlatformUnsat::RequiredSourceIsBinary(
             name.as_source().to_string(),
             source.into_owned(),
-        ));
+        )));
     };
 
-    match (source_spec, source_package) {
-        (SourceSpec::Path(requested), SourceSpec::Path(locked)) => {
-            if requested.path != locked.path {
-                return Err(PlatformUnsat::SourcePathMismatch(
-                    name.as_source().to_string(),
-                    requested.path.to_string(),
-                    locked.path.to_string(),
-                ));
-            }
-        }
-    }
+    source_package
+        .source
+        .satisfies(&source_spec)
+        .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
+
+    Ok(FoundPackage::Conda(idx))
 }
 
 trait MatchesMatchspec {
@@ -1185,7 +1250,7 @@ mod tests {
         PlatformUnsat(String, Platform, #[source] PlatformUnsat),
     }
 
-    fn verify_lockfile_satisfiability(
+    async fn verify_lockfile_satisfiability(
         project: &Project,
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
@@ -1198,6 +1263,7 @@ mod tests {
 
             for platform in env.platforms() {
                 verify_platform_satisfiability(&env, &locked_env, platform, project.root())
+                    .await
                     .map_err(|e| {
                         LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
                     })?;
@@ -1207,7 +1273,8 @@ mod tests {
     }
 
     #[rstest]
-    fn test_good_satisfiability(
+    #[tokio::test]
+    async fn test_good_satisfiability(
         #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
@@ -1223,23 +1290,30 @@ mod tests {
 
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-        match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
+        match verify_lockfile_satisfiability(&project, &lock_file)
+            .await
+            .into_diagnostic()
+        {
             Ok(()) => {}
             Err(e) => panic!("{e:?}"),
         }
     }
 
     #[rstest]
-    fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
+    #[tokio::test]
+    async fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-        match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
+        match verify_lockfile_satisfiability(&project, &lock_file)
+            .await
+            .into_diagnostic()
+        {
             Ok(()) => {}
             Err(e) => panic!("{e:?}"),
         }
     }
 
-    #[test]
+    #[tokio::test]
     fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
@@ -1247,6 +1321,7 @@ mod tests {
             let project = Project::from_path(path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
             let err = verify_lockfile_satisfiability(&project, &lock_file)
+                .await
                 .expect_err("expected failing satisfiability");
 
             let mut s = String::new();

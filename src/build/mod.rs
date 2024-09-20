@@ -19,10 +19,14 @@ use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
+mod input_hash_cache;
+pub use input_hash_cache::{InputHashCache, InputHashKey};
+
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Debug, Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
+    _input_hash_cache: InputHashCache,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -67,7 +71,18 @@ pub struct SourceMetadata {
 
 impl BuildContext {
     pub fn new(channel_config: ChannelConfig) -> Self {
-        Self { channel_config }
+        Self {
+            channel_config,
+            _input_hash_cache: InputHashCache::default(),
+        }
+    }
+
+    /// Sets the input hash cache to use for caching input hashes.
+    pub fn with_input_hash_cache(self, input_hash_cache: InputHashCache) -> Self {
+        Self {
+            _input_hash_cache: input_hash_cache,
+            ..self
+        }
     }
 
     /// Extracts the metadata for a package from the given source specification.
@@ -261,9 +276,14 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
-        // Compute the input globs for the source repository.
-        let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
-        let input_hash = InputHash::from_globs(&source.path, input_globs)?;
+        // Compute the input globs for the mutable source checkouts.
+        let input_hash = if source.pinned.is_immutable() {
+            None
+        } else {
+            let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
+            let input_hash = InputHash::from_globs(&source.path, input_globs)?;
+            Some(input_hash)
+        };
 
         // Convert the metadata to repodata
         let packages = metadata

@@ -4,7 +4,7 @@ use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
-use crate::{SpecConversionError};
+use crate::SpecConversionError;
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]

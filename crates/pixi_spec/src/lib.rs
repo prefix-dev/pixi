@@ -20,7 +20,9 @@ pub use detailed::DetailedSpec;
 pub use git::{GitReference, GitSpec};
 use itertools::Either;
 pub use path::{PathSourceSpec, PathSpec};
-use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, VersionSpec};
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName, VersionSpec,
+};
 use thiserror::Error;
 pub use url::{UrlSourceSpec, UrlSpec};
 
@@ -265,6 +267,20 @@ impl PixiSpec {
                 .into_source_or_binary(&channel_config.root_dir)?
                 .map_left(SourceSpec::Path)),
         }
+    }
+
+    /// Converts this instance into a named source or binary spec.
+    pub fn into_named_source_or_binary(
+        self,
+        package_name: PackageName,
+        channel_config: &ChannelConfig,
+    ) -> Result<Either<(PackageName, SourceSpec), MatchSpec>, SpecConversionError> {
+        Ok(match self.into_source_or_binary(channel_config)? {
+            Either::Left(source) => Either::Left((package_name, source)),
+            Either::Right(spec) => {
+                Either::Right(MatchSpec::from_nameless(spec, Some(package_name)))
+            }
+        })
     }
 
     /// Converts this instance into a source spec if this instance represents a

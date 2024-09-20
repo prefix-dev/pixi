@@ -5,12 +5,6 @@ use std::{
     io::{stdout, Write},
 };
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::{
-    load_lock_file,
-    lock_file::{filter_lock_file, UpdateContext},
-    Project,
-};
 use ahash::HashMap;
 use clap::Parser;
 use indexmap::IndexMap;
@@ -18,13 +12,19 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
-use pixi_manifest::EnvironmentName;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
+
+use crate::{
+    cli::cli_config::ProjectConfig,
+    load_lock_file,
+    lock_file::{filter_lock_file, UpdateContext},
+    Project,
+};
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -156,7 +156,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let updated_lock_file = UpdateContext::builder(&project)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
-        .finish()?
+        .finish()
+        .await?
         .update()
         .await?;
 
