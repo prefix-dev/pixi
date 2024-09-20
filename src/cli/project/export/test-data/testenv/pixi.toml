@@ -10,6 +10,8 @@ version = "0.1.0"
 
 [dependencies]
 python = ">=3.12.5,<4"
+# Specific channel and version
+ca-certificates = { version = "2024.8.30", channel = "conda-forge" }
 
 [pypi-dependencies]
 rich = ">=13.8.0, <14"
@@ -19,6 +21,7 @@ requests = ">=2.32.3,<3"
 
 [target.osx-64.dependencies]
 pyyaml = ">=6.0.2,<7"
+readline = { version = "8.2", build = "h9e318b2_1" }
 
 [feature.test.dependencies]
 pytest = "*"

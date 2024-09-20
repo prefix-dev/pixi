@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::project::Environment;
+use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -9,12 +11,9 @@ use pixi_manifest::{
     FeaturesExt, HasFeaturesIter, PyPiRequirement,
 };
 use rattler_conda_types::{
-    EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, ParseStrictness, Platform,
+    ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, ParseStrictness, Platform,
 };
 use rattler_lock::FindLinksUrlOrPath;
-
-use crate::project::Environment;
-use crate::Project;
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -128,6 +127,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
 fn build_env_yaml(
     platform: &Platform,
     environment: &Environment,
+    config: &ChannelConfig,
 ) -> miette::Result<EnvironmentYaml> {
     let mut env_yaml = rattler_conda_types::EnvironmentYaml {
         name: Some(environment.name().as_str().to_string()),
@@ -139,23 +139,19 @@ fn build_env_yaml(
 
     for feature in environment.features() {
         if let Some(dependencies) = feature.dependencies(None, Some(*platform)) {
-            for (key, value) in dependencies.iter() {
-                let spec = MatchSpec {
-                    name: Some(key.clone()),
-                    version: value.clone().into_version(),
-                    build: None,
-                    build_number: None,
-                    subdir: None,
-                    md5: None,
-                    sha256: None,
-                    url: None,
-                    file_name: None,
-                    channel: None,
-                    namespace: None,
-                };
-                env_yaml
-                    .dependencies
-                    .push(MatchSpecOrSubSection::MatchSpec(spec));
+            for (name, pixi_spec) in dependencies.iter() {
+                if let Some(nameless_spec) = pixi_spec
+                    .clone()
+                    .try_into_nameless_match_spec(config)
+                    .into_diagnostic()?
+                {
+                    let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
+                    env_yaml
+                        .dependencies
+                        .push(MatchSpecOrSubSection::MatchSpec(spec));
+                } else {
+                    tracing::warn!("Failed to convert dependency to conda environment spec: {:?}. Skipping dependency", name);
+                }
             }
         }
 
@@ -210,8 +206,9 @@ fn build_env_yaml(
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     let environment = project.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+    let config = project.config();
 
-    let env_yaml = build_env_yaml(&platform, &environment).unwrap();
+    let env_yaml = build_env_yaml(&platform, &environment, config.global_channel_config())?;
 
     if let Some(output_path) = args.output_path {
         env_yaml
@@ -246,7 +243,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml",
             env_yaml.unwrap().to_yaml_string()
@@ -267,7 +268,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_extras",
             env_yaml.unwrap().to_yaml_string()
@@ -289,7 +294,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_source_editable",
             env_yaml.unwrap().to_yaml_string()
@@ -311,7 +320,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",
             env_yaml.unwrap().to_yaml_string()
@@ -332,7 +345,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_find_links",
             env_yaml.unwrap().to_yaml_string()
@@ -353,7 +370,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment);
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_pyproject_panic",
             env_yaml.unwrap().to_yaml_string()
