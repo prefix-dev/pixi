@@ -5,6 +5,7 @@ expression: env_yaml.unwrap().to_yaml_string()
 name: default
 channels:
 - conda-forge
+- nodefaults
 dependencies:
 - python >=3.12.5,<4
 - conda-forge::ca-certificates ==2024.8.30
