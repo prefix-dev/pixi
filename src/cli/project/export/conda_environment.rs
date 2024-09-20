@@ -10,7 +10,10 @@ use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
     FeaturesExt, HasFeaturesIter, PyPiRequirement,
 };
-use rattler_conda_types::{ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl, ParseStrictness, Platform};
+use rattler_conda_types::{
+    ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
+    ParseStrictness, Platform,
+};
 use rattler_lock::FindLinksUrlOrPath;
 
 #[derive(Debug, Parser)]
@@ -415,7 +418,11 @@ mod tests {
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
-        let env_yaml = build_env_yaml(&platform, &environment, project.config().global_channel_config());
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            project.config().global_channel_config(),
+        );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_defaults",
             env_yaml.unwrap().to_yaml_string()
