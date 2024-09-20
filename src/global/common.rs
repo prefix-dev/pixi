@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -15,6 +18,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use reqwest_middleware::ClientWithMiddleware;
+use tokio::io::AsyncReadExt;
 
 use crate::{
     cli::project::environment, prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible,
@@ -27,7 +31,7 @@ use super::{EnvironmentName, ExposedKey};
 pub struct BinDir(PathBuf);
 
 impl BinDir {
-    /// Create the Binary Executable directory
+    /// Create the binary executable directory from environment variables
     pub async fn from_env() -> miette::Result<Self> {
         let bin_dir = home_path()
             .map(|path| path.join("bin"))
@@ -40,7 +44,7 @@ impl BinDir {
         Ok(Self(bin_dir))
     }
 
-    /// Asynchronously retrieves all files in the Binary Executable directory.
+    /// Asynchronously retrieves all files in the binary executable directory.
     ///
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the
@@ -123,16 +127,25 @@ impl BinDir {
 pub struct EnvRoot(PathBuf);
 
 impl EnvRoot {
+    /// Create the environment root directory
+    #[cfg(test)]
     pub async fn new(path: PathBuf) -> miette::Result<Self> {
-        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        tokio::fs::create_dir_all(&path)
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
-    pub async fn from_env() -> miette::Result<Self> {
+    /// Create the environment root directory from environment variables
+    pub(crate) async fn from_env() -> miette::Result<Self> {
         let path = home_path()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Could not get home path"))?;
-        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        tokio::fs::create_dir_all(&path)
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
@@ -140,12 +153,9 @@ impl EnvRoot {
         &self.0
     }
 
-    /// Delete environments that are not listed
-    pub(crate) async fn prune(
-        &self,
-        environments: impl IntoIterator<Item = EnvironmentName>,
-    ) -> miette::Result<()> {
-        let env_set: ahash::HashSet<EnvironmentName> = environments.into_iter().collect();
+    /// Get all directories in the env root
+    pub(crate) async fn directories(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut directories = Vec::new();
         let mut entries = tokio::fs::read_dir(&self.path())
             .await
             .into_diagnostic()
@@ -154,25 +164,39 @@ impl EnvRoot {
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             if path.is_dir() {
-                let Some(Ok(env_name)) = path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.parse())
-                else {
-                    continue;
-                };
-                if !env_set.contains(&env_name) {
-                    tokio::fs::remove_dir_all(&path)
-                        .await
-                        .into_diagnostic()
-                        .wrap_err_with(|| {
-                            format!("Could not remove directory {}", path.display())
-                        })?;
-                    eprintln!(
-                        "{} Remove environment '{env_name}'",
-                        console::style(console::Emoji("✔", " ")).green()
-                    );
-                }
+                directories.push(path);
+            }
+        }
+
+        Ok(directories)
+    }
+
+    /// Delete environments that are not listed
+    pub(crate) async fn prune(
+        &self,
+        environments_to_keep: impl IntoIterator<Item = EnvironmentName>,
+    ) -> miette::Result<()> {
+        let env_set: ahash::HashSet<EnvironmentName> = environments_to_keep.into_iter().collect();
+
+        for env_path in self.directories().await? {
+            let Some(Ok(env_name)) = env_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.parse())
+            else {
+                continue;
+            };
+            if !env_set.contains(&env_name) {
+                tokio::fs::remove_dir_all(&env_path)
+                    .await
+                    .into_diagnostic()
+                    .wrap_err_with(|| {
+                        format!("Could not remove directory {}", env_path.display())
+                    })?;
+                eprintln!(
+                    "{} Remove environment '{env_name}'",
+                    console::style(console::Emoji("✔", " ")).green()
+                );
             }
         }
 
@@ -180,20 +204,36 @@ impl EnvRoot {
     }
 }
 
-/// Global binary environments directory
+/// A global environment directory
 pub(crate) struct EnvDir {
     root: EnvRoot,
     path: PathBuf,
 }
 
 impl EnvDir {
-    /// Create the Binary Environment directory
+    /// Create a global environment directory
     pub(crate) async fn new(
         root: EnvRoot,
         environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
         let path = root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+
+        Ok(Self { root, path })
+    }
+
+    /// Initialize a global environment directory from an existing path
+    pub(crate) fn try_from_existing(
+        root: EnvRoot,
+        environment_name: EnvironmentName,
+    ) -> miette::Result<Self> {
+        let path = root.path().join(environment_name.as_str());
+        if !path.is_dir() {
+            return Err(miette::miette!(
+                "Directory does not exist: {}",
+                path.display()
+            ));
+        }
 
         Ok(Self { root, path })
     }
@@ -233,6 +273,26 @@ pub(crate) async fn find_designated_package(
         .into_iter()
         .find(|r| r.repodata_record.package_record.name == *package_name)
         .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+}
+
+/// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
+pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
+    let mut file = std::fs::File::open(&file_path)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not open {}", &file_path.as_ref().display()))?;
+    let mut buffer = [0; 1024];
+    let bytes_read = file
+        .read(&mut buffer)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not read {}", &file_path.as_ref().display()))?;
+
+    Ok(buffer[..bytes_read].contains(&0))
+}
+
+/// Checks if given path points to a text file by calling `is_binary`.
+/// If that returns `false`, then it is a text file and vice-versa.
+pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
+    Ok(!is_binary(file_path)?)
 }
 
 #[cfg(test)]

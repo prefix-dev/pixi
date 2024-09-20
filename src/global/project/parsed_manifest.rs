@@ -1,23 +1,55 @@
 use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::Serialize;
 use serde_with::{serde_as, serde_derive::Deserialize};
 
 use super::environment::EnvironmentName;
 
 use super::error::ManifestError;
+use super::ExposedData;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ParsedManifest {
     /// The environments the project can create.
-    environments: IndexMap<EnvironmentName, ParsedEnvironment>,
+    envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+impl<I> From<I> for ParsedManifest
+where
+    I: IntoIterator<Item = ExposedData>,
+{
+    fn from(value: I) -> Self {
+        let mut envs: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
+        for data in value {
+            let ExposedData {
+                env_name,
+                platform,
+                channel,
+                package,
+                executable_name,
+                exposed,
+            } = data;
+            let mut parsed_environment = envs.entry(env_name).or_default();
+            parsed_environment.channels.insert(channel);
+            parsed_environment.platform = platform;
+            parsed_environment
+                .dependencies
+                .insert(package, PixiSpec::default());
+            parsed_environment.exposed.insert(exposed, executable_name);
+        }
+
+        Self { envs }
+    }
 }
 
 impl ParsedManifest {
@@ -27,7 +59,7 @@ impl ParsedManifest {
     }
 
     pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.environments.clone()
+        self.envs.clone()
     }
 }
 
@@ -64,13 +96,13 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         }
 
         Ok(Self {
-            environments: manifest.envs,
+            envs: manifest.envs,
         })
     }
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
     #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
@@ -84,12 +116,8 @@ pub(crate) struct ParsedEnvironment {
 
 impl ParsedEnvironment {
     // If `self.platform` is `None` is not given, the current platform is used
-    pub(crate) fn platform(&self) -> Platform {
-        if let Some(platform) = self.platform {
-            platform
-        } else {
-            Platform::current()
-        }
+    pub(crate) fn platform(&self) -> Option<Platform> {
+        self.platform
     }
 
     /// Returns the channels associated with this collection.
@@ -98,7 +126,7 @@ impl ParsedEnvironment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub(crate) struct ExposedKey(String);
 
 impl fmt::Display for ExposedKey {
@@ -108,11 +136,11 @@ impl fmt::Display for ExposedKey {
 }
 
 impl FromStr for ExposedKey {
-    type Err = String;
+    type Err = miette::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
-            Err("The key 'pixi' is not allowed in the exposed map".to_string())
+            miette::bail!("The key 'pixi' is not allowed in the exposed map");
         } else {
             Ok(ExposedKey(value.to_string()))
         }

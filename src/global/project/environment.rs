@@ -5,11 +5,11 @@ use miette::Diagnostic;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer};
+use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 /// Represents the name of an environment.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 pub(crate) struct EnvironmentName(String);
 
 impl EnvironmentName {
