@@ -29,6 +29,9 @@ mamba = "*"       # needed for cross-architecturo solves
 [feature.build.tasks]
 construct = """
   rm -rf dist/installer/$CC_PLATFORM
+  && cat installer/construct.yaml.in > installer/construct.yaml
+  && echo "environment_file: ./specs/installer_$(echo $CC_PLATFORM)_conda_spec.txt"
+    >> installer/construct.yaml
   && constructor installer
     --platform $CC_PLATFORM
     --cache-dir build/.cache/constructor
