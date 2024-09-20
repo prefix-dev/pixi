@@ -3,7 +3,7 @@ authors = []
 channels = ["conda-forge"]
 description = "test environments"
 name = "testenv"
-platforms = ["osx-64", "linux-64"]
+platforms = ["osx-64", "linux-64", "osx-arm64"]
 version = "0.1.0"
 
 [tasks]
