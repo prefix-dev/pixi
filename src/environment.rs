@@ -523,7 +523,7 @@ pub async fn update_prefix_conda(
                     &source_record.package_record.version
                 )
             })?;
-        repodata_records.push(built_source_record);
+        repodata_records.push(built_source_record.repodata_record);
     }
 
     // Execute the operations that are returned by the solver.

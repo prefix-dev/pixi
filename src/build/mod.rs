@@ -15,6 +15,7 @@ use pixi_build_types::{
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
+use rattler_digest::Sha256;
 use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
@@ -29,6 +30,9 @@ pub struct BuildContext {
 pub enum BuildError {
     #[error("failed to resolve source path {}", &.0)]
     ResolveSourcePath(Utf8TypedPathBuf, #[source] std::io::Error),
+
+    #[error("error calculating sha for {}", &.0.display())]
+    CalculateSha(PathBuf, #[source] std::io::Error),
 
     #[error(transparent)]
     BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
@@ -62,6 +66,15 @@ pub struct SourceMetadata {
     pub records: Vec<SourceRecord>,
 }
 
+/// The result of a conda-build operation.
+pub struct CondaBuildOutput {
+    /// The repodata record that was created.
+    pub repodata_record: RepoDataRecord,
+
+    /// The input file globs that were used to build the package.
+    pub input_globs: Vec<String>,
+}
+
 impl BuildContext {
     pub fn new(channel_config: ChannelConfig) -> Self {
         Self { channel_config }
@@ -91,7 +104,7 @@ impl BuildContext {
         source_spec: &SourceRecord,
         channels: &[Url],
         target_platform: Platform,
-    ) -> Result<RepoDataRecord, BuildError> {
+    ) -> Result<CondaBuildOutput, BuildError> {
         let source = self.fetch_pinned_source(&source_spec.source).await?;
 
         // TODO: Add caching of this information based on the source.
@@ -127,9 +140,14 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
+        // Add the sha256 to the package record.
+        let sha = rattler_digest::compute_file_digest::<Sha256>(&build_result.output_file)
+            .map_err(|e| BuildError::CalculateSha(source, e))?;
+        let mut package_record = source_spec.package_record.clone();
+        package_record.sha256 = Some(sha);
         // Construct a repodata record that represents the package
-        Ok(RepoDataRecord {
-            package_record: source_spec.package_record.clone(),
+        let record = RepoDataRecord {
+            package_record,
             url: Url::from_file_path(&build_result.output_file).map_err(|_| {
                 BuildError::FrontendError(
                     miette::miette!(
@@ -146,6 +164,11 @@ impl BuildContext {
                 .and_then(OsStr::to_str)
                 .map(ToString::to_string)
                 .unwrap_or_default(),
+        };
+
+        Ok(CondaBuildOutput {
+            repodata_record: record,
+            input_globs: build_result.input_globs,
         })
     }
 

@@ -339,17 +339,17 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "5e3eaf254b5bd481c75d2710eed055f95b756913" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-file_url = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/conda_url_or_path" }
+file_url = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
 
 # file_url = { path = "../rattler/crates/file_url" }
 # rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
