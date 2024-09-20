@@ -413,7 +413,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   downstream_tests:
-    name: "Test downstream projects"
+    name: "Test examples, downstream projects and integration"
     needs:
       - build
     uses: ./.github/workflows/test_downstream.yml
