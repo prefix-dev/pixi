@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -16,7 +11,8 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform,
+    RepoDataRecord,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
@@ -37,7 +33,6 @@ use crate::{
 /// Installs global environment records
 pub(crate) async fn install_environment(
     specs: &IndexMap<PackageName, MatchSpec>,
-    env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
     authenticated_client: ClientWithMiddleware,
     prefix: &Prefix,
@@ -155,7 +150,7 @@ pub(crate) async fn expose_executables(
                 .map(|name| (name.to_string(), path.clone()))
         })
         // Filters tuples to include only those whose names are in the `exposed` values
-        .filter(|(name, path)| parsed_environment.exposed.values().contains(&name))
+        .filter(|(name, _)| parsed_environment.exposed.values().contains(&name))
         .collect();
 
     let script_mapping = parsed_environment
@@ -247,6 +242,7 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 
 /// For each executable provided, map it to the installation path for its global
 /// executable script.
+#[allow(unused)]
 async fn map_executables_to_global_bin_scripts(
     package_executables: impl IntoIterator<Item = PathBuf>,
     bin_dir: &BinDir,
@@ -401,6 +397,7 @@ async fn create_executable_scripts(
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
+#[allow(unused)]
 pub(crate) fn prompt_user_to_continue(
     packages: &IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<bool> {
@@ -506,7 +503,6 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         if !specs_match_local_environment(&specs, prefix_records, parsed_environment.platform()) {
             install_environment(
                 &specs,
-                &env_name,
                 &parsed_environment,
                 auth_client.clone(),
                 &prefix,
@@ -541,7 +537,7 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
-    let specs_in_manifest_are_present = specs.iter().all(|(name, spec)| {
+    let specs_in_manifest_are_present = specs.values().all(|spec| {
         prefix_records
             .iter()
             .any(|record| spec.matches(record.as_ref()))

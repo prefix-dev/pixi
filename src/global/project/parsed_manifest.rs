@@ -5,7 +5,7 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, Visitor};
+use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::Serialize;
 use serde_with::{serde_as, serde_derive::Deserialize};
 
