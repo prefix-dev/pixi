@@ -8,7 +8,9 @@ use miette::{Context, IntoDiagnostic};
 use crate::cli::cli_config::PrefixUpdateConfig;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::Project;
-use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
+use rattler_conda_types::{
+    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
+};
 use rattler_lock::{CondaPackage, Environment, Package};
 
 #[derive(Debug, Parser)]
@@ -37,13 +39,13 @@ pub struct Args {
 
 fn build_explicit_spec<'a>(
     platform: &Platform,
-    conda_packages: impl IntoIterator<Item = &'a CondaPackage>,
+    conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();
 
     for cp in conda_packages {
-        let prec = cp.package_record();
-        let mut url = cp.url().to_owned();
+        let prec = &cp.package_record;
+        let mut url = cp.url.to_owned();
         let hash = prec.md5.ok_or(miette::miette!(
             "Package {} does not contain an md5 hash",
             prec.name.as_normalized()
@@ -117,7 +119,17 @@ fn render_env_platform(
         }
     }
 
-    let ees = build_explicit_spec(platform, &conda_packages_from_lockfile)?;
+    // Topologically sort packages
+    let repodata = conda_packages_from_lockfile
+        .iter()
+        .map(|p| RepoDataRecord::try_from(p.clone()))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()
+        .with_context(|| "Failed to convert conda packages to RepoDataRecords")?;
+
+    let repodata = PackageRecord::sort_topologically(repodata);
+
+    let ees = build_explicit_spec(platform, &repodata)?;
 
     tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform}");
     let target = output_dir
