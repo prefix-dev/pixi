@@ -36,18 +36,6 @@ pub struct CondaOutputIdentifier {
     pub subdir: Option<String>,
 }
 
-/// Globs that were used as input to the build.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InputGlobs {
-    // TODO: Should this be a UTF8 encoded type
-    /// The path to the directory that globs should be interpreted relative to.
-    /// if this is None, then the globs should be interpreted relative to the
-    /// source directory.
-    pub path: Option<PathBuf>,
-    /// The globs that were used as input to the build.
-    pub globs: Vec<String>,
-}
-
 /// Contains the result of the `conda/build` request.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CondaBuildResult {
@@ -55,5 +43,5 @@ pub struct CondaBuildResult {
     pub output_file: PathBuf,
     /// The globs that were used as input to the build.
     /// use these for re-verifying the build.
-    pub input_globs: InputGlobs,
+    pub input_globs: Vec<String>,
 }
