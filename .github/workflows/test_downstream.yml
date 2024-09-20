@@ -1,4 +1,4 @@
-name: "Test examples and Downstream projects"
+name: "Test examples, downstream projects and integration"
 
 on:
   workflow_call:
@@ -200,6 +200,7 @@ jobs:
           Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
         shell: pwsh
       - name: Typecheck integration tests
+        if: runner.os == 'Linux'
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run typecheck-integration
       - name: Run integration tests
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-integration-ci
