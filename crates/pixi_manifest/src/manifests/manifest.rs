@@ -13,7 +13,7 @@ use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use toml_edit::{DocumentMut, Table};
+use toml_edit::{DocumentMut, Value};
 
 use crate::{
     consts,
@@ -549,17 +549,7 @@ impl Manifest {
         // clear and recreate from current list
         channels.clear();
         for channel in current_clone.iter() {
-            match channel.priority {
-                Some(priority) => {
-                    let mut table = Table::new().into_inline_table();
-                    table.insert("channel", channel.channel.to_string().into());
-                    table.insert("priority", i64::from(priority).into());
-                    channels.push(table);
-                }
-                None => {
-                    channels.push(channel.channel.to_string());
-                }
-            }
+            channels.push(Value::from(channel.clone()));
         }
 
         Ok(())
@@ -602,20 +592,9 @@ impl Manifest {
         // And from the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
         // clear and recreate from current list
-        // to preserve order and priority
         channels.clear();
         for channel in current_clone.iter() {
-            match channel.priority {
-                Some(priority) => {
-                    let mut table = Table::new().into_inline_table();
-                    table.insert("channel", channel.channel.to_string().into());
-                    table.insert("priority", i64::from(priority).into());
-                    channels.push(table);
-                }
-                None => {
-                    channels.push(channel.channel.to_string());
-                }
-            }
+            channels.push(Value::from(channel.clone()));
         }
 
         Ok(())
