@@ -63,9 +63,9 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.1-h4ab18f5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/lz4-c-1.9.4-hcb278e6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/lzo-2.10-hd590300_1001.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/mamba-1.5.9-py312h9460a1c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/markupsafe-2.1.5-py312h66e93f0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/menuinst-2.1.2-py312h7900ff3_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/micromamba-1.5.9-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-he02047a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.2-hb9d3cd8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-24.1-pyhd8ed1ab_0.conda
@@ -151,9 +151,9 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libzlib-1.3.1-h68df207_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/lz4-c-1.9.4-hd600fc2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/lzo-2.10-h31becfc_1001.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/mamba-1.5.9-py312hd80a4d2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/markupsafe-2.1.5-py312h52516f5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/menuinst-2.1.2-py312h996f985_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/micromamba-1.5.9-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/ncurses-6.5-hcccb83c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/openssl-3.3.2-h86ecc28_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-24.1-pyhd8ed1ab_0.conda
@@ -240,9 +240,9 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/libzlib-1.3.1-h1f2b957_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/lz4-c-1.9.4-h883269e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/lzo-2.10-ha17a0cc_1001.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/mamba-1.5.9-py312hff23a77_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/markupsafe-2.1.5-py312he7221a8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/menuinst-2.1.2-py312h7864ebf_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/micromamba-1.5.9-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/ncurses-6.5-hd444e8b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-ppc64le/openssl-3.3.2-h190368a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-24.1-pyhd8ed1ab_0.conda
@@ -334,9 +334,9 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gcc-libs-core-5.3.0-7.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gmp-6.1.0-2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-libwinpthread-git-5.0.0.4634.697f757-2.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/mamba-1.5.9-py312h5494d5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/markupsafe-2.1.5-py312h4389bb4_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/menuinst-2.1.2-py312h275cf98_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/micromamba-1.5.9-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/msys2-conda-epoch-20160418-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/nsis-3.10-h2be35fd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openjpeg-2.5.2-h3d672ee_0.conda
@@ -3798,6 +3798,80 @@ packages:
   license: MIT, BSD
   size: 31928
   timestamp: 1608166099896
+- kind: conda
+  name: mamba
+  version: 1.5.9
+  build: py312h5494d5c_0
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/mamba-1.5.9-py312h5494d5c_0.conda
+  sha256: 5510a307d1a21a692c990528b34107863e354b05661b9eb86cbf2b3214c1069f
+  md5: 1d335e6ccbb1cdf5d5418011f3435251
+  depends:
+  - conda >=24,<25
+  - libmambapy 1.5.9 py312h0723cf6_0
+  - openssl >=3.3.1,<4.0a0
+  - python >=3.12,<3.13.0a0
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 89353
+  timestamp: 1725068243349
+- kind: conda
+  name: mamba
+  version: 1.5.9
+  build: py312h9460a1c_0
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/mamba-1.5.9-py312h9460a1c_0.conda
+  sha256: a628b976e878a3502db8306d710937d577297ee6d31a62f0aa8d29fa00efe91b
+  md5: a8525c8a1647b4f5967fa6b552722851
+  depends:
+  - conda >=24,<25
+  - libmambapy 1.5.9 py312h7fb9e8e_0
+  - openssl >=3.3.1,<4.0a0
+  - python >=3.12,<3.13.0a0
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 64422
+  timestamp: 1725067034169
+- kind: conda
+  name: mamba
+  version: 1.5.9
+  build: py312hd80a4d2_0
+  subdir: linux-aarch64
+  url: https://conda.anaconda.org/conda-forge/linux-aarch64/mamba-1.5.9-py312hd80a4d2_0.conda
+  sha256: e75f93fea9a6bac34a5cbbff3e968248f4e69d71df915ffca395b01933266aba
+  md5: 6089cf39e91b88dcf703c637e18ab7bf
+  depends:
+  - conda >=24,<25
+  - libmambapy 1.5.9 py312hc6280c9_0
+  - openssl >=3.3.1,<4.0a0
+  - python >=3.12,<3.13.0a0
+  - python >=3.12,<3.13.0a0 *_cpython
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 65437
+  timestamp: 1725067583194
+- kind: conda
+  name: mamba
+  version: 1.5.9
+  build: py312hff23a77_0
+  subdir: linux-ppc64le
+  url: https://conda.anaconda.org/conda-forge/linux-ppc64le/mamba-1.5.9-py312hff23a77_0.conda
+  sha256: 2a15608d229ca46465f176a04f9f83cd4aa9cdb7616720c5653e999dc8f32059
+  md5: 7030ea48a56213e623a8973727813338
+  depends:
+  - conda >=24,<25
+  - libmambapy 1.5.9 py312haf8c6e0_0
+  - openssl >=3.3.1,<4.0a0
+  - python >=3.12,<3.13.0a0
+  - python >=3.12,<3.13.0a0 *_cpython
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 65147
+  timestamp: 1725067507255
 - kind: conda
   name: markupsafe
   version: 2.1.5

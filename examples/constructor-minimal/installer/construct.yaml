@@ -1,13 +1,15 @@
 # see https://github.com/conda/constructor/blob/main/CONSTRUCT.md
-name: {{ environ["PIXI_PROJECT_NAME"].title().replace(' ', '') }}
-version: {{ environ["PIXI_PROJECT_VERSION"] }}
+{% set spec = "./specs/installer_" ~ environ.CC_PLATFORM ~ "_conda_spec.txt" %}
+
+name: MySimpleInstaller
+version: 0.1.0
 company: My Company
 license_file: ../LICENSE
 
 channels:
   - conda-forge
 
-environment_file: "./specs/installer_{{ os.environ.CC_PLATFORM }}_conda_spec.txt"
+environment_file: "{{ spec }}"
 
 write_condarc: True
 initialize_conda: True
