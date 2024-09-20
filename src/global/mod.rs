@@ -3,9 +3,7 @@ mod install;
 mod project;
 
 use crate::prefix::Prefix;
-pub(crate) use common::{
-    BinDir, EnvDir, EnvRoot,
-};
+pub(crate) use common::{BinDir, EnvDir, EnvRoot};
 pub(crate) use install::sync;
 pub(crate) use project::{EnvironmentName, ExposedKey, Project};
 use rattler_conda_types::PrefixRecord;
