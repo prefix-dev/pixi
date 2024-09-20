@@ -27,11 +27,8 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 
 [feature.pytest.dependencies]
-mypy = ">=1.11,<1.12"
-# For detecting cpu cores with pytest-xdist
-psutil = ">=6.0.0,<7"
-# For running tests in parallel, use this instead of regular pytest
 filelock = ">=3.16.0,<4"
+mypy = ">=1.11,<1.12"
 pytest = "*"
 pytest-rerunfailures = ">=14.0,<15"
 pytest-xdist = ">=3.6.1,<4"

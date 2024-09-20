@@ -11,6 +11,9 @@ use super::{EnvironmentName, ExposedKey, MANIFEST_DEFAULT_NAME};
 
 use pixi_manifest::TomlManifest;
 
+// TODO: remove
+#[allow(unused)]
+
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format

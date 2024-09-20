@@ -81,6 +81,7 @@ tar = "0.4.40"
 tempfile = "3.10.1"
 thiserror = "1.0.58"
 tokio = "1.37.0"
+tokio-stream = "0.1.16"
 tokio-util = "0.7.10"
 toml_edit = "0.22.11"
 tracing = "0.1.40"
@@ -265,6 +266,7 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-stream = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
