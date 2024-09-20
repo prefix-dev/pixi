@@ -223,14 +223,14 @@ pub(super) async fn create_executable_scripts(
         global_binary_path: executable_script_path,
     } in mapped_executables
     {
-        let mut script = if cfg!(unix) {
-            "#!/bin/sh\n".to_string()
+        let mut script = if no_activation {
+            if cfg!(unix) {
+                "#!/bin/sh\n".to_string()
+            } else {
+                String::new()
+            }
         } else {
-            String::new()
-        };
-
-        if !no_activation {
-            script.push_str(&activation_script);
+            activation_script.clone()
         }
 
         shell
