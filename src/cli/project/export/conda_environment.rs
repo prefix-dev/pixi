@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -9,9 +7,10 @@ use pixi_manifest::{
     FeaturesExt, HasFeaturesIter, PyPiRequirement,
 };
 use rattler_conda_types::{
-    EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, ParseStrictness, Platform,
+    EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl, ParseStrictness, Platform,
 };
 use rattler_lock::FindLinksUrlOrPath;
+use std::path::PathBuf;
 
 use crate::project::Environment;
 use crate::Project;
@@ -129,9 +128,11 @@ fn build_env_yaml(
     platform: &Platform,
     environment: &Environment,
 ) -> miette::Result<EnvironmentYaml> {
+    let channels =
+        channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
     let mut env_yaml = rattler_conda_types::EnvironmentYaml {
         name: Some(environment.name().as_str().to_string()),
-        channels: environment.channels().into_iter().cloned().collect_vec(),
+        channels,
         ..Default::default()
     };
 
@@ -205,6 +206,18 @@ fn build_env_yaml(
     }
 
     Ok(env_yaml)
+}
+
+/// Add `nodefaults` channel if the environment doesn't have `main`, `r`, or `msys2`
+fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
+    let mut channels = channels;
+    if !channels.iter().any(|channel| {
+        let channel = channel.as_str().to_lowercase();
+        channel == "main" || channel == "r" || channel == "msys2"
+    }) {
+        channels.push(NamedChannelOrUrl::Name("nodefaults".to_string()));
+    }
+    channels
 }
 
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
@@ -357,6 +370,52 @@ mod tests {
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_pyproject_panic",
             env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_defaults() {
+        let toml = r#"
+            [project]
+            name = "test"
+            channels = ["main"]
+            platforms = ["osx-64"]
+
+            [dependencies]
+            python = "3.9"
+           "#;
+        let project = Project::from_str(Path::new("pixi.toml"), toml).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Platform::Osx64),
+            environment: None,
+        };
+        let environment = project
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+
+        let env_yaml = build_env_yaml(&platform, &environment);
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_defaults",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_channels_with_nodefaults() {
+        let channels = vec![NamedChannelOrUrl::Name("main".to_string())];
+        let channels = channels_with_nodefaults(channels);
+        assert_eq!(channels, vec![NamedChannelOrUrl::Name("main".to_string())]);
+
+        let channels = vec![NamedChannelOrUrl::Name("conda-forge".to_string())];
+        let channels = channels_with_nodefaults(channels);
+        assert_eq!(
+            channels,
+            vec![
+                NamedChannelOrUrl::Name("conda-forge".to_string()),
+                NamedChannelOrUrl::Name("nodefaults".to_string())
+            ]
         );
     }
 }
