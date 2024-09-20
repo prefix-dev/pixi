@@ -40,5 +40,8 @@ pub struct CondaOutputIdentifier {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CondaBuildResult {
     // TODO: Should this be a UTF8 encoded type
-    pub path: PathBuf,
+    pub output_file: PathBuf,
+    /// The globs that were used as input to the build.
+    /// use these for re-verifying the build.
+    pub input_globs: Vec<String>,
 }

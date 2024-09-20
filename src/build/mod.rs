@@ -130,18 +130,18 @@ impl BuildContext {
         // Construct a repodata record that represents the package
         Ok(RepoDataRecord {
             package_record: source_spec.package_record.clone(),
-            url: Url::from_file_path(&build_result.path).map_err(|_| {
+            url: Url::from_file_path(&build_result.output_file).map_err(|_| {
                 BuildError::FrontendError(
                     miette::miette!(
                         "failed to convert returned path to URL: {}",
-                        build_result.path.display()
+                        build_result.output_file.display()
                     )
                     .into(),
                 )
             })?,
             channel: String::new(),
             file_name: build_result
-                .path
+                .output_file
                 .file_name()
                 .and_then(OsStr::to_str)
                 .map(ToString::to_string)
