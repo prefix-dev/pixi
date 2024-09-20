@@ -4,11 +4,6 @@ expression: env_yaml.unwrap().to_yaml_string()
 ---
 name: default
 channels:
-- conda-forge
-- nodefaults
+- main
 dependencies:
-- python >=3.12.5,<4
-- pyyaml >=6.0.2,<7
-- pip
-- pip:
-  - rich>=13.8.0, <14
+- python ==3.9
