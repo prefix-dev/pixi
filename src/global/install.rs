@@ -618,123 +618,124 @@ fn local_environment_matches_spec(
 #[cfg(test)]
 mod tests {
     use indexmap::IndexMap;
+    use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
     use rattler_lock::LockFile;
+    use rstest::{fixture, rstest};
 
     use super::*;
 
-    #[test]
-    fn test_local_environment_matches_spec() {
-        let specs = IndexMap::from([(
+    #[fixture]
+    fn ripgrep_specs() -> IndexMap<PackageName, MatchSpec> {
+        IndexMap::from([(
             PackageName::from_str("ripgrep").unwrap(),
             MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        let lock_file =
-            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
-        let environment = lock_file.default_environment().unwrap();
-        let records = environment
-            .conda_repodata_records_for_platform(Platform::Linux64)
-            .unwrap()
-            .unwrap();
-
-        assert!(local_environment_matches_spec(records, &specs, None));
+        )])
     }
 
-    #[test]
-    fn test_local_environment_misses_entries_for_specs() {
-        let specs = IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        let lock_file =
-            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
-        let environment = lock_file.default_environment().unwrap();
-        let mut records = environment
+    #[fixture]
+    fn ripgrep_records() -> Vec<RepoDataRecord> {
+        LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock"))
+            .unwrap()
+            .default_environment()
+            .unwrap()
             .conda_repodata_records_for_platform(Platform::Linux64)
             .unwrap()
-            .unwrap();
-
-        // Remove last repdata record
-        records.pop();
-
-        assert!(!local_environment_matches_spec(records, &specs, None));
+            .unwrap()
     }
 
-    #[test]
-    fn test_local_environment_has_too_many_entries_to_match_spec() {
-        let specs_ripgrep = IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        let lock_file =
-            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep_and_bat.lock")).unwrap();
-        let environment = lock_file.default_environment().unwrap();
-        let records = environment
-            .conda_repodata_records_for_platform(Platform::Linux64)
-            .unwrap()
-            .unwrap();
-
-        assert!(!local_environment_matches_spec(
-            records.clone(),
-            &specs_ripgrep,
-            None
-        ));
-
-        let specs_ripgrep_and_bat = IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        assert!(!local_environment_matches_spec(
-            records,
-            &specs_ripgrep_and_bat,
-            None
-        ));
+    #[fixture]
+    fn ripgrep_bat_specs() -> IndexMap<PackageName, MatchSpec> {
+        IndexMap::from([
+            (
+                PackageName::from_str("ripgrep").unwrap(),
+                MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+            ),
+            (
+                PackageName::from_str("bat").unwrap(),
+                MatchSpec::from_str("bat=0.24.0", ParseStrictness::Strict).unwrap(),
+            ),
+        ])
     }
 
-    #[test]
-    fn test_local_environment_matches_given_platform() {
-        let specs = IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        let lock_file =
-            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
-        let environment = lock_file.default_environment().unwrap();
-        let records = environment
+    #[fixture]
+    fn ripgrep_bat_records() -> Vec<RepoDataRecord> {
+        LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep_bat.lock"))
+            .unwrap()
+            .default_environment()
+            .unwrap()
             .conda_repodata_records_for_platform(Platform::Linux64)
             .unwrap()
-            .unwrap();
+            .unwrap()
+    }
 
+    #[rstest]
+    fn test_local_environment_matches_spec(
+        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+    ) {
         assert!(local_environment_matches_spec(
-            records,
-            &specs,
-            Some(Platform::Linux64)
+            ripgrep_records,
+            &ripgrep_specs,
+            None
         ));
     }
 
-    #[test]
-    fn test_local_environment_doesnt_match_given_platform() {
-        let specs = IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )]);
-
-        let lock_file =
-            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
-        let environment = lock_file.default_environment().unwrap();
-        let records = environment
-            .conda_repodata_records_for_platform(Platform::Linux64)
-            .unwrap()
-            .unwrap();
+    #[rstest]
+    fn test_local_environment_misses_entries_for_specs(
+        mut ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+    ) {
+        // Remove last repodata record
+        ripgrep_records.pop();
 
         assert!(!local_environment_matches_spec(
-            records,
-            &specs,
-            Some(Platform::Win64)
+            ripgrep_records,
+            &ripgrep_specs,
+            None
         ));
+    }
+
+    #[rstest]
+    fn test_local_environment_has_too_many_entries_to_match_spec(
+        ripgrep_bat_records: Vec<RepoDataRecord>,
+        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_bat_specs: IndexMap<PackageName, MatchSpec>,
+    ) {
+        assert!(!local_environment_matches_spec(
+            ripgrep_bat_records.clone(),
+            &ripgrep_specs,
+            None
+        ), "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone.");
+
+        assert!(
+            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),
+            "The records and specs match and the function should return `true`."
+        );
+    }
+
+    #[rstest]
+    fn test_local_environment_matches_given_platform(
+        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+    ) {
+        assert!(
+            local_environment_matches_spec(
+                ripgrep_records,
+                &ripgrep_specs,
+                Some(Platform::Linux64)
+            ),
+            "The records contains only linux-64 entries"
+        );
+    }
+
+    #[rstest]
+    fn test_local_environment_doesnt_match_given_platform(
+        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+    ) {
+        assert!(
+            !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),
+            "The record contains linux-64 entries, so the function should always return `false`"
+        );
     }
 }
