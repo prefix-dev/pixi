@@ -1,19 +1,14 @@
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     ffi::OsStr,
-    iter,
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
-    time,
 };
 
-use clap::Parser;
-use distribution_types::Diagnostic;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{bail, Context, IntoDiagnostic};
-use pixi_config::{self, default_channel_config, Config, ConfigCli};
+use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, default_channel_config, Config};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
@@ -21,8 +16,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform,
-    PrefixRecord, RepoDataRecord,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
@@ -35,11 +29,9 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
 use crate::{
-    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs, project::platform},
-    global::{self, channel_name_from_prefix, find_designated_package, BinDir, EnvDir},
+    global::{self, BinDir, EnvDir},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
-    task::ExecutableTask,
 };
 
 /// Installs global environment records

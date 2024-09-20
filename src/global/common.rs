@@ -5,23 +5,13 @@ use std::{
 
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_progress::{await_in_progress, global_multi_progress};
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
 use rattler_conda_types::{
-    Channel, ChannelConfig, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    Channel, ChannelConfig, PackageName, PrefixRecord,
 };
-use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
-    shell::ShellEnum,
-};
-use reqwest_middleware::ClientWithMiddleware;
 use tokio::io::AsyncReadExt;
 
 use crate::{
-    cli::project::environment, prefix::Prefix, repodata, rlimit::try_increase_rlimit_to_sensible,
+    prefix::Prefix, repodata,
 };
 use pixi_config::home_path;
 
@@ -298,7 +288,7 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+
     use tempfile::tempdir;
 
     #[tokio::test]

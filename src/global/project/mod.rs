@@ -1,5 +1,4 @@
 use std::{
-    env,
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
@@ -11,19 +10,17 @@ pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use manifest::Manifest;
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{default_channel_config, home_path, Config};
 use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
-use rattler_digest::digest::typenum::Exp;
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use rattler_repodata_gateway::Gateway;
 use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio_stream::{wrappers::ReadDirStream, StreamExt};
-use url::Url;
 
 use super::{find_executables, BinDir, EnvRoot};
 use crate::{

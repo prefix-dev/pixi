@@ -4,10 +4,10 @@ mod project;
 
 use crate::prefix::Prefix;
 pub(crate) use common::{
-    channel_name_from_prefix, find_designated_package, BinDir, EnvDir, EnvRoot,
+    BinDir, EnvDir, EnvRoot,
 };
 pub(crate) use install::sync;
-pub(crate) use project::{EnvironmentName, ExposedKey, Project, MANIFEST_DEFAULT_NAME};
+pub(crate) use project::{EnvironmentName, ExposedKey, Project};
 use rattler_conda_types::PrefixRecord;
 use std::path::{Path, PathBuf};
 

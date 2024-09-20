@@ -1,13 +1,11 @@
 use std::fmt;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, Visitor};
 use serde::Serialize;
 use serde_with::{serde_as, serde_derive::Deserialize};
 
@@ -39,7 +37,7 @@ where
                 executable_name,
                 exposed,
             } = data;
-            let mut parsed_environment = envs.entry(env_name).or_default();
+            let parsed_environment = envs.entry(env_name).or_default();
             parsed_environment.channels.insert(channel);
             parsed_environment.platform = platform;
             parsed_environment
@@ -77,7 +75,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
             envs: IndexMap<EnvironmentName, ParsedEnvironment>,
         }
 
-        let mut manifest = TomlManifest::deserialize(deserializer)?;
+        let manifest = TomlManifest::deserialize(deserializer)?;
 
         // Check for duplicate keys in the exposed fields
         let mut exposed_keys = IndexSet::new();
