@@ -21,6 +21,7 @@ impl From<SourceRecord> for CondaPackageData {
             location: value.source.into(),
             file_name: None,
             channel: None,
+            input: None,
         }
     }
 }
