@@ -498,9 +498,15 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         let env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(env_dir.path());
 
-        let prefix_records = prefix.find_installed_packages(Some(50)).await?;
+        let repodata_records = prefix
+            .find_installed_packages(Some(50))
+            .await?
+            .into_iter()
+            .map(|r| r.repodata_record)
+            .collect_vec();
 
-        if !specs_match_local_environment(&specs, prefix_records, parsed_environment.platform()) {
+        if !local_environment_matches_spec(repodata_records, &specs, parsed_environment.platform())
+        {
             install_environment(
                 &specs,
                 &parsed_environment,
@@ -530,18 +536,16 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
 /// This function verifies that all the given specifications are present in the
 /// local environment's prefix records and that there are no extra entries in
 /// the prefix records that do not match any of the specifications.
-fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
+fn local_environment_matches_spec(
+    prefix_records: Vec<RepoDataRecord>,
     specs: &IndexMap<PackageName, MatchSpec>,
-    prefix_records: Vec<T>,
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
-    let specs_in_manifest_are_present = specs.values().all(|spec| {
-        prefix_records
-            .iter()
-            .any(|record| spec.matches(record.as_ref()))
-    });
+    let specs_in_manifest_are_present = specs
+        .values()
+        .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
     if !specs_in_manifest_are_present {
         return false;
@@ -549,31 +553,32 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
 
     // Check whether all packages in the installed environment have the correct
     // platform
-    let platform_specs_match_env = prefix_records.iter().all(|record| {
-        let Ok(package_platform) = Platform::from_str(&record.as_ref().package_record.subdir)
-        else {
-            return true;
-        };
+    if let Some(platform) = platform {
+        let platform_specs_match_env = prefix_records.iter().all(|record| {
+            let Ok(package_platform) = Platform::from_str(&record.package_record.subdir) else {
+                return true;
+            };
 
-        match package_platform {
-            Platform::NoArch => true,
-            p if Some(p) == platform => true,
-            _ => false,
+            match package_platform {
+                Platform::NoArch => true,
+                p if p == platform => true,
+                _ => false,
+            }
+        });
+
+        if !platform_specs_match_env {
+            return false;
         }
-    });
-
-    if !platform_specs_match_env {
-        return false;
     }
 
-    fn prune_dependencies<T: AsRef<RepoDataRecord>>(
-        mut remaining_prefix_records: Vec<T>,
-        matched_record: &T,
-    ) -> Vec<T> {
+    fn prune_dependencies(
+        mut remaining_prefix_records: Vec<RepoDataRecord>,
+        matched_record: &RepoDataRecord,
+    ) -> Vec<RepoDataRecord> {
         let mut work_queue = Vec::from([matched_record.as_ref().clone()]);
 
         while let Some(current_record) = work_queue.pop() {
-            let dependencies = &current_record.as_ref().depends;
+            let dependencies = &current_record.depends;
             for dependency in dependencies {
                 let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
                 else {
@@ -581,7 +586,7 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
                 };
                 let Some(index) = remaining_prefix_records
                     .iter()
-                    .position(|record| match_spec.matches(&record.as_ref().package_record))
+                    .position(|record| match_spec.matches(&record.package_record))
                 else {
                     continue;
                 };
@@ -597,7 +602,7 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
     // Process each spec and remove matched entries and their dependencies
     let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, (name, spec)| {
         let Some(index) = acc.iter().position(|record| {
-            record.as_ref().package_record.name == *name && spec.matches(record.as_ref())
+            record.package_record.name == *name && spec.matches(record.as_ref())
         }) else {
             return acc;
         };
@@ -608,4 +613,128 @@ fn specs_match_local_environment<T: AsRef<RepoDataRecord>>(
     // If there are no remaining prefix records, then this means that
     // the environment doesn't contain records that don't match the manifest
     remaining_prefix_records.is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use indexmap::IndexMap;
+    use rattler_lock::LockFile;
+
+    use super::*;
+
+    #[test]
+    fn test_local_environment_matches_spec() {
+        let specs = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        let lock_file =
+            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
+        let environment = lock_file.default_environment().unwrap();
+        let records = environment
+            .conda_repodata_records_for_platform(Platform::Linux64)
+            .unwrap()
+            .unwrap();
+
+        assert!(local_environment_matches_spec(records, &specs, None));
+    }
+
+    #[test]
+    fn test_local_environment_misses_entries_for_specs() {
+        let specs = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        let lock_file =
+            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
+        let environment = lock_file.default_environment().unwrap();
+        let mut records = environment
+            .conda_repodata_records_for_platform(Platform::Linux64)
+            .unwrap()
+            .unwrap();
+
+        // Remove last repdata record
+        records.pop();
+
+        assert!(!local_environment_matches_spec(records, &specs, None));
+    }
+
+    #[test]
+    fn test_local_environment_has_too_many_entries_to_match_spec() {
+        let specs_ripgrep = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        let lock_file =
+            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep_and_bat.lock")).unwrap();
+        let environment = lock_file.default_environment().unwrap();
+        let records = environment
+            .conda_repodata_records_for_platform(Platform::Linux64)
+            .unwrap()
+            .unwrap();
+
+        assert!(!local_environment_matches_spec(
+            records.clone(),
+            &specs_ripgrep,
+            None
+        ));
+
+        let specs_ripgrep_and_bat = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        assert!(!local_environment_matches_spec(
+            records,
+            &specs_ripgrep_and_bat,
+            None
+        ));
+    }
+
+    #[test]
+    fn test_local_environment_matches_given_platform() {
+        let specs = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        let lock_file =
+            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
+        let environment = lock_file.default_environment().unwrap();
+        let records = environment
+            .conda_repodata_records_for_platform(Platform::Linux64)
+            .unwrap()
+            .unwrap();
+
+        assert!(local_environment_matches_spec(
+            records,
+            &specs,
+            Some(Platform::Linux64)
+        ));
+    }
+
+    #[test]
+    fn test_local_environment_doesnt_match_given_platform() {
+        let specs = IndexMap::from([(
+            PackageName::from_str("ripgrep").unwrap(),
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+        )]);
+
+        let lock_file =
+            LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock")).unwrap();
+        let environment = lock_file.default_environment().unwrap();
+        let records = environment
+            .conda_repodata_records_for_platform(Platform::Linux64)
+            .unwrap()
+            .unwrap();
+
+        assert!(!local_environment_matches_spec(
+            records,
+            &specs,
+            Some(Platform::Win64)
+        ));
+    }
 }
