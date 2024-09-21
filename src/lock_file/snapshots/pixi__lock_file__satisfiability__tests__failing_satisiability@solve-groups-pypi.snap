@@ -1,7 +1,6 @@
 ---
 source: src/lock_file/satisfiability.rs
 expression: s
-input_file: tests/non-satisfiability/solve-groups-pypi/pixi.toml
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64
     Diagnostic severity: error

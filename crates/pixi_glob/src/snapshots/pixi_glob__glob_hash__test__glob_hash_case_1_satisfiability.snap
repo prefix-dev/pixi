@@ -1,0 +1,11 @@
+---
+source: crates/pixi_glob/src/glob_hash.rs
+expression: snapshot
+---
+Globs:
+- tests/satisfiability/source-dependency/**/*
+Hash: 2d21099bca464eb17613b06c6a756208c45ca3dc01317f632f840a2d53ba480a
+Matched files:
+- tests/satisfiability/source-dependency/child-package/pixi.toml
+- tests/satisfiability/source-dependency/pixi.lock
+- tests/satisfiability/source-dependency/pixi.toml

@@ -12,7 +12,8 @@ use pixi_build_types::{
     },
     ChannelConfiguration,
 };
-use pixi_record::{PinnedPathSpec, PinnedSourceSpec, SourceRecord};
+pub use pixi_glob::{GlobHash, GlobHashCache, GlobHashError};
+use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use rattler_digest::Sha256;
@@ -24,6 +25,7 @@ use url::Url;
 #[derive(Debug, Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
+    _glob_hash_cache: GlobHashCache,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -42,6 +44,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     FrontendError(Box<dyn Diagnostic + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    InputHash(#[from] GlobHashError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -77,7 +82,18 @@ pub struct CondaBuildOutput {
 
 impl BuildContext {
     pub fn new(channel_config: ChannelConfig) -> Self {
-        Self { channel_config }
+        Self {
+            channel_config,
+            _glob_hash_cache: GlobHashCache::default(),
+        }
+    }
+
+    /// Sets the input hash cache to use for caching input hashes.
+    pub fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
+        Self {
+            _glob_hash_cache: glob_hash_cache,
+            ..self
+        }
     }
 
     /// Extracts the metadata for a package from the given source specification.
@@ -281,12 +297,26 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
+        // Compute the input globs for the mutable source checkouts.
+        let input_hash = if source.pinned.is_immutable() {
+            None
+        } else {
+            let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
+            let input_hash =
+                GlobHash::from_patterns(&source.path, input_globs.iter().map(String::as_str))?;
+            Some(InputHash {
+                hash: input_hash.hash,
+                globs: input_globs,
+            })
+        };
+
         // Convert the metadata to repodata
-        Ok(metadata
+        let packages = metadata
             .packages
             .into_iter()
             .map(|p| {
                 SourceRecord {
+                    input_hash: input_hash.clone(),
                     source: source.pinned.clone(),
                     package_record: PackageRecord {
                         // We cannot now these values from the metadata because no actual package
@@ -329,7 +359,9 @@ impl BuildContext {
                     },
                 }
             })
-            .collect())
+            .collect();
+
+        Ok(packages)
     }
 }
 

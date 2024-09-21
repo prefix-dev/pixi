@@ -1,8 +1,6 @@
 ---
 source: src/lock_file/satisfiability.rs
-assertion_line: 532
-expression: "format!(\"{err:?}\")"
-input_file: tests/non-satisfiability/mismatched-spec/pixi.toml
+expression: s
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64
     Diagnostic severity: error

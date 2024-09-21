@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
@@ -77,6 +78,23 @@ impl PathSpec {
             .file_name()
             .and_then(ArchiveIdentifier::try_from_path)
             .is_some()
+    }
+
+    /// Converts this instance into a [`PathSourceSpec`] if the path points to a
+    /// source package. Or to a [`NamelessMatchSpec`] otherwise.
+    pub fn into_source_or_binary(
+        self,
+        root_dir: &Path,
+    ) -> Result<Either<PathSourceSpec, NamelessMatchSpec>, SpecConversionError> {
+        match self.try_into_source_path() {
+            Ok(spec) => Ok(Either::Left(spec)),
+            Err(spec) => {
+                let nameless_match_spec = spec
+                    .try_into_nameless_match_spec(root_dir)?
+                    .expect("if the path is not a source package, it should be a binary package");
+                Ok(Either::Right(nameless_match_spec))
+            }
+        }
     }
 }
 

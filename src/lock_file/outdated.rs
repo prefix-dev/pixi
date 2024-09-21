@@ -1,28 +1,38 @@
-use super::{verify_environment_satisfiability, verify_platform_satisfiability};
-use crate::lock_file::satisfiability::EnvironmentUnsat;
-use crate::{project::Environment, project::SolveGroup, Project};
+use std::collections::{HashMap, HashSet};
+
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
-use std::collections::{HashMap, HashSet};
+
+use super::{verify_environment_satisfiability, verify_platform_satisfiability};
+use crate::{
+    build::GlobHashCache,
+    lock_file::satisfiability::EnvironmentUnsat,
+    project::{Environment, SolveGroup},
+    Project,
+};
 
 /// A struct that contains information about specific outdated environments.
 ///
-/// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an instance of this
-/// struct by examining the project and lock-file and finding any mismatches.
+/// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
+/// instance of this struct by examining the project and lock-file and finding
+/// any mismatches.
 #[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
-    /// The conda environments that are considered out of date with the lock-file.
+    /// The conda environments that are considered out of date with the
+    /// lock-file.
     pub conda: HashMap<Environment<'p>, HashSet<Platform>>,
 
-    /// The pypi environments that are considered out of date with the lock-file.
+    /// The pypi environments that are considered out of date with the
+    /// lock-file.
     pub pypi: HashMap<Environment<'p>, HashSet<Platform>>,
 
-    /// Records the environments for which the lock-file content should also be discarded. This is
-    /// the case for instance when the order of the channels changed.
+    /// Records the environments for which the lock-file content should also be
+    /// discarded. This is the case for instance when the order of the
+    /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
 }
 
@@ -49,9 +59,13 @@ impl<'p> DisregardLockedContent<'p> {
 }
 
 impl<'p> OutdatedEnvironments<'p> {
-    /// Constructs a new instance of this struct by examining the project and lock-file and finding
-    /// any mismatches.
-    pub(crate) fn from_project_and_lock_file(project: &'p Project, lock_file: &LockFile) -> Self {
+    /// Constructs a new instance of this struct by examining the project and
+    /// lock-file and finding any mismatches.
+    pub(crate) async fn from_project_and_lock_file(
+        project: &'p Project,
+        lock_file: &LockFile,
+        glob_hash_cache: GlobHashCache,
+    ) -> Self {
         let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
         let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
         let mut disregard_locked_content = DisregardLockedContent::default();
@@ -63,13 +77,16 @@ impl<'p> OutdatedEnvironments<'p> {
             &mut outdated_conda,
             &mut outdated_pypi,
             &mut disregard_locked_content,
-        );
+            glob_hash_cache,
+        )
+        .await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
             map_outdated_targets_to_solve_groups(&outdated_conda, &outdated_pypi);
 
-        // Find all the solve groups that have inconsistent dependencies between environments.
+        // Find all the solve groups that have inconsistent dependencies between
+        // environments.
         find_inconsistent_solve_groups(
             project,
             lock_file,
@@ -97,7 +114,8 @@ impl<'p> OutdatedEnvironments<'p> {
             }
         }
 
-        // For all targets where conda is out of date, the pypi packages are also out of date.
+        // For all targets where conda is out of date, the pypi packages are also out of
+        // date.
         for (environment, platforms) in outdated_conda.iter() {
             outdated_pypi
                 .entry(environment.clone())
@@ -112,21 +130,22 @@ impl<'p> OutdatedEnvironments<'p> {
         }
     }
 
-    /// Returns true if the lock-file is up-to-date with the project (e.g. there are no
-    /// outdated targets).
+    /// Returns true if the lock-file is up-to-date with the project (e.g. there
+    /// are no outdated targets).
     pub(crate) fn is_empty(&self) -> bool {
         self.conda.is_empty() && self.pypi.is_empty()
     }
 }
 
-/// Find all targets (combination of environment and platform) who's requirements in the `project`
-/// are not satisfied by the `lock_file`.
-fn find_unsatisfiable_targets<'p>(
+/// Find all targets (combination of environment and platform) who's
+/// requirements in the `project` are not satisfied by the `lock_file`.
+async fn find_unsatisfiable_targets<'p>(
     project: &'p Project,
     lock_file: &LockFile,
     outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     disregard_locked_content: &mut DisregardLockedContent<'p>,
+    glob_hash_cache: GlobHashCache,
 ) {
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -180,7 +199,10 @@ fn find_unsatisfiable_targets<'p>(
                 &locked_environment,
                 platform,
                 project.root(),
-            ) {
+                glob_hash_cache.clone(),
+            )
+            .await
+            {
                 Ok(_) => {}
                 Err(unsat) if unsat.is_pypi_only() => {
                     tracing::info!(
@@ -209,11 +231,12 @@ fn find_unsatisfiable_targets<'p>(
     }
 }
 
-/// Given a mapping of outdated targets, construct a new mapping of all the groups that are out of
-/// date.
+/// Given a mapping of outdated targets, construct a new mapping of all the
+/// groups that are out of date.
 ///
-/// If one of the environments in a solve-group is no longer satisfied by the lock-file all the
-/// environments in the same solve-group have to be recomputed.
+/// If one of the environments in a solve-group is no longer satisfied by the
+/// lock-file all the environments in the same solve-group have to be
+/// recomputed.
 fn map_outdated_targets_to_solve_groups<'p>(
     outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &HashMap<Environment<'p>, HashSet<Platform>>,
@@ -252,12 +275,13 @@ fn map_outdated_targets_to_solve_groups<'p>(
     )
 }
 
-/// Given a `project` and `lock_file`, finds all the solve-groups that have inconsistent
-/// dependencies between environments.
+/// Given a `project` and `lock_file`, finds all the solve-groups that have
+/// inconsistent dependencies between environments.
 ///
-/// All environments in a solve-group must share the same dependencies. This function iterates over
-/// solve-groups and checks if the dependencies of all its environments are the same. For each
-/// package name, only one candidate is allowed.
+/// All environments in a solve-group must share the same dependencies. This
+/// function iterates over solve-groups and checks if the dependencies of all
+/// its environments are the same. For each package name, only one candidate is
+/// allowed.
 fn find_inconsistent_solve_groups<'p>(
     project: &'p Project,
     lock_file: &LockFile,
@@ -279,7 +303,8 @@ fn find_inconsistent_solve_groups<'p>(
         let mut conda_package_mismatch = false;
         let mut pypi_package_mismatch = false;
 
-        // Keep track of the packages by name to check for mismatches between environments.
+        // Keep track of the packages by name to check for mismatches between
+        // environments.
         let mut conda_packages_by_name = HashMap::new();
         let mut pypi_packages_by_name = HashMap::new();
 

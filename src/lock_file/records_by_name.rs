@@ -9,7 +9,6 @@ use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pixi_record::PixiRecord;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 
@@ -172,38 +171,6 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
         }
 
         Self { records, by_name }
-    }
-}
-
-impl RepoDataRecordsByName {
-    /// Returns the record that represents the python interpreter or `None` if
-    /// no such record exists.
-    pub(crate) fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
-        self.records.iter().find(|record| is_python_record(*record))
-    }
-
-    /// Convert the records into a map of pypi package identifiers mapped to the
-    /// records they were extracted from.
-    pub(crate) fn by_pypi_name(
-        &self,
-    ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
-        self.records
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, record)| {
-                PypiPackageIdentifier::from_repodata_record(record)
-                    .ok()
-                    .map(move |identifiers| (idx, record, identifiers))
-            })
-            .flat_map(|(idx, record, identifiers)| {
-                identifiers.into_iter().map(move |identifier| {
-                    (
-                        identifier.name.as_normalized().clone(),
-                        (identifier, idx, record),
-                    )
-                })
-            })
-            .collect()
     }
 }
 

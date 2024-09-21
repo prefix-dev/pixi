@@ -19,11 +19,23 @@ use crate::tool::Tool;
 pub struct Protocol {
     pub(super) channel_config: ChannelConfig,
     pub(super) tool: Tool,
-    pub(super) _source_dir: PathBuf,
+    pub(super) source_dir: PathBuf,
     pub(super) recipe_dir: PathBuf,
 }
 
 impl Protocol {
+    /// Returns the relative path from the source directory to the recipe.
+    pub fn manifests(&self) -> Vec<String> {
+        self.recipe_dir
+            .strip_prefix(&self.source_dir)
+            .unwrap_or(&self.recipe_dir)
+            .join("meta.yaml")
+            .to_str()
+            .map(|s| s.to_string())
+            .into_iter()
+            .collect()
+    }
+
     // Extract metadata from the recipe.
     pub fn get_conda_metadata(
         &self,
@@ -90,6 +102,7 @@ impl Protocol {
                     })
                 })
                 .collect::<miette::Result<_>>()?,
+            input_globs: None,
         };
 
         Ok(metadata)

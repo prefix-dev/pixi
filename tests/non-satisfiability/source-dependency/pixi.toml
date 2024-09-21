@@ -1,0 +1,8 @@
+[project]
+channels = ["conda-forge"]
+name = "source-dependency"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[dependencies]
+child-package = { path = "child-package" }

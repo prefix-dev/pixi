@@ -38,7 +38,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::BuildContext,
+    build::{BuildContext, GlobHashCache},
     environment::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
@@ -107,6 +107,9 @@ pub struct LockFileDerivedData<'p> {
 
     /// The build context that was used to create the lock-file
     pub build_context: BuildContext,
+
+    /// An object that caches input hashes
+    pub glob_hash_cache: GlobHashCache,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -366,6 +369,9 @@ pub struct UpdateContext<'p> {
     /// The build context to use for building source packages
     build_context: BuildContext,
 
+    /// The input hash cache
+    glob_hash_cache: GlobHashCache,
+
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
 }
@@ -547,6 +553,7 @@ pub async fn update_lock_file(
     let lock_file = load_lock_file(project).await?;
     let package_cache =
         PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
+    let glob_hash_cache = GlobHashCache::default();
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -561,11 +568,17 @@ pub async fn update_lock_file(
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
             build_context: BuildContext::new(project.channel_config()),
+            glob_hash_cache,
         });
     }
 
     // Check which environments are out of date.
-    let outdated = OutdatedEnvironments::from_project_and_lock_file(project, &lock_file);
+    let outdated = OutdatedEnvironments::from_project_and_lock_file(
+        project,
+        &lock_file,
+        glob_hash_cache.clone(),
+    )
+    .await;
     if outdated.is_empty() {
         tracing::info!("the lock-file is up-to-date");
 
@@ -579,6 +592,7 @@ pub async fn update_lock_file(
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
             build_context: BuildContext::new(project.channel_config()),
+            glob_hash_cache,
         });
     }
 
@@ -599,7 +613,9 @@ pub async fn update_lock_file(
         .with_no_install(options.no_install)
         .with_outdated_environments(outdated)
         .with_lock_file(lock_file)
-        .finish()?
+        .with_glob_hash_cache(glob_hash_cache)
+        .finish()
+        .await?
         .update()
         .await?;
 
@@ -636,9 +652,19 @@ pub struct UpdateContextBuilder<'p> {
 
     /// The io concurrency semaphore to use when updating environments
     io_concurrency_limit: Option<IoConcurrencyLimit>,
+
+    /// A cache for computing input hashes
+    glob_hash_cache: Option<GlobHashCache>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
+    pub(crate) fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
+        Self {
+            glob_hash_cache: Some(glob_hash_cache),
+            ..self
+        }
+    }
+
     /// The package cache to use during the update process. Prefixes might need
     /// to be instantiated to be able to solve pypi dependencies.
     pub(crate) fn with_package_cache(self, package_cache: PackageCache) -> Self {
@@ -691,7 +717,7 @@ impl<'p> UpdateContextBuilder<'p> {
     }
 
     /// Construct the context.
-    pub(crate) fn finish(self) -> miette::Result<UpdateContext<'p>> {
+    pub(crate) async fn finish(self) -> miette::Result<UpdateContext<'p>> {
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
@@ -700,9 +726,18 @@ impl<'p> UpdateContextBuilder<'p> {
             ),
         };
         let lock_file = self.lock_file;
-        let outdated = self.outdated_environments.unwrap_or_else(|| {
-            OutdatedEnvironments::from_project_and_lock_file(project, &lock_file)
-        });
+        let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
+        let outdated = match self.outdated_environments {
+            Some(outdated) => outdated,
+            None => {
+                OutdatedEnvironments::from_project_and_lock_file(
+                    project,
+                    &lock_file,
+                    glob_hash_cache.clone(),
+                )
+                .await
+            }
+        };
 
         // Extract the current conda records from the lock-file
         // TODO: Should we parallelize this? Measure please.
@@ -881,6 +916,7 @@ impl<'p> UpdateContextBuilder<'p> {
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
             build_context,
+            glob_hash_cache,
 
             no_install: self.no_install,
         })
@@ -898,6 +934,7 @@ impl<'p> UpdateContext<'p> {
             package_cache: None,
             max_concurrent_solves: None,
             io_concurrency_limit: None,
+            glob_hash_cache: None,
         }
     }
 
@@ -1395,6 +1432,7 @@ impl<'p> UpdateContext<'p> {
             uv_context,
             io_concurrency_limit: self.io_concurrency_limit,
             build_context: self.build_context,
+            glob_hash_cache: self.glob_hash_cache,
         })
     }
 }
@@ -1543,23 +1581,11 @@ async fn spawn_solve_conda_environment_task(
             // Convert the dependencies into match specs and source dependencies
             let (source_specs, match_specs): (Vec<_>, Vec<_>) = dependencies
                 .into_specs()
-                .partition_map(
-                    |(name, constraint)| match constraint.try_into_source_spec() {
-                        Ok(source_spec) => itertools::Either::Left((name, source_spec)),
-                        Err(spec) => {
-                            let nameless_spec = spec
-                                .try_into_nameless_match_spec(&channel_config)
-                                .expect("failed to convert dependency into match spec")
-                                .expect(
-                                    "if the spec is not a source spec it should be a nameless spec",
-                                );
-                            itertools::Either::Right(MatchSpec::from_nameless(
-                                nameless_spec,
-                                Some(name.clone()),
-                            ))
-                        }
-                    },
-                );
+                .partition_map(|(name, constraint)| {
+                    constraint
+                        .into_named_source_or_binary(name, &channel_config)
+                        .expect("failed to convert dependency into match spec")
+                });
 
             // Collect metadata from all source packages
             let channel_urls = channels

@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 file_url = { workspace = true }
+pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }

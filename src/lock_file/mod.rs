@@ -13,7 +13,7 @@ pub use outdated::OutdatedEnvironments;
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-pub use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
+pub use records_by_name::PypiRecordsByName;
 pub use resolve::{
     conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
 };
