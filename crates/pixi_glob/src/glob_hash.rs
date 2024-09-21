@@ -215,7 +215,10 @@ mod test {
     #[case::satisfiability_ignore_lock(vec!["tests/satisfiability/source-dependency/**/*", "!tests/satisfiability/source-dependency/**/*.lock"])]
     #[case::non_glob(vec!["tests/satisfiability/source-dependency/pixi.toml"])]
     fn test_input_hash(testname: String, #[case] globs: Vec<&str>) {
-        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
         let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied()).unwrap();
         let snapshot = format!(
             "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",

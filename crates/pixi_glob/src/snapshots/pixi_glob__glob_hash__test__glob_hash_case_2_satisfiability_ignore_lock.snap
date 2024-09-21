@@ -1,5 +1,5 @@
 ---
-source: src/build/glob_hash.rs
+source: crates/pixi_glob/src/glob_hash.rs
 expression: snapshot
 ---
 Globs:
