@@ -1239,7 +1239,6 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use tokio::runtime::Handle;
 
     use super::*;
     use crate::Project;
@@ -1325,26 +1324,26 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_failing_satisiability() {
+    async fn test_failing_satisiability(
+        #[files("tests/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+    ) {
+        let name = manifest_path
+            .parent()
+            .and_then(Path::file_stem)
+            .and_then(OsStr::to_str)
+            .unwrap();
         let report_handler = NarratableReportHandler::new().with_cause_chain();
-        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .build()
-                .unwrap();
-            runtime.block_on(async {
-                let project = Project::from_path(path).unwrap();
-                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-                let err = Handle::current().block_on(async {
-                    verify_lockfile_satisfiability(&project, &lock_file)
-                        .await
-                        .expect_err("expected failing satisfiability")
-                });
-                let mut s = String::new();
-                report_handler.render_report(&mut s, &err).unwrap();
-                insta::assert_snapshot!(s);
-            })
-        });
+
+        let project = Project::from_path(&manifest_path).unwrap();
+        let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+        let err = verify_lockfile_satisfiability(&project, &lock_file)
+            .await
+            .expect_err("expected failing satisfiability");
+        let mut s = String::new();
+        report_handler.render_report(&mut s, &err).unwrap();
+        insta::assert_snapshot!(format!("failing_satisiability@{name}"), s);
     }
 
     #[test]
