@@ -16,10 +16,15 @@ pub struct SourceRecord {
 
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
+    ///
+    /// If this is `None`, the input hash was not computed or is not relevant
+    /// for this record. The record can always be considered up to date.
     pub input_hash: Option<InputHash>,
 }
 
-/// Similar to an [`glob_hash::GlobHash`] but without the matching files.
+/// Defines the hash of the input files that were used to build the metadata of
+/// the record. If reevaluating and hashing the globs results in a different
+/// hash, the metadata is considered invalid.
 #[derive(Debug, Clone)]
 pub struct InputHash {
     pub hash: Sha256Hash,
