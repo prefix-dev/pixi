@@ -1,0 +1,11 @@
+---
+source: src/build/glob_hash.rs
+expression: snapshot
+---
+Globs:
+- tests/satisfiability/source-dependency/**/*
+- !tests/satisfiability/source-dependency/**/*.lock
+Hash: c2b3831fa86971ccf7cc697e92b659a3ac92aa3629994e766f2a5ba6648dfca4
+Matched files:
+- tests/satisfiability/source-dependency/child-package/pixi.toml
+- tests/satisfiability/source-dependency/pixi.toml

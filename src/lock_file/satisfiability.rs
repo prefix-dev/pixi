@@ -13,7 +13,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
-use pixi_record::{InputHashError, ParseLockFileError, PixiRecord, SourceMismatchError};
+use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -33,8 +33,9 @@ use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 use super::{PypiRecord, PypiRecordsByName};
+use crate::build::GlobHashError;
 use crate::{
-    build::{InputHashCache, InputHashKey},
+    build::{GlobHashCache, GlobHashKey},
     lock_file::records_by_name::PixiRecordsByName,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
 };
@@ -203,10 +204,10 @@ pub enum PlatformUnsat {
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
 
     #[error(transparent)]
-    FailedToComputeInputHash(#[from] InputHashError),
+    FailedToComputeInputHash(#[from] GlobHashError),
 
-    #[error("the input hash for '{0}' does not match the hash in the lock-file")]
-    InputHashMismatch(String),
+    #[error("the input hash for '{0}' ({1}) does not match the hash in the lock-file ({2})")]
+    InputHashMismatch(String, String, String),
 }
 
 impl PlatformUnsat {
@@ -371,7 +372,7 @@ pub async fn verify_platform_satisfiability(
     locked_environment: &rattler_lock::Environment,
     platform: Platform,
     project_root: &Path,
-    input_hash_cache: InputHashCache,
+    glob_hash_cache: GlobHashCache,
 ) -> Result<(), Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
@@ -437,7 +438,7 @@ pub async fn verify_platform_satisfiability(
         &pypi_records_by_name,
         platform,
         project_root,
-        input_hash_cache,
+        glob_hash_cache,
     )
     .await
 }
@@ -613,7 +614,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
     project_root: &Path,
-    input_hash_cache: InputHashCache,
+    input_hash_cache: GlobHashCache,
 ) -> Result<(), Box<PlatformUnsat>> {
     let channel_config = environment.project().channel_config();
 
@@ -999,7 +1000,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         })?;
 
         let input_hash = input_hash_cache
-            .compute_hash(InputHashKey {
+            .compute_hash(GlobHashKey {
                 root: source_dir,
                 globs: locked_input_hash.globs.clone(),
             })
@@ -1007,9 +1008,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
             .map_err(PlatformUnsat::FailedToComputeInputHash)
             .map_err(Box::new)?;
 
-        if input_hash != locked_input_hash.hash {
+        if input_hash.hash != locked_input_hash.hash {
             return Err(Box::new(PlatformUnsat::InputHashMismatch(
                 path_record.path.to_string(),
+                format!("{:x}", input_hash.hash),
+                format!("{:x}", locked_input_hash.hash),
             )));
         }
     }

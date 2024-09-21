@@ -5,12 +5,12 @@ use std::{
 };
 
 use dashmap::{DashMap, Entry};
-use pixi_record::{InputHash, InputHashError};
-use rattler_digest::Sha256Hash;
 use tokio::sync::broadcast;
 
+use super::{GlobHash, GlobHashError};
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct InputHashKey {
+pub struct GlobHashKey {
     pub root: PathBuf,
     pub globs: Vec<String>,
 }
@@ -18,30 +18,30 @@ pub struct InputHashKey {
 #[derive(Debug)]
 enum HashCacheEntry {
     /// The value is currently being computed.
-    Pending(Weak<broadcast::Sender<Sha256Hash>>),
+    Pending(Weak<broadcast::Sender<GlobHash>>),
 
     /// We have a value for this key.
-    Done(Sha256Hash),
+    Done(GlobHash),
 }
 
-/// An object that caches the computation of input hashes. It deduplicates
+/// An object that caches the computation of glob hashes. It deduplicates
 /// requests for the same hash.
 ///
 /// Its is safe and efficient to use this object from multiple threads.
 #[derive(Debug, Default, Clone)]
-pub struct InputHashCache {
-    cache: Arc<DashMap<InputHashKey, HashCacheEntry>>,
+pub struct GlobHashCache {
+    cache: Arc<DashMap<GlobHashKey, HashCacheEntry>>,
 }
 
-impl InputHashCache {
+impl GlobHashCache {
     /// Computes the input hash of the given key. If the hash is already in the
     /// cache, it will return the cached value. If the hash is not in the
     /// cache, it will compute the hash (deduplicating any request) and return
     /// it.
     pub async fn compute_hash(
         &self,
-        key: impl Into<InputHashKey>,
-    ) -> Result<Sha256Hash, InputHashError> {
+        key: impl Into<GlobHashKey>,
+    ) -> Result<GlobHash, GlobHashError> {
         let key = key.into();
         match self.cache.entry(key.clone()) {
             Entry::Vacant(entry) => {
@@ -55,24 +55,26 @@ impl InputHashCache {
                 // Spawn the computation of the hash
                 let computation_key = key.clone();
                 let result = tokio::task::spawn_blocking(move || {
-                    InputHash::from_globs(&computation_key.root, computation_key.globs)
+                    GlobHash::from_patterns(
+                        &computation_key.root,
+                        computation_key.globs.iter().map(String::as_str),
+                    )
                 })
                 .await
                 .map_or_else(
                     |err| match err.try_into_panic() {
                         Ok(panic) => std::panic::resume_unwind(panic),
-                        Err(_) => Err(InputHashError::Cancelled),
+                        Err(_) => Err(GlobHashError::Cancelled),
                     },
                     identity,
-                )?
-                .hash;
+                )?;
 
                 // Store the result in the cache
-                self.cache.insert(key, HashCacheEntry::Done(result));
+                self.cache.insert(key, HashCacheEntry::Done(result.clone()));
 
                 // Broadcast the result, ignore the error. If the receiver is dropped, we don't
                 // care.
-                let _ = tx.send(result);
+                let _ = tx.send(result.clone());
 
                 Ok(result)
             }
@@ -82,17 +84,17 @@ impl InputHashCache {
                         let sender = weak_tx.clone();
                         let mut subscriber = sender
                             .upgrade()
-                            .ok_or(InputHashError::Cancelled)?
+                            .ok_or(GlobHashError::Cancelled)?
                             .subscribe();
                         drop(entry);
                         subscriber
                             .recv()
                             .await
-                            .map_err(|_| InputHashError::Cancelled)
+                            .map_err(|_| GlobHashError::Cancelled)
                     }
                     HashCacheEntry::Done(hash) => {
                         // We have a value for this key.
-                        Ok(*hash)
+                        Ok(hash.clone())
                     }
                 }
             }

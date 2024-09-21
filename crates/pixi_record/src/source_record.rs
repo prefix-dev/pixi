@@ -1,7 +1,8 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
+use rattler_digest::Sha256Hash;
 use rattler_lock::CondaPackageData;
 
-use crate::{input_hash::InputHash, ParseLockFileError, PinnedSourceSpec};
+use crate::{ParseLockFileError, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone)]
@@ -16,6 +17,13 @@ pub struct SourceRecord {
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
     pub input_hash: Option<InputHash>,
+}
+
+/// Similar to an [`glob_hash::GlobHash`] but without the matching files.
+#[derive(Debug, Clone)]
+pub struct InputHash {
+    pub hash: Sha256Hash,
+    pub globs: Vec<String>,
 }
 
 impl From<SourceRecord> for CondaPackageData {

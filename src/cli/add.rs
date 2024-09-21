@@ -223,7 +223,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_pypi_prefixes,
         io_concurrency_limit,
         build_context,
-        input_hash_cache,
+        glob_hash_cache,
     } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
         .with_no_install(prefix_update_config.no_install())
@@ -270,7 +270,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         uv_context,
         io_concurrency_limit,
         build_context,
-        input_hash_cache,
+        glob_hash_cache,
     };
     if !prefix_update_config.no_lockfile_update {
         updated_lock_file.write_to_disk()?;

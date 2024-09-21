@@ -9,7 +9,7 @@ use rattler_lock::{LockFile, Package};
 
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
-    build::InputHashCache,
+    build::GlobHashCache,
     lock_file::satisfiability::EnvironmentUnsat,
     project::{Environment, SolveGroup},
     Project,
@@ -64,7 +64,7 @@ impl<'p> OutdatedEnvironments<'p> {
     pub(crate) async fn from_project_and_lock_file(
         project: &'p Project,
         lock_file: &LockFile,
-        input_hash_cache: InputHashCache,
+        glob_hash_cache: GlobHashCache,
     ) -> Self {
         let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
         let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
@@ -77,7 +77,7 @@ impl<'p> OutdatedEnvironments<'p> {
             &mut outdated_conda,
             &mut outdated_pypi,
             &mut disregard_locked_content,
-            input_hash_cache,
+            glob_hash_cache,
         )
         .await;
 
@@ -145,7 +145,7 @@ async fn find_unsatisfiable_targets<'p>(
     outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     disregard_locked_content: &mut DisregardLockedContent<'p>,
-    input_hash_cache: InputHashCache,
+    glob_hash_cache: GlobHashCache,
 ) {
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -199,7 +199,7 @@ async fn find_unsatisfiable_targets<'p>(
                 &locked_environment,
                 platform,
                 project.root(),
-                input_hash_cache.clone(),
+                glob_hash_cache.clone(),
             )
             .await
             {

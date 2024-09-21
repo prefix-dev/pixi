@@ -1,0 +1,9 @@
+---
+source: src/build/glob_hash.rs
+expression: snapshot
+---
+Globs:
+- tests/satisfiability/source-dependency/pixi.toml
+Hash: 4353d15bbc5c19dfc81721e4b2c05e6af607ffcfcfb3bd17dbb55e737e72b1cf
+Matched files:
+- tests/satisfiability/source-dependency/pixi.toml

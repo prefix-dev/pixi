@@ -122,6 +122,7 @@ uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 
+wax = "0.6.0"
 which = "6.0.2"
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
@@ -299,6 +300,7 @@ uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+wax = { workspace = true, features = ["walk"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 

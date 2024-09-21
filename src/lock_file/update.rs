@@ -38,7 +38,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, InputHashCache},
+    build::{BuildContext, GlobHashCache},
     environment::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
@@ -109,7 +109,7 @@ pub struct LockFileDerivedData<'p> {
     pub build_context: BuildContext,
 
     /// An object that caches input hashes
-    pub input_hash_cache: InputHashCache,
+    pub glob_hash_cache: GlobHashCache,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -370,7 +370,7 @@ pub struct UpdateContext<'p> {
     build_context: BuildContext,
 
     /// The input hash cache
-    input_hash_cache: InputHashCache,
+    glob_hash_cache: GlobHashCache,
 
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
@@ -553,7 +553,7 @@ pub async fn update_lock_file(
     let lock_file = load_lock_file(project).await?;
     let package_cache =
         PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
-    let input_hash_cache = InputHashCache::default();
+    let glob_hash_cache = GlobHashCache::default();
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -568,7 +568,7 @@ pub async fn update_lock_file(
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
             build_context: BuildContext::new(project.channel_config()),
-            input_hash_cache,
+            glob_hash_cache,
         });
     }
 
@@ -576,7 +576,7 @@ pub async fn update_lock_file(
     let outdated = OutdatedEnvironments::from_project_and_lock_file(
         project,
         &lock_file,
-        input_hash_cache.clone(),
+        glob_hash_cache.clone(),
     )
     .await;
     if outdated.is_empty() {
@@ -592,7 +592,7 @@ pub async fn update_lock_file(
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
             build_context: BuildContext::new(project.channel_config()),
-            input_hash_cache,
+            glob_hash_cache,
         });
     }
 
@@ -613,7 +613,7 @@ pub async fn update_lock_file(
         .with_no_install(options.no_install)
         .with_outdated_environments(outdated)
         .with_lock_file(lock_file)
-        .with_input_hash_cache(input_hash_cache)
+        .with_glob_hash_cache(glob_hash_cache)
         .finish()
         .await?
         .update()
@@ -654,13 +654,13 @@ pub struct UpdateContextBuilder<'p> {
     io_concurrency_limit: Option<IoConcurrencyLimit>,
 
     /// A cache for computing input hashes
-    input_hash_cache: Option<InputHashCache>,
+    glob_hash_cache: Option<GlobHashCache>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
-    pub(crate) fn with_input_hash_cache(self, input_hash_cache: InputHashCache) -> Self {
+    pub(crate) fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
-            input_hash_cache: Some(input_hash_cache),
+            glob_hash_cache: Some(glob_hash_cache),
             ..self
         }
     }
@@ -726,14 +726,14 @@ impl<'p> UpdateContextBuilder<'p> {
             ),
         };
         let lock_file = self.lock_file;
-        let input_hash_cache = self.input_hash_cache.unwrap_or_default();
+        let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
         let outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_project_and_lock_file(
                     project,
                     &lock_file,
-                    input_hash_cache.clone(),
+                    glob_hash_cache.clone(),
                 )
                 .await
             }
@@ -916,7 +916,7 @@ impl<'p> UpdateContextBuilder<'p> {
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
             build_context,
-            input_hash_cache,
+            glob_hash_cache,
 
             no_install: self.no_install,
         })
@@ -934,7 +934,7 @@ impl<'p> UpdateContext<'p> {
             package_cache: None,
             max_concurrent_solves: None,
             io_concurrency_limit: None,
-            input_hash_cache: None,
+            glob_hash_cache: None,
         }
     }
 
@@ -1432,7 +1432,7 @@ impl<'p> UpdateContext<'p> {
             uv_context,
             io_concurrency_limit: self.io_concurrency_limit,
             build_context: self.build_context,
-            input_hash_cache: self.input_hash_cache,
+            glob_hash_cache: self.glob_hash_cache,
         })
     }
 }

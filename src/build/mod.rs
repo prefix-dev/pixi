@@ -12,7 +12,7 @@ use pixi_build_types::{
     },
     ChannelConfiguration,
 };
-use pixi_record::{InputHash, InputHashError, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
+use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use rattler_digest::Sha256;
@@ -20,14 +20,17 @@ use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
-mod input_hash_cache;
-pub use input_hash_cache::{InputHashCache, InputHashKey};
+mod glob_hash_cache;
+pub use glob_hash_cache::{GlobHashCache, GlobHashKey};
+
+mod glob_hash;
+pub use glob_hash::{GlobHash, GlobHashError};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Debug, Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
-    _input_hash_cache: InputHashCache,
+    _glob_hash_cache: GlobHashCache,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -48,7 +51,7 @@ pub enum BuildError {
     FrontendError(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
-    InputHash(#[from] InputHashError),
+    InputHash(#[from] GlobHashError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -86,14 +89,14 @@ impl BuildContext {
     pub fn new(channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
-            _input_hash_cache: InputHashCache::default(),
+            _glob_hash_cache: GlobHashCache::default(),
         }
     }
 
     /// Sets the input hash cache to use for caching input hashes.
-    pub fn with_input_hash_cache(self, input_hash_cache: InputHashCache) -> Self {
+    pub fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
-            _input_hash_cache: input_hash_cache,
+            _glob_hash_cache: glob_hash_cache,
             ..self
         }
     }
@@ -304,8 +307,12 @@ impl BuildContext {
             None
         } else {
             let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
-            let input_hash = InputHash::from_globs(&source.path, input_globs)?;
-            Some(input_hash)
+            let input_hash =
+                GlobHash::from_patterns(&source.path, input_globs.iter().map(String::as_str))?;
+            Some(InputHash {
+                hash: input_hash.hash,
+                globs: input_globs,
+            })
         };
 
         // Convert the metadata to repodata
