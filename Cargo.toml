@@ -51,6 +51,7 @@ itertools = "0.13.0"
 jsonrpsee = "=0.24.2"
 lazy_static = "1.4.0"
 libc = { version = "0.2.153", default-features = false }
+memchr = "2.7.4"
 miette = { version = "7.2.0", features = ["fancy"] }
 minijinja = "2.1.1"
 nix = { version = "0.29.0", default-features = false }
@@ -247,6 +248,7 @@ rattler_repodata_gateway = { workspace = true, features = [
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
+memchr = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
@@ -303,7 +305,6 @@ uv-types = { workspace = true }
 wax = { workspace = true, features = ["walk"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
-
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
