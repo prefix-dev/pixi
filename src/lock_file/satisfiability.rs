@@ -12,6 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::FeaturesExt;
 use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
@@ -33,9 +34,7 @@ use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 use super::{PypiRecord, PypiRecordsByName};
-use crate::build::GlobHashError;
 use crate::{
-    build::{GlobHashCache, GlobHashKey},
     lock_file::records_by_name::PixiRecordsByName,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
 };

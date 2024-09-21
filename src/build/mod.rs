@@ -12,6 +12,7 @@ use pixi_build_types::{
     },
     ChannelConfiguration,
 };
+pub use pixi_glob::{GlobHash, GlobHashCache, GlobHashError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
@@ -19,12 +20,6 @@ use rattler_digest::Sha256;
 use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
-
-mod glob_hash_cache;
-pub use glob_hash_cache::{GlobHashCache, GlobHashKey};
-
-mod glob_hash;
-pub use glob_hash::{GlobHash, GlobHashError};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Debug, Clone)]

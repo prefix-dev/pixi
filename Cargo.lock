@@ -3638,7 +3638,6 @@ dependencies = [
  "console",
  "crossbeam-channel",
  "csv",
- "dashmap",
  "deno_task_shell",
  "dialoguer",
  "dirs",
@@ -3664,7 +3663,6 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "libc",
- "memchr",
  "miette 7.2.0",
  "minijinja",
  "nix",
@@ -3678,6 +3676,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
+ "pixi_glob",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
@@ -3736,7 +3735,6 @@ dependencies = [
  "uv-python",
  "uv-resolver",
  "uv-types",
- "wax",
  "xxhash-rust",
  "zip 2.2.0",
 ]
@@ -3825,6 +3823,21 @@ name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
+]
+
+[[package]]
+name = "pixi_glob"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "insta",
+ "itertools 0.13.0",
+ "memchr",
+ "rattler_digest",
+ "rstest",
+ "thiserror",
+ "tokio",
+ "wax",
 ]
 
 [[package]]

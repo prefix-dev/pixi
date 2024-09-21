@@ -135,6 +135,7 @@ pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
+pixi_glob = { path = "crates/pixi_glob" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_record = { path = "crates/pixi_record" }
@@ -195,7 +196,6 @@ clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
-dashmap = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
@@ -248,12 +248,12 @@ rattler_repodata_gateway = { workspace = true, features = [
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
-memchr = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
+pixi_glob = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
@@ -302,7 +302,6 @@ uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
-wax = { workspace = true, features = ["walk"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
