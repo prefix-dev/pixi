@@ -841,7 +841,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
                     conda_queue.push(Dependency::Conda(
                         spec,
-                        Cow::Owned(record.package_record().name.as_source().to_string()),
+                        match record {
+                            PixiRecord::Binary(record) => Cow::Owned(record.file_name.to_string()),
+                            PixiRecord::Source(record) => Cow::Owned(format!(
+                                "{} @ {}",
+                                record.package_record.name.as_source(),
+                                &record.source
+                            )),
+                        },
                     ));
                 }
             }
@@ -1318,11 +1325,14 @@ mod tests {
         }
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
-        tokio::task::block_in_place(|| {
-            insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
+        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap();
+            runtime.block_on(async {
                 let project = Project::from_path(path).unwrap();
                 let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
                 let err = Handle::current().block_on(async {
@@ -1333,7 +1343,7 @@ mod tests {
                 let mut s = String::new();
                 report_handler.render_report(&mut s, &err).unwrap();
                 insta::assert_snapshot!(s);
-            });
+            })
         });
     }
 

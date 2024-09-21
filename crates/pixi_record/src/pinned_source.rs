@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::{Display, Formatter},
+    path::{Path, PathBuf},
+};
 
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
@@ -277,5 +280,33 @@ impl PinnedSourceSpec {
             (PinnedSourceSpec::Git(locked), SourceSpec::Git(spec)) => locked.satisfies(spec),
             (_, _) => Err(SourceMismatchError::SourceTypeMismatch),
         }
+    }
+}
+
+impl Display for PinnedSourceSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PinnedSourceSpec::Path(spec) => write!(f, "{}", spec.path),
+            PinnedSourceSpec::Url(spec) => write!(f, "{}", spec.url),
+            PinnedSourceSpec::Git(spec) => write!(f, "{}", spec.git),
+        }
+    }
+}
+
+impl Display for PinnedUrlSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)
+    }
+}
+
+impl Display for PinnedPathSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+impl Display for PinnedGitSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.git, self.commit)
     }
 }

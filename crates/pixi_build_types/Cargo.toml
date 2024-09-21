@@ -11,7 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 url = { workspace = true }
-rattler_digest = { workspace = true }
