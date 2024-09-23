@@ -21,10 +21,11 @@ pub struct CondaBuildParams {
     /// The channel configuration to use to resolve dependencies.
     pub channel_configuration: ChannelConfiguration,
 
-    /// Information about the output to build. This information is previously
-    /// returned from a call to `conda/getMetadata`.
+    /// Information about the outputs to build. This information is previously
+    /// returned from a call to `conda/getMetadata`. Pass `None` to build all
+    /// outputs.
     #[serde(default)]
-    pub output: CondaOutputIdentifier,
+    pub outputs: Option<Vec<CondaOutputIdentifier>>,
 }
 
 /// Identifier of an output.
@@ -39,9 +40,28 @@ pub struct CondaOutputIdentifier {
 /// Contains the result of the `conda/build` request.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CondaBuildResult {
-    // TODO: Should this be a UTF8 encoded type
+    /// The packages that were built.
+    pub packages: Vec<CondaBuiltPackage>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CondaBuiltPackage {
+    /// The location on disk where the built package is located.
     pub output_file: PathBuf,
-    /// The globs that were used as input to the build.
-    /// use these for re-verifying the build.
+
+    /// The globs that were used as input to the build. Use these for
+    /// re-verifying the build.
     pub input_globs: Vec<String>,
+
+    /// The name of the package.
+    pub name: String,
+
+    /// The version of the package.
+    pub version: String,
+
+    /// The build string of the package.
+    pub build: String,
+
+    /// The subdirectory of the package.
+    pub subdir: String,
 }
