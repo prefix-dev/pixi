@@ -69,7 +69,7 @@ Multiple channels can be specified by using `--channel` multiple times.
 By default, if no channel is provided, the `default-channels` key in the pixi configuration is used, which again defaults to "conda-forge".
 
 ```
-pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... PACKAGE...
+pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--no-activation] [--channel CHANNEL]... PACKAGE...
 ```
 
 Remove environments `ENV`.
@@ -293,4 +293,18 @@ In order to make it easier to manage manifests in version control, we could allo
 
 ``` title="config.toml"
 global_manifests = "/path/to/your/manifests"
+```
+
+
+### No activation
+
+The current `pixi global install` features `--no-activation`.
+When this flag is set `CONDA_PREFIX` and `PATH` will not be set in the activation script.
+This is useful when installing Python package managers or shells.
+
+Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:
+
+```toml
+[envs.pip.exposed]
+pip = { executable="python", activation=false }
 ```
