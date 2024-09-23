@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use crate::global::{BinDir, EnvRoot};
 use clap::Parser;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
@@ -72,94 +71,82 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
     Ok(())
 }
 
-pub async fn add(args: AddArgs) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
-
-    let bin_dir = BinDir::from_env().await?;
-    let env_root = EnvRoot::from_env().await?;
-
-    let mut project_original =
-        global::Project::discover_or_create(env_root, bin_dir, args.assume_yes)
-            .await?
-            .with_cli_config(config.clone());
-
-    // Make sure that the manifest is up-to-date with the local installation
-    global::sync(&project_original, &config).await?;
-
-    if let Err(err) = apply_add_changes(args, project_original.clone(), &config).await {
-        let err = err.wrap_err("Could not add mappings");
-        project_original
-            .manifest
-            .save()
-            .await
-            .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-        global::sync(&project_original, &config)
-            .await
-            .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-        return Err(err);
-    }
-    Ok(())
+async fn setup_project(config: &Config, assume_yes: bool) -> miette::Result<global::Project> {
+    let project = global::Project::discover_or_create(assume_yes)
+        .await?
+        .with_cli_config(config.clone());
+    global::sync(&project, config).await?;
+    Ok(project)
 }
 
-async fn apply_add_changes(
-    args: AddArgs,
-    project_original: global::Project,
+async fn revert_after_error(
+    err: miette::Error,
+    mut project_original: global::Project,
     config: &Config,
-) -> Result<(), miette::Error> {
-    let mut project_modified = project_original.clone();
+    action: &str,
+) -> miette::Result<()> {
+    let err = err.wrap_err(format!("Could not {}.", action));
+    project_original
+        .manifest
+        .save()
+        .await
+        .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
+    global::sync(&project_original, config)
+        .await
+        .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
+    Err(err)
+}
 
-    for mapping in args.mappings {
-        project_modified
-            .manifest
-            .add_exposed_mapping(&args.environment, &mapping)?;
+pub async fn add(args: AddArgs) -> miette::Result<()> {
+    let config = Config::with_cli_config(&args.config);
+    let project_original = setup_project(&config, args.assume_yes).await?;
+
+    async fn apply_changes(
+        args: AddArgs,
+        project_original: global::Project,
+        config: &Config,
+    ) -> Result<(), miette::Error> {
+        let mut project_modified = project_original.clone();
+
+        for mapping in args.mappings {
+            project_modified
+                .manifest
+                .add_exposed_mapping(&args.environment, &mapping)?;
+        }
+        project_modified.manifest.save().await?;
+        global::sync(&project_modified, config).await?;
+        Ok(())
     }
-    project_modified.manifest.save().await?;
-    global::sync(&project_modified, config).await?;
+
+    if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
+        return revert_after_error(err, project_original, &config, "add mappings").await;
+    }
     Ok(())
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
+    let project_original = setup_project(&config, args.assume_yes).await?;
 
-    let bin_dir = BinDir::from_env().await?;
-    let env_root = EnvRoot::from_env().await?;
+    async fn apply_changes(
+        args: RemoveArgs,
+        project_original: global::Project,
+        config: &Config,
+    ) -> Result<(), miette::Error> {
+        let mut project_modified = project_original.clone();
 
-    let mut project_original =
-        global::Project::discover_or_create(env_root, bin_dir, args.assume_yes)
-            .await?
-            .with_cli_config(config.clone());
-
-    // Make sure that the manifest is up-to-date with the local installation
-    global::sync(&project_original, &config).await?;
-
-    if let Err(err) = apply_remove_changes(args, project_original.clone(), &config).await {
-        let err = err.wrap_err("Could not remove exposed names");
-        project_original
-            .manifest
-            .save()
-            .await
-            .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-        global::sync(&project_original, &config)
-            .await
-            .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-        return Err(err);
+        for exposed_name in args.exposed_names {
+            project_modified
+                .manifest
+                .remove_exposed_name(&args.environment, &exposed_name)?;
+        }
+        project_modified.manifest.save().await?;
+        global::sync(&project_modified, config).await?;
+        Ok(())
     }
-    Ok(())
-}
 
-async fn apply_remove_changes(
-    args: RemoveArgs,
-    project_original: global::Project,
-    config: &Config,
-) -> Result<(), miette::Error> {
-    let mut project_modified = project_original.clone();
-
-    for exposed_name in args.exposed_names {
-        project_modified
-            .manifest
-            .remove_exposed_name(&args.environment, &exposed_name)?;
+    if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
+        return revert_after_error(err, project_original, &config, "remove exposed names").await;
     }
-    project_modified.manifest.save().await?;
-    global::sync(&project_modified, config).await?;
     Ok(())
 }

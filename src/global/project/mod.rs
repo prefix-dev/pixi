@@ -262,11 +262,7 @@ impl Project {
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub(crate) async fn discover_or_create(
-        env_root: EnvRoot,
-        bin_dir: BinDir,
-        assume_yes: bool,
-    ) -> miette::Result<Self> {
+    pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
 
         tokio::fs::create_dir_all(&manifest_dir)
@@ -275,6 +271,9 @@ impl Project {
             .wrap_err_with(|| format!("Couldn't create directory {}", manifest_dir.display()))?;
 
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+
+        let bin_dir = BinDir::from_env().await?;
+        let env_root = EnvRoot::from_env().await?;
 
         if !manifest_path.exists() {
             let prompt = format!(
