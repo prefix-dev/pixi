@@ -27,7 +27,7 @@ pub struct AddArgs {
     #[arg(value_parser = parse_mapping)]
     mapping: Vec<Mapping>,
 
-    #[clap(long)]
+    #[clap(short, long)]
     environment: EnvironmentName,
 
     /// Answer yes to all questions.
