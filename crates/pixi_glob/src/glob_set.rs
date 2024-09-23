@@ -119,22 +119,21 @@ mod tests {
 
         // Filter directory and get results as strings
         let mut filtered_files: Vec<_> = filter_globs
-            .filter_directory(&root_path)
-            .into_iter()
+            .filter_directory(root_path)
             .collect::<Result<Vec<_>, _>>()
             .unwrap()
             .into_iter()
-            .map(|p| p.path().strip_prefix(&root_path).unwrap().to_path_buf())
+            .map(|p| p.path().strip_prefix(root_path).unwrap().to_path_buf())
             .collect();
 
         // Assert the expected files are present
-        assert_eq!(
-            filtered_files.sort(),
-            vec![
-                "include1.txt".parse::<PathBuf>().unwrap(),
-                "subdir/include_subdir.txt".parse().unwrap()
-            ]
-            .sort()
-        );
+        filtered_files.sort();
+
+        let mut expected = vec![
+            "include1.txt".parse::<PathBuf>().unwrap(),
+            "subdir/include_subdir.txt".parse().unwrap(),
+        ];
+        expected.sort();
+        assert_eq!(filtered_files, expected);
     }
 }
