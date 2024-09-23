@@ -1554,9 +1554,9 @@ platforms = ["linux-64", "win-64"]
 
         // Test adding priority
         let prioritized_channel1 = PrioritizedChannel {
-                channel: NamedChannelOrUrl::Name(String::from("prioritized")),
-                priority: Some(12i32),
-            };
+            channel: NamedChannelOrUrl::Name(String::from("prioritized")),
+            priority: Some(12i32),
+        };
         manifest
             .add_channels([prioritized_channel1.clone()], &FeatureName::Default)
             .unwrap();
@@ -2256,5 +2256,4 @@ bar = "*"
             }
         }
     }
-
 }
