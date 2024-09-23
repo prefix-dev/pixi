@@ -124,13 +124,7 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .unwrap()
             .into_iter()
-            .map(|p| {
-                p.path()
-                    .clone()
-                    .strip_prefix(&root_path)
-                    .unwrap()
-                    .to_path_buf()
-            })
+            .map(|p| p.path().strip_prefix(&root_path).unwrap().to_path_buf())
             .collect();
 
         // Assert the expected files are present
