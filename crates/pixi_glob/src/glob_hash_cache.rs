@@ -1,3 +1,6 @@
+//! This module contains the `GlobHashCache` struct which is used to cache the computation of glob hashes. This cache is an in-process cache
+//! so it's purpose is to re-use computed hashes across multiple calls to the same glob hash computation for the same set of input files.
+//! The input files are deemed not to change between calls.
 use std::{
     convert::identity,
     path::PathBuf,
@@ -9,9 +12,12 @@ use tokio::sync::broadcast;
 
 use super::{GlobHash, GlobHashError};
 
+/// A key for the cache of glob hashes.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct GlobHashKey {
+    /// The root directory of the glob patterns.
     pub root: PathBuf,
+    /// The glob patterns.
     pub globs: Vec<String>,
 }
 

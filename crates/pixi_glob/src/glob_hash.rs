@@ -1,3 +1,6 @@
+//! This module contains the `GlobHash` struct which is used to calculate a hash of the files that match the given glob patterns.
+//! Use this if you want to calculate a hash of a set of files that match a glob pattern.
+//! This is useful for finding out if you need to rebuild a target based on the files that match a glob pattern.
 use std::{
     fs::File,
     io,
@@ -5,35 +8,36 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use rattler_digest::{digest::Digest, Sha256, Sha256Hash};
 use thiserror::Error;
-use wax::Glob;
 
-/// InputHash is a struct that contains the hash of the input files.
+use crate::glob_set::{self, GlobSet};
+
+/// Contains a hash of the files that match the given glob patterns.
 #[derive(Debug, Clone, Default)]
 pub struct GlobHash {
+    /// The hash of the files that match the given glob patterns.
     pub hash: Sha256Hash,
     #[cfg(test)]
     matching_files: Vec<String>,
 }
 
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum GlobHashError {
-    #[error("failed to access {}", .0.display())]
-    IoError(PathBuf, #[source] io::Error),
-
     #[error(transparent)]
-    GlobError(#[from] wax::BuildError),
+    FilterGlobError(#[from] glob_set::GlobSetError),
 
-    #[error(transparent)]
-    WalkError(#[from] io::Error),
+    #[error("during line normalization, failed to access {}", .0.display())]
+    NormalizeLineEnds(PathBuf, #[source] io::Error),
 
     #[error("the operation was cancelled")]
     Cancelled,
 }
 
 impl GlobHash {
+    /// Calculate a hash of the files that match the given glob patterns.
     pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
@@ -43,53 +47,13 @@ impl GlobHash {
             return Ok(Self::default());
         }
 
-        // Split the globs into inclusion and exclusion globs based on whether they
-        // start with `!`.
-        let (inclusion_globs, exclusion_globs): (Vec<_>, Vec<_>) =
-            globs.into_iter().partition_map(|g| {
-                g.strip_prefix("!")
-                    .map(Either::Right)
-                    .unwrap_or(Either::Left(g))
-            });
-
-        // Parse all globs
-        let inclusion_globs = inclusion_globs
+        let glob_set = GlobSet::create(globs)?;
+        let mut entries = glob_set
+            .filter_directory(root_dir)
+            .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .map(|g| Glob::new(g).map_err(GlobHashError::GlobError))
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusion_globs = exclusion_globs
-            .into_iter()
-            .map(|g| Glob::new(g).map_err(GlobHashError::GlobError))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let mut entries = inclusion_globs
-            .iter()
-            .flat_map(|glob| {
-                glob.walk(root_dir)
-                    .not(exclusion_globs.clone())
-                    .expect("since the globs are already parsed this should not error")
-            })
-            .filter_map(|entry| {
-                match entry {
-                    Ok(entry) if entry.file_type().is_dir() => None,
-                    Ok(entry) => Some(Ok(entry.into_path())),
-                    Err(e) => {
-                        let path = e.path().map(Path::to_path_buf);
-                        let io_err = std::io::Error::from(e);
-                        match io_err.kind() {
-                            // Ignore DONE and permission errors
-                            io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => None,
-                            _ => Some(Err(if let Some(path) = path {
-                                GlobHashError::IoError(path, io_err)
-                            } else {
-                                GlobHashError::WalkError(io_err)
-                            })),
-                        }
-                    }
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
+            .map(|entry| entry.path().to_path_buf())
+            .collect_vec();
         entries.sort();
 
         #[cfg(test)]
@@ -109,7 +73,7 @@ impl GlobHash {
             // Concatenate the contents of the file to the hash.
             File::open(&entry)
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| GlobHashError::IoError(entry, e))?;
+                .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
         }
         let hash = hasher.finalize();
 
