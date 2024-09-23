@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     path::{Path, PathBuf},
 };
 
@@ -108,12 +109,6 @@ impl Prefix {
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
     /// to filter and collect executable files.
-    /// It performs the following steps:
-    /// 1. Filters records to only include direct dependencies
-    /// 2. Finds executables for each filtered record.
-    /// 3. Maps executables to a tuple of file name (as a string) and file path.
-    /// 4. Filters tuples to include only those whose names are in the `exposed` values.
-    /// 5. Collects the resulting tuples into a vector of executables.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<(String, PathBuf)> {
         prefix_packages
             .iter()
@@ -123,8 +118,8 @@ impl Prefix {
                     .iter()
                     .filter(|relative_path| is_executable(self, relative_path))
                     .filter_map(|path| {
-                        path.file_name()
-                            .and_then(|name| name.to_str())
+                        path.file_stem()
+                            .and_then(OsStr::to_str)
                             .map(|name| (name.to_string(), path.clone()))
                     })
             })
