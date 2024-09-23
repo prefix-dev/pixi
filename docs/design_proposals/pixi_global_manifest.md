@@ -306,5 +306,5 @@ Assuming that this needs to be set per mapping, one way to expose this functiona
 
 ```toml
 [envs.pip.exposed]
-pip = { executable="python", activation=false }
+pip = { executable="pip", activation=false }
 ```
