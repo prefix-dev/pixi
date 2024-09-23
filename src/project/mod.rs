@@ -544,7 +544,8 @@ impl Project {
                         .flat_map(|feature| feature.channels.iter())
                         .flatten()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .collect();
+                        .try_collect()
+                        .into_diagnostic()?;
 
                     let project_and_feature_channels: HashSet<_> =
                         project_channels.union(&feature_channels).collect();
