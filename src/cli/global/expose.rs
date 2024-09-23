@@ -8,7 +8,8 @@ use crate::global::{self, EnvironmentName, ExposedName};
 
 #[derive(Parser, Debug)]
 pub struct AddArgs {
-    /// The binary to add as executable in the form of key=value (e.g. python=python3.10)
+    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
+    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
     #[arg(value_parser = parse_mapping)]
     mappings: Vec<global::Mapping>,
 
@@ -39,7 +40,7 @@ fn parse_mapping(input: &str) -> miette::Result<global::Mapping> {
 }
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
-    /// The binary or binaries to remove as executable  (e.g. python atuin)
+    /// The exposed names that should be removed
     exposed_names: Vec<ExposedName>,
 
     #[clap(short, long)]
