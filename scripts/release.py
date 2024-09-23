@@ -78,7 +78,6 @@ def print_summary():
 atexit.register(print_summary)
 
 
-
 def main():
     steps = [
         "Start release process",
