@@ -208,7 +208,7 @@ def test_global_expose(pixi: Path, tmp_path: Path) -> None:
     exposed_exec = "python3.bat" if platform.system() == "Windows" else "python3"
     python3 = tmp_path / "bin" / exposed_exec
 
-    # Add Python1
+    # Add python1
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "python1=python"],
         ExitCode.SUCCESS,
@@ -216,7 +216,7 @@ def test_global_expose(pixi: Path, tmp_path: Path) -> None:
     )
     verify_cli_command([python1, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12")
 
-    # Add Python3
+    # Add python3
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "python3=python"],
         ExitCode.SUCCESS,
@@ -224,10 +224,18 @@ def test_global_expose(pixi: Path, tmp_path: Path) -> None:
     )
     verify_cli_command([python3, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12")
 
-    # Remove Python1
+    # Remove python1
     verify_cli_command(
         [pixi, "global", "expose", "remove", "--environment=test", "python1"],
         ExitCode.SUCCESS,
         env=env,
     )
     assert not python1.is_file()
+
+    # Attempt to remove python2
+    verify_cli_command(
+        [pixi, "global", "expose", "remove", "--environment=test", "python2"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="The exposed name python2 doesn't exist",
+    )
