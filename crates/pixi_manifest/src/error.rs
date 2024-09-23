@@ -1,3 +1,6 @@
+// TODO: remove
+#![allow(dead_code)]
+
 use std::{borrow::Borrow, fmt::Display};
 
 use itertools::Itertools;

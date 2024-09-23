@@ -164,6 +164,7 @@ pub(crate) fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
     is_executable::is_executable(absolute_path)
 }
 
+#[allow(unused)]
 /// Create the environment activation script
 pub(crate) fn create_activation_script(
     prefix: &Prefix,

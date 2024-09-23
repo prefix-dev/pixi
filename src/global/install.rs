@@ -28,7 +28,7 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::{project::ParsedEnvironment, EnvironmentName, ExposedKey};
+use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
     global::{self, BinDir, EnvDir},
     prefix::Prefix,
@@ -180,7 +180,7 @@ pub(crate) async fn expose_executables(
 ///
 /// Returns an error if the entry point is not found in the list of executable names.
 pub(crate) fn script_exec_mapping<'a>(
-    exposed_name: &ExposedKey,
+    exposed_name: &ExposedName,
     entry_point: &str,
     mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
     bin_dir: &BinDir,

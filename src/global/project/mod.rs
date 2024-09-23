@@ -7,10 +7,10 @@ use std::{
 
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
-pub(crate) use manifest::Manifest;
+pub(crate) use manifest::{Manifest, Mapping};
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
-pub(crate) use parsed_manifest::ExposedKey;
+pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
@@ -66,7 +66,7 @@ struct ExposedData {
     platform: Option<Platform>,
     channel: PrioritizedChannel,
     package: PackageName,
-    exposed: ExposedKey,
+    exposed: ExposedName,
     executable_name: String,
 }
 
@@ -81,7 +81,7 @@ impl ExposedData {
             .file_stem()
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
-            .and_then(ExposedKey::from_str)?;
+            .and_then(ExposedName::from_str)?;
         let executable_path = extract_executable_from_script(path)?;
 
         let executable = executable_path
@@ -367,7 +367,7 @@ impl Project {
 
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.manifest.parsed.envs()
+        &self.manifest.parsed.envs
     }
 }
 
