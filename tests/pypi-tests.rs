@@ -3,7 +3,9 @@ mod common;
 use std::path::Path;
 
 use crate::common::{LockFileExt, PixiControl};
+use pep508_rs::PackageName;
 use rattler_conda_types::Platform;
+use rattler_lock::PypiPackageData;
 use url::Url;
 
 #[tokio::test]
@@ -81,5 +83,32 @@ async fn test_index_strategy() {
     assert_eq!(
         lock_file.get_pypi_package_version("unsafe-best-match", Platform::current(), "foo"),
         Some("3.0.0".into())
+    );
+}
+
+#[tokio::test]
+async fn test_allow_exact_yanked_package() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-yanked-package"
+        platforms = ["{platform}"]
+        channels = ["conda-forge"]
+
+        [dependencies]
+        python = "==3.11.0"
+
+        [pypi-dependencies]
+        # this is an yanked package
+        setuptools-scm = "==6.2.0"
+        "#,
+        platform = Platform::current(),
+    ));
+
+    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", Platform::current(), "setuptools_scm"),
+        Some("6.2.0".into())
     );
 }
