@@ -24,7 +24,6 @@ use crate::{
     prefix::Prefix,
 };
 
-mod document;
 mod environment;
 mod error;
 mod manifest;

@@ -59,6 +59,13 @@ impl ParsedManifest {
     pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
         self.envs.clone()
     }
+
+    pub(crate) fn get_mut_environment(
+        &mut self,
+        key: &EnvironmentName,
+    ) -> Option<&mut ParsedEnvironment> {
+        self.environments.get_mut(key)
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for ParsedManifest {

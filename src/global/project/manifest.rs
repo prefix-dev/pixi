@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, PackageName};
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item};
 
 use super::error::ManifestError;
 
-use super::MANIFEST_DEFAULT_NAME;
-use super::{document::ManifestSource, parsed_manifest::ParsedManifest};
+use super::parsed_manifest::ParsedManifest;
+use super::{EnvironmentName, MANIFEST_DEFAULT_NAME};
+use pixi_manifest::TomlManifest;
 
 // TODO: remove
 #[allow(unused)]
@@ -26,7 +28,7 @@ pub struct Manifest {
     pub contents: String,
 
     /// Editable toml document
-    pub document: ManifestSource,
+    pub document: TomlManifest,
 
     /// The parsed manifest
     pub parsed: ParsedManifest,
@@ -55,11 +57,10 @@ impl Manifest {
             Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,
         };
 
-        let source = ManifestSource(document);
         let manifest = Self {
             path: manifest_path.to_path_buf(),
             contents,
-            document: source,
+            document: TomlManifest::new(document),
             parsed: manifest,
         };
 
@@ -67,13 +68,22 @@ impl Manifest {
     }
 
     /// Adds an environment to the project.
-    pub fn add_environment(&mut self, _name: String) -> miette::Result<()> {
-        todo!()
-    }
+    pub fn add_dependency(
+        &mut self,
+        env_name: EnvironmentName,
+        package_name: PackageName,
+        spec: PixiSpec,
+    ) -> miette::Result<()> {
+        let table_name = format!("envs.{env_name}");
 
-    /// Removes an environment from the project.
-    pub fn remove_environment(&mut self, _name: &str) -> miette::Result<bool> {
-        todo!()
+        self.document
+            .get_or_insert_nested_table(&table_name)?
+            .insert(
+                package_name.as_normalized(),
+                Item::Value(toml_edit::Value::from(spec)),
+            );
+
+        Ok(())
     }
 
     /// Add a matchspec to the manifest

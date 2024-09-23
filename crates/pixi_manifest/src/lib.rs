@@ -24,6 +24,7 @@ mod validation;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
 pub use manifests::manifest::{Manifest, ManifestKind};
+pub use manifests::TomlManifest;
 
 pub use crate::environments::Environments;
 pub use crate::parsed_manifest::{deserialize_package_map, ParsedManifest};

@@ -1,8 +1,11 @@
 use clap::Parser;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{package, Platform};
 
-use crate::{cli::cli_config::ChannelsConfig, cli::has_specs::HasSpecs};
-use pixi_config::{self, ConfigCli};
+use crate::{
+    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
+    global::{self, EnvironmentName},
+};
+use pixi_config::{self, Config, ConfigCli};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -15,8 +18,16 @@ pub struct Args {
     #[clap(flatten)]
     channels: ChannelsConfig,
 
-    #[clap(short, long, default_value_t = Platform::current())]
-    platform: Platform,
+    #[clap(short, long)]
+    platform: Option<Platform>,
+
+    /// Ensures that all packages will be installed in the same environment
+    #[clap(short, long)]
+    environment: Option<EnvironmentName>,
+
+    /// Answer yes to all questions.
+    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    assume_yes: bool,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -29,6 +40,10 @@ impl HasSpecs for Args {
 }
 
 /// Install a global command
-pub async fn execute(_args: Args) -> miette::Result<()> {
-    todo!()
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let config = Config::with_cli_config(&args.config);
+
+    global::sync(&config, args.assume_yes).await?;
+
+    Ok(())
 }
