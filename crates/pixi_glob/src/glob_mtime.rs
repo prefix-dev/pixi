@@ -1,5 +1,3 @@
-//! This module contains the `GlobModificationTime` struct which is used to calculate the newest modification time for the files that match the given glob patterns.
-//! Use this if you want to find the newest modification time for a set of files that match a glob pattern.
 use std::{
     path::{Path, PathBuf},
     time::SystemTime,
@@ -11,20 +9,16 @@ use crate::glob_set::{self, GlobSet};
 
 /// Contains the newest modification time for the files that match the given glob patterns.
 #[derive(Debug, Clone)]
-pub struct GlobModificationTime {
-    /// The newest modification time for the files that match the given glob patterns.
-    pub modified_at: SystemTime,
-    /// The designated file with the newest modification time.
-    pub designated_file: PathBuf,
-}
-
-impl Default for GlobModificationTime {
-    fn default() -> Self {
-        Self {
-            modified_at: SystemTime::UNIX_EPOCH,
-            designated_file: PathBuf::new(),
-        }
-    }
+pub enum GlobModificationTime {
+    /// No files matched the given glob patterns.
+    NoMatches,
+    /// Files matched the glob patterns, and this variant contains the newest modification time and designated file.
+    MatchesFound {
+        /// The newest modification time for the files that match the given glob patterns.
+        modified_at: SystemTime,
+        /// The designated file with the newest modification time.
+        designated_file: PathBuf,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -42,9 +36,9 @@ impl GlobModificationTime {
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
     ) -> Result<Self, GlobModificationTimeError> {
-        // If the root is not a directory or does not exist, return an empty map.
+        // If the root is not a directory or does not exist, return NoMatches.
         if !root_dir.is_dir() {
-            return Ok(Self::default());
+            return Ok(Self::NoMatches);
         }
 
         let glob_set = GlobSet::create(globs)?;
@@ -52,7 +46,7 @@ impl GlobModificationTime {
             .filter_directory(root_dir)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut latest = SystemTime::UNIX_EPOCH;
+        let mut latest = None;
         let mut designated_file = PathBuf::new();
 
         // Find the newest modification time and the designated file
@@ -65,27 +59,46 @@ impl GlobModificationTime {
                 .modified()
                 .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
 
-            if latest >= modified_entry {
-                continue;
+            if let Some(ref current_latest) = latest {
+                if *current_latest >= modified_entry {
+                    continue;
+                }
             }
 
-            latest = modified_entry;
+            latest = Some(modified_entry);
             designated_file = matched_path.clone();
         }
-        Ok(Self {
-            modified_at: latest,
-            designated_file,
-        })
+
+        match latest {
+            Some(modified_at) => Ok(Self::MatchesFound {
+                modified_at,
+                designated_file,
+            }),
+            None => Ok(Self::NoMatches),
+        }
     }
 
-    /// Get the newest modification time.
-    pub fn newest(&self) -> SystemTime {
-        self.modified_at
+    /// Get the newest modification time, if any.
+    pub fn newest(&self) -> Option<SystemTime> {
+        match self {
+            Self::MatchesFound { modified_at, .. } => Some(*modified_at),
+            Self::NoMatches => None,
+        }
     }
 
-    /// Get the designated file with the newest modification time.
-    pub fn designated_file(&self) -> &Path {
-        &self.designated_file
+    /// Get the designated file with the newest modification time, if any.
+    pub fn designated_file(&self) -> Option<&Path> {
+        match self {
+            Self::MatchesFound {
+                designated_file, ..
+            } => Some(designated_file.as_path()),
+            Self::NoMatches => None,
+        }
+    }
+
+    /// Returns `true` if there have been any matches found.
+    pub fn has_matches(&self) -> bool {
+        matches!(self, Self::MatchesFound { .. })
     }
 }
 
@@ -124,8 +137,30 @@ mod tests {
         // Use glob patterns to match `.txt` files
         let glob_mod_time = GlobModificationTime::from_patterns(dir_path, ["*.txt"]).unwrap();
 
-        // Assert that the designated file is `file3.txt` with the latest modification time
-        assert_eq!(glob_mod_time.designated_file(), dir_path.join("file3.txt"));
-        assert_eq!(glob_mod_time.modified_at, now + Duration::from_secs(60));
+        match glob_mod_time {
+            GlobModificationTime::MatchesFound {
+                modified_at,
+                designated_file,
+            } => {
+                // Assert that the designated file is `file3.txt` with the latest modification time
+                assert_eq!(designated_file, dir_path.join("file3.txt"));
+                assert_eq!(modified_at, now + Duration::from_secs(60));
+            }
+            GlobModificationTime::NoMatches => panic!("Expected matches but found none"),
+        }
+    }
+
+    #[test]
+    fn test_glob_modification_time_no_matches() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+
+        // Use glob patterns that match no files
+        let glob_mod_time = GlobModificationTime::from_patterns(dir_path, ["*.md"]).unwrap();
+
+        assert!(matches!(glob_mod_time, GlobModificationTime::NoMatches));
+        assert_eq!(glob_mod_time.newest(), None);
+        assert_eq!(glob_mod_time.designated_file(), None);
     }
 }
