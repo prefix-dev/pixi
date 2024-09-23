@@ -117,14 +117,19 @@ pub struct ConfigCli {
     pypi_keyring_provider: Option<KeyringProvider>,
 }
 
-#[derive(Parser, Debug, Default, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 pub struct ConfigCliPrompt {
-    #[clap(flatten)]
-    config: ConfigCli,
-
     /// Do not change the PS1 variable when starting a prompt.
     #[arg(long)]
     change_ps1: Option<bool>,
+}
+
+impl ConfigCliPrompt {
+    pub fn merge_with_config(self, config: Config) -> Config {
+        let mut config = config;
+        config.change_ps1 = self.change_ps1.or(config.change_ps1);
+        config
+    }
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
@@ -439,13 +444,6 @@ impl From<ConfigCli> for Config {
     }
 }
 
-impl From<ConfigCliPrompt> for Config {
-    fn from(cli: ConfigCliPrompt) -> Self {
-        let mut config: Config = cli.config.into();
-        config.change_ps1 = cli.change_ps1;
-        config
-    }
-}
 #[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {

@@ -8,9 +8,9 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::{
-    activation::CurrentEnvVarBehavior, cli::LockFileUsageArgs, environment::update_prefix,
+    activation::CurrentEnvVarBehavior, environment::update_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project,
 };
@@ -26,14 +26,14 @@ pub struct Args {
     project_config: ProjectConfig,
 
     #[clap(flatten)]
-    lock_file_usage: LockFileUsageArgs,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// The environment to activate in the shell
     #[arg(long, short)]
     environment: Option<String>,
 
     #[clap(flatten)]
-    config: ConfigCliPrompt,
+    prompt_config: ConfigCliPrompt,
 }
 
 fn start_powershell(
@@ -203,8 +203,11 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let config = args
+        .prompt_config
+        .merge_with_config(args.prefix_update_config.config.clone().into());
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.config);
+        .with_cli_config(config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
@@ -215,7 +218,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    update_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    update_prefix(
+        &environment,
+        args.prefix_update_config.lock_file_usage(),
+        false,
+    )
+    .await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
@@ -228,6 +236,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()
         .or_else(ShellEnum::from_env)
         .unwrap_or_default();
+
+    tracing::info!("Starting shell: {:?}", interactive_shell);
 
     let prompt = if project.config().change_ps1() {
         match interactive_shell {

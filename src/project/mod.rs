@@ -27,8 +27,7 @@ use once_cell::sync::OnceCell;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, EnvironmentName, Environments, HasManifestRef, Manifest,
-    ParsedManifest, SpecType,
+    EnvironmentName, Environments, HasManifestRef, Manifest, ParsedManifest, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -177,7 +176,7 @@ impl Project {
     /// environment. This will also set the current working directory to the
     /// project root.
     pub(crate) fn discover() -> miette::Result<Self> {
-        let project_toml = find_project_manifest();
+        let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
 
         if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
@@ -226,16 +225,18 @@ impl Project {
     /// than a discovered version
     pub(crate) fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
         if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
-            let discover_path = find_project_manifest();
-            let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
+            if let Ok(current_dir) = std::env::current_dir() {
+                let discover_path = find_project_manifest(current_dir);
+                let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
 
-            if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
-                if env_path.as_str() != discover_path.to_str().unwrap() {
-                    tracing::warn!(
-                        "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
-                        env_path,
-                        discover_path.to_string_lossy()
-                    );
+                if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
+                    if env_path.as_str() != discover_path.to_str().unwrap() {
+                        tracing::warn!(
+                            "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            env_path,
+                            discover_path.to_string_lossy()
+                        );
+                    }
                 }
             }
         }
@@ -536,15 +537,28 @@ impl Project {
                         .try_collect()
                         .into_diagnostic()?;
 
+                    let feature_channels: HashSet<_> = manifest
+                        .parsed
+                        .features
+                        .values()
+                        .flat_map(|feature| feature.channels.iter())
+                        .flatten()
+                        .map(|pc| pc.channel.clone().into_channel(channel_config))
+                        .collect();
+
+                    let project_and_feature_channels: HashSet<_> =
+                        project_channels.union(&feature_channels).collect();
+
                     for channel in channel_to_location_map.keys() {
-                        if !project_channels.contains(channel) {
-                            let channels = project_channels
+                        if !project_and_feature_channels.contains(channel) {
+                            let channels = project_and_feature_channels
                                 .iter()
                                 .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                                .sorted()
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             miette::bail!(
-                                "Defined conda-pypi-map channel: {} is missing from the channels, which are: {}",
+                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
                                 console::style(
                                     channel
                                         .name
@@ -600,29 +614,31 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest() -> Option<PathBuf> {
-    let current_dir = std::env::current_dir().ok()?;
-    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
-        [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST]
-            .iter()
-            .find_map(|manifest| {
-                let path = dir.join(manifest);
-                if path.is_file() {
-                    match *manifest {
-                        consts::PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        consts::PYPROJECT_MANIFEST
-                            if PyProjectManifest::from_path(&path)
-                                .is_ok_and(|project| project.is_pixi()) =>
-                        {
-                            Some(path.to_path_buf())
+pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
+    let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
+
+    for dir in current_dir.ancestors() {
+        for manifest in &manifests {
+            let path = dir.join(manifest);
+            if !path.is_file() {
+                continue;
+            }
+
+            match *manifest {
+                consts::PROJECT_MANIFEST => return Some(path),
+                consts::PYPROJECT_MANIFEST => {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if content.contains("[tool.pixi") {
+                            return Some(path);
                         }
-                        _ => None,
                     }
-                } else {
-                    None
                 }
-            })
-    })
+                _ => {}
+            }
+        }
+    }
+
+    None
 }
 
 /// Create a symlink from the directory to the custom target directory
@@ -701,15 +717,17 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::Write;
     use std::str::FromStr;
 
+    use super::*;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
-
-    use super::*;
+    use tempfile::tempdir;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -954,6 +972,131 @@ mod tests {
                 )
                 .unwrap(),
             &MappingLocation::Path(PathBuf::from("mapping.json"))
+        );
+    }
+
+    #[test]
+    fn test_mapping_ensure_feature_channels_also_checked() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {custom-feature-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+
+            [feature.a]
+            channels = ["custom-feature-channel"]
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert!(project.pypi_name_mapping_source().is_ok());
+
+        let non_existing_channel = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge", "pytorch"]
+            platforms = []
+            conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
+            "#;
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        // We output error message with bold channel name,
+        // so we need to disable colors for snapshot
+        console::set_colors_enabled(false);
+
+        insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
+    }
+
+    #[test]
+    fn test_find_project_manifest_in_current_dir() {
+        for manifest in &[consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST] {
+            let dir = tempdir().unwrap();
+            let project_manifest_path = dir.path().join(manifest);
+
+            // Create manifest
+            let mut file = File::create(&project_manifest_path).unwrap();
+            writeln!(file, "[project]").unwrap();
+            if manifest == &consts::PYPROJECT_MANIFEST {
+                writeln!(file, "[tool.pixi.project]").unwrap();
+            }
+
+            assert_eq!(
+                find_project_manifest(dir.into_path()),
+                Some(project_manifest_path)
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_project_manifest_with_multiple() {
+        let dir = tempdir().unwrap();
+        let manifest_path = dir.path().join(consts::PROJECT_MANIFEST);
+        let pyproject_manifest_path = dir.path().join(consts::PYPROJECT_MANIFEST);
+
+        // Create manifests
+        let mut file = File::create(&manifest_path).unwrap();
+        writeln!(file, "[project]").unwrap();
+        let mut file = File::create(&pyproject_manifest_path).unwrap();
+        writeln!(file, "[project]").unwrap();
+        writeln!(file, "[tool.pixi.project]").unwrap();
+
+        assert_eq!(find_project_manifest(dir.into_path()), Some(manifest_path));
+    }
+
+    #[test]
+    fn test_find_manifest_closest_to_current_dir() {
+        // Create a file structure like:
+        // root
+        // ├── child
+        // │   └── pyproject.toml
+        // ├── non-pixi-child
+        // │   └── pyproject.toml
+        // └── pixi.toml
+        //
+        // And verify that the correct manifest is found in each directory
+
+        let dir = tempdir().unwrap();
+        let pixi_child_dir = dir.path().join("child");
+        let non_pixi_child_dir = dir.path().join("non-pixi-child");
+
+        let manifest_path_root = dir.path().join(consts::PROJECT_MANIFEST);
+        let manifest_path_pixi_child = pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
+        let manifest_path_non_pixi_child = non_pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
+
+        // Create manifests
+        // Root manifest is normal pixi.toml
+        let mut file = File::create(&manifest_path_root).unwrap();
+        writeln!(file, "[project]").unwrap();
+
+        // Pixi child manifest is pyproject.toml with pixi tool
+        std::fs::create_dir_all(&pixi_child_dir).unwrap();
+        let mut file = File::create(&manifest_path_pixi_child).unwrap();
+        writeln!(file, "[project]").unwrap();
+        writeln!(file, "[tool.pixi.project]").unwrap();
+
+        // Non pixi child manifest is pyproject.toml without pixi tool
+        std::fs::create_dir_all(&non_pixi_child_dir).unwrap();
+        let mut file = File::create(&manifest_path_non_pixi_child).unwrap();
+        writeln!(file, "[project]").unwrap();
+
+        // In root use root manifest
+        assert_eq!(
+            find_project_manifest(dir.into_path()),
+            Some(manifest_path_root.clone())
+        );
+
+        // In pixi child use pixi child manifest
+        assert_eq!(
+            find_project_manifest(pixi_child_dir),
+            Some(manifest_path_pixi_child)
+        );
+
+        // In non pixi child use root manifest
+        assert_eq!(
+            find_project_manifest(non_pixi_child_dir),
+            Some(manifest_path_root)
         );
     }
 }

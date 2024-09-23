@@ -1,0 +1,68 @@
+# This file defines the wheels that are used to test common wheels and adding them using pixi
+# Add the top-level wheels, for where you want a simple `name` = `version` mapping
+# Add more complex mappings using the [[name]] table, where you can specify extras, version, and more
+# Or a single [name] for a more complex version
+confz = "*"
+dvc = "*"
+dvclive = "*"
+icecream = "*"
+matplotlib = "*"
+mkdocs = "*"
+mkdocs-material = "*"
+numpy = "*"
+pymeshfix = "*"
+pyright = "*"
+pytest = "*"
+pytest-benchmark = "*"
+pyvista = "*"
+ruff = "*"
+scipy = "*"
+setuptools-scm = "6.2.0"
+taichi = "*"
+trimesh = "*"
+typeguard = "*"
+
+## Add more complex dependencies after this line:
+
+## Failing for windows (add for linux until the issue is resolved)
+[meshpy]
+target = "linux-64"
+version = "*"
+
+[meshtaichi-patcher]
+target = "linux-64"
+version = "*"
+
+[meshtools]
+target = "linux-64"
+version = "*"
+
+[rerun-sdk]
+target = "linux-64"
+version = "*"
+# Use these system requirements
+# because the wheel requires a higher version of glibc than the conda counterpart
+[rerun-sdk.system-requirements]
+libc = { family = "glibc", version = "2.31" }
+
+[mkdocstrings]
+extras = "python"
+version = "*"
+
+[meshio]
+extras = "all"
+version = "*"
+[meshio.system-requirements]
+macos = "14.0"
+
+[[jax]]
+version = "*"
+[[jax]]
+extras = "cuda12"
+version = "*"
+
+[nvidia-cuda-nvrtc-cu11]
+target = "linux-64"
+version = "*"
+[nvidia-cuda-nvrtc-cu11.system-requirements]
+cuda = "11.0"
