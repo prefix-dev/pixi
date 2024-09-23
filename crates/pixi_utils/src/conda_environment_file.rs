@@ -234,9 +234,9 @@ mod tests {
         assert_eq!(
             channels,
             vec![
-                NamedChannelOrUrl::from_str("pytorch").unwrap(),
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
                 NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
+                NamedChannelOrUrl::from_str("pytorch").unwrap(),
             ]
         );
 
