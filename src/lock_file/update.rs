@@ -26,7 +26,7 @@ use pixi_progress::global_multi_progress;
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, Channel, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
@@ -1322,14 +1322,19 @@ impl<'p> UpdateContext<'p> {
             let grouped_env = GroupedEnvironment::from(environment.clone());
 
             let channel_config = project.channel_config();
-            builder.set_channels(
-                &environment_name,
-                grouped_env
-                    .channels()
-                    .into_iter()
-                    .cloned()
-                    .map(|channel| channel.into_base_url(&channel_config).to_string()),
-            );
+            let channels: Vec<String> = grouped_env
+                .channels()
+                .into_iter()
+                .cloned()
+                .map(|channel| {
+                    channel
+                        .into_base_url(&channel_config)
+                        .map(|ch| ch.to_string())
+                })
+                .try_collect()
+                .into_diagnostic()?;
+
+            builder.set_channels(&environment_name, channels);
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
@@ -1527,14 +1532,14 @@ async fn spawn_solve_conda_environment_task(
             // Extract the repo data records needed to solve the environment.
             pb.set_message("loading repodata");
             let fetch_repodata_start = Instant::now();
+            let channels: Vec<Channel> = channels
+                .into_iter()
+                .map(|c| c.into_channel(&channel_config))
+                .try_collect()
+                .into_diagnostic()?;
+
             let available_packages = repodata_gateway
-                .query(
-                    channels
-                        .into_iter()
-                        .map(|c| c.into_channel(&channel_config)),
-                    [platform, Platform::NoArch],
-                    match_specs.clone(),
-                )
+                .query(channels, [platform, Platform::NoArch], match_specs.clone())
                 .recursive(true)
                 .with_reporter(GatewayProgressReporter::new(pb.clone()))
                 .await

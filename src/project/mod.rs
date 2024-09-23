@@ -21,6 +21,7 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
 pub use has_project_ref::HasProjectRef;
 use indexmap::Equivalent;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pixi_config::Config;
@@ -516,7 +517,7 @@ impl Project {
                     let channel_to_location_map = map
                         .into_iter()
                         .map(|(key, value)| {
-                            let key = key.into_channel(channel_config);
+                            let key = key.into_channel(channel_config).into_diagnostic()?;
                             Ok((key, value))
                         })
                         .collect::<miette::Result<HashMap<Channel, String>>>()?;
@@ -532,7 +533,8 @@ impl Project {
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .collect();
+                        .try_collect()
+                        .into_diagnostic()?;
 
                     for channel in channel_to_location_map.keys() {
                         if !project_channels.contains(channel) {

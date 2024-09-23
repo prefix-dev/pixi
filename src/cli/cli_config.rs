@@ -5,6 +5,7 @@ use crate::Project;
 use clap::Parser;
 use indexmap::IndexSet;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
@@ -38,12 +39,15 @@ pub struct ChannelsConfig {
 
 impl ChannelsConfig {
     /// Parses the channels, getting channel config and default channels from config
-    pub(crate) fn resolve_from_config(&self, config: &Config) -> IndexSet<Channel> {
+    pub(crate) fn resolve_from_config(&self, config: &Config) -> miette::Result<IndexSet<Channel>> {
         self.resolve(config.global_channel_config(), config.default_channels())
     }
 
     /// Parses the channels, getting channel config and default channels from project
-    pub(crate) fn resolve_from_project(&self, project: Option<&Project>) -> IndexSet<Channel> {
+    pub(crate) fn resolve_from_project(
+        &self,
+        project: Option<&Project>,
+    ) -> miette::Result<IndexSet<Channel>> {
         match project {
             Some(project) => {
                 let channels = project
@@ -63,7 +67,7 @@ impl ChannelsConfig {
         &self,
         channel_config: &ChannelConfig,
         default_channels: Vec<NamedChannelOrUrl>,
-    ) -> IndexSet<Channel> {
+    ) -> miette::Result<IndexSet<Channel>> {
         let channels = if self.channels.is_empty() {
             default_channels
         } else {
@@ -72,7 +76,8 @@ impl ChannelsConfig {
         channels
             .into_iter()
             .map(|c| c.into_channel(channel_config))
-            .collect()
+            .try_collect()
+            .into_diagnostic()
     }
 }
 
