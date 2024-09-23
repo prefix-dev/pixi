@@ -92,7 +92,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package.output_file.display()
             )
         })?;
-        let dest = output_dir.join(&file_name);
+        let dest = output_dir.join(file_name);
         match std::fs::rename(&package.output_file, &dest) {
             Ok(_) => {}
             Err(e) if e.raw_os_error() == Some(EXDEV) => {
