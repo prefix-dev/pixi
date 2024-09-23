@@ -3,9 +3,7 @@ mod common;
 use std::path::Path;
 
 use crate::common::{LockFileExt, PixiControl};
-use pep508_rs::PackageName;
 use rattler_conda_types::Platform;
-use rattler_lock::PypiPackageData;
 use url::Url;
 
 #[tokio::test]
