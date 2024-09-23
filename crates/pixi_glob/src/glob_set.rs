@@ -92,8 +92,8 @@ impl<'t> GlobSet<'t> {
         entries
     }
 }
-#[cfg(test)]
 
+#[cfg(test)]
 mod tests {
     use super::GlobSet;
     use std::{
