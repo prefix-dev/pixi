@@ -89,6 +89,19 @@ pixi global install rattler-build
 pixi global install ruff
 ```
 
+### Using the --no-activation option
+
+When installing packages globally, you can use the `--no-activation` option to prevent the insertion of environment activation code into the installed executable scripts. This means that when you run the installed executable, it won't modify the `PATH` or `CONDA_PREFIX` environment variables beforehand.
+
+Example:
+
+```shell
+# Install a package without inserting activation code
+pixi global install ruff --no-activation
+```
+
+This option can be useful in scenarios where you want more control over the environment activation or if you're using the installed executables in contexts where automatic activation might interfere with other processes.
+
 ## Use pixi in GitHub Actions
 
 You can use pixi in GitHub Actions to install dependencies and run commands.
