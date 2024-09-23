@@ -17,16 +17,16 @@ pub(crate) struct GlobSet<'t> {
 #[derive(Error, Debug)]
 pub enum GlobSetError {
     #[error("failed to access {}", .0.display())]
-    IoError(PathBuf, #[source] io::Error),
+    Io(PathBuf, #[source] io::Error),
 
     #[error(transparent)]
-    WalkError(#[from] io::Error),
+    DirWalk(#[from] io::Error),
 
     #[error("failed to read metadata for {0}")]
-    MetadataError(PathBuf, #[source] wax::WalkError),
+    Metadata(PathBuf, #[source] wax::WalkError),
 
     #[error(transparent)]
-    BuildError(#[from] wax::BuildError),
+    Build(#[from] wax::BuildError),
 }
 
 pub(crate) struct MatchedFile {
@@ -59,11 +59,11 @@ impl<'t> GlobSet<'t> {
         // Parse all globs
         let inclusion_globs = inclusion_globs
             .into_iter()
-            .map(|g| Glob::new(g))
+            .map(Glob::new)
             .collect::<Result<Vec<_>, _>>()?;
         let exclusion_globs = exclusion_globs
             .into_iter()
-            .map(|g| Glob::new(g))
+            .map(Glob::new)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
@@ -86,7 +86,7 @@ impl<'t> GlobSet<'t> {
                 match entry {
                     Ok(entry) if entry.file_type().is_dir() => None,
                     Ok(entry) => match entry.metadata() {
-                        Err(e) => Some(Err(GlobSetError::MetadataError(entry.into_path(), e))),
+                        Err(e) => Some(Err(GlobSetError::Metadata(entry.into_path(), e))),
                         Ok(metadata) => Some(Ok(MatchedFile::new(entry.into_path(), metadata))),
                     },
                     Err(e) => {
@@ -96,9 +96,9 @@ impl<'t> GlobSet<'t> {
                             // Ignore DONE and permission errors
                             io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => None,
                             _ => Some(Err(if let Some(path) = path {
-                                GlobSetError::IoError(path, io_err)
+                                GlobSetError::Io(path, io_err)
                             } else {
-                                GlobSetError::WalkError(io_err)
+                                GlobSetError::DirWalk(io_err)
                             })),
                         }
                     }
