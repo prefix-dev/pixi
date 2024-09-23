@@ -5,7 +5,7 @@ use std::{
 
 use itertools::{Either, Itertools};
 use thiserror::Error;
-use wax::Glob;
+use wax::{Glob, WalkEntry};
 
 pub(crate) struct GlobSet<'t> {
     /// The globs to include in the filter.
@@ -27,22 +27,6 @@ pub enum GlobSetError {
 
     #[error(transparent)]
     Build(#[from] wax::BuildError),
-}
-
-pub(crate) struct MatchedFile {
-    /// Path to the matched file
-    pub matched_path: PathBuf,
-    /// Metadata of the matched file
-    pub metadata: std::fs::Metadata,
-}
-
-impl MatchedFile {
-    pub fn new(matched_path: PathBuf, metadata: std::fs::Metadata) -> Self {
-        Self {
-            matched_path,
-            metadata,
-        }
-    }
 }
 
 impl<'t> GlobSet<'t> {
@@ -73,22 +57,23 @@ impl<'t> GlobSet<'t> {
     }
 
     /// Create a function that filters out files that match the globs.
-    pub fn filter_directory(&self, root_dir: &Path) -> Result<Vec<MatchedFile>, GlobSetError> {
+    pub fn filter_directory(
+        &'t self,
+        root_dir: &Path,
+    ) -> impl Iterator<Item = Result<WalkEntry<'static>, GlobSetError>> + 't {
+        let root_dir = root_dir.to_path_buf();
         let entries = self
             .include
             .iter()
-            .flat_map(|glob| {
-                glob.walk(root_dir)
+            .flat_map(move |glob| {
+                glob.walk(root_dir.clone())
                     .not(self.exclude.clone())
                     .expect("since the globs are already parsed this should not error")
             })
             .filter_map(|entry| {
                 match entry {
                     Ok(entry) if entry.file_type().is_dir() => None,
-                    Ok(entry) => match entry.metadata() {
-                        Err(e) => Some(Err(GlobSetError::Metadata(entry.into_path(), e))),
-                        Ok(metadata) => Some(Ok(MatchedFile::new(entry.into_path(), metadata))),
-                    },
+                    Ok(entry) => Some(Ok(entry)),
                     Err(e) => {
                         let path = e.path().map(Path::to_path_buf);
                         let io_err = std::io::Error::from(e);
@@ -103,9 +88,8 @@ impl<'t> GlobSet<'t> {
                         }
                     }
                 }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(entries)
+            });
+        entries
     }
 }
 #[cfg(test)]
@@ -136,10 +120,13 @@ mod tests {
         // Filter directory and get results as strings
         let mut filtered_files: Vec<_> = filter_globs
             .filter_directory(&root_path)
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap()
             .into_iter()
             .map(|p| {
-                p.matched_path
+                p.path()
+                    .clone()
                     .strip_prefix(&root_path)
                     .unwrap()
                     .to_path_buf()

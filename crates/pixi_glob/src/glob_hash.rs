@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use itertools::Itertools;
 use rattler_digest::{digest::Digest, Sha256, Sha256Hash};
 use thiserror::Error;
 
@@ -47,11 +48,12 @@ impl GlobHash {
         }
 
         let glob_set = GlobSet::create(globs)?;
-        let mut entries: Vec<_> = glob_set
-            .filter_directory(root_dir)?
+        let mut entries = glob_set
+            .filter_directory(root_dir)
+            .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .map(|m| m.matched_path)
-            .collect();
+            .map(|entry| entry.path().to_path_buf())
+            .collect_vec();
         entries.sort();
 
         #[cfg(test)]

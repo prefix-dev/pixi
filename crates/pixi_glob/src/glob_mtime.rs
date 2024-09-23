@@ -48,29 +48,29 @@ impl GlobModificationTime {
         }
 
         let glob_set = GlobSet::create(globs)?;
-        let entries: Vec<_> = glob_set.filter_directory(root_dir)?;
-
-        #[cfg(test)]
-        let mut matching_files = Vec::new();
+        let entries: Vec<_> = glob_set
+            .filter_directory(root_dir)
+            .collect::<Result<Vec<_>, _>>()?;
 
         let mut latest = SystemTime::UNIX_EPOCH;
         let mut designated_file = PathBuf::new();
 
         // Find the newest modification time and the designated file
         for entry in entries {
-            #[cfg(test)]
-            matching_files.push(entry.matched_path.clone());
-
-            let modified_entry = entry.metadata.modified().map_err(|e| {
-                GlobModificationTimeError::CalculateMTime(entry.matched_path.clone(), e)
+            let matched_path = entry.path().to_owned();
+            let metadata = entry.metadata().map_err(|e| {
+                GlobModificationTimeError::CalculateMTime(matched_path.clone(), e.into())
             })?;
+            let modified_entry = metadata
+                .modified()
+                .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
 
             if latest >= modified_entry {
                 continue;
             }
 
             latest = modified_entry;
-            designated_file = entry.matched_path.clone();
+            designated_file = matched_path.clone();
         }
         Ok(Self {
             modified_at: latest,
