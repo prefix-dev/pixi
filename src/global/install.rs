@@ -1,4 +1,9 @@
-use std::{collections::{HashMap, HashSet}, ffi::OsStr, path::PathBuf, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -23,7 +28,7 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
+use super::{project::ParsedEnvironment, EnvironmentName, ExposedKey};
 use crate::{
     global::{self, BinDir, EnvDir},
     prefix::Prefix,
@@ -44,7 +49,6 @@ pub(crate) async fn install_environment(
         .into_iter()
         .map(|channel| channel.clone().into_channel(config.global_channel_config()))
         .collect_vec();
-
 
     let platform = parsed_environment
         .platform()
@@ -119,7 +123,6 @@ pub(crate) async fn install_environment(
 pub(crate) async fn expose_executables(
     env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
-    packages: Vec<PackageName>,
     prefix: &Prefix,
     bin_dir: &BinDir,
 ) -> miette::Result<bool> {
@@ -418,22 +421,15 @@ pub(crate) fn prompt_user_to_continue(
     Ok(true)
 }
 
-pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette::Error> {
-    // Create directories
-    let bin_dir = BinDir::from_env().await?;
-    let env_root = EnvRoot::from_env().await?;
-
-    let project = global::Project::discover_or_create(&bin_dir, &env_root, assume_yes)
-        .await?
-        .with_cli_config(config.clone());
-
+pub(crate) async fn sync(project: &global::Project, config: &Config) -> Result<(), miette::Error> {
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(config));
 
     let gateway = config.gateway(auth_client.clone());
 
     // Prune environments that are not listed
-    env_root
+    project
+        .env_root
         .prune(project.environments().keys().cloned())
         .await?;
 
@@ -445,10 +441,10 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             environment
                 .exposed
                 .keys()
-                .map(|e| bin_dir.executable_script_path(e))
+                .map(|e| project.bin_dir.executable_script_path(e))
         })
         .collect_vec();
-    for file in bin_dir.files().await? {
+    for file in project.bin_dir.files().await? {
         let file_name = file
             .file_stem()
             .and_then(OsStr::to_str)
@@ -484,7 +480,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             })
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
-        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let prefix_records = prefix.find_installed_packages(Some(50)).await?;
@@ -492,7 +488,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
         if !specs_match_local_environment(&specs, prefix_records, parsed_environment.platform()) {
             install_environment(
                 &specs,
-                &parsed_environment,
+                parsed_environment,
                 auth_client.clone(),
                 &prefix,
                 config,
@@ -501,14 +497,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             .await?;
         }
 
-        expose_executables(
-            &env_name,
-            &parsed_environment,
-            specs.keys().cloned().collect(),
-            &prefix,
-            &bin_dir,
-        )
-        .await?;
+        expose_executables(env_name, parsed_environment, &prefix, &project.bin_dir).await?;
     }
 
     Ok(())

@@ -93,26 +93,16 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         exposed_name: ExposedKey,
-        actual_bin: String,
+        executable_name: String,
     ) -> miette::Result<()> {
-        let table_name = format!("envs.{}.exposed", env_name);
-
         self.document
-            .get_or_insert_nested_table(&table_name)?
+            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .insert(
                 exposed_name.as_str(),
-                Item::Value(toml_edit::Value::from(actual_bin.clone())),
+                Item::Value(toml_edit::Value::from(executable_name.clone())),
             );
 
-        let mut envs = self
-            .parsed
-            .get_mut_env(env_name)
-            .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
-
-        envs.exposed
-            .insert(exposed_name.clone(), actual_bin.clone());
-
-        tracing::debug!("added {}={} in toml document", exposed_name, actual_bin);
+        tracing::debug!("Added exposed mapping {exposed_name}={executable_name} to toml document");
         Ok(())
     }
 
@@ -121,20 +111,11 @@ impl Manifest {
         env_name: &EnvironmentName,
         exposed_name: &ExposedKey,
     ) -> miette::Result<()> {
-        let table_name = format!("envs.{}.exposed", env_name);
-
         self.document
-            .get_or_insert_nested_table(&table_name)?
+            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .remove(exposed_name.as_str());
 
-        let mut envs = self
-            .parsed
-            .get_mut_env(env_name)
-            .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
-
-        envs.exposed.swap_remove(exposed_name);
-
-        tracing::debug!("removed {} from manifest", exposed_name);
+        tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
         Ok(())
     }
 

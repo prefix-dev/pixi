@@ -1,14 +1,11 @@
 mod common;
-mod expose;
 mod install;
 mod project;
 // mod document;
 
-pub(crate) use expose::{expose_add, expose_remove};
-
-pub(crate) use common::{BinDir, EnvDir, EnvRoot,};
-pub(crate) use install::{create_executable_scripts, script_exec_mapping, sync};
-pub(crate) use project::{EnvironmentName, ExposedKey, Project, MANIFEST_DEFAULT_NAME};
+pub(crate) use common::{BinDir, EnvDir, EnvRoot};
+pub(crate) use install::sync;
+pub(crate) use project::{EnvironmentName, ExposedKey, Project};
 // pub(crate) use document::ManifestSource;
 
 use crate::prefix::Prefix;

@@ -9,11 +9,9 @@ pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 pub(crate) use manifest::Manifest;
 use miette::{Context, IntoDiagnostic};
+use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedKey;
 pub(crate) use parsed_manifest::ParsedEnvironment;
-use rattler_repodata_gateway::Gateway;
-use reqwest_middleware::ClientWithMiddleware;
-use once_cell::sync::Lazy;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
 use pixi_manifest::PrioritizedChannel;
@@ -46,6 +44,10 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
     config: Config,
+    /// Root directory of the global environments
+    pub(crate) env_root: EnvRoot,
+    /// Binary directory
+    pub(crate) bin_dir: BinDir,
 }
 
 impl Debug for Project {
@@ -227,7 +229,7 @@ async fn package_from_conda_meta(
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest, env_root: EnvRoot, bin_dir: BinDir) -> Self {
         let root = manifest
             .path
             .parent()
@@ -240,13 +242,20 @@ impl Project {
             root,
             manifest,
             config,
+            env_root,
+            bin_dir,
         }
     }
 
     /// Constructs a project from a manifest.
-    pub(crate) fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+    pub(crate) fn from_str(
+        manifest_path: &Path,
+        content: &str,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest))
+        Ok(Self::from_manifest(manifest, env_root, bin_dir))
     }
 
     /// Discovers the project manifest file in path at
@@ -254,8 +263,8 @@ impl Project {
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover_or_create(
-        bin_dir: &BinDir,
-        env_root: &EnvRoot,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
         assume_yes: bool,
     ) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
@@ -283,7 +292,7 @@ impl Project {
                         .interact()
                         .into_diagnostic()?)
             {
-                return Self::try_from_existing_installation(&manifest_path, bin_dir, env_root)
+                return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
@@ -296,13 +305,13 @@ impl Project {
                 .wrap_err_with(|| format!("Couldn't create file {}", manifest_path.display()))?;
         }
 
-        Self::from_path(&manifest_path)
+        Self::from_path(&manifest_path, env_root, bin_dir)
     }
 
     async fn try_from_existing_installation(
         manifest_path: &Path,
-        bin_dir: &BinDir,
-        env_root: &EnvRoot,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
     ) -> miette::Result<Self> {
         let futures = bin_dir
             .files()
@@ -313,9 +322,9 @@ impl Project {
                 Ok(false) => None,          // Success and isn't text, filter out
                 Err(e) => Some(Err(e)),     // Failure, continue with error
             })
-            .map(|result| async move {
+            .map(|result| async {
                 match result {
-                    Ok(path) => ExposedData::from_exposed_path(&path, env_root).await,
+                    Ok(path) => ExposedData::from_exposed_path(&path, &env_root).await,
                     Err(e) => Err(e),
                 }
             });
@@ -327,7 +336,7 @@ impl Project {
         tokio::fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml)
+        Self::from_str(manifest_path, &toml, env_root, bin_dir)
     }
 
     /// Get default dir for the pixi global manifest
@@ -338,9 +347,13 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub(crate) fn from_path(manifest_path: &Path) -> miette::Result<Self> {
+    pub(crate) fn from_path(
+        manifest_path: &Path,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
-        Ok(Project::from_manifest(manifest))
+        Ok(Project::from_manifest(manifest, env_root, bin_dir))
     }
 
     /// Merge config with existing config project
@@ -355,15 +368,6 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         self.manifest.parsed.envs()
-    }
-
-    /// Returns a specific environment based by name.
-    pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
-        self.manifest.parsed.envs().get(name)
-    }
-
-    pub(crate) fn config(&self) -> &Config {
-        &self.config
     }
 }
 
@@ -384,23 +388,29 @@ mod tests {
         python = "python"
         "#;
 
-    #[test]
-    fn test_project_from_str() {
+    #[tokio::test]
+    async fn test_project_from_str() {
         let manifest_path: PathBuf = FilePath().fake();
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
 
-        let project = Project::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
+        let project =
+            Project::from_str(&manifest_path, SIMPLE_MANIFEST, env_root, bin_dir).unwrap();
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
-    #[test]
-    fn test_project_from_path() {
+    #[tokio::test]
+    async fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
         let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
+
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
 
         // Create and write global manifest
         let mut file = std::fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
 
         // Canonicalize both paths
         let canonical_root = project.root.canonicalize().unwrap();
@@ -409,12 +419,15 @@ mod tests {
         assert_eq!(canonical_root, canonical_manifest_parent);
     }
 
-    #[test]
-    fn test_project_from_manifest() {
+    #[tokio::test]
+    async fn test_project_from_manifest() {
         let manifest_path: PathBuf = FilePath().fake();
 
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
+
         let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Project::from_manifest(manifest, env_root, bin_dir);
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 

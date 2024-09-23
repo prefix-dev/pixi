@@ -1,51 +1,63 @@
-use std::{error::Error, path::PathBuf};
+use std::str::FromStr;
 
+use crate::global::{BinDir, EnvRoot};
 use clap::Parser;
-use itertools::Itertools;
-use miette::IntoDiagnostic;
-use pixi_config::ConfigCli;
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler_shell::shell::ShellEnum;
+use pixi_config::{Config, ConfigCli};
 
-use crate::global::{expose_add, expose_remove, BinDir, EnvRoot};
+use crate::global::{self, EnvironmentName, ExposedKey};
 
-use crate::{
-    global::{
-        self, create_executable_scripts, script_exec_mapping, EnvDir, EnvironmentName, ExposedKey,
-    },
-    prefix::{create_activation_script, Prefix},
-};
+#[derive(Debug, Clone)]
+struct Mapping {
+    exposed_key: ExposedKey,
+    executable_name: String,
+}
+
+impl Mapping {
+    pub fn new(exposed_key: ExposedKey, executable_name: String) -> Self {
+        Self {
+            exposed_key,
+            executable_name,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 pub struct AddArgs {
     /// The binary to add as executable in the form of key=value (e.g. python=python3.10)
-    #[arg(value_parser = parse_key_val)]
-    name: Vec<(String, String)>,
+    #[arg(value_parser = parse_mapping)]
+    mapping: Vec<Mapping>,
 
     #[clap(long)]
-    environment: String,
+    environment: EnvironmentName,
+
+    /// Answer yes to all questions.
+    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    assume_yes: bool,
 
     #[clap(flatten)]
     config: ConfigCli,
 }
 
-/// Parse a single key-value pair
-fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Sync + 'static>> {
-    let pos = s
-        .find('=')
-        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
-    let key = s[..pos].to_string();
-    let value = s[pos + 1..].to_string();
-    Ok((key, value))
+/// Parse mapping between exposed key and executable name
+fn parse_mapping(input: &str) -> miette::Result<Mapping> {
+    input
+        .split_once('=')
+        .ok_or_else(|| {
+            miette::miette!("Could not parse mapping `exposed_key=executable_name` from {input}")
+        })
+        .and_then(|(key, value)| Ok(Mapping::new(ExposedKey::from_str(key)?, value.to_string())))
 }
-
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The binary or binaries to remove as executable  (e.g. python atuin)
-    name: Vec<String>,
+    exposed_keys: Vec<ExposedKey>,
 
     #[clap(long)]
-    environment: String,
+    environment: EnvironmentName,
+
+    /// Answer yes to all questions.
+    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    assume_yes: bool,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -70,44 +82,43 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 }
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
-    // should we do a sync first?
-    let mut project = global::Project::discover()?.with_cli_config(args.config);
-    let env_name: EnvironmentName = args.environment.parse()?;
-    expose_add(&mut project, env_name, args.name).await?;
+    let config = Config::with_cli_config(&args.config);
 
-    let config = project.config();
-
-    // after https://github.com/prefix-dev/pixi/pull/1975 PR lands
-    // this can be simplified by just passing the project
-    let (_, auth_client) = build_reqwest_clients(Some(&config));
-
-    let gateway = config.gateway(auth_client.clone());
-
-    let env_root = EnvRoot::from_env().await?;
     let bin_dir = BinDir::from_env().await?;
+    let env_root = EnvRoot::from_env().await?;
 
+    let mut project = global::Project::discover_or_create(env_root, bin_dir, args.assume_yes)
+        .await?
+        .with_cli_config(config.clone());
+    for mapping in args.mapping {
+        project.manifest.add_exposed_binary(
+            &args.environment,
+            mapping.exposed_key,
+            mapping.executable_name,
+        )?;
+    }
 
-    global::sync(&env_root, &project, &bin_dir, config, &gateway, &auth_client).await
+    project.manifest.save()?;
+
+    global::sync(&project, &config).await
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
-    // should we do a sync first?
-    let mut project = global::Project::discover()?.with_cli_config(args.config);
-    let env_name: EnvironmentName = args.environment.parse()?;
-    expose_remove(&mut project, env_name, args.name).await?;
+    let config = Config::with_cli_config(&args.config);
 
-    let config = project.config();
-
-    // after https://github.com/prefix-dev/pixi/pull/1975 PR lands
-    // this can be simplified by just passing the project
-    let (_, auth_client) = build_reqwest_clients(Some(&config));
-
-    let gateway = config.gateway(auth_client.clone());
-
-    let env_root = EnvRoot::from_env().await?;
     let bin_dir = BinDir::from_env().await?;
+    let env_root = EnvRoot::from_env().await?;
 
+    let mut project = global::Project::discover_or_create(env_root, bin_dir, args.assume_yes)
+        .await?
+        .with_cli_config(config.clone());
+    for exposed_key in args.exposed_keys {
+        project
+            .manifest
+            .remove_exposed_binary(&args.environment, &exposed_key)?;
+    }
 
-    global::sync(&env_root, &project, &bin_dir, config, &gateway, &auth_client).await
+    project.manifest.save()?;
 
+    global::sync(&project, &config).await
 }
