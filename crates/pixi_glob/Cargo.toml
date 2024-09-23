@@ -15,9 +15,10 @@ itertools = { workspace = true }
 memchr = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
 wax = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
 rstest = { workspace = true }
+tempfile = { workspace = true }
