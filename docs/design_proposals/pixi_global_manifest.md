@@ -299,7 +299,7 @@ global_manifests = "/path/to/your/manifests"
 ### No activation
 
 The current `pixi global install` features `--no-activation`.
-When this flag is set `CONDA_PREFIX` and `PATH` will not be set in the activation script.
+When this flag is set, `CONDA_PREFIX` and `PATH` will not be set when running the exposed executable.
 This is useful when installing Python package managers or shells.
 
 Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:
