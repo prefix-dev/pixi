@@ -8,6 +8,7 @@ mod lock_file;
 mod prefix;
 mod project;
 mod prompt;
+pub(crate) mod reinstall_globs;
 pub mod task;
 
 mod uv_reporter;

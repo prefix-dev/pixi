@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use chrono::Utc;
 use miette::Diagnostic;
 use pixi_build_frontend::{BackendOverrides, SetupRequest};
 use pixi_build_types::{
@@ -173,8 +174,11 @@ impl BuildContext {
         // Add the sha256 to the package record.
         let sha = rattler_digest::compute_file_digest::<Sha256>(&build_result.output_file)
             .map_err(|e| BuildError::CalculateSha(source, e))?;
+
+        // Update the package_record sha256 field and timestamp.
         let mut package_record = source_spec.package_record.clone();
         package_record.sha256 = Some(sha);
+        package_record.timestamp.get_or_insert_with(Utc::now);
 
         // Construct a repodata record that represents the package
         let record = RepoDataRecord {

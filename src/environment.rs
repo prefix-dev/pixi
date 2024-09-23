@@ -12,6 +12,7 @@ use fancy_display::FancyDisplay;
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
+use pixi_glob::GlobModificationTime;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
@@ -32,6 +33,7 @@ use crate::{
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    reinstall_globs::{load_reinstall_globs, write_reinstall_globs},
     rlimit::try_increase_rlimit_to_sensible,
     Project,
 };
@@ -486,6 +488,13 @@ impl PythonStatus {
     }
 }
 
+/// Returns the location of where the input globs to check for source
+/// rebuilds are stored.
+/// This will be in the conda-meta directory of the prefix.
+fn reinstall_globs_location(prefix: &Path) -> PathBuf {
+    prefix.join("conda-meta")
+}
+
 /// Updates the environment to contain the packages from the specified lock-file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
@@ -511,8 +520,67 @@ pub async fn update_prefix_conda(
             PixiRecord::Source(record) => Either::Right(record),
         });
 
+    let mut write_globs = vec![];
     // Build conda packages out of the source records
     for source_record in source_records {
+        // Try to load the reinstall globs from the conda-meta directory
+        let glob_file_name = format!(
+            "{}_{}.globs",
+            source_record.package_record.name.as_normalized(),
+            source_record.package_record.version
+        );
+        let glob_file = reinstall_globs_location(prefix.root()).join(glob_file_name);
+        let reinstall_globs = load_reinstall_globs(&glob_file).into_diagnostic()?;
+        let source = source_record
+            .source
+            .as_path()
+            .expect("need a path")
+            .clone()
+            .path;
+
+        if let Some(globs) = reinstall_globs {
+            let glob_mtime = GlobModificationTime::from_patterns(
+                Path::new(source.as_str()),
+                globs.iter().map(|f| f.as_ref()),
+            )
+            .into_diagnostic()?;
+
+            // Find the PrefixRecord timestamp for installed package if it exists
+            // with the same name and version as the source record
+            let installed_timestamp = installed_packages
+                .iter()
+                .find(|record| {
+                    record.repodata_record.package_record.name == source_record.package_record.name
+                        && record.repodata_record.package_record.version
+                            == source_record.package_record.version
+                })
+                .map(|r| r.repodata_record.package_record.timestamp.clone())
+                .flatten()
+                .clone();
+
+            if let Some(timestamp) = installed_timestamp {
+                let newest_file: chrono::DateTime<chrono::Utc> = glob_mtime.newest().clone().into();
+                if newest_file < timestamp {
+                    tracing::debug!(
+                        "skipping rebuild of {} {} as the source files have not changed",
+                        &source_record.package_record.name.as_source(),
+                        &source_record.package_record.version
+                    );
+                    continue;
+                } else {
+                    tracing::debug!(
+                        "rebuilding because source files have changed for {} {}, file {} was found to be the newest",
+                        &source_record.package_record.name.as_source(),
+                        &source_record.package_record.version,
+                        glob_mtime.designated_file().display()
+                    );
+                }
+            } else {
+                tracing::debug!("rebuilding because source record timestamp is None");
+            }
+        } else {
+            tracing::debug!("rebuilding because no globs file was found");
+        }
         let built_source_record = build_context
             .build_source_record(&source_record, &channels, platform)
             .await
@@ -524,6 +592,7 @@ pub async fn update_prefix_conda(
                 )
             })?;
         repodata_records.push(built_source_record.repodata_record);
+        write_globs.push((glob_file, built_source_record.input_globs));
     }
 
     // Execute the operations that are returned by the solver.
@@ -558,9 +627,22 @@ pub async fn update_prefix_conda(
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
     create_history_file(prefix.root())?;
+    // Update the globs for the packages that were built
+    write_glob_files_for_built_packages(prefix.root(), &write_globs).into_diagnostic()?;
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&result.transaction))
+}
+
+fn write_glob_files_for_built_packages(
+    root: &Path,
+    write_globs: &[(PathBuf, Vec<String>)],
+) -> Result<(), std::io::Error> {
+    for (glob_file, globs) in write_globs {
+        let glob_file = reinstall_globs_location(root).join(glob_file);
+        write_reinstall_globs(&glob_file, globs)?;
+    }
+    Ok(())
 }
 
 pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
