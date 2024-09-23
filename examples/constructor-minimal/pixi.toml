@@ -27,7 +27,7 @@ jaq = "*"         # needed to get current platform
 mamba = "*"       # needed for cross-architecturo solves
 
 [feature.build.tasks]
-construct = """
+construct = { cmd = """
   rm -rf dist/installer/$CC_PLATFORM
   && cat installer/construct.yaml.in > installer/construct.yaml
   && echo "environment_file: ./specs/installer_$(echo $CC_PLATFORM)_conda_spec.txt"
@@ -37,7 +37,7 @@ construct = """
     --cache-dir build/.cache/constructor
     --output-dir dist/installer/$CC_PLATFORM
     --conda-exe $(which mamba || where mamba)
-"""
+""", env = { CONDA_EXE = "$(which mamba || where mamba)" } }
 platform = "pixi info --json | jaq -r '.platform'"
 specs = "pixi project export conda-explicit-spec --environment installer ./installer/specs"
 
