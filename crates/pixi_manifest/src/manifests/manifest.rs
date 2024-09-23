@@ -13,7 +13,7 @@ use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Value};
 
 use crate::{
     consts,
@@ -531,14 +531,25 @@ impl Manifest {
         };
         let to_add: IndexSet<_> = channels.into_iter().collect();
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
+        let new_channels: IndexSet<_> = new
+            .clone()
+            .into_iter()
+            .map(|channel| channel.channel)
+            .collect();
 
-        // Add the channels to the manifest
+        // clear channels with modified priority
+        current.retain(|c| !new_channels.contains(&c.channel));
+
+        // Add the updated channels to the manifest
         current.extend(new.clone());
+        let current_clone = current.clone();
 
         // Then to the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        for channel in new.iter() {
-            channels.push(channel.channel.to_string())
+        // clear and recreate from current list
+        channels.clear();
+        for channel in current_clone.iter() {
+            channels.push(Value::from(channel.clone()));
         }
 
         Ok(())
@@ -555,28 +566,35 @@ impl Manifest {
             FeatureName::Default => &mut self.parsed.project.channels,
             FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
         };
-
         // Get the channels to remove, while checking if they exist
         let to_remove: IndexSet<_> = channels
             .into_iter()
             .map(|c| {
                 current
                     .iter()
-                    .position(|x| x.channel == c.channel)
+                    .position(|x| x.channel.to_string() == c.channel.to_string())
                     .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.as_str()))
-                    .map(|_| c)
+                    .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
 
-        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
+        let retained: IndexSet<_> = current
+            .iter()
+            .filter(|channel| !to_remove.contains(&channel.channel.to_string()))
+            .cloned()
+            .collect();
 
         // Remove channels from the manifest
         current.retain(|c| retained.contains(c));
+        let current_clone = current.clone();
 
         // And from the TOML document
-        let retained = retained.iter().map(|c| c.channel.as_str()).collect_vec();
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        channels.retain(|x| retained.contains(&x.as_str().unwrap()));
+        // clear and recreate from current list
+        channels.clear();
+        for channel in current_clone.iter() {
+            channels.push(Value::from(channel.clone()));
+        }
 
         Ok(())
     }
@@ -1533,6 +1551,35 @@ platforms = ["linux-64", "win-64"]
             .channels
             .iter()
             .any(|c| c.channel == custom_channel.channel));
+
+        // Test adding priority
+        let prioritized_channel1 = PrioritizedChannel {
+            channel: NamedChannelOrUrl::Name(String::from("prioritized")),
+            priority: Some(12i32),
+        };
+        manifest
+            .add_channels([prioritized_channel1.clone()], &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == prioritized_channel1.channel && c.priority == Some(12i32)));
+
+        let prioritized_channel2 = PrioritizedChannel {
+            channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
+            priority: Some(-12i32),
+        };
+        manifest
+            .add_channels([prioritized_channel2.clone()], &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
 
         assert_snapshot!(manifest.document.to_string());
     }

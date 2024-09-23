@@ -934,6 +934,7 @@ This command installs package(s) into its own environment and adds the binary to
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
+- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
 
 ```shell
 pixi global install ruff
@@ -952,6 +953,9 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 
 # Install for a specific platform, only useful on osx-arm64
 pixi global install --platform osx-64 ruff
+
+# Install without inserting activation code into the executable script
+pixi global install ruff --no-activation
 ```
 
 !!! tip

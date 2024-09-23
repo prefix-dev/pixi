@@ -121,12 +121,12 @@ impl CondaEnvFile {
         Vec<pep508_rs::Requirement>,
         Vec<NamedChannelOrUrl>,
     )> {
-        let channels = parse_channels(self.channels().clone());
-        let (conda_deps, pip_deps, mut extra_channels) =
+        let mut channels = parse_channels(self.channels().clone());
+        let (conda_deps, pip_deps, extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
 
-        extra_channels.extend(channels);
-        let mut channels: Vec<_> = extra_channels.into_iter().unique().collect();
+        channels.extend(extra_channels);
+        let mut channels: Vec<_> = channels.into_iter().unique().collect();
         if channels.is_empty() {
             channels = config.default_channels();
         }
@@ -234,9 +234,9 @@ mod tests {
         assert_eq!(
             channels,
             vec![
-                NamedChannelOrUrl::from_str("pytorch").unwrap(),
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
                 NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
+                NamedChannelOrUrl::from_str("pytorch").unwrap(),
             ]
         );
 

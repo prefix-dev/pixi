@@ -15,10 +15,14 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
+    let updated_env = global::sync(&project, &config).await?;
 
-    let project = global::Project::discover_or_create(args.assume_yes)
-        .await?
-        .with_cli_config(config.clone());
+    if !updated_env {
+        eprintln!(
+            "{} Nothing to do. The pixi global installation is already up-to-date",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
+    }
 
-    global::sync(&project, &config).await
+    Ok(())
 }
