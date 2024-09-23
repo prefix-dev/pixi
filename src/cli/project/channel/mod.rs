@@ -58,15 +58,19 @@ impl AddRemoveArgs {
         for channel in self.channel {
             match channel {
                 NamedChannelOrUrl::Name(ref name) => eprintln!(
-                    "{}{operation} {} ({})",
+                    "{}{operation} {} ({}){}",
                     console::style(console::Emoji("✔ ", "")).green(),
                     name,
-                    channel.clone().into_base_url(channel_config)
+                    channel.clone().into_base_url(channel_config),
+                    self.priority
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p))
                 ),
                 NamedChannelOrUrl::Url(url) => eprintln!(
-                    "{}{operation} {}",
+                    "{}{operation} {}{}",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    url
+                    url,
+                    self.priority
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p)),
                 ),
             }
         }
