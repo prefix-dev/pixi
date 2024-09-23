@@ -188,3 +188,46 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = tomllib.loads(manifest.read_text())
     assert original_manifest == migrated_manifest
+
+
+def test_global_expose(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = """
+    [envs.test]
+    channels = ["conda-forge"]
+    [envs.test.dependencies]
+    python = "3.12"
+    """
+    manifest.write_text(toml)
+    exposed_exec = "python1.bat" if platform.system() == "Windows" else "python1"
+    python1 = tmp_path / "bin" / exposed_exec
+
+    exposed_exec = "python3.bat" if platform.system() == "Windows" else "python3"
+    python3 = tmp_path / "bin" / exposed_exec
+
+    # Add Python1
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment=test", "python1=python"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    verify_cli_command([python1, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12")
+
+    # Add Python3
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment=test", "python3=python"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    verify_cli_command([python3, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12")
+
+    # Remove Python1
+    verify_cli_command(
+        [pixi, "global", "expose", "remove", "--environment=test", "python1"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert not python1.is_file()

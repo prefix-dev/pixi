@@ -423,7 +423,10 @@ pub(crate) fn prompt_user_to_continue(
 
 // Syncs the manifest with the local environment
 // Returns true if the global installation had to be updated
-pub(crate) async fn sync(project: &global::Project, config: &Config) -> Result<(bool), miette::Error> {
+pub(crate) async fn sync(
+    project: &global::Project,
+    config: &Config,
+) -> Result<bool, miette::Error> {
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(config));
 
@@ -514,7 +517,8 @@ pub(crate) async fn sync(project: &global::Project, config: &Config) -> Result<(
             .await?;
         }
 
-        updated_env |= expose_executables(env_name, parsed_environment, &prefix, &project.bin_dir).await?;
+        updated_env |=
+            expose_executables(env_name, parsed_environment, &prefix, &project.bin_dir).await?;
     }
 
     Ok(updated_env)
