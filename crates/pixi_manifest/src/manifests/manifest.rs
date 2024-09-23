@@ -1552,6 +1552,35 @@ platforms = ["linux-64", "win-64"]
             .iter()
             .any(|c| c.channel == custom_channel.channel));
 
+        // Test adding priority
+        let prioritized_channel1 = PrioritizedChannel {
+                channel: NamedChannelOrUrl::Name(String::from("prioritized")),
+                priority: Some(12i32),
+            };
+        manifest
+            .add_channels([prioritized_channel1.clone()], &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == prioritized_channel1.channel && c.priority == Some(12i32)));
+
+        let prioritized_channel2 = PrioritizedChannel {
+            channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
+            priority: Some(-12i32),
+        };
+        manifest
+            .add_channels([prioritized_channel2.clone()], &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
+
         assert_snapshot!(manifest.document.to_string());
     }
 
@@ -2227,4 +2256,5 @@ bar = "*"
             }
         }
     }
+
 }
