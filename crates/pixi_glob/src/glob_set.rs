@@ -112,53 +112,48 @@ impl<'t> GlobSet<'t> {
 
 mod tests {
     use super::GlobSet;
+    use std::{
+        fs::{create_dir, File},
+        path::PathBuf,
+    };
+    use tempfile::tempdir;
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use std::{
-            fs::{create_dir, File},
-            path::PathBuf,
-        };
-        use tempfile::tempdir;
+    #[test]
+    fn test_filter_globs_inclusion_exclusion() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path();
 
-        #[test]
-        fn test_filter_globs_inclusion_exclusion() {
-            let temp_dir = tempdir().unwrap();
-            let root_path = temp_dir.path();
+        // Create files and directories
+        File::create(root_path.join("include1.txt")).unwrap();
+        File::create(root_path.join("include2.log")).unwrap();
+        File::create(root_path.join("exclude.txt")).unwrap();
+        create_dir(root_path.join("subdir")).unwrap();
+        File::create(root_path.join("subdir/include_subdir.txt")).unwrap();
 
-            // Create files and directories
-            File::create(root_path.join("include1.txt")).unwrap();
-            File::create(root_path.join("include2.log")).unwrap();
-            File::create(root_path.join("exclude.txt")).unwrap();
-            create_dir(root_path.join("subdir")).unwrap();
-            File::create(root_path.join("subdir/include_subdir.txt")).unwrap();
+        // Test globs: include all .txt but exclude exclude.txt
+        let filter_globs = GlobSet::create(vec!["**/*.txt", "!exclude.txt"]).unwrap();
 
-            // Test globs: include all .txt but exclude exclude.txt
-            let filter_globs = GlobSet::create(vec!["**/*.txt", "!exclude.txt"]).unwrap();
+        // Filter directory and get results as strings
+        let mut filtered_files: Vec<_> = filter_globs
+            .filter_directory(&root_path)
+            .unwrap()
+            .into_iter()
+            .map(|p| {
+                p.matched_path
+                    .strip_prefix(&root_path)
+                    .unwrap()
+                    .to_path_buf()
+            })
+            .collect();
 
-            // Filter directory and get results as strings
-            let mut filtered_files: Vec<_> = filter_globs
-                .filter_directory(&root_path)
-                .unwrap()
-                .into_iter()
-                .map(|p| {
-                    p.matched_path
-                        .strip_prefix(&root_path)
-                        .unwrap()
-                        .to_path_buf()
-                })
-                .collect();
-
-            // Assert the expected files are present
-            assert_eq!(
-                filtered_files.sort(),
-                vec![
-                    "include1.txt".parse::<PathBuf>().unwrap(),
-                    "subdir/include_subdir.txt".parse().unwrap()
-                ]
-                .sort()
-            );
-        }
+        // Assert the expected files are present
+        assert_eq!(
+            filtered_files.sort(),
+            vec![
+                "include1.txt".parse::<PathBuf>().unwrap(),
+                "subdir/include_subdir.txt".parse().unwrap()
+            ]
+            .sort()
+        );
     }
 }
