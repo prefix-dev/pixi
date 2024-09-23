@@ -3354,6 +3354,7 @@ variable.</p>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that you want to install the package for. (default: current platform)</li>
+<li><code>--no-activation</code>: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># multiple packages can be installed at once</span>
@@ -3371,6 +3372,9 @@ variable.</p>
 </span><span id="__span-39-14"><a id="__codelineno-39-14" name="__codelineno-39-14" href="#__codelineno-39-14"></a>
 </span><span id="__span-39-15"><a id="__codelineno-39-15" name="__codelineno-39-15" href="#__codelineno-39-15"></a><span class="c1"># Install for a specific platform, only useful on osx-arm64</span>
 </span><span id="__span-39-16"><a id="__codelineno-39-16" name="__codelineno-39-16" href="#__codelineno-39-16"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>ruff
+</span><span id="__span-39-17"><a id="__codelineno-39-17" name="__codelineno-39-17" href="#__codelineno-39-17"></a>
+</span><span id="__span-39-18"><a id="__codelineno-39-18" name="__codelineno-39-18" href="#__codelineno-39-18"></a><span class="c1"># Install without inserting activation code into the executable script</span>
+</span><span id="__span-39-19"><a id="__codelineno-39-19" name="__codelineno-39-19" href="#__codelineno-39-19"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff<span class="w"> </span>--no-activation
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
