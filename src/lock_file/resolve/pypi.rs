@@ -397,6 +397,8 @@ pub async fn resolve_pypi(
             .into_diagnostic()
             .context("error creating requires-python for solver")?;
 
+    let markers = ResolverMarkers::SpecificEnvironment(marker_environment.into());
+
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
@@ -406,7 +408,7 @@ pub async fn resolve_pypi(
         &flat_index,
         Some(&tags),
         Some(&requires_python),
-        AllowedYanks::default(),
+        AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
         &context.build_options,
@@ -427,7 +429,7 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        ResolverMarkers::SpecificEnvironment(marker_environment.into()),
+        markers,
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,

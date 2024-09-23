@@ -20,6 +20,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// Do not insert `CONDA_PREFIX`, `PATH` modifications into the installed executable script.
+    #[clap(long)]
+    no_activation: bool,
 }
 
 impl HasSpecs for Args {

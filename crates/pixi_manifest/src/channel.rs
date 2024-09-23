@@ -4,6 +4,7 @@ use itertools::Itertools;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use toml_edit::{Table, Value};
 
 /// A channel with an optional priority.
 /// If the priority is not specified, it is assumed to be 0.
@@ -40,6 +41,29 @@ impl From<NamedChannelOrUrl> for PrioritizedChannel {
         Self {
             channel: value,
             priority: None,
+        }
+    }
+}
+
+impl From<(NamedChannelOrUrl, Option<i32>)> for PrioritizedChannel {
+    fn from((value, prio): (NamedChannelOrUrl, Option<i32>)) -> Self {
+        Self {
+            channel: value,
+            priority: prio,
+        }
+    }
+}
+
+impl From<PrioritizedChannel> for Value {
+    fn from(channel: PrioritizedChannel) -> Self {
+        match channel.priority {
+            Some(priority) => {
+                let mut table = Table::new().into_inline_table();
+                table.insert("channel", channel.channel.to_string().into());
+                table.insert("priority", i64::from(priority).into());
+                Value::InlineTable(table)
+            }
+            None => Value::String(toml_edit::Formatted::new(channel.channel.to_string())),
         }
     }
 }
