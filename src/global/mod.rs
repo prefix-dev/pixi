@@ -1,12 +1,10 @@
 mod common;
 mod install;
 mod project;
-// mod document;
 
 pub(crate) use common::{BinDir, EnvDir, EnvRoot};
 pub(crate) use install::sync;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
-// pub(crate) use document::ManifestSource;
 
 use crate::prefix::Prefix;
 use rattler_conda_types::PrefixRecord;
