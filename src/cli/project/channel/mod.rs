@@ -26,6 +26,10 @@ pub struct AddRemoveArgs {
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<NamedChannelOrUrl>,
 
+    /// Specify the channel priority
+    #[clap(long, num_args = 1)]
+    pub priority: Option<i32>,
+
     /// Don't update the environment, only modify the manifest and the
     /// lock-file.
     #[clap(long)]
@@ -38,7 +42,10 @@ pub struct AddRemoveArgs {
 
 impl AddRemoveArgs {
     fn prioritized_channels(&self) -> impl IntoIterator<Item = PrioritizedChannel> + '_ {
-        self.channel.iter().cloned().map(PrioritizedChannel::from)
+        self.channel
+            .iter()
+            .cloned()
+            .map(|channel| PrioritizedChannel::from((channel, self.priority)))
     }
 
     fn feature_name(&self) -> FeatureName {
@@ -51,15 +58,19 @@ impl AddRemoveArgs {
         for channel in self.channel {
             match channel {
                 NamedChannelOrUrl::Name(ref name) => eprintln!(
-                    "{}{operation} {} ({})",
+                    "{}{operation} {} ({}){}",
                     console::style(console::Emoji("✔ ", "")).green(),
                     name,
-                    channel.clone().into_base_url(channel_config)
+                    channel.clone().into_base_url(channel_config),
+                    self.priority
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p))
                 ),
                 NamedChannelOrUrl::Url(url) => eprintln!(
-                    "{}{operation} {}",
+                    "{}{operation} {}{}",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    url
+                    url,
+                    self.priority
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p)),
                 ),
             }
         }

@@ -28,8 +28,6 @@ env:
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
 
 jobs:
   check-rustdoc-links:
@@ -38,8 +36,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.5
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
@@ -70,10 +71,9 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
-
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
       - name: Run clippy
         run: cargo clippy --all-targets --workspace
 
@@ -108,11 +108,7 @@ jobs:
               target: x86_64-unknown-linux-musl,
               os: 8core_ubuntu_latest_runner,
             }
-          - {
-              name: "macOS",
-              target: x86_64-apple-darwin,
-              os: macos-13,
-            }
+          - { name: "macOS", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
           - {
               name: "Windows",
@@ -125,10 +121,8 @@ jobs:
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
-      #      - uses: Swatinem/rust-cache@v2
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -144,8 +138,7 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - if: ${{ matrix.os != 'windows-latest' }}
-        uses: rui314/setup-mold@v1
+      - uses: rui314/setup-mold@v1
 
       - name: "Cargo nextest"
         run: >-
@@ -216,13 +209,11 @@ jobs:
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
-      #      - uses: Swatinem/rust-cache@v2
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: Swatinem/rust-cache@v2
 
       - name: Setup | Install cargo-wix [Windows]
         # aarch64 is only supported in wix 4.0 development builds
-        if: startsWith(matrix.os, 'windows') && matrix.target != 'aarch64-pc-windows-msvc'
+        if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: cargo install --version 0.3.8 cargo-wix
         env:
           # cargo-wix does not require static crt
@@ -292,7 +283,7 @@ jobs:
           echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Build msi Installer
-        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
           --profile $env:CARGO_PROFILE
@@ -402,7 +393,7 @@ jobs:
           path: ${{ steps.package.outputs.BIN_PATH }}
 
       - name: "Artifact upload: windows installer"
-        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
         uses: actions/upload-artifact@v4
         with:
           name: pixi-${{ matrix.target }}.msi
@@ -421,7 +412,42 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   downstream_tests:
-    name: "Test downstream projects"
+    name: "Test examples, downstream projects and integration"
     needs:
       - build
     uses: ./.github/workflows/test_downstream.yml
+
+  export-filter:
+    name: Only run example tests if relevant code or manifests have changed
+    runs-on: ubuntu-20.04
+    needs:
+      - build
+    outputs:
+      exports: ${{ steps.filter.outputs.exports }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            exports:
+              - src/cli/project/export/conda_environment.rs
+              - src/cli/project/export/test-data/testenv/*
+              - examples/pypi-source-deps/*
+              - examples/pypi-custom-registry/*
+              - examples/pypi-find-links/*
+              - examples/docker/*
+
+  export_tests:
+    name: "Export tests"
+    needs: export-filter
+    if: ${{ needs.export-filter.outputs.exports == 'true' }}
+    uses: ./.github/workflows/test_exports.yml
+
+  test_common_wheels:
+    name: "Test installation of common wheels"
+    needs:
+      - build
+    uses: ./.github/workflows/test_common_wheels.yml

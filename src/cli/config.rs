@@ -184,7 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
-    match project::find_project_manifest() {
+    match project::find_project_manifest(std::env::current_dir().into_diagnostic()?) {
         None => {
             if common_args.local {
                 return Err(miette::miette!(

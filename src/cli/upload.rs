@@ -14,11 +14,12 @@ use tokio_util::io::ReaderStream;
 
 use pixi_progress;
 
+#[allow(rustdoc::bare_urls)]
 /// Upload a conda package
 ///
 /// With this command, you can upload a conda package to a channel.
 /// Example:
-///     pixi upload repo.prefix.dev/my_channel my_package.conda
+///     pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
 ///
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]

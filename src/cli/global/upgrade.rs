@@ -200,6 +200,7 @@ pub(super) async fn upgrade_packages(
                 records,
                 authenticated_client.clone(),
                 platform,
+                false,
             )
             .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));

@@ -38,7 +38,7 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
@@ -300,6 +300,7 @@ impl PixiControl {
                 prefix_update_config: PrefixUpdateConfig {
                     no_lockfile_update: false,
                     no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
                 },
                 editable: false,
@@ -318,6 +319,7 @@ impl PixiControl {
                 prefix_update_config: PrefixUpdateConfig {
                     no_lockfile_update: false,
                     no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
                 },
             },
@@ -332,6 +334,20 @@ impl PixiControl {
                 channel: vec![],
                 no_install: true,
                 feature: None,
+                priority: None,
+            },
+        }
+    }
+
+    /// Add a new channel to the project.
+    pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
+        ProjectChannelRemoveBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::channel::AddRemoveArgs {
+                channel: vec![],
+                no_install: true,
+                feature: None,
+                priority: None,
             },
         }
     }
@@ -374,7 +390,7 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_usage.into(),
+                lock_file_usage: args.prefix_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
             })
             .await?;

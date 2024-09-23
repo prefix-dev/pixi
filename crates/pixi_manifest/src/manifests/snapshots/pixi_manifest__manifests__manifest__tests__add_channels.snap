@@ -4,7 +4,7 @@ expression: manifest.document.to_string()
 ---
 [project]
 name = "foo"
-channels = ["conda-forge", "https://custom.com/channel"]
+channels = ["conda-forge", "https://custom.com/channel", { channel = "prioritized", priority = 12 }, { channel = "prioritized2", priority = -12 }]
 platforms = ["linux-64", "win-64"]
 
 [dependencies]
