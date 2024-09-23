@@ -1147,6 +1147,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#no-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      No activation
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1702,6 +1711,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#no-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      No activation
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1791,7 +1809,7 @@ The syntax for <code>MAPPING</code> is <code>exposed_name=executable_name</code>
 <code>--platform</code> sets the platform of the environment to <code>PLATFORM</code>
 Multiple channels can be specified by using <code>--channel</code> multiple times.
 By default, if no channel is provided, the <code>default-channels</code> key in the pixi configuration is used, which again defaults to "conda-forge".</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... PACKAGE...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--no-activation] [--channel CHANNEL]... PACKAGE...
 </span></code></pre></div>
 <p>Remove environments <code>ENV</code>.
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi global uninstall &lt;ENV&gt;...
@@ -1931,6 +1949,14 @@ At the very least we should put the manifest into its own folder like <code>~/.p
 <h3 id="discovery-via-config-key">Discovery via config key<a class="headerlink" href="#discovery-via-config-key" title="Permanent link">#</a></h3>
 <p>In order to make it easier to manage manifests in version control, we could allow to set the manifest path via a key in the <a href="https://pixi.sh/dev/reference/pixi_configuration/">pixi configuration</a>.</p>
 <div class="language-text highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>global_manifests = &quot;/path/to/your/manifests&quot;
+</span></code></pre></div>
+<h3 id="no-activation">No activation<a class="headerlink" href="#no-activation" title="Permanent link">#</a></h3>
+<p>The current <code>pixi global install</code> features <code>--no-activation</code>.
+When this flag is set, <code>CONDA_PREFIX</code> and <code>PATH</code> will not be set when running the exposed executable.
+This is useful when installing Python package managers or shells.</p>
+<p>Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[envs.pip.exposed]</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">pip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">executable</span><span class="p">=</span><span class="s2">&quot;pip&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">activation</span><span class="p">=</span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 
 
