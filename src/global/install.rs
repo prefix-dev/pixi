@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
+use std::{collections::{HashMap, HashSet}, ffi::OsStr, path::PathBuf, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -45,10 +45,6 @@ pub(crate) async fn install_environment(
         .map(|channel| channel.clone().into_channel(config.global_channel_config()))
         .collect_vec();
 
-    // Create the binary environment prefix where we install or update the package
-    let bin_env_dir = EnvDir::new(environment_name.clone()).await?;
-
-    let prefix = Prefix::new(bin_env_dir.path());
 
     let platform = parsed_environment
         .platform()
@@ -143,9 +139,11 @@ pub(crate) async fn expose_executables(
 
     let all_executables = prefix.find_executables(prefix_records.as_slice());
 
+    let exposed: HashSet<&String> = parsed_environment.exposed.values().collect();
+
     let exposed_executables: Vec<_> = all_executables
         .into_iter()
-        .filter(|(name, _)| exposed.values().contains(name))
+        .filter(|(name, _)| exposed.contains(name))
         .collect();
 
     let script_mapping = parsed_environment
@@ -156,8 +154,8 @@ pub(crate) async fn expose_executables(
                 exposed_name,
                 entry_point,
                 exposed_executables.iter(),
-                &bin_env_dir.bin_dir,
-                environment_name,
+                bin_dir,
+                env_name,
             )
         })
         .collect::<miette::Result<Vec<_>>>()?;
@@ -486,7 +484,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<(), miette
             })
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
-        let env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let prefix_records = prefix.find_installed_packages(Some(50)).await?;

@@ -8,18 +8,13 @@ use std::{
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 pub(crate) use manifest::Manifest;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedKey;
-use parsed_manifest::ParsedEnvironment;
-use pixi_config::Config;
+pub(crate) use parsed_manifest::ParsedEnvironment;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
-use std::fmt::Debug;
-use manifest::Manifest;
-use miette::{Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 use parsed_manifest::ParsedManifest;
-pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{home_path, Config};
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
@@ -107,7 +102,7 @@ impl ExposedData {
 
         let conda_meta = env_path.join("conda-meta");
 
-        let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
 
         let (platform, channel, package) =
@@ -359,12 +354,12 @@ impl Project {
 
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.manifest.parsed.environments()
+        self.manifest.parsed.envs()
     }
 
     /// Returns a specific environment based by name.
     pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
-        self.manifest.parsed.environments().get(name)
+        self.manifest.parsed.envs().get(name)
     }
 
     pub(crate) fn config(&self) -> &Config {

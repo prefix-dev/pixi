@@ -1,15 +1,17 @@
 use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
+use pixi_manifest::TomlManifest;
 use rattler_conda_types::{MatchSpec, PackageName};
 use toml_edit::{DocumentMut, Item};
+
+// use crate::global::document::ManifestSource;
 
 use super::error::ManifestError;
 
 use super::parsed_manifest::ParsedManifest;
 use super::{EnvironmentName, ExposedKey, MANIFEST_DEFAULT_NAME};
-
-use pixi_manifest::TomlManifest;
+// use super::document::ManifestSource;
 
 // TODO: remove
 #[allow(unused)]
@@ -104,7 +106,7 @@ impl Manifest {
 
         let mut envs = self
             .parsed
-            .get_mut_environment(env_name)
+            .get_mut_env(env_name)
             .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
 
         envs.exposed
@@ -127,7 +129,7 @@ impl Manifest {
 
         let mut envs = self
             .parsed
-            .get_mut_environment(env_name)
+            .get_mut_env(env_name)
             .ok_or_else(|| miette::miette!("Environment {env_name} not found"))?;
 
         envs.exposed.swap_remove(exposed_name);

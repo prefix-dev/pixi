@@ -58,15 +58,15 @@ impl ParsedManifest {
         toml_edit::de::from_str(source).map_err(ManifestError::from)
     }
 
-    pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
-        &self.environments
+    pub(crate) fn envs(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
+        &self.envs
     }
 
-    pub(crate) fn get_mut_environment(
+    pub(crate) fn get_mut_env(
         &mut self,
         key: &EnvironmentName,
     ) -> Option<&mut ParsedEnvironment> {
-        self.environments.get_mut(key)
+        self.envs.get_mut(key)
     }
 }
 
@@ -153,11 +153,11 @@ impl fmt::Display for ExposedKey {
 }
 
 impl FromStr for ExposedKey {
-    type Err = ParseExposedKeyError;
+    type Err = miette::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
-            Err(ParseExposedKeyError {})
+            miette::bail!("The key 'pixi' is not allowed in the exposed map");
         } else {
             Ok(ExposedKey(value.to_string()))
         }
