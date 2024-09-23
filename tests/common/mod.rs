@@ -38,7 +38,7 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
@@ -334,6 +334,20 @@ impl PixiControl {
                 channel: vec![],
                 no_install: true,
                 feature: None,
+                priority: None,
+            },
+        }
+    }
+
+    /// Add a new channel to the project.
+    pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
+        ProjectChannelRemoveBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::channel::AddRemoveArgs {
+                channel: vec![],
+                no_install: true,
+                feature: None,
+                priority: None,
             },
         }
     }
