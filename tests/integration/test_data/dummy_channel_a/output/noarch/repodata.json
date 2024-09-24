@@ -1,0 +1,35 @@
+{
+  "info": {
+    "subdir": "noarch"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-h4616a5c_0.conda": {
+      "build": "h4616a5c_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "5e88b056d795607a9b4f1176bac361ad",
+      "name": "dummy-a",
+      "noarch": "generic",
+      "sha256": "9b99a1d2cf4e37bf9672d057c1ff3893c7091a8fcc0f02af85bd6804830c6996",
+      "size": 2834,
+      "subdir": "noarch",
+      "timestamp": 1727167562691,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-h4616a5c_0.conda": {
+      "build": "h4616a5c_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "ffa91c7b1ce14de8974b761bcf07c9fe",
+      "name": "dummy-b",
+      "noarch": "generic",
+      "sha256": "e4d6772edb0105bfefa3611213134039b28cd7d60e7468b31bd3c85b43ecdc5b",
+      "size": 5807,
+      "subdir": "noarch",
+      "timestamp": 1727167562691,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use toml_edit::{self, Array, Item, Table, Value};
 
 pub mod project;
@@ -23,7 +25,7 @@ impl TomlManifest {
     /// Retrieve a mutable reference to a target table `table_name`
     /// in dotted form (e.g. `table1.table2`) from the root of the document.
     /// If the table is not found, it is inserted into the document.
-    fn get_or_insert_nested_table<'a>(
+    pub fn get_or_insert_nested_table<'a>(
         &'a mut self,
         table_name: &str,
     ) -> Result<&'a mut Table, TomlError> {
@@ -73,5 +75,11 @@ impl TomlManifest {
             .get_mut(array_name)
             .and_then(|a| a.as_array_mut());
         Ok(array)
+    }
+}
+
+impl fmt::Display for TomlManifest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

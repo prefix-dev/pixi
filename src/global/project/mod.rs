@@ -7,11 +7,12 @@ use std::{
 
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
-use manifest::Manifest;
+pub(crate) use manifest::{Manifest, Mapping};
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
+pub(crate) use parsed_manifest::ExposedName;
+pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{home_path, Config};
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
@@ -24,9 +25,7 @@ use crate::{
     prefix::Prefix,
 };
 
-mod document;
 mod environment;
-mod error;
 mod manifest;
 mod parsed_manifest;
 
@@ -44,6 +43,10 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
     config: Config,
+    /// Root directory of the global environments
+    pub(crate) env_root: EnvRoot,
+    /// Binary directory
+    pub(crate) bin_dir: BinDir,
 }
 
 impl Debug for Project {
@@ -62,7 +65,7 @@ struct ExposedData {
     platform: Option<Platform>,
     channel: PrioritizedChannel,
     package: PackageName,
-    exposed: ExposedKey,
+    exposed: ExposedName,
     executable_name: String,
 }
 
@@ -77,7 +80,7 @@ impl ExposedData {
             .file_stem()
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
-            .and_then(ExposedKey::from_str)?;
+            .and_then(ExposedName::from_str)?;
         let executable_path = extract_executable_from_script(path)?;
 
         let executable = executable_path
@@ -100,7 +103,7 @@ impl ExposedData {
 
         let conda_meta = env_path.join("conda-meta");
 
-        let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
 
         let (platform, channel, package) =
@@ -160,7 +163,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     }
 
     miette::bail!(
-        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
+        "Could not determine environment path: no parent of '{}' has '{}' as its direct parent",
         executable_path.display(),
         env_root.display()
     )
@@ -179,14 +182,17 @@ async fn package_from_conda_meta(
     let read_dir = tokio::fs::read_dir(conda_meta)
         .await
         .into_diagnostic()
-        .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?;
+        .wrap_err_with(|| format!("Could not read directory {}", conda_meta.display()))?;
     let mut entries = ReadDirStream::new(read_dir);
 
     while let Some(entry) = entries.next().await {
         let path = entry
             .into_diagnostic()
             .wrap_err_with(|| {
-                format!("Couldn't read file from directory {}", conda_meta.display())
+                format!(
+                    "Could not read file from directory {}",
+                    conda_meta.display()
+                )
             })?
             .path();
         // Check if the entry is a file and has a .json extension
@@ -225,7 +231,7 @@ async fn package_from_conda_meta(
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    fn from_manifest(manifest: Manifest) -> Self {
+    pub(crate) fn from_manifest(manifest: Manifest, env_root: EnvRoot, bin_dir: BinDir) -> Self {
         let root = manifest
             .path
             .parent()
@@ -238,32 +244,38 @@ impl Project {
             root,
             manifest,
             config,
+            env_root,
+            bin_dir,
         }
     }
 
     /// Constructs a project from a manifest.
-    pub(crate) fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+    pub(crate) fn from_str(
+        manifest_path: &Path,
+        content: &str,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest))
+        Ok(Self::from_manifest(manifest, env_root, bin_dir))
     }
 
     /// Discovers the project manifest file in path at
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub(crate) async fn discover_or_create(
-        bin_dir: &BinDir,
-        env_root: &EnvRoot,
-        assume_yes: bool,
-    ) -> miette::Result<Self> {
+    pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
 
         tokio::fs::create_dir_all(&manifest_dir)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", manifest_dir.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", manifest_dir.display()))?;
 
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+
+        let bin_dir = BinDir::from_env().await?;
+        let env_root = EnvRoot::from_env().await?;
 
         if !manifest_path.exists() {
             let prompt = format!(
@@ -281,7 +293,7 @@ impl Project {
                         .interact()
                         .into_diagnostic()?)
             {
-                return Self::try_from_existing_installation(&manifest_path, bin_dir, env_root)
+                return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
@@ -291,16 +303,16 @@ impl Project {
             tokio::fs::File::create(&manifest_path)
                 .await
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Couldn't create file {}", manifest_path.display()))?;
+                .wrap_err_with(|| format!("Could not create file {}", manifest_path.display()))?;
         }
 
-        Self::from_path(&manifest_path)
+        Self::from_path(&manifest_path, env_root, bin_dir)
     }
 
     async fn try_from_existing_installation(
         manifest_path: &Path,
-        bin_dir: &BinDir,
-        env_root: &EnvRoot,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
     ) -> miette::Result<Self> {
         let futures = bin_dir
             .files()
@@ -311,9 +323,9 @@ impl Project {
                 Ok(false) => None,          // Success and isn't text, filter out
                 Err(e) => Some(Err(e)),     // Failure, continue with error
             })
-            .map(|result| async move {
+            .map(|result| async {
                 match result {
-                    Ok(path) => ExposedData::from_exposed_path(&path, env_root).await,
+                    Ok(path) => ExposedData::from_exposed_path(&path, &env_root).await,
                     Err(e) => Err(e),
                 }
             });
@@ -325,7 +337,7 @@ impl Project {
         tokio::fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml)
+        Self::from_str(manifest_path, &toml, env_root, bin_dir)
     }
 
     /// Get default dir for the pixi global manifest
@@ -336,9 +348,13 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    pub(crate) fn from_path(manifest_path: &Path) -> miette::Result<Self> {
+    pub(crate) fn from_path(
+        manifest_path: &Path,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
-        Ok(Project::from_manifest(manifest))
+        Ok(Project::from_manifest(manifest, env_root, bin_dir))
     }
 
     /// Merge config with existing config project
@@ -351,8 +367,8 @@ impl Project {
     }
 
     /// Returns the environments in this project.
-    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.manifest.parsed.environments()
+    pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
+        &self.manifest.parsed.envs
     }
 }
 
@@ -366,30 +382,36 @@ mod tests {
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]
-        channels = ["conda-forge"]
+        channels = ["dummy-channel"]
         [envs.python.dependencies]
-        python = "3.11.*"
+        dummy = "3.11.*"
         [envs.python.exposed]
-        python = "python"
+        dummy = "dummy"
         "#;
 
-    #[test]
-    fn test_project_from_str() {
+    #[tokio::test]
+    async fn test_project_from_str() {
         let manifest_path: PathBuf = FilePath().fake();
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
 
-        let project = Project::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
+        let project =
+            Project::from_str(&manifest_path, SIMPLE_MANIFEST, env_root, bin_dir).unwrap();
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
-    #[test]
-    fn test_project_from_path() {
+    #[tokio::test]
+    async fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
         let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
+
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
 
         // Create and write global manifest
         let mut file = std::fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
 
         // Canonicalize both paths
         let canonical_root = project.root.canonicalize().unwrap();
@@ -398,12 +420,15 @@ mod tests {
         assert_eq!(canonical_root, canonical_manifest_parent);
     }
 
-    #[test]
-    fn test_project_from_manifest() {
+    #[tokio::test]
+    async fn test_project_from_manifest() {
         let manifest_path: PathBuf = FilePath().fake();
 
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
+
         let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Project::from_manifest(manifest, env_root, bin_dir);
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
