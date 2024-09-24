@@ -3448,6 +3448,7 @@ dependencies = [
  "reqwest-retry 0.5.0",
  "rlimit",
  "rstest",
+ "same-file",
  "self-replace",
  "serde",
  "serde_ignored",
