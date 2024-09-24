@@ -18,6 +18,19 @@ use url::Url;
 
 use crate::build::SourceCheckout;
 
+/// A cache for caching the metadata of a source checkout.
+///
+/// To request metadata for a source checkout we need to invoke the build
+/// backend associated with the given source checkout. This operation can be
+/// time-consuming so we want to avoid having to query the build backend.
+///
+/// This cache stores the raw response for a given source checkout together with
+/// some additional properties to determine if the cache is still valid.
+#[derive(Clone)]
+pub struct SourceMetadataCache {
+    root: PathBuf,
+}
+
 #[derive(Debug, Error)]
 pub enum SourceMetadataError {
     /// An I/O error occurred while reading or writing the cache.
@@ -25,7 +38,9 @@ pub enum SourceMetadataError {
     IoError(String, PathBuf, #[source] std::io::Error),
 }
 
-pub struct SourceCacheKey {
+/// Defines additional input besides the source files that are used to compute
+/// the metadata of a source checkout.
+pub struct SourceMetadataInput {
     /// TODO: I think this should also include the build backend used! Maybe?
 
     /// The URL of the source.
@@ -35,7 +50,7 @@ pub struct SourceCacheKey {
     pub target_platform: Platform,
 }
 
-impl SourceCacheKey {
+impl SourceMetadataInput {
     /// Computes a unique semi-human-readable hash for this key.
     pub fn hash_key(&self) -> String {
         let mut hasher = DefaultHasher::new();
@@ -48,13 +63,12 @@ impl SourceCacheKey {
     }
 }
 
-pub struct SourceMetadataCache {
-    root: PathBuf,
-}
-
 impl SourceMetadataCache {
-    /// The root directory were the cache is stored. An additional directory is
-    /// created by this cache which includes a version number.
+    /// Constructs a new instance.
+    ///
+    /// An additional directory is created by this cache inside the passed root
+    /// which includes a version number. This is to ensure that the cache is
+    /// never corrupted if the format changes in the future.
     pub fn new(root: PathBuf) -> Self {
         Self {
             root: root.join("source-meta-v0"),
@@ -73,10 +87,15 @@ impl SourceMetadataCache {
         self.root.join(path)
     }
 
+    /// Returns the cache entry for the given source checkout and input.
+    ///
+    /// Returns the cached metadata if it exists and is still valid and a
+    /// [`CacheEntry`] that can be used to update the cache. As long as the
+    /// [`CacheEntry`] is held, another process cannot update the cache.
     pub async fn entry(
         &self,
         source: &SourceCheckout,
-        input: &SourceCacheKey,
+        input: &SourceMetadataInput,
     ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataError> {
         // Locate the cache file and lock it.
         let cache_dir = self.source_cache_path(source);
@@ -137,12 +156,17 @@ impl SourceMetadataCache {
     }
 }
 
+/// A cache entry returned by [`SourceMetadataCache::entry`] which enables
+/// updating the cache.
+///
+/// As long as this entry is held, no other process can access this cache entry.
 pub struct CacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
     path: PathBuf,
 }
 
 impl CacheEntry {
+    /// Consumes this instance and writes the given metadata to the cache.
     pub async fn insert(
         mut self,
         metadata: CachedCondaMetadata,
@@ -177,6 +201,8 @@ impl CacheEntry {
     }
 }
 
+/// Cached result of calling `conda/getMetadata` on a build backend. This is
+/// returned by [`SourceMetadataCache::entry`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -17,7 +17,6 @@ async-fd-lock = "0.2.0"
 async-once-cell = "0.5.3"
 async-trait = "0.1.82"
 base64 = "0.22.1"
-bincode = ""
 cfg-if = "1.0"
 chrono = "0.4.38"
 clap = { version = "4.5.9", default-features = false }

@@ -26,7 +26,7 @@ use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
 use crate::build::source_metadata_cache::{
-    CachedCondaMetadata, SourceCacheKey, SourceMetadataCache,
+    CachedCondaMetadata, SourceMetadataCache, SourceMetadataInput,
 };
 
 /// The [`BuildContext`] is used to build packages from source.
@@ -291,7 +291,7 @@ impl BuildContext {
             .source_metadata_cache
             .entry(
                 source,
-                &SourceCacheKey {
+                &SourceMetadataInput {
                     channel_urls: channels.to_vec(),
                     target_platform,
                 },
