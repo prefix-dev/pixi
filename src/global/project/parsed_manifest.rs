@@ -4,7 +4,7 @@ use std::str::FromStr;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_manifest::PrioritizedChannel;
+use pixi_manifest::{PrioritizedChannel, TomlError};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::Serialize;
@@ -13,7 +13,6 @@ use thiserror::Error;
 
 use super::environment::EnvironmentName;
 
-use super::error::ManifestError;
 use super::ExposedData;
 use pixi_spec::PixiSpec;
 
@@ -54,8 +53,8 @@ where
 
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
-    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestError> {
-        toml_edit::de::from_str(source).map_err(ManifestError::from)
+    pub(crate) fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        toml_edit::de::from_str(source).map_err(TomlError::from)
     }
 }
 

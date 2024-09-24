@@ -2,19 +2,11 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use miette::IntoDiagnostic;
-use pixi_manifest::TomlManifest;
+use pixi_manifest::{TomlError, TomlManifest};
 use toml_edit::{DocumentMut, Item};
-
-// use crate::global::document::ManifestSource;
-
-use super::error::ManifestError;
 
 use super::parsed_manifest::ParsedManifest;
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
-// use super::document::ManifestSource;
-
-// TODO: remove
-#[allow(unused)]
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
@@ -50,7 +42,7 @@ impl Manifest {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
-                .map_err(ManifestError::from)
+                .map_err(TomlError::from)
         }) {
             Ok(result) => result,
             Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,

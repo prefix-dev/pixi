@@ -26,7 +26,6 @@ use crate::{
 };
 
 mod environment;
-mod error;
 mod manifest;
 mod parsed_manifest;
 
