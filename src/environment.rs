@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     convert::identity,
     io::ErrorKind,
@@ -16,7 +17,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobModificationTime;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{MutablePinnedSourceSpec, PixiRecord, SourceRecord};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -498,9 +499,10 @@ fn reinstall_globs_location(prefix: &Path) -> PathBuf {
 
 fn glob_filename(source_record: &SourceRecord) -> PathBuf {
     format!(
-        "{}_{}.globs",
+        "{}-{}-{}.globs",
         source_record.package_record.name.as_normalized(),
-        source_record.package_record.version
+        source_record.package_record.version,
+        &source_record.package_record.build,
     )
     .into()
 }
@@ -508,12 +510,12 @@ fn glob_filename(source_record: &SourceRecord) -> PathBuf {
 enum Rebuild {
     Build {
         source_records: SourceRecord,
-        reason: String,
+        reason: Cow<'static, str>,
     },
     DontBuild {
         source_records: SourceRecord,
         installed_repodata: RepoDataRecord,
-        reason: String,
+        reason: Cow<'static, str>,
     },
 }
 
@@ -538,47 +540,24 @@ impl WriteGlobs {
 impl SourceRebuilds {
     /// Checks if the sources needs to be reinstalled.
     async fn create(
-        root: &Path,
+        prefix: &Prefix,
+        project_root: &Path,
         source_records: &[SourceRecord],
         installed_packages: &[PrefixRecord],
     ) -> miette::Result<SourceRebuilds> {
         let mut rebuilds = vec![];
         // Build conda packages out of the source records
         for source_record in source_records {
-            // Try to load the reinstall globs from the conda-meta directory
-            let glob_file_name = glob_filename(source_record);
-            let glob_file = reinstall_globs_location(root).join(glob_file_name);
-            let reinstall_globs = load_reinstall_globs(&glob_file).into_diagnostic()?;
-            let source = source_record
-                .source
-                .as_path()
-                .expect("only accept paths for now")
-                .clone()
-                .path;
-
-            let globs = match reinstall_globs {
-                Some(globs) => globs,
-                None => {
-                    rebuilds.push(Rebuild::Build {
-                        source_records: source_record.clone(),
-                        reason: "no glob file found in prefix".to_string(),
-                    });
-                    continue;
-                }
-            };
-
-            // Glob the modified time of the source files
-            let source_path = Path::new(source.as_str());
-            let glob_mtime =
-                GlobModificationTime::from_patterns(source_path, globs.iter().map(|f| f.as_ref()))
-                    .into_diagnostic()?;
-
             // Find the PrefixRecord timestamp for installed package if it exists
             // with the same name and version as the source record
             let installed_package = installed_packages.iter().find(|record| {
                 record.repodata_record.package_record.name == source_record.package_record.name
                     && record.repodata_record.package_record.version
                         == source_record.package_record.version
+                    && record.repodata_record.package_record.build
+                        == source_record.package_record.build
+                    && record.repodata_record.package_record.subdir
+                        == source_record.package_record.subdir
             });
 
             // If no installed package was found, we need to rebuild
@@ -587,10 +566,31 @@ impl SourceRebuilds {
                 None => {
                     rebuilds.push(Rebuild::Build {
                         source_records: source_record.clone(),
-                        reason: "package has not yet been installed in the prefix".to_string(),
+                        reason: Cow::Borrowed("package has not yet been installed in the prefix"),
                     });
                     continue;
                 }
+            };
+
+            let Ok(source_dir) =
+                source_record
+                    .source
+                    .clone()
+                    .into_mutable()
+                    .map(|path| match path {
+                        MutablePinnedSourceSpec::Path(path) => path.resolve(project_root),
+                    })
+            else {
+                // Only check reinstall logic for path packages. We never reinstall other types.
+                rebuilds.push(Rebuild::DontBuild {
+                    source_records: source_record.clone(),
+                    installed_repodata: installed_package.repodata_record.clone(),
+                    reason: Cow::Owned(format!(
+                        "source at {} is considered immutable",
+                        &source_record.source
+                    )),
+                });
+                continue;
             };
 
             // If the installed timestamp is not set, we need to rebuild
@@ -600,14 +600,39 @@ impl SourceRebuilds {
                     None => {
                         rebuilds.push(Rebuild::Build {
                             source_records: source_record.clone(),
-                            reason:
-                                "installed timestamp, taken from conda-meta directory is not set"
-                                    .to_string(),
+                            reason: Cow::Borrowed(
+                                "installed timestamp, taken from conda-meta directory is not set",
+                            ),
                         });
                         continue;
                     }
                 };
-            // If no matches were found, lets just rebuild, as we can't determine if the source has changed
+
+            // Try to load the reinstallation globs from the conda-meta directory
+            let glob_file_name = glob_filename(source_record);
+            let glob_file = reinstall_globs_location(prefix.root()).join(glob_file_name);
+            let reinstall_globs = load_reinstall_globs(&glob_file)
+                .into_diagnostic()
+                .with_context(|| format!("failed to access {}", glob_file.display()))?;
+
+            let globs = match reinstall_globs {
+                Some(globs) => globs,
+                None => {
+                    rebuilds.push(Rebuild::Build {
+                        source_records: source_record.clone(),
+                        reason: Cow::Borrowed("no glob file found in prefix"),
+                    });
+                    continue;
+                }
+            };
+
+            // Glob the modified time of the source files
+            let glob_mtime =
+                GlobModificationTime::from_patterns(&source_dir, globs.iter().map(|f| f.as_ref()))
+                    .into_diagnostic()?;
+
+            // If no matches were found, lets just rebuild, as we can't determine if the
+            // source has changed
             let (newest_file, designated_file) = match glob_mtime {
                 GlobModificationTime::MatchesFound {
                     modified_at,
@@ -616,24 +641,28 @@ impl SourceRebuilds {
                 GlobModificationTime::NoMatches => {
                     rebuilds.push(Rebuild::Build {
                         source_records: source_record.clone(),
-                        reason: format!("no matches found for globs in: {}", source_path.display()),
+                        reason: Cow::Owned(format!(
+                            "no matches found for globs in: {}",
+                            source_dir.display()
+                        )),
                     });
                     continue;
                 }
             };
 
+            // If the newest file is older than the installed package, we don't need to
+            // rebuild
             let newest_file: chrono::DateTime<Utc> = newest_file.into();
-            // If the newest file is older than the installed package, we don't need to rebuild
             if newest_file < installed_timestamp {
                 rebuilds.push(Rebuild::DontBuild {
                     source_records: source_record.clone(),
                     installed_repodata: installed_package.repodata_record.clone(),
-                    reason: format!(
+                    reason: Cow::Owned(format!(
                         "source files are OLDER than installed package, last file changed {} on {}, source last installed on {}",
                         designated_file.display(),
                         newest_file,
                         installed_timestamp
-                    ),
+                    )),
                 });
                 continue;
             }
@@ -641,18 +670,19 @@ impl SourceRebuilds {
             // If the newest file is newer than the installed package, we need to rebuild
             rebuilds.push(Rebuild::Build {
                 source_records: source_record.clone(),
-                reason: format!(
+                reason: Cow::Owned(format!(
                     "source files are NEWER than installed package, last file changed {} on {}, source last installed on {}",
                     designated_file.display(),
                     newest_file,
                     installed_timestamp
-                ),
+                )),
             });
         }
         Ok(SourceRebuilds { rebuilds })
     }
 
-    /// Build sources that need building, provide diagnostics why rebuilding when needed
+    /// Build sources that need building, provide diagnostics why rebuilding
+    /// when needed
     pub async fn process(
         self,
         build_context: &BuildContext,
@@ -722,6 +752,7 @@ impl SourceRebuilds {
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
     prefix: &Prefix,
+    project_root: &Path,
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
@@ -745,7 +776,7 @@ pub async fn update_prefix_conda(
 
     // Build conda packages out of the source records
     let (processed_source_packages, write_globs) =
-        SourceRebuilds::create(prefix.root(), &source_records, &installed_packages)
+        SourceRebuilds::create(prefix, project_root, &source_records, &installed_packages)
             .await?
             .process(&build_context, &channels, platform)
             .await?;

@@ -20,6 +20,13 @@ pub enum PinnedSourceSpec {
     Path(PinnedPathSpec),
 }
 
+/// Describes a mutable source spec. This is similar to a [`PinnedSourceSpec`]
+/// but the contents can change over time.
+#[derive(Debug, Clone)]
+pub enum MutablePinnedSourceSpec {
+    Path(PinnedPathSpec),
+}
+
 impl PinnedSourceSpec {
     pub fn as_path(&self) -> Option<&PinnedPathSpec> {
         match self {
@@ -63,10 +70,39 @@ impl PinnedSourceSpec {
         }
     }
 
+    pub fn into_mutable(self) -> Result<MutablePinnedSourceSpec, PinnedSourceSpec> {
+        match self {
+            PinnedSourceSpec::Path(spec) => Ok(MutablePinnedSourceSpec::Path(spec)),
+            _ => Err(self),
+        }
+    }
+
     /// Returns true if the pinned source will never change. This can be useful
     /// for caching purposes.
     pub fn is_immutable(&self) -> bool {
         !matches!(self, PinnedSourceSpec::Path(_))
+    }
+}
+
+impl MutablePinnedSourceSpec {
+    pub fn as_path(&self) -> Option<&PinnedPathSpec> {
+        match self {
+            MutablePinnedSourceSpec::Path(spec) => Some(spec),
+        }
+    }
+
+    pub fn into_path(self) -> Option<PinnedPathSpec> {
+        match self {
+            MutablePinnedSourceSpec::Path(spec) => Some(spec),
+        }
+    }
+}
+
+impl From<MutablePinnedSourceSpec> for PinnedSourceSpec {
+    fn from(value: MutablePinnedSourceSpec) -> Self {
+        match value {
+            MutablePinnedSourceSpec::Path(spec) => PinnedSourceSpec::Path(spec),
+        }
     }
 }
 
