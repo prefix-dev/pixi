@@ -59,8 +59,8 @@ taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
-lint = { depends-on = ["pre-commit-run"] }
-pre-commit-install = "pre-commit install"
+lint = "pre-commit run --all-files --hook-stage=manual"
+pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
