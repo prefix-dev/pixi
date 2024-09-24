@@ -303,7 +303,7 @@ pub(crate) fn prompt_user_to_continue(
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = args.channels.resolve_from_config(&config);
+    let channels = args.channels.resolve_from_config(&config)?;
 
     let specs = args.specs()?;
 

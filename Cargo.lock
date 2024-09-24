@@ -2518,70 +2518,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
-name = "lexical-core"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cde5de06e8d4c2faabc400238f9ae1c74d5412d03a7bd067645ccbc47070e46"
-dependencies = [
- "lexical-parse-float",
- "lexical-parse-integer",
- "lexical-util",
- "lexical-write-float",
- "lexical-write-integer",
-]
-
-[[package]]
-name = "lexical-parse-float"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683b3a5ebd0130b8fb52ba0bdc718cc56815b6a097e28ae5a6997d0ad17dc05f"
-dependencies = [
- "lexical-parse-integer",
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-parse-integer"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0994485ed0c312f6d965766754ea177d07f9c00c9b82a5ee62ed5b47945ee9"
-dependencies = [
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-util"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5255b9ff16ff898710eb9eb63cb39248ea8a5bb036bea8085b1a767ff6c4e3fc"
-dependencies = [
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-float"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accabaa1c4581f05a3923d1b4cfd124c329352288b7b9da09e766b0668116862"
-dependencies = [
- "lexical-util",
- "lexical-write-integer",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-integer"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b6f3d1f4422866b68192d62f77bc5c700bee84f3069f2469d7bc8c77852446"
-dependencies = [
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.155"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3999,9 +3935,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.27.11"
+version = "0.27.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d563b8b9551f6adb158e38aa62f46a7dc408221f2de4d542847bc06dd5fc3e"
+checksum = "965ab8331a87c11c00d010c8762f0372ca5164fc48f138c65ad91a2623fed8cc"
 dependencies = [
  "anyhow",
  "clap",
@@ -4040,9 +3976,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b54e6fe6f88048c6ef67cef204a82a3352d6a4310c8a99ed6006bdaeeb6606c5"
+checksum = "5aa3b9c6437f3eeaca27215f8956afdf69c2a3556c0a47ed5f6c04449ef5f282"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4068,9 +4004,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.27.6"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0be970b4dce3af4eddbae70c91e7d681a47f1165cfc0adc178fab8354027e967"
+checksum = "fc4a0774b7af7c35a42faad213808c7c8383fcad01185f990591a2d268c29450"
 dependencies = [
  "chrono",
  "dirs",
@@ -4121,9 +4057,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.24"
+version = "0.22.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdd53504437d7fb0e2891fe2963fe5ff4c5e3e3447be18daf087567f25e7fb4a"
+checksum = "0f5cbd1ccbc81db033d7b97b977f356b72c52fee4c0ad28d71afed0a05a28202"
 dependencies = [
  "chrono",
  "file_url",
@@ -4182,9 +4118,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.7"
+version = "0.22.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0295cb7363b926c23faa2fc1c50550e64977b5d9e4567f6b8a4cd4e7b3ed286"
+checksum = "538ba45d495642be2bc05531e826171201706def5d867427ae35f3bb45d7ffaf"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4221,9 +4157,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.13"
+version = "0.21.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "901b4570a45bca55b94fe7c39d3e772ea373483d284c42381878db03c669c681"
+checksum = "d50556663a532a0406e4458bbec71dd96e13a32b2c03a6ac309ad30bf0a44a65"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4275,9 +4211,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.1"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee67c9715c069b28e9c572be381132ee5999207f20e71c62153ad09a1ad79736"
+checksum = "5a651a711cac6c0f2351f761603e7ed58d857dafb454f1f5804a4c3faadf58bf"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.3.0",
@@ -4293,9 +4229,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "581450cce7f7077e5a5fa17e07889d356ff5eb02f2234a6080ba72dbd5f05bbf"
+checksum = "f3db40d5dee6267798c28c32c002fcc1a0a4de7cd6e13b3a70c2193be2656647"
 dependencies = [
  "chrono",
  "futures",
@@ -4312,9 +4248,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "1.1.4"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd6d63a2bd6966a6f57739378f6408c67d5c521cf7bbaf6a45071a20595e2991"
+checksum = "909854e474213964fac69309e8d7eddd57a5ddebea82c63671218ae2c2cac6d8"
 dependencies = [
  "archspec",
  "libloading",
@@ -5309,13 +5245,12 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simd-json"
-version = "0.13.10"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570c430b3d902ea083097e853263ae782dfe40857d93db019a12356c8e8143fa"
+checksum = "05f0b376aada35f30a0012f5790e50aed62f91804a0682669aefdbe81c7fcb91"
 dependencies = [
  "getrandom",
  "halfbrown",
- "lexical-core",
  "ref-cast",
  "serde",
  "serde_json",
@@ -6667,9 +6602,9 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "value-trait"
-version = "0.8.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad8db98c1e677797df21ba03fca7d3bf9bec3ca38db930954e4fe6e1ea27eb4"
+checksum = "bcaa56177466248ba59d693a048c0959ddb67f1151b963f904306312548cf392"
 dependencies = [
  "float-cmp",
  "halfbrown",
