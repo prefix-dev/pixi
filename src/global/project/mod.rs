@@ -382,11 +382,11 @@ mod tests {
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]
-        channels = ["conda-forge"]
+        channels = ["dummy-channel"]
         [envs.python.dependencies]
-        python = "3.11.*"
+        dummy = "3.11.*"
         [envs.python.exposed]
-        python = "python"
+        dummy = "dummy"
         "#;
 
     #[tokio::test]

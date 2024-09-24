@@ -62,6 +62,16 @@ impl Manifest {
         env_name: &EnvironmentName,
         mapping: &Mapping,
     ) -> miette::Result<()> {
+        self.parsed
+            .envs
+            .entry(env_name.clone())
+            .or_default()
+            .exposed
+            .insert(
+                mapping.exposed_name.clone(),
+                mapping.executable_name.clone(),
+            );
+
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .insert(
@@ -78,6 +88,13 @@ impl Manifest {
         env_name: &EnvironmentName,
         exposed_name: &ExposedName,
     ) -> miette::Result<()> {
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?
+            .exposed
+            .shift_remove(exposed_name);
+
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .remove(&exposed_name.to_string())
@@ -136,6 +153,8 @@ mod tests {
         assert!(result.is_ok());
 
         let expected_value = "test_executable";
+
+        // Check document
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
@@ -145,6 +164,17 @@ mod tests {
             .as_str()
             .unwrap();
         assert_eq!(expected_value, actual_value);
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .get(&exposed_name)
+            .unwrap();
+        assert_eq!(expected_value, actual_value)
     }
 
     #[test]
@@ -162,10 +192,11 @@ mod tests {
         let result = manifest.add_exposed_mapping(&env_name, &mapping2);
         assert!(result.is_ok());
 
+        // Check document for executable1
         let expected_value1 = "test_executable1";
         let actual_value1 = manifest
             .document
-            .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
+            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
             .get(&exposed_name1.to_string())
             .unwrap()
@@ -173,16 +204,39 @@ mod tests {
             .unwrap();
         assert_eq!(expected_value1, actual_value1);
 
+        // Check parsed for executable1
+        let actual_value1 = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .get(&exposed_name1)
+            .unwrap();
+        assert_eq!(expected_value1, actual_value1);
+
+        // Check document for executable2
         let expected_value2 = "test_executable2";
         let actual_value2 = manifest
             .document
-            .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
+            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
             .get(&exposed_name2.to_string())
             .unwrap()
             .as_str()
             .unwrap();
         assert_eq!(expected_value2, actual_value2);
+
+        // Check parsed for executable2
+        let actual_value2 = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .get(&exposed_name2)
+            .unwrap();
+        assert_eq!(expected_value2, actual_value2)
     }
 
     #[test]
@@ -199,12 +253,23 @@ mod tests {
             .remove_exposed_name(&env_name, &exposed_name)
             .unwrap();
 
+        // Check document
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
             .get(&exposed_name.to_string());
         assert!(actual_value.is_none());
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .get(&exposed_name);
+        assert!(actual_value.is_none())
     }
 
     #[test]
@@ -214,8 +279,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Removing an exposed name that doesn't exist should return an error
-        manifest
-            .remove_exposed_name(&env_name, &exposed_name)
-            .unwrap_err();
+        let result = manifest.remove_exposed_name(&env_name, &exposed_name);
+        assert!(result.is_err())
     }
 }
