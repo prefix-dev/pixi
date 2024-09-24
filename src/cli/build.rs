@@ -8,7 +8,11 @@ use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{
+    cli::cli_config::ProjectConfig,
+    utils::{move_file, MoveError},
+    Project,
+};
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
@@ -27,12 +31,6 @@ pub struct Args {
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
 }
-
-#[cfg(unix)]
-const EXDEV: i32 = 18;
-
-#[cfg(windows)]
-const EXDEV: i32 = 17;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
@@ -93,40 +91,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
         let dest = output_dir.join(file_name);
-        match std::fs::rename(&package.output_file, &dest) {
-            Ok(_) => {
-                println!(
-                    "{}Successfully built '{}'",
-                    console::style(console::Emoji("✔ ", "")).green(),
-                    dest.display()
-                );
-            }
-            Err(e) if e.raw_os_error() == Some(EXDEV) => {
-                std::fs::copy(&package.output_file, &dest)
-                    .into_diagnostic()
-                    .with_context(|| {
+        if let Err(err) = move_file(&package.output_file, &dest) {
+            match err {
+                MoveError::CopyFailed(err) => {
+                    return Err(err).into_diagnostic().with_context(|| {
                         format!(
                             "failed to copy {} to {}",
                             package.output_file.display(),
                             dest.display()
                         )
-                    })?;
-                if let Err(e) = std::fs::remove_file(&package.output_file) {
+                    });
+                }
+                MoveError::FailedToRemove(e) => {
                     tracing::warn!(
                         "failed to remove {} after copying it to the output directory: {}",
                         package.output_file.display(),
                         e
                     );
                 }
+                MoveError::MoveFailed(e) => {
+                    return Err(e).into_diagnostic().with_context(|| {
+                        format!(
+                            "failed to move {} to {}",
+                            package.output_file.display(),
+                            dest.display()
+                        )
+                    })
+                }
             }
-            Err(e) => Err(e).into_diagnostic().with_context(|| {
-                format!(
-                    "failed to move {} to {}",
-                    package.output_file.display(),
-                    dest.display()
-                )
-            })?,
         }
+
+        println!(
+            "{}Successfully built '{}'",
+            console::style(console::Emoji("✔ ", "")).green(),
+            dest.display()
+        );
     }
 
     Ok(())

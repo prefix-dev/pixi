@@ -272,7 +272,6 @@ impl<'p> LockFileDerivedData<'p> {
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
         let python_status = environment::update_prefix_conda(
             &prefix,
-            self.project.root(),
             self.package_cache.clone(),
             environment.project().authenticated_client().clone(),
             installed_packages,
@@ -2004,7 +2003,6 @@ async fn spawn_create_prefix_task(
     let channels = group
         .channel_urls(&group.project().channel_config())
         .collect_vec();
-    let project_root = group.project().root().to_path_buf();
 
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
@@ -2030,7 +2028,6 @@ async fn spawn_create_prefix_task(
             let has_existing_packages = !installed_packages.is_empty();
             let python_status = environment::update_prefix_conda(
                 &prefix,
-                &project_root,
                 package_cache,
                 client,
                 installed_packages,

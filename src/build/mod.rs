@@ -1,5 +1,4 @@
-mod build_cache;
-mod source_metadata_cache;
+mod cache;
 
 use std::{
     ffi::OsStr,
@@ -9,6 +8,7 @@ use std::{
 };
 
 use chrono::Utc;
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_frontend::{BackendOverrides, SetupRequest};
 use pixi_build_types::{
@@ -28,9 +28,9 @@ use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
-use crate::build::{
-    build_cache::{BuildCache, BuildInput, CachedBuild, SourceInfo},
-    source_metadata_cache::{CachedCondaMetadata, SourceMetadataCache, SourceMetadataInput},
+use crate::build::cache::{
+    BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
+    SourceMetadataInput,
 };
 
 /// The [`BuildContext`] is used to build packages from source.
@@ -66,10 +66,10 @@ pub enum BuildError {
     GlobModificationError(#[from] GlobModificationTimeError),
 
     #[error(transparent)]
-    SourceMetadataError(#[from] source_metadata_cache::SourceMetadataError),
+    SourceMetadataError(#[from] cache::SourceMetadataError),
 
     #[error(transparent)]
-    BuildCacheError(#[from] build_cache::BuildCacheError),
+    BuildCacheError(#[from] cache::BuildCacheError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -107,7 +107,7 @@ impl BuildContext {
     /// Sets the input hash cache to use for caching input hashes.
     pub fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
-            glob_hash_cache: glob_hash_cache,
+            glob_hash_cache,
             ..self
         }
     }
@@ -162,7 +162,7 @@ impl BuildContext {
                     &source_checkout.path,
                     source_input.globs.iter().map(String::as_str),
                 )
-                .map_err(|e| BuildError::GlobModificationError(e.into()))?;
+                .map_err(BuildError::GlobModificationError)?;
                 match glob_time {
                     GlobModificationTime::MatchesFound { modified_at, .. } => {
                         if build
@@ -216,9 +216,16 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
-        let build_result = build_result.packages.into_iter().next().ok_or_else(|| {
-            BuildError::FrontendError(miette::miette!("no packages were built").into())
-        })?;
+        let build_result = build_result
+            .packages
+            .into_iter()
+            .exactly_one()
+            .map_err(|e| {
+                BuildError::FrontendError(
+                    miette::miette!("expected the build backend to return a single built package but it returned {}", e.len())
+                        .into(),
+                )
+            })?;
 
         // Add the sha256 to the package record.
         let sha = rattler_digest::compute_file_digest::<Sha256>(&build_result.output_file)
@@ -251,20 +258,20 @@ impl BuildContext {
         };
 
         // Store the build in the cache
-        entry
+        let updated_record = entry
             .insert(CachedBuild {
                 source: source_checkout
                     .pinned
                     .is_immutable()
                     .not()
-                    .then(|| SourceInfo {
+                    .then_some(SourceInfo {
                         globs: build_result.input_globs,
                     }),
                 record: record.clone(),
             })
             .await?;
 
-        Ok(record)
+        Ok(updated_record)
     }
 
     /// Acquires the source from the given source specification. A source

@@ -70,6 +70,7 @@ impl PinnedSourceSpec {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn into_mutable(self) -> Result<MutablePinnedSourceSpec, PinnedSourceSpec> {
         match self {
             PinnedSourceSpec::Path(spec) => Ok(MutablePinnedSourceSpec::Path(spec)),

@@ -491,7 +491,6 @@ impl PythonStatus {
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
     prefix: &Prefix,
-    project_root: &Path,
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
@@ -521,7 +520,7 @@ pub async fn update_prefix_conda(
             let channels = &channels;
             async move {
                 build_context
-                    .build_source_record(&record, &channels, platform)
+                    .build_source_record(&record, channels, platform)
                     .await
             }
         })
