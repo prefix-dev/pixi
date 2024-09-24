@@ -3,14 +3,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 
 use pixi_config::home_path;
 use pixi_consts::consts;
-use super::{EnvironmentName, ExposedKey};
+use super::{EnvironmentName, ExposedName};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
+#[derive(Debug, Clone)]
 pub struct BinDir(PathBuf);
 
 impl BinDir {
@@ -59,53 +59,16 @@ impl BinDir {
     /// This function constructs the path to the executable script by joining the
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.bat`.
-    pub(crate) fn executable_script_path(&self, exposed_name: &ExposedKey) -> PathBuf {
+    pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
         let mut executable_script_path = self.0.join(exposed_name.to_string());
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         }
         executable_script_path
     }
-
-    pub async fn print_executables_available(
-        &self,
-        executables: Vec<PathBuf>,
-    ) -> miette::Result<()> {
-        let whitespace = console::Emoji("  ", "").to_string();
-        let executable = executables
-            .into_iter()
-            .map(|path| {
-                path.strip_prefix(self.path())
-                    .expect("script paths were constructed by joining onto BinDir")
-                    .to_string_lossy()
-                    .to_string()
-            })
-            .join(&format!("\n{whitespace} -  "));
-
-        if self.is_on_path() {
-            eprintln!(
-                "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
-            )
-        } else {
-            eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&self.path().display()).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&self.path().display()).bold()
-            )
-        }
-
-        Ok(())
-    }
-
-    /// Returns true if the bin folder is available on the PATH.
-    fn is_on_path(&self) -> bool {
-        let Some(path_content) = std::env::var_os("PATH") else {
-            return false;
-        };
-        std::env::split_paths(&path_content).contains(&self.path().to_owned())
-    }
 }
 
+/// Global environoments directory, default to `$HOME/.pixi/envs`
 #[derive(Debug, Clone)]
 pub struct EnvRoot(PathBuf);
 
@@ -116,7 +79,7 @@ impl EnvRoot {
         tokio::fs::create_dir_all(&path)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
@@ -128,7 +91,7 @@ impl EnvRoot {
         tokio::fs::create_dir_all(&path)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
@@ -194,16 +157,16 @@ impl EnvRoot {
 
 /// A global environment directory
 pub(crate) struct EnvDir {
-    path: PathBuf,
+    pub(crate) path: PathBuf,
 }
 
 impl EnvDir {
-    /// Create a global environment directory
-    pub(crate) async fn new(
-        root: EnvRoot,
+    /// Create a global environment directory based on passed global environment root
+    pub(crate) async fn from_env_root(
+        env_root: EnvRoot,
         environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
-        let path = root.path().join(environment_name.as_str());
+        let path = env_root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
         Ok(Self { path })
@@ -239,6 +202,7 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
 
     use tempfile::tempdir;
 
@@ -254,7 +218,9 @@ mod tests {
         let environment_name = "test-env".parse().unwrap();
 
         // Create a new binary env dir
-        let bin_env_dir = EnvDir::new(env_root, environment_name).await.unwrap();
+        let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
+            .await
+            .unwrap();
 
         // Verify that the directory was created
         assert!(bin_env_dir.path().exists());
@@ -272,7 +238,7 @@ mod tests {
         // Create some directories in the temporary directory
         let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
         for env in &envs {
-            EnvDir::new(env_root.clone(), env.parse().unwrap())
+            EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
                 .await
                 .unwrap();
         }
