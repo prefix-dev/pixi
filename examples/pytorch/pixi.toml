@@ -1,0 +1,32 @@
+[project]
+channels = []
+name = "pytorch"
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
+
+[feature.task.tasks]
+start = "python test.py"
+
+[environments]
+cf-channel = ["pytorch-conda-forge", "task"]
+nvidia-channel = ["pytorch-with-cuda-11", "task"]
+pytorch-channel = ["pytorch-from-pytorch", "task"]
+
+[feature.pytorch-conda-forge]
+channels = ["https://fast.prefix.dev/conda-forge"]
+# No windows support YET: https://github.com/conda-forge/pytorch-cpu-feedstock/pull/231
+dependencies = { pytorch = "*" }
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64"]
+system-requirements = { cuda = "12.1" }
+
+[feature.pytorch-from-pytorch]
+channels = ["pytorch", "https://fast.prefix.dev/conda-forge"]
+dependencies = { pytorch = "*", pytorch-cuda = "*", numpy = "<2" }
+platforms = ["linux-64"]
+system-requirements = { cuda = "12.1" }
+
+
+[feature.pytorch-with-cuda-11]
+channels = ["nvidia", "pytorch", "https://fast.prefix.dev/conda-forge"]
+dependencies = { pytorch = "*", pytorch-cuda = "*", numpy = "<2" }
+platforms = ["linux-64"]
+system-requirements = { cuda = "11" }
