@@ -118,3 +118,32 @@ impl fmt::Display for Mapping {
         write!(f, "{}={}", self.exposed_name, self.executable_name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_add_exposed_mapping_new_env() {
+        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let result = manifest.add_exposed_mapping(&env_name, &mapping);
+        assert!(result.is_ok());
+
+        let expected_value = "test_executable";
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
+            .unwrap()
+            .get(&exposed_name.to_string())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value, actual_value);
+    }
+}
