@@ -4,6 +4,8 @@ use crate::{
     prefix::Prefix,
 };
 pub(crate) use environment::EnvironmentName;
+use fs::tokio as tokio_fs;
+use fs_err as fs;
 use indexmap::IndexMap;
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{Context, IntoDiagnostic};
@@ -22,7 +24,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use tokio_stream::{wrappers::ReadDirStream, StreamExt};
 
 mod environment;
 mod manifest;
@@ -126,7 +127,7 @@ impl ExposedData {
 /// the actual binary path from a wrapper script.
 fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
     // Read the script file into a string
-    let script_content = std::fs::read_to_string(script)
+    let script_content = fs::read_to_string(script)
         .into_diagnostic()
         .wrap_err_with(|| format!("Could not read {}", script.display()))?;
 
@@ -178,22 +179,12 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let read_dir = tokio::fs::read_dir(conda_meta)
+    let mut read_dir = tokio_fs::read_dir(conda_meta)
         .await
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Could not read directory {}", conda_meta.display()))?;
-    let mut entries = ReadDirStream::new(read_dir);
+        .into_diagnostic()?;
 
-    while let Some(entry) = entries.next().await {
-        let path = entry
-            .into_diagnostic()
-            .wrap_err_with(|| {
-                format!(
-                    "Could not read file from directory {}",
-                    conda_meta.display()
-                )
-            })?
-            .path();
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
         // Check if the entry is a file and has a .json extension
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
             let prefix_record = PrefixRecord::from_path(&path)
@@ -294,14 +285,14 @@ impl Project {
                     });
             }
 
-            tokio::fs::create_dir_all(&manifest_dir)
+            tokio_fs::create_dir_all(&manifest_dir)
                 .await
                 .into_diagnostic()
                 .wrap_err_with(|| {
                     format!("Couldn't create directory {}", manifest_dir.display())
                 })?;
 
-            tokio::fs::File::create(&manifest_path)
+            tokio_fs::File::create(&manifest_path)
                 .await
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Could not create file {}", manifest_path.display()))?;
@@ -336,7 +327,7 @@ impl Project {
         })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
-        tokio::fs::write(&manifest_path, &toml)
+        tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
         Self::from_str(manifest_path, &toml, env_root, bin_dir)
@@ -411,7 +402,7 @@ mod tests {
         let bin_dir = BinDir::from_env().await.unwrap();
 
         // Create and write global manifest
-        let mut file = std::fs::File::create(&manifest_path).unwrap();
+        let mut file = fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
 

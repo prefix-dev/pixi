@@ -3414,6 +3414,7 @@ dependencies = [
  "fancy_display",
  "fd-lock",
  "flate2",
+ "fs-err",
  "fs_extra",
  "futures",
  "http 1.1.0",
