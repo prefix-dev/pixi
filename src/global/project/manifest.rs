@@ -1,10 +1,16 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
+use ahash::HashSet;
 use miette::IntoDiagnostic;
 
-use pixi_manifest::{TomlError, TomlManifest};
+use pixi_config::Config;
+use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform, VersionSpec};
 use toml_edit::{DocumentMut, Item};
+
+use crate::global::project::ParsedEnvironment;
 
 use super::parsed_manifest::ParsedManifest;
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
@@ -59,22 +65,167 @@ impl Manifest {
         Ok(manifest)
     }
 
+    pub fn add_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+        channels: Option<Vec<NamedChannelOrUrl>>,
+    ) -> miette::Result<()> {
+        let channels = channels
+            .filter(|c| !c.is_empty())
+            .unwrap_or_else(|| Config::load_global().default_channels());
+
+        // Update self.parsed
+        self.parsed.envs.entry(env_name.clone()).or_insert_with(|| {
+            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from))
+        });
+
+        // Update self.document
+        let channels_array = self
+            .document
+            .get_or_insert_toml_array(&format!("envs.{env_name}"), "channels")?;
+        for channel in channels {
+            channels_array.push(channel.as_str());
+        }
+
+        tracing::debug!("Added environment {} to toml document", env_name);
+        Ok(())
+    }
+
+    pub fn add_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        dependency_name: &PackageName,
+        spec: &MatchSpec,
+    ) -> miette::Result<()> {
+        let version = spec.version.clone().unwrap_or(VersionSpec::Any);
+        let dependency_name_string = dependency_name.as_normalized();
+        let version_string = version.to_string();
+
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .dependencies
+            .insert(dependency_name.clone(), version.into());
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
+            .insert(
+                dependency_name_string,
+                Item::Value(toml_edit::Value::from(version_string)),
+            );
+
+        tracing::debug!(
+            "Added dependency {}={} to toml document for environment {}",
+            dependency_name_string,
+            spec,
+            env_name
+        );
+        Ok(())
+    }
+
+    pub fn set_platform(
+        &mut self,
+        env_name: &EnvironmentName,
+        platform: Platform,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .platform = Some(platform);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .insert(
+                "platform",
+                Item::Value(toml_edit::Value::from(platform.to_string())),
+            );
+
+        tracing::debug!(
+            "Set platform {} for environment {} in toml document",
+            platform,
+            env_name
+        );
+        Ok(())
+    }
+
+    pub fn add_channel(
+        &mut self,
+        env_name: &EnvironmentName,
+        channel: &NamedChannelOrUrl,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
+
+        // Update self.parsed
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?;
+        env.channels
+            .insert(PrioritizedChannel::from(channel.clone()));
+
+        // Update self.document
+        let channels_array = self
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .entry("channels")
+            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
+            .as_array_mut()
+            .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
+
+        // Convert existing TOML array to a HashSet to ensure uniqueness
+        let mut existing_channels: HashSet<String> = channels_array
+            .iter()
+            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+            .collect();
+
+        // Add the new channel to the HashSet
+        existing_channels.insert(channel.to_string());
+
+        // Reinsert unique channels
+        *channels_array = existing_channels.iter().collect();
+
+        tracing::debug!("Added channel {channel} for environment {env_name} in toml document",);
+        Ok(())
+    }
 
     pub fn add_exposed_mapping(
         &mut self,
         env_name: &EnvironmentName,
         mapping: &Mapping,
     ) -> miette::Result<()> {
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
+        // Update self.parsed
         self.parsed
             .envs
-            .entry(env_name.clone())
-            .or_default()
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?
             .exposed
             .insert(
                 mapping.exposed_name.clone(),
                 mapping.executable_name.clone(),
             );
 
+        // Update self.document
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .insert(
@@ -108,7 +259,7 @@ impl Manifest {
     }
 
     /// Save the manifest to the file and update the parsed_manifest
-    pub async fn save(&mut self) -> miette::Result<()> {
+    pub async fn save(&self) -> miette::Result<()> {
         let contents = self.document.to_string();
         tokio::fs::write(&self.path, contents)
             .await
@@ -135,6 +286,23 @@ impl Mapping {
 impl fmt::Display for Mapping {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}={}", self.exposed_name, self.executable_name)
+    }
+}
+
+impl FromStr for Mapping {
+    type Err = miette::Error;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        input
+            .split_once('=')
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Could not parse mapping `exposed_name=executable_name` from {input}"
+                )
+            })
+            .and_then(|(key, value)| {
+                Ok(Mapping::new(ExposedName::from_str(key)?, value.to_string()))
+            })
     }
 }
 

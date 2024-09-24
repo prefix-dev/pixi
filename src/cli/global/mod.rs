@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use crate::global;
+
 mod expose;
 mod install;
 mod list;
@@ -44,5 +46,14 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
     };
+    Ok(())
+}
+
+async fn revert_after_error(
+    project_original: &global::Project,
+    config: &pixi_config::Config,
+) -> miette::Result<()> {
+    project_original.manifest.save().await?;
+    global::sync(project_original, config).await?;
     Ok(())
 }

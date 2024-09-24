@@ -1,16 +1,16 @@
-use std::str::FromStr;
-
 use clap::Parser;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
-use crate::global::{self, EnvironmentName, ExposedName};
+use crate::{
+    cli::global::revert_after_error,
+    global::{self, EnvironmentName, ExposedName},
+};
 
 #[derive(Parser, Debug)]
 pub struct AddArgs {
     /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
     /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
-    #[arg(value_parser = parse_mapping)]
     mappings: Vec<global::Mapping>,
 
     #[clap(short, long)]
@@ -24,20 +24,6 @@ pub struct AddArgs {
     config: ConfigCli,
 }
 
-/// Parse mapping between exposed name and executable name
-fn parse_mapping(input: &str) -> miette::Result<global::Mapping> {
-    input
-        .split_once('=')
-        .ok_or_else(|| {
-            miette::miette!("Could not parse mapping `exposed_name=executable_name` from {input}")
-        })
-        .and_then(|(key, value)| {
-            Ok(global::Mapping::new(
-                ExposedName::from_str(key)?,
-                value.to_string(),
-            ))
-        })
-}
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
@@ -72,15 +58,6 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
     Ok(())
 }
 
-async fn revert_after_error(
-    mut project_original: global::Project,
-    config: &Config,
-) -> miette::Result<()> {
-    project_original.manifest.save().await?;
-    global::sync(&project_original, config).await?;
-    Ok(())
-}
-
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project_original = global::Project::discover_or_create(args.assume_yes)
@@ -105,7 +82,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        revert_after_error(project_original, &config)
+        revert_after_error(&project_original, &config)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
         return Err(err);
@@ -137,7 +114,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        revert_after_error(project_original, &config)
+        revert_after_error(&project_original, &config)
             .await
             .wrap_err("Could not remove exposed name. Reverting also failed.")?;
         return Err(err);

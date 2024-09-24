@@ -184,7 +184,7 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     manifest.unlink()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = tomllib.loads(manifest.read_text())
-    assert original_manifest == migrated_manifest
+    assert migrated_manifest == original_manifest
 
 
 def test_global_expose_basic(pixi: Path, tmp_path: Path, test_data: Path) -> None:

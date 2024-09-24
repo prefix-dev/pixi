@@ -45,13 +45,13 @@ pub(crate) async fn install_environment(
     gateway: &Gateway,
 ) -> miette::Result<()> {
     let channels = parsed_environment
-        .channels()
+        .sorted_named_channels()
         .into_iter()
         .map(|channel| channel.clone().into_channel(config.global_channel_config()))
         .collect_vec();
 
     let platform = parsed_environment
-        .platform()
+        .platform
         .unwrap_or_else(Platform::current);
 
     let repodata = await_in_progress("querying repodata ", |_| async {
@@ -497,11 +497,8 @@ pub(crate) async fn sync(
             .map(|r| r.repodata_record)
             .collect_vec();
 
-        let install_env = !local_environment_matches_spec(
-            repodata_records,
-            &specs,
-            parsed_environment.platform(),
-        );
+        let install_env =
+            !local_environment_matches_spec(repodata_records, &specs, parsed_environment.platform);
 
         updated_env |= install_env;
 
