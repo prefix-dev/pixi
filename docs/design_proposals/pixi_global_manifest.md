@@ -61,7 +61,6 @@ python = "3.10.*"
 
 Install one or more packages `PACKAGE` and expose their executables.
 If `--environment` has been given, all packages will be installed in the same environment.
-If the environment already exists, the command will return with an error.
 `--expose` can be given if `--environment` is given as well or if only a single `PACKAGE` will be installed.
 The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
 `--platform` sets the platform of the environment to `PLATFORM`
