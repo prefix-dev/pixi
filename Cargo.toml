@@ -253,8 +253,8 @@ reqwest = { workspace = true, features = [
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 rlimit = { workspace = true }
-self-replace = { workspace = true }
 same-file = { workspace = true }
+self-replace = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
