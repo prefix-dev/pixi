@@ -67,44 +67,6 @@ impl BinDir {
         }
         executable_script_path
     }
-
-    pub async fn print_executables_available(
-        &self,
-        executables: Vec<PathBuf>,
-    ) -> miette::Result<()> {
-        let whitespace = console::Emoji("  ", "").to_string();
-        let executable = executables
-            .into_iter()
-            .map(|path| {
-                path.strip_prefix(self.path())
-                    .expect("script paths were constructed by joining onto BinDir")
-                    .to_string_lossy()
-                    .to_string()
-            })
-            .join(&format!("\n{whitespace} -  "));
-
-        if self.is_on_path() {
-            eprintln!(
-                "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
-            )
-        } else {
-            eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&self.path().display()).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&self.path().display()).bold()
-            )
-        }
-
-        Ok(())
-    }
-
-    /// Returns true if the bin folder is available on the PATH.
-    fn is_on_path(&self) -> bool {
-        let Some(path_content) = std::env::var_os("PATH") else {
-            return false;
-        };
-        std::env::split_paths(&path_content).contains(&self.path().to_owned())
-    }
 }
 
 /// Global environoments directory, default to `$HOME/.pixi/envs`
