@@ -72,42 +72,27 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
     Ok(())
 }
 
-async fn setup_project(config: &Config, assume_yes: bool) -> miette::Result<global::Project> {
-    let project = global::Project::discover_or_create(assume_yes)
-        .await?
-        .with_cli_config(config.clone());
-    global::sync(&project, config).await?;
-    Ok(project)
-}
-
 async fn revert_after_error(
-    err: miette::Error,
     mut project_original: global::Project,
     config: &Config,
-    action: &str,
 ) -> miette::Result<()> {
-    let err = err.wrap_err(format!("Could not {}.", action));
-    project_original
-        .manifest
-        .save()
-        .await
-        .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-    global::sync(&project_original, config)
-        .await
-        .wrap_err_with(|| format!("{}\nReverting also failed", &err))?;
-    Err(err)
+    project_original.manifest.save().await?;
+    global::sync(&project_original, config).await?;
+    Ok(())
 }
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = setup_project(&config, args.assume_yes).await?;
+    let project_original = global::Project::discover_or_create(args.assume_yes)
+        .await?
+        .with_cli_config(config.clone());
 
     async fn apply_changes(
         args: AddArgs,
         project_original: global::Project,
         config: &Config,
     ) -> Result<(), miette::Error> {
-        let mut project_modified = project_original.clone();
+        let mut project_modified = project_original;
 
         for mapping in args.mappings {
             project_modified
@@ -120,21 +105,26 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        return revert_after_error(err, project_original, &config, "add mappings").await;
+        revert_after_error(project_original, &config)
+            .await
+            .wrap_err_with(|| format!("Reverting of the following error failed:\n {err}"))?;
+        return Err(err);
     }
     Ok(())
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = setup_project(&config, args.assume_yes).await?;
+    let project_original = global::Project::discover_or_create(args.assume_yes)
+        .await?
+        .with_cli_config(config.clone());
 
     async fn apply_changes(
         args: RemoveArgs,
         project_original: global::Project,
         config: &Config,
     ) -> Result<(), miette::Error> {
-        let mut project_modified = project_original.clone();
+        let mut project_modified = project_original;
 
         for exposed_name in args.exposed_names {
             project_modified
@@ -147,7 +137,10 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        return revert_after_error(err, project_original, &config, "remove exposed names").await;
+        revert_after_error(project_original, &config)
+            .await
+            .wrap_err_with(|| format!("Reverting of the following error failed:\n {err}"))?;
+        return Err(err);
     }
     Ok(())
 }
