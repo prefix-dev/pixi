@@ -196,11 +196,10 @@ pub(crate) struct EnvDir {
 
 impl EnvDir {
     /// Create a global environment directory based on passed global environment root
-    pub(crate) async fn from_env_root<T: Into<EnvironmentName>>(
+    pub(crate) async fn from_env_root(
         env_root: EnvRoot,
-        environment_name: T,
+        environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
-        let environment_name = environment_name.into();
         let path = env_root.path().join(environment_name.as_str());
         tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
 
@@ -249,7 +248,7 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
 
         // Define a test environment name
-        let environment_name: EnvironmentName = "test-env".parse().unwrap();
+        let environment_name = "test-env".parse().unwrap();
 
         // Create a new binary env dir
         let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
@@ -272,7 +271,7 @@ mod tests {
         // Create some directories in the temporary directory
         let envs = ["env1", "env2", "env3"];
         for env in &envs {
-            EnvDir::from_env_root(env_root.clone(), env.parse::<EnvironmentName>().unwrap())
+            EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
                 .await
                 .unwrap();
         }
