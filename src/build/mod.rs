@@ -25,6 +25,7 @@ use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use rattler_digest::Sha256;
 use thiserror::Error;
+use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
@@ -128,6 +129,7 @@ impl BuildContext {
     }
 
     /// Build a package from the given source specification.
+    #[instrument(skip_all, fields(source = %source_spec.source))]
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
@@ -164,7 +166,10 @@ impl BuildContext {
                 )
                 .map_err(BuildError::GlobModificationError)?;
                 match glob_time {
-                    GlobModificationTime::MatchesFound { modified_at, .. } => {
+                    GlobModificationTime::MatchesFound {
+                        modified_at,
+                        designated_file,
+                    } => {
                         if build
                             .record
                             .package_record
@@ -172,14 +177,26 @@ impl BuildContext {
                             .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
                             .unwrap_or(false)
                         {
+                            tracing::debug!("found an up-to-date cached build.");
                             return Ok(build.record);
+                        } else {
+                            tracing::debug!(
+                                "found an stale cached build, {} is newer than {}",
+                                designated_file.display(),
+                                build.record.package_record.timestamp.unwrap_or_default()
+                            );
                         }
                     }
                     GlobModificationTime::NoMatches => {
                         // No matches, so we should rebuild.
+                        tracing::debug!(
+                            "found a stale cached build, no files match the source glob"
+                        );
                     }
                 }
             } else {
+                tracing::debug!("found a cached build");
+
                 // If there is no source info in the cache we assume its still valid.
                 return Ok(build.record);
             }
@@ -352,6 +369,7 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
+    #[instrument(skip_all, fields(source = %source.pinned, platform = %target_platform))]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
@@ -379,13 +397,18 @@ impl BuildContext {
                     })
                     .await?;
                 if new_hash.hash == input_globs.hash {
+                    tracing::debug!("found up-to-date cached metadata.");
                     return Ok(source_metadata_to_records(
                         source,
                         metadata.packages,
                         metadata.input_hash,
                     ));
+                } else {
+                    tracing::debug!("found stale cached metadata.");
                 }
             } else {
+                tracing::debug!("found cached metadata.");
+
                 // No input hash so just assume it is still valid.
                 return Ok(source_metadata_to_records(
                     source,
