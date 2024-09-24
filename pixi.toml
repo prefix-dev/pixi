@@ -59,7 +59,7 @@ taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
-lint = { depends-on = ["pre-commit-run"] }
+lint = "pre-commit run --all-files --hook-stage=manual"
 pre-commit-install = "pre-commit install"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"

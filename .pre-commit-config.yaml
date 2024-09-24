@@ -58,7 +58,7 @@ repos:
       - id: fmt
         name: fmt
         language: system
-        stages: [push, manual]
+        stages: [pre-commit, push, manual]
         types: [file, rust]
         entry: cargo fmt
         pass_filenames: false
@@ -68,11 +68,4 @@ repos:
         stages: [push, manual]
         types: [file, rust]
         entry: cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
-        pass_filenames: false
-      - id: test
-        name: test
-        language: system
-        stages: [push, manual]
-        types: [file, rust]
-        entry: cargo test
         pass_filenames: false
