@@ -75,7 +75,7 @@ impl ExposedData {
     pub async fn from_exposed_path(
         path: &Path,
         env_root: &EnvRoot,
-    ) -> miette::Result<Option<Self>> {
+    ) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
@@ -102,24 +102,20 @@ impl ExposedData {
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
-        if !conda_meta.exists() {
-            return Ok(None);
-        }
-
         let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
 
         let (platform, channel, package) =
             package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
 
-        Ok(Some(ExposedData {
+        Ok(ExposedData {
             env_name,
             platform,
             channel,
             package,
             executable_name: executable,
             exposed,
-        }))
+        })
     }
 }
 
@@ -326,11 +322,9 @@ impl Project {
                 }
             });
 
-        let opt_exposed_binaries: Vec<Option<ExposedData>> =
-            futures::future::try_join_all(futures).await?;
-        let exposed_binaries: Vec<ExposedData> =
-            opt_exposed_binaries.into_iter().flatten().collect();
-
+        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await.wrap_err_with(|| {
+            "Failed to extract exposed binaries from existing installation please clean up your installation."
+        })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         tokio::fs::write(&manifest_path, &toml)
