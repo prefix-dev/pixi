@@ -1,10 +1,8 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
+use super::{BinDir, EnvRoot};
+use crate::{
+    global::{common::is_text, find_executables, EnvDir},
+    prefix::Prefix,
 };
-
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 use manifest::Manifest;
@@ -13,16 +11,17 @@ use once_cell::sync::Lazy;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedKey, ParsedEnvironment};
 use pixi_config::{home_path, Config};
+use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use regex::Regex;
-use tokio_stream::{wrappers::ReadDirStream, StreamExt};
-
-use super::{BinDir, EnvRoot};
-use crate::{
-    global::{common::is_text, find_executables, EnvDir},
-    prefix::Prefix,
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
 };
+use tokio_stream::{wrappers::ReadDirStream, StreamExt};
 
 mod document;
 mod environment;
@@ -31,6 +30,7 @@ mod manifest;
 mod parsed_manifest;
 
 pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
+pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
 /// project. This struct holds the `Manifest` and has functions to modify
@@ -72,7 +72,10 @@ impl ExposedData {
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
-    pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
+    pub async fn from_exposed_path(
+        path: &Path,
+        env_root: &EnvRoot,
+    ) -> miette::Result<Option<Self>> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
@@ -98,7 +101,10 @@ impl ExposedData {
             })
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
-        let conda_meta = env_path.join("conda-meta");
+        let conda_meta = env_path.join(consts::CONDA_META_DIR);
+        if !conda_meta.exists() {
+            return Ok(None);
+        }
 
         let bin_env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
@@ -106,14 +112,14 @@ impl ExposedData {
         let (platform, channel, package) =
             package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
 
-        Ok(ExposedData {
+        Ok(Some(ExposedData {
             env_name,
             platform,
             channel,
             package,
             executable_name: executable,
             exposed,
-        })
+        }))
     }
 }
 
@@ -257,13 +263,8 @@ impl Project {
         assume_yes: bool,
     ) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
-
-        tokio::fs::create_dir_all(&manifest_dir)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", manifest_dir.display()))?;
-
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+        // Prompt user if the manifest is empty and the user wants to create one
 
         if !manifest_path.exists() {
             let prompt = format!(
@@ -287,6 +288,13 @@ impl Project {
                         "Failed to create global manifest from existing installation"
                     });
             }
+
+            tokio::fs::create_dir_all(&manifest_dir)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!("Couldn't create directory {}", manifest_dir.display())
+                })?;
 
             tokio::fs::File::create(&manifest_path)
                 .await
@@ -318,7 +326,10 @@ impl Project {
                 }
             });
 
-        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await?;
+        let opt_exposed_binaries: Vec<Option<ExposedData>> =
+            futures::future::try_join_all(futures).await?;
+        let exposed_binaries: Vec<ExposedData> =
+            opt_exposed_binaries.into_iter().flatten().collect();
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
@@ -331,7 +342,7 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         home_path()
-            .map(|dir| dir.join("manifests"))
+            .map(|dir| dir.join(MANIFESTS_DIR))
             .ok_or_else(|| miette::miette!("Could not get home directory"))
     }
 
