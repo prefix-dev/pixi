@@ -146,4 +146,76 @@ mod tests {
             .unwrap();
         assert_eq!(expected_value, actual_value);
     }
+
+    #[test]
+    fn test_add_exposed_mapping_existing_env() {
+        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let exposed_name1 = ExposedName::from_str("test_exposed1").unwrap();
+        let executable_name1 = "test_executable1".to_string();
+        let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
+
+        let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
+        let executable_name2 = "test_executable2".to_string();
+        let mapping2 = Mapping::new(exposed_name2.clone(), executable_name2);
+        let result = manifest.add_exposed_mapping(&env_name, &mapping2);
+        assert!(result.is_ok());
+
+        let expected_value1 = "test_executable1";
+        let actual_value1 = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
+            .unwrap()
+            .get(&exposed_name1.to_string())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value1, actual_value1);
+
+        let expected_value2 = "test_executable2";
+        let actual_value2 = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
+            .unwrap()
+            .get(&exposed_name2.to_string())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value2, actual_value2);
+    }
+
+    #[test]
+    fn test_remove_exposed_mapping() {
+        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add and remove mapping again
+        manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
+        manifest
+            .remove_exposed_name(&env_name, &exposed_name)
+            .unwrap();
+
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
+            .unwrap()
+            .get(&exposed_name.to_string());
+        assert!(actual_value.is_none());
+    }
+
+    #[test]
+    fn test_remove_exposed_mapping_nonexistent() {
+        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Removing an exposed name that doesn't exist should return an error
+        manifest
+            .remove_exposed_name(&env_name, &exposed_name)
+            .unwrap_err();
+    }
 }
