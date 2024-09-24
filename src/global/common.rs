@@ -3,10 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use miette::{Context, IntoDiagnostic};
+use super::{EnvironmentName, ExposedName};
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use super::{EnvironmentName, ExposedName};
+use miette::IntoDiagnostic;
 use pixi_config::home_path;
 use pixi_consts::consts;
 
@@ -22,9 +22,7 @@ impl BinDir {
             .ok_or(miette::miette!(
                 "could not determine global binary executable directory"
             ))?;
-        tokio_fs::create_dir_all(&bin_dir)
-            .await
-            .into_diagnostic()?;
+        tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
         Ok(Self(bin_dir))
     }
 
@@ -35,9 +33,7 @@ impl BinDir {
     /// vector of file paths or an error if the directory cannot be read.
     pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
-        let mut entries = tokio_fs::read_dir(&self.0)
-            .await
-            .into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
@@ -76,9 +72,7 @@ impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
     pub async fn new(path: PathBuf) -> miette::Result<Self> {
-        tokio_fs::create_dir_all(&path)
-            .await
-            .into_diagnostic()?;
+        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -87,9 +81,7 @@ impl EnvRoot {
         let path = home_path()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Could not get home path"))?;
-        tokio_fs::create_dir_all(&path)
-            .await
-            .into_diagnostic()?;
+        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -100,9 +92,7 @@ impl EnvRoot {
     /// Get all directories in the env root
     pub(crate) async fn directories(&self) -> miette::Result<Vec<PathBuf>> {
         let mut directories = Vec::new();
-        let mut entries = tokio_fs::read_dir(&self.path())
-            .await
-            .into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&self.path()).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
@@ -177,12 +167,9 @@ impl EnvDir {
 
 /// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
 pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    let mut file = fs::File::open(&file_path.as_ref())
-        .into_diagnostic()?;
+    let mut file = fs::File::open(file_path.as_ref()).into_diagnostic()?;
     let mut buffer = [0; 1024];
-    let bytes_read = file
-        .read(&mut buffer)
-        .into_diagnostic()?;
+    let bytes_read = file.read(&mut buffer).into_diagnostic()?;
 
     Ok(buffer[..bytes_read].contains(&0))
 }
@@ -196,8 +183,8 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use itertools::Itertools;
     use fs_err::tokio as tokio_fs;
+    use itertools::Itertools;
 
     use tempfile::tempdir;
 

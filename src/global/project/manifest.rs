@@ -1,11 +1,11 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use fs_err as fs;
+use fs_err::tokio as tokio_fs;
 use miette::IntoDiagnostic;
 use pixi_manifest::{TomlError, TomlManifest};
 use toml_edit::{DocumentMut, Item};
-use fs_err as fs;
-use fs_err::tokio as tokio_fs;
 
 use super::parsed_manifest::ParsedManifest;
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};

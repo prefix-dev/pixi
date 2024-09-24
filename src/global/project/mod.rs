@@ -179,9 +179,7 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let mut read_dir = tokio_fs::read_dir(conda_meta)
-        .await
-        .into_diagnostic()?;
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
 
     while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
         let path = entry.path();
