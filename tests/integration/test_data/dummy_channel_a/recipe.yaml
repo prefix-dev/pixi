@@ -12,7 +12,7 @@ outputs:
       noarch: generic
       script:
         - mkdir -p $PREFIX/bin
-        - echo "clobber-1" > $PREFIX/bin/dummy-a.com
+        - echo "dummy-a" > $PREFIX/bin/dummy-a.com
         - chmod +x $PREFIX/bin/dummy-a.com
 
   - package:
@@ -23,5 +23,5 @@ outputs:
       noarch: generic
       script:
         - mkdir -p $PREFIX/bin
-        - echo "clobber-1" > $PREFIX/bin/dummy-b.com
+        - echo "dummy-b" > $PREFIX/bin/dummy-b.com
         - chmod +x $PREFIX/bin/dummy-b.com

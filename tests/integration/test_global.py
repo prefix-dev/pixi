@@ -89,97 +89,92 @@ def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_global_sync_change_expose(pixi: Path, tmp_path: Path) -> None:
+def test_global_sync_change_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    toml = """
+    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    toml = f"""
     [envs.test]
-    channels = ["conda-forge"]
+    channels = ["{dummy_channel}"]
     [envs.test.dependencies]
-    python = "3.12"
+    dummy-a = "*"
 
     [envs.test.exposed]
-    "python-injected" = "python"
+    "dummy-a" = "dummy-a"
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / exe_extension("python-injected")
+    dummy_a = tmp_path / "bin" / exe_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command(
-        [python_injected, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12"
-    )
-    verify_cli_command([python_injected], ExitCode.SUCCESS, env=env)
+    assert dummy_a.is_file()
 
     # Add another expose
-    python_in_disguise_str = exe_extension("python-in-disguise")
-    python_in_disguise = tmp_path / "bin" / python_in_disguise_str
-    parsed_toml["envs"]["test"]["exposed"][python_in_disguise_str] = "python"
+    dummy_in_disguise_str = exe_extension("dummy-in-disguise")
+    dummy_in_disguise = tmp_path / "bin" / dummy_in_disguise_str
+    parsed_toml["envs"]["test"]["exposed"][dummy_in_disguise_str] = "dummy-a"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command([python_in_disguise, "--version"], ExitCode.SUCCESS, env=env)
+    assert dummy_in_disguise.is_file()
 
     # Remove expose again
-    del parsed_toml["envs"]["test"]["exposed"][python_in_disguise_str]
+    del parsed_toml["envs"]["test"]["exposed"][dummy_in_disguise_str]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not python_in_disguise.is_file()
+    assert not dummy_in_disguise.is_file()
 
 
-def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path) -> None:
+def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    toml = """
+    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    toml = f"""
     [envs.test]
-    channels = ["conda-forge"]
+    channels = ["{dummy_channel}"]
     [envs.test.dependencies]
-    python = "3.12"
+    dummy-a = "*"
 
     [envs.test.exposed]
-    "python-injected" = "python"
+    "dummy-a" = "dummy-a"
     """
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / exe_extension("python-injected")
+    dummy_a = tmp_path / "bin" / exe_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command(
-        [python_injected, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12"
-    )
-    verify_cli_command([python_injected], ExitCode.SUCCESS, env=env)
+    assert dummy_a.is_file()
 
     # Remove binary manually
-    python_injected.unlink()
+    dummy_a.unlink()
 
     # Binary is added again
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_cli_command(
-        [python_injected, "--version"], ExitCode.SUCCESS, env=env, stdout_contains="3.12"
-    )
+    assert dummy_a.is_file()
 
 
-def test_global_sync_migrate(pixi: Path, tmp_path: Path) -> None:
+def test_global_sync_migrate(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    toml = """
+    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    toml = f"""
     [envs.test]
-    channels = ["https://conda.anaconda.org/conda-forge"]
+    channels = ["{dummy_channel}"]
     [envs.test.dependencies]
-    ripgrep = "*"
-    python = "*"
+    dummy-a = "*"
+    dummy-b = "*"
 
     [envs.test.exposed]
-    rg = "rg"
-    grep = "rg"
-    python = "python"
-    python3 = "python"
+    dummy-1 = "dummy-a"
+    dummy-2 = "dummy-a"
+    dummy-3 = "dummy-b"
+    dummy-4 = "dummy-b"
     """
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
