@@ -255,5 +255,6 @@ fn is_pixi_binary_default_location() -> bool {
     same_file::is_same_file(
         std::env::current_exe().expect("Failed to retrieve the current pixi binary path"),
         default_pixi_binary_path(),
-    ).unwrap_or(false)
+    )
+    .unwrap_or(false)
 }
