@@ -5,9 +5,9 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 
+use super::{EnvironmentName, ExposedName};
 use pixi_config::home_path;
 use pixi_consts::consts;
-use super::{EnvironmentName, ExposedName};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]

@@ -75,10 +75,7 @@ impl ExposedData {
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
-    pub async fn from_exposed_path(
-        path: &Path,
-        env_root: &EnvRoot,
-    ) -> miette::Result<Self> {
+    pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
         let exposed = path
             .file_stem()
             .and_then(OsStr::to_str)
