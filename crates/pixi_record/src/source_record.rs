@@ -1,5 +1,5 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
-use rattler_digest::Sha256Hash;
+use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::CondaPackageData;
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +26,12 @@ pub struct SourceRecord {
 /// Defines the hash of the input files that were used to build the metadata of
 /// the record. If reevaluating and hashing the globs results in a different
 /// hash, the metadata is considered invalid.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputHash {
+    #[serde(
+        serialize_with = "rattler_digest::serde::serialize::<_, Sha256>",
+        deserialize_with = "rattler_digest::serde::deserialize::<_, Sha256>"
+    )]
     pub hash: Sha256Hash,
     pub globs: Vec<String>,
 }
