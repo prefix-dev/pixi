@@ -10,7 +10,6 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use reqwest::Client;
 use serde::Deserialize;
-use same_file::is_same_file;
 
 /// Update pixi to the latest version or a specific version.
 ///
