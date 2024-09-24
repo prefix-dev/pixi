@@ -55,7 +55,8 @@ impl GlobHashCache {
                 // the map. If another requests comes in for the same hash it will find this
                 // entry.
                 let (tx, _) = broadcast::channel(1);
-                let weak_tx = Arc::downgrade(&Arc::new(tx.clone()));
+                let tx = Arc::new(tx);
+                let weak_tx = Arc::downgrade(&tx);
                 entry.insert(HashCacheEntry::Pending(weak_tx));
 
                 // Spawn the computation of the hash
