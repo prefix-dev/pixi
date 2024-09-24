@@ -95,7 +95,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let dest = output_dir.join(file_name);
         match std::fs::rename(&package.output_file, &dest) {
             Ok(_) => {
-                println!("{}Successfully built '{}'", console::style(console::Emoji("✔ ", "")).green(), dest.display());
+                println!(
+                    "{}Successfully built '{}'",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    dest.display()
+                );
             }
             Err(e) if e.raw_os_error() == Some(EXDEV) => {
                 std::fs::copy(&package.output_file, &dest)
