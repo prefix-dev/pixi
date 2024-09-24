@@ -164,7 +164,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     }
 
     miette::bail!(
-        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
+        "Could not determine environment path: no parent of '{}' has '{}' as its direct parent",
         executable_path.display(),
         env_root.display()
     )
@@ -183,14 +183,17 @@ async fn package_from_conda_meta(
     let read_dir = tokio::fs::read_dir(conda_meta)
         .await
         .into_diagnostic()
-        .wrap_err_with(|| format!("Couldn't read directory {}", conda_meta.display()))?;
+        .wrap_err_with(|| format!("Could not read directory {}", conda_meta.display()))?;
     let mut entries = ReadDirStream::new(read_dir);
 
     while let Some(entry) = entries.next().await {
         let path = entry
             .into_diagnostic()
             .wrap_err_with(|| {
-                format!("Couldn't read file from directory {}", conda_meta.display())
+                format!(
+                    "Could not read file from directory {}",
+                    conda_meta.display()
+                )
             })?
             .path();
         // Check if the entry is a file and has a .json extension
@@ -268,7 +271,7 @@ impl Project {
         tokio::fs::create_dir_all(&manifest_dir)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", manifest_dir.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", manifest_dir.display()))?;
 
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
 
@@ -301,7 +304,7 @@ impl Project {
             tokio::fs::File::create(&manifest_path)
                 .await
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Couldn't create file {}", manifest_path.display()))?;
+                .wrap_err_with(|| format!("Could not create file {}", manifest_path.display()))?;
         }
 
         Self::from_path(&manifest_path, env_root, bin_dir)

@@ -1,0 +1,27 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+
+outputs:
+  - package:
+      name: dummy-a
+      version: 0.1.0
+
+    build:
+      noarch: generic
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "clobber-1" > $PREFIX/bin/dummy-a.com
+        - chmod +x $PREFIX/bin/dummy-a.com
+
+  - package:
+      name: dummy-b
+      version: 0.1.0
+
+    build:
+      noarch: generic
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "clobber-1" > $PREFIX/bin/dummy-b.com
+        - chmod +x $PREFIX/bin/dummy-b.com

@@ -118,7 +118,7 @@ impl EnvRoot {
         tokio::fs::create_dir_all(&path)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
@@ -130,7 +130,7 @@ impl EnvRoot {
         tokio::fs::create_dir_all(&path)
             .await
             .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't create directory {}", path.display()))?;
+            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
         Ok(Self(path))
     }
 
