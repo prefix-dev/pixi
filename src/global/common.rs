@@ -5,9 +5,9 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 
-use pixi_config::home_path;
-
 use super::{EnvironmentName, ExposedName};
+use pixi_config::home_path;
+use pixi_consts::consts;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
@@ -132,17 +132,22 @@ impl EnvRoot {
             else {
                 continue;
             };
+
             if !env_set.contains(&env_name) {
-                tokio::fs::remove_dir_all(&env_path)
-                    .await
-                    .into_diagnostic()
-                    .wrap_err_with(|| {
-                        format!("Could not remove directory {}", env_path.display())
-                    })?;
-                eprintln!(
-                    "{} Remove environment '{env_name}'",
-                    console::style(console::Emoji("✔", " ")).green()
-                );
+                // Test if the environment directory is a conda environment
+                if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
+                    // Remove the conda environment
+                    tokio::fs::remove_dir_all(&env_path)
+                        .await
+                        .into_diagnostic()
+                        .wrap_err_with(|| {
+                            format!("Could not remove directory {}", env_path.display())
+                        })?;
+                    eprintln!(
+                        "{} Remove environment '{env_name}'",
+                        console::style(console::Emoji("✔", " ")).green()
+                    );
+                }
             }
         }
 
@@ -231,14 +236,18 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
 
         // Create some directories in the temporary directory
-        let envs = ["env1", "env2", "env3"];
+        let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
         for env in &envs {
             EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
                 .await
                 .unwrap();
         }
+        // Add conda meta data to env2 to make sure it's seen as a conda environment
+        tokio::fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
+            .await
+            .unwrap();
 
-        // Call the prune method with a list of environments to keep
+        // Call the prune method with a list of environments to keep (env1 and env3) but not env4
         env_root
             .prune(["env1".parse().unwrap(), "env3".parse().unwrap()])
             .await
@@ -253,6 +262,6 @@ mod tests {
             .sorted()
             .collect_vec();
 
-        assert_eq!(remaining_dirs, vec!["env1", "env3"]);
+        assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
     }
 }

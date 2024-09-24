@@ -1,10 +1,8 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
+use super::{BinDir, EnvRoot};
+use crate::{
+    global::{common::is_text, find_executables, EnvDir},
+    prefix::Prefix,
 };
-
 pub(crate) use environment::EnvironmentName;
 use indexmap::IndexMap;
 pub(crate) use manifest::{Manifest, Mapping};
@@ -14,22 +12,24 @@ pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
+use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use regex::Regex;
-use tokio_stream::{wrappers::ReadDirStream, StreamExt};
-
-use super::{BinDir, EnvRoot};
-use crate::{
-    global::{common::is_text, find_executables, EnvDir},
-    prefix::Prefix,
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
 };
+use tokio_stream::{wrappers::ReadDirStream, StreamExt};
 
 mod environment;
 mod manifest;
 mod parsed_manifest;
 
 pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
+pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
 /// project. This struct holds the `Manifest` and has functions to modify
@@ -101,8 +101,7 @@ impl ExposedData {
             })
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
-        let conda_meta = env_path.join("conda-meta");
-
+        let conda_meta = env_path.join(consts::CONDA_META_DIR);
         let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
 
@@ -266,13 +265,8 @@ impl Project {
     /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
-
-        tokio::fs::create_dir_all(&manifest_dir)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not create directory {}", manifest_dir.display()))?;
-
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+        // Prompt user if the manifest is empty and the user wants to create one
 
         let bin_dir = BinDir::from_env().await?;
         let env_root = EnvRoot::from_env().await?;
@@ -299,6 +293,13 @@ impl Project {
                         "Failed to create global manifest from existing installation"
                     });
             }
+
+            tokio::fs::create_dir_all(&manifest_dir)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!("Couldn't create directory {}", manifest_dir.display())
+                })?;
 
             tokio::fs::File::create(&manifest_path)
                 .await
@@ -330,8 +331,9 @@ impl Project {
                 }
             });
 
-        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await?;
-
+        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await.wrap_err_with(|| {
+            "Failed to extract exposed binaries from existing installation please clean up your installation."
+        })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         tokio::fs::write(&manifest_path, &toml)
@@ -343,7 +345,7 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         home_path()
-            .map(|dir| dir.join("manifests"))
+            .map(|dir| dir.join(MANIFESTS_DIR))
             .ok_or_else(|| miette::miette!("Could not get home directory"))
     }
 
