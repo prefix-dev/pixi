@@ -1,6 +1,9 @@
+mod source_metadata_cache;
+
 use std::{
     ffi::OsStr,
     path::{Component, Path, PathBuf},
+    sync::Arc,
 };
 
 use miette::Diagnostic;
@@ -10,9 +13,10 @@ use pixi_build_types::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
         conda_metadata::CondaMetadataParams,
     },
-    ChannelConfiguration,
+    ChannelConfiguration, CondaPackageMetadata,
 };
-pub use pixi_glob::{GlobHash, GlobHashCache, GlobHashError};
+use pixi_glob::GlobHashKey;
+pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
@@ -21,11 +25,16 @@ use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
+use crate::build::source_metadata_cache::{
+    CachedCondaMetadata, SourceCacheKey, SourceMetadataCache,
+};
+
 /// The [`BuildContext`] is used to build packages from source.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
     _glob_hash_cache: GlobHashCache,
+    source_metadata_cache: Arc<SourceMetadataCache>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -47,6 +56,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     InputHash(#[from] GlobHashError),
+
+    #[error(transparent)]
+    SourceMetadataError(#[from] source_metadata_cache::SourceMetadataError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -81,10 +93,11 @@ pub struct CondaBuildOutput {
 }
 
 impl BuildContext {
-    pub fn new(channel_config: ChannelConfig) -> Self {
+    pub fn new(cache_dir: PathBuf, channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
             _glob_hash_cache: GlobHashCache::default(),
+            source_metadata_cache: Arc::new(SourceMetadataCache::new(cache_dir)),
         }
     }
 
@@ -104,9 +117,6 @@ impl BuildContext {
         target_platform: Platform,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
-
-        // TODO: Add caching of this information based on the source.
-
         let records = self
             .extract_records(&source, channels, target_platform)
             .await?;
@@ -277,6 +287,43 @@ impl BuildContext {
         channels: &[Url],
         target_platform: Platform,
     ) -> Result<Vec<SourceRecord>, BuildError> {
+        let (cached_metadata, cache_entry) = self
+            .source_metadata_cache
+            .entry(
+                source,
+                &SourceCacheKey {
+                    channel_urls: channels.to_vec(),
+                    target_platform,
+                },
+            )
+            .await?;
+        if let Some(metadata) = cached_metadata {
+            // Check if the input hash is still valid.
+            if let Some(input_globs) = &metadata.input_hash {
+                let new_hash = self
+                    ._glob_hash_cache
+                    .compute_hash(GlobHashKey {
+                        root: source.path.clone(),
+                        globs: input_globs.globs.clone(),
+                    })
+                    .await?;
+                if new_hash.hash == input_globs.hash {
+                    return Ok(source_metadata_to_records(
+                        source,
+                        metadata.packages,
+                        metadata.input_hash,
+                    ));
+                }
+            } else {
+                // No input hash so just assume it is still valid.
+                return Ok(source_metadata_to_records(
+                    source,
+                    metadata.packages,
+                    metadata.input_hash,
+                ));
+            }
+        }
+
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
@@ -306,68 +353,91 @@ impl BuildContext {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata.input_globs.unwrap_or(protocol.manifests());
-            let input_hash =
-                GlobHash::from_patterns(&source.path, input_globs.iter().map(String::as_str))?;
+            let input_globs = metadata.input_globs.clone().unwrap_or(protocol.manifests());
+            let input_hash = self
+                ._glob_hash_cache
+                .compute_hash(GlobHashKey {
+                    root: source.path.clone(),
+                    globs: input_globs.clone(),
+                })
+                .await?;
             Some(InputHash {
                 hash: input_hash.hash,
                 globs: input_globs,
             })
         };
 
-        // Convert the metadata to repodata
-        let packages = metadata
-            .packages
-            .into_iter()
-            .map(|p| {
-                SourceRecord {
-                    input_hash: input_hash.clone(),
-                    source: source.pinned.clone(),
-                    package_record: PackageRecord {
-                        // We cannot now these values from the metadata because no actual package
-                        // was built yet.
-                        size: None,
-                        sha256: None,
-                        md5: None,
-
-                        // TODO(baszalmstra): Decide if it makes sense to include the current
-                        // timestamp here.
-                        timestamp: None,
-
-                        // These values are derived from the build backend values.
-                        platform: p.subdir.only_platform().map(ToString::to_string),
-                        arch: p.subdir.arch().as_ref().map(ToString::to_string),
-
-                        // These values are passed by the build backend
-                        name: p.name,
-                        build: p.build,
-                        version: p.version,
-                        build_number: p.build_number,
-                        license: p.license,
-                        subdir: p.subdir.to_string(),
-                        license_family: p.license_family,
-                        noarch: p.noarch,
-                        constrains: p.constraints.into_iter().map(|c| c.to_string()).collect(),
-                        depends: p.depends.into_iter().map(|c| c.to_string()).collect(),
-
-                        // These are deprecated and no longer used.
-                        features: None,
-                        track_features: vec![],
-                        legacy_bz2_md5: None,
-                        legacy_bz2_size: None,
-
-                        // TODO(baszalmstra): Add support for these.
-                        purls: None,
-
-                        // These are not important at this point.
-                        run_exports: None,
-                    },
-                }
+        // Store in the cache
+        cache_entry
+            .insert(CachedCondaMetadata {
+                packages: metadata.packages.clone(),
+                input_hash: input_hash.clone(),
             })
-            .collect();
+            .await?;
 
-        Ok(packages)
+        Ok(source_metadata_to_records(
+            source,
+            metadata.packages,
+            input_hash,
+        ))
     }
+}
+
+fn source_metadata_to_records(
+    source: &SourceCheckout,
+    packages: Vec<CondaPackageMetadata>,
+    input_hash: Option<InputHash>,
+) -> Vec<SourceRecord> {
+    // Convert the metadata to repodata
+    let packages = packages
+        .into_iter()
+        .map(|p| {
+            SourceRecord {
+                input_hash: input_hash.clone(),
+                source: source.pinned.clone(),
+                package_record: PackageRecord {
+                    // We cannot now these values from the metadata because no actual package
+                    // was built yet.
+                    size: None,
+                    sha256: None,
+                    md5: None,
+
+                    // TODO(baszalmstra): Decide if it makes sense to include the current
+                    // timestamp here.
+                    timestamp: None,
+
+                    // These values are derived from the build backend values.
+                    platform: p.subdir.only_platform().map(ToString::to_string),
+                    arch: p.subdir.arch().as_ref().map(ToString::to_string),
+
+                    // These values are passed by the build backend
+                    name: p.name,
+                    build: p.build,
+                    version: p.version,
+                    build_number: p.build_number,
+                    license: p.license,
+                    subdir: p.subdir.to_string(),
+                    license_family: p.license_family,
+                    noarch: p.noarch,
+                    constrains: p.constraints.into_iter().map(|c| c.to_string()).collect(),
+                    depends: p.depends.into_iter().map(|c| c.to_string()).collect(),
+
+                    // These are deprecated and no longer used.
+                    features: None,
+                    track_features: vec![],
+                    legacy_bz2_md5: None,
+                    legacy_bz2_size: None,
+
+                    // TODO(baszalmstra): Add support for these.
+                    purls: None,
+
+                    // These are not important at this point.
+                    run_exports: None,
+                },
+            }
+        })
+        .collect();
+    packages
 }
 
 /// Normalize a path, removing things like `.` and `..`.

@@ -1,9 +1,9 @@
-use rattler_conda_types::{MatchSpec, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaPackageMetadata {
     /// The name of the package.
@@ -23,13 +23,11 @@ pub struct CondaPackageMetadata {
 
     /// The dependencies of the package
     #[serde(default)]
-    #[serde_as(as = "Vec<DisplayFromStr>")]
-    pub depends: Vec<MatchSpec>,
+    pub depends: Vec<String>,
 
     /// The constrains of the package
     #[serde(default)]
-    #[serde_as(as = "Vec<DisplayFromStr>")]
-    pub constraints: Vec<MatchSpec>,
+    pub constraints: Vec<String>,
 
     /// The license of the package
     pub license: Option<String>,

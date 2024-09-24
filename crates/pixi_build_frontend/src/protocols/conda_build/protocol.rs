@@ -5,10 +5,7 @@ use pixi_build_types::{
     procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult},
     CondaPackageMetadata,
 };
-use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NoArchType, PackageName, ParseStrictness::Lenient, Platform,
-    VersionWithSource,
-};
+use rattler_conda_types::{ChannelConfig, NoArchType, PackageName, Platform, VersionWithSource};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -17,7 +14,7 @@ use sha1::{Digest, Sha1};
 use crate::tool::Tool;
 
 pub struct Protocol {
-    pub(super) channel_config: ChannelConfig,
+    pub(super) _channel_config: ChannelConfig,
     pub(super) tool: Tool,
     pub(super) source_dir: PathBuf,
     pub(super) recipe_dir: PathBuf,
@@ -94,7 +91,7 @@ impl Protocol {
             packages: rendered_recipes
                 .into_iter()
                 .map(|(recipe, meta_yaml)| {
-                    convert_conda_render_output(recipe, &self.channel_config).with_context(|| {
+                    convert_conda_render_output(recipe).with_context(|| {
                         format!(
                             "failed to extract metadata from conda-render output:\n{}",
                             meta_yaml
@@ -147,26 +144,8 @@ fn extract_rendered_recipes(
     .collect()
 }
 
-/// Convert a list of matchspecs into a map of [`PixiSpec`].
-fn dependencies_from_depends_vec(
-    depends: Vec<String>,
-    _channel_config: &ChannelConfig,
-) -> miette::Result<Vec<MatchSpec>> {
-    depends
-        .into_iter()
-        .map(|dep| {
-            MatchSpec::from_str(&dep, Lenient)
-                .into_diagnostic()
-                .with_context(|| "failed to parse matchspec: {dep}")
-        })
-        .collect()
-}
-
 /// Converts a [`CondaRenderRecipe`] output into a [`CondaPackageMetadata`].
-fn convert_conda_render_output(
-    recipe: CondaRenderRecipe,
-    channel_config: &ChannelConfig,
-) -> miette::Result<CondaPackageMetadata> {
+fn convert_conda_render_output(recipe: CondaRenderRecipe) -> miette::Result<CondaPackageMetadata> {
     Ok(CondaPackageMetadata {
         build: recipe.hash(),
         name: recipe.recipe.package.name,
@@ -177,11 +156,8 @@ fn convert_conda_render_output(
         } else {
             Platform::NoArch
         },
-        depends: dependencies_from_depends_vec(recipe.recipe.requirements.run, channel_config)?,
-        constraints: dependencies_from_depends_vec(
-            recipe.recipe.requirements.run_constrained,
-            channel_config,
-        )?,
+        depends: recipe.recipe.requirements.run,
+        constraints: recipe.recipe.requirements.run_constrained,
         license: recipe.recipe.about.license,
         license_family: recipe.recipe.about.license_family,
         noarch: recipe.recipe.build.noarch,

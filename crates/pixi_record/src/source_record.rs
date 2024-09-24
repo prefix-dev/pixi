@@ -1,6 +1,7 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::Sha256Hash;
 use rattler_lock::CondaPackageData;
+use serde::{Deserialize, Serialize};
 
 use crate::{ParseLockFileError, PinnedSourceSpec};
 
@@ -25,7 +26,7 @@ pub struct SourceRecord {
 /// Defines the hash of the input files that were used to build the metadata of
 /// the record. If reevaluating and hashing the globs results in a different
 /// hash, the metadata is considered invalid.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InputHash {
     pub hash: Sha256Hash,
     pub globs: Vec<String>,

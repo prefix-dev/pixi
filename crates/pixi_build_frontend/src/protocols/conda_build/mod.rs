@@ -69,7 +69,7 @@ impl ProtocolBuilder {
 
     pub fn finish(self, tool: Tool) -> Protocol {
         Protocol {
-            channel_config: self.channel_config,
+            _channel_config: self.channel_config,
             tool,
             source_dir: self.source_dir,
             recipe_dir: self.recipe_dir,

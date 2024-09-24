@@ -7,29 +7,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use barrier_cell::BarrierCell;
-use fancy_display::FancyDisplay;
-use futures::{
-    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
-};
-use indexmap::IndexSet;
-use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
-use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
-use pixi_progress::global_multi_progress;
-use pixi_record::PixiRecord;
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use uv_normalize::ExtraName;
-
 use super::{
     reporter::{GatewayProgressReporter, SolveProgressBar},
     update,
@@ -52,6 +29,29 @@ use crate::{
     },
     Project,
 };
+use barrier_cell::BarrierCell;
+use fancy_display::FancyDisplay;
+use futures::{
+    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
+use indexmap::IndexSet;
+use indicatif::ProgressBar;
+use itertools::Itertools;
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use pixi_config::get_cache_dir;
+use pixi_consts::consts;
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_progress::global_multi_progress;
+use pixi_record::PixiRecord;
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -567,7 +567,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(project.channel_config()),
+            build_context: BuildContext::new(get_cache_dir()?, project.channel_config()),
             glob_hash_cache,
         });
     }
@@ -591,7 +591,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(project.channel_config()),
+            build_context: BuildContext::new(get_cache_dir()?, project.channel_config()),
             glob_hash_cache,
         });
     }
@@ -894,7 +894,8 @@ impl<'p> UpdateContextBuilder<'p> {
             .max_concurrent_solves
             .unwrap_or_else(default_max_concurrent_solves);
 
-        let build_context = BuildContext::new(project.channel_config());
+        let build_context =
+            BuildContext::new(pixi_config::get_cache_dir()?, project.channel_config());
 
         Ok(UpdateContext {
             project,

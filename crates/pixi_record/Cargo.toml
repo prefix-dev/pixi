@@ -15,6 +15,7 @@ pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
