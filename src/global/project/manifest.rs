@@ -107,7 +107,6 @@ impl Manifest {
     /// Save the manifest to the file and update the parsed_manifest
     pub async fn save(&mut self) -> miette::Result<()> {
         let contents = self.document.to_string();
-        self.parsed = ParsedManifest::from_toml_str(&contents)?;
         tokio::fs::write(&self.path, contents)
             .await
             .into_diagnostic()?;
