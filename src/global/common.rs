@@ -3,7 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 
 use pixi_config::home_path;
@@ -198,6 +197,7 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
 
     use tempfile::tempdir;
 
