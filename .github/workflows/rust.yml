@@ -106,14 +106,14 @@ jobs:
           - {
               name: "Linux",
               target: x86_64-unknown-linux-musl,
-              os: 8core_ubuntu_latest_runner,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}",
             }
           - { name: "macOS", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
           - {
               name: "Windows",
               target: x86_64-pc-windows-msvc,
-              os: 16core_windows_latest_runner,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}",
             }
 
     steps:
@@ -159,7 +159,7 @@ jobs:
           - {
               name: "Linux-x86_64",
               target: x86_64-unknown-linux-musl,
-              os: 8core_ubuntu_latest_runner,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
             }
           - {
               name: "Linux-aarch64",
@@ -173,7 +173,7 @@ jobs:
           - {
               name: "Windows",
               target: x86_64-pc-windows-msvc,
-              os: 16core_windows_latest_runner,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
             }
           - {
               name: "Windows-arm",
