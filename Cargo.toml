@@ -32,6 +32,7 @@ distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 dunce = "1.0.4"
 fd-lock = "4.0.2"
 flate2 = "1.0.28"
+fs-err = { version = "2.11.0" }
 fs_extra = "1.3.0"
 futures = "0.3.30"
 http = "1.1.0"
@@ -234,6 +235,7 @@ rattler_repodata_gateway = { workspace = true, features = [
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 
+fs-err = { workspace = true, features = ["tokio"] }
 pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }

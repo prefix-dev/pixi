@@ -3,9 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use miette::{Context, IntoDiagnostic};
-
 use super::{EnvironmentName, ExposedName};
+use fs_err as fs;
+use fs_err::tokio as tokio_fs;
+use miette::IntoDiagnostic;
 use pixi_config::home_path;
 use pixi_consts::consts;
 
@@ -21,9 +22,7 @@ impl BinDir {
             .ok_or(miette::miette!(
                 "could not determine global binary executable directory"
             ))?;
-        tokio::fs::create_dir_all(&bin_dir)
-            .await
-            .into_diagnostic()?;
+        tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
         Ok(Self(bin_dir))
     }
 
@@ -34,10 +33,7 @@ impl BinDir {
     /// vector of file paths or an error if the directory cannot be read.
     pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
-        let mut entries = tokio::fs::read_dir(&self.0)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not read {}", &self.0.display()))?;
+        let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
@@ -76,10 +72,7 @@ impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
     pub async fn new(path: PathBuf) -> miette::Result<Self> {
-        tokio::fs::create_dir_all(&path)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
+        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -88,10 +81,7 @@ impl EnvRoot {
         let path = home_path()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Could not get home path"))?;
-        tokio::fs::create_dir_all(&path)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not create directory {}", path.display()))?;
+        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -102,10 +92,7 @@ impl EnvRoot {
     /// Get all directories in the env root
     pub(crate) async fn directories(&self) -> miette::Result<Vec<PathBuf>> {
         let mut directories = Vec::new();
-        let mut entries = tokio::fs::read_dir(&self.path())
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not read directory {}", self.path().display()))?;
+        let mut entries = tokio_fs::read_dir(&self.path()).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
@@ -121,9 +108,10 @@ impl EnvRoot {
     pub(crate) async fn prune(
         &self,
         environments_to_keep: impl IntoIterator<Item = EnvironmentName>,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<Vec<PathBuf>> {
         let env_set: ahash::HashSet<EnvironmentName> = environments_to_keep.into_iter().collect();
 
+        let mut pruned = Vec::new();
         for env_path in self.directories().await? {
             let Some(Ok(env_name)) = env_path
                 .file_name()
@@ -137,12 +125,10 @@ impl EnvRoot {
                 // Test if the environment directory is a conda environment
                 if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
                     // Remove the conda environment
-                    tokio::fs::remove_dir_all(&env_path)
+                    tokio_fs::remove_dir_all(&env_path)
                         .await
-                        .into_diagnostic()
-                        .wrap_err_with(|| {
-                            format!("Could not remove directory {}", env_path.display())
-                        })?;
+                        .into_diagnostic()?;
+                    pruned.push(env_path);
                     eprintln!(
                         "{} Remove environment '{env_name}'",
                         console::style(console::Emoji("✔", " ")).green()
@@ -151,7 +137,7 @@ impl EnvRoot {
             }
         }
 
-        Ok(())
+        Ok(pruned)
     }
 }
 
@@ -167,7 +153,7 @@ impl EnvDir {
         environment_name: EnvironmentName,
     ) -> miette::Result<Self> {
         let path = env_root.path().join(environment_name.as_str());
-        tokio::fs::create_dir_all(&path).await.into_diagnostic()?;
+        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
 
         Ok(Self { path })
     }
@@ -181,14 +167,9 @@ impl EnvDir {
 
 /// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
 pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    let mut file = std::fs::File::open(&file_path)
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Could not open {}", &file_path.as_ref().display()))?;
+    let mut file = fs::File::open(file_path.as_ref()).into_diagnostic()?;
     let mut buffer = [0; 1024];
-    let bytes_read = file
-        .read(&mut buffer)
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Could not read {}", &file_path.as_ref().display()))?;
+    let bytes_read = file.read(&mut buffer).into_diagnostic()?;
 
     Ok(buffer[..bytes_read].contains(&0))
 }
@@ -202,6 +183,7 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fs_err::tokio as tokio_fs;
     use itertools::Itertools;
 
     use tempfile::tempdir;
@@ -243,7 +225,7 @@ mod tests {
                 .unwrap();
         }
         // Add conda meta data to env2 to make sure it's seen as a conda environment
-        tokio::fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
+        tokio_fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
             .await
             .unwrap();
 
@@ -254,7 +236,7 @@ mod tests {
             .unwrap();
 
         // Verify that only the specified directories remain
-        let remaining_dirs = std::fs::read_dir(env_root.path())
+        let remaining_dirs = fs::read_dir(env_root.path())
             .unwrap()
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.path().is_dir())
