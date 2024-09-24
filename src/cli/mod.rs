@@ -4,16 +4,15 @@ use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
+use pixi_progress::{self, global_multi_progress};
+use pixi_utils::indicatif::IndicatifWriter;
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
 };
 
-use pixi_progress;
-use pixi_progress::global_multi_progress;
-use pixi_utils::indicatif::IndicatifWriter;
-
 pub mod add;
+mod build;
 pub mod clean;
 pub mod cli_config;
 pub mod completion;
@@ -126,14 +125,17 @@ pub enum Command {
     SelfUpdate(self_update::Args),
     Clean(clean::Args),
     Completion(completion::Args),
+
+    // Build
+    Build(build::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    /// Install the environment as defined in the lockfile, doesn't update lockfile if it isn't
-    /// up-to-date with the manifest file.
+    /// Install the environment as defined in the lockfile, doesn't update
+    /// lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
@@ -277,6 +279,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
+        Command::Build(args) => build::execute(args).await,
     }
 }
 

@@ -146,21 +146,26 @@ impl BuildContext {
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),
                 },
-                output: CondaOutputIdentifier {
+                outputs: Some(vec![CondaOutputIdentifier {
                     name: Some(source_spec.package_record.name.as_normalized().to_string()),
                     version: Some(source_spec.package_record.version.version().to_string()),
                     build: Some(source_spec.package_record.build.clone()),
                     subdir: Some(source_spec.package_record.subdir.clone()),
-                },
+                }]),
             })
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
+
+        let build_result = build_result.packages.into_iter().next().ok_or_else(|| {
+            BuildError::FrontendError(miette::miette!("no packages were built").into())
+        })?;
 
         // Add the sha256 to the package record.
         let sha = rattler_digest::compute_file_digest::<Sha256>(&build_result.output_file)
             .map_err(|e| BuildError::CalculateSha(source, e))?;
         let mut package_record = source_spec.package_record.clone();
         package_record.sha256 = Some(sha);
+
         // Construct a repodata record that represents the package
         let record = RepoDataRecord {
             package_record,
