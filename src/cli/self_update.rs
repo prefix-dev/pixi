@@ -10,6 +10,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use reqwest::Client;
 use serde::Deserialize;
+use same_file::is_same_file;
 
 /// Update pixi to the latest version or a specific version.
 ///
@@ -252,9 +253,8 @@ fn default_pixi_binary_path() -> std::path::PathBuf {
 
 // check current binary is in the default pixi location
 fn is_pixi_binary_default_location() -> bool {
-    let default_binary_path = default_pixi_binary_path();
-
-    std::env::current_exe()
-        .expect("Failed to retrieve the current pixi binary path")
-        .starts_with(default_binary_path)
+    same_file::is_same_file(
+        std::env::current_exe().expect("Failed to retrieve the current pixi binary path"),
+        default_pixi_binary_path(),
+    ).unwrap_or(false)
 }
