@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     path::{Path, PathBuf},
 };
 
@@ -104,5 +105,57 @@ impl Prefix {
         }
 
         Ok(result)
+    }
+
+    /// Processes prefix records (that you can get by using `find_installed_packages`)
+    /// to filter and collect executable files.
+    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<(String, PathBuf)> {
+        prefix_packages
+            .iter()
+            .flat_map(|record| {
+                record
+                    .files
+                    .iter()
+                    .filter(|relative_path| self.is_executable(relative_path))
+                    .filter_map(|path| {
+                        path.file_stem()
+                            .and_then(OsStr::to_str)
+                            .map(|name| (name.to_string(), path.clone()))
+                    })
+            })
+            .collect()
+    }
+
+    /// Checks if the given relative path points to an executable file.
+    pub(crate) fn is_executable(&self, relative_path: &Path) -> bool {
+        // Check if the file is in a known executable directory.
+        let binary_folders = if cfg!(windows) {
+            &([
+                "",
+                "Library/mingw-w64/bin/",
+                "Library/usr/bin/",
+                "Library/bin/",
+                "Scripts/",
+                "bin/",
+            ][..])
+        } else {
+            &(["bin"][..])
+        };
+
+        let parent_folder = match relative_path.parent() {
+            Some(dir) => dir,
+            None => return false,
+        };
+
+        if !binary_folders
+            .iter()
+            .any(|bin_path| Path::new(bin_path) == parent_folder)
+        {
+            return false;
+        }
+
+        // Check if the file is executable
+        let absolute_path = self.root().join(relative_path);
+        is_executable::is_executable(absolute_path)
     }
 }

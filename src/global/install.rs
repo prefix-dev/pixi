@@ -1,4 +1,9 @@
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -23,7 +28,7 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
-use super::{common::EnvRoot, project::ParsedEnvironment, EnvironmentName, ExposedKey};
+use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
     global::{self, BinDir, EnvDir},
     prefix::Prefix,
@@ -118,7 +123,6 @@ pub(crate) async fn install_environment(
 pub(crate) async fn expose_executables(
     env_name: &EnvironmentName,
     parsed_environment: &ParsedEnvironment,
-    packages: Vec<PackageName>,
     prefix: &Prefix,
     bin_dir: &BinDir,
 ) -> miette::Result<bool> {
@@ -136,21 +140,13 @@ pub(crate) async fn expose_executables(
 
     let prefix_records = prefix.find_installed_packages(None).await?;
 
-    // Processes prefix records to filter and collect executable files.
-    let executables: Vec<(String, PathBuf)> = prefix_records
+    let all_executables = prefix.find_executables(prefix_records.as_slice());
+
+    let exposed: HashSet<&String> = parsed_environment.exposed.values().collect();
+
+    let exposed_executables: Vec<_> = all_executables
         .into_iter()
-        // Filters records to only include direct dependencies
-        .filter(|record| packages.contains(&record.repodata_record.package_record.name))
-        // Finds executables for each filtered record.
-        .flat_map(|record| global::find_executables(prefix, &record))
-        // Maps executables to a tuple of file name (as a string) and file path.
-        .filter_map(|path| {
-            path.file_stem()
-                .and_then(OsStr::to_str)
-                .map(|name| (name.to_string(), path.clone()))
-        })
-        // Filters tuples to include only those whose names are in the `exposed` values
-        .filter(|(name, _)| parsed_environment.exposed.values().contains(&name))
+        .filter(|(name, _)| exposed.contains(name))
         .collect();
 
     let script_mapping = parsed_environment
@@ -160,7 +156,7 @@ pub(crate) async fn expose_executables(
             script_exec_mapping(
                 exposed_name,
                 entry_point,
-                executables.clone(),
+                exposed_executables.iter(),
                 bin_dir,
                 env_name,
             )
@@ -182,21 +178,19 @@ pub(crate) async fn expose_executables(
 ///
 /// # Errors
 ///
-/// Returns an error if the entry point is not found in the list of executable
-/// names.
-fn script_exec_mapping(
-    exposed_name: &ExposedKey,
+/// Returns an error if the entry point is not found in the list of executable names.
+pub(crate) fn script_exec_mapping<'a>(
+    exposed_name: &ExposedName,
     entry_point: &str,
-    executables: impl IntoIterator<Item = (String, PathBuf)>,
+    mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
     bin_dir: &BinDir,
     environment_name: &EnvironmentName,
 ) -> miette::Result<ScriptExecMapping> {
     executables
-        .into_iter()
         .find(|(executable_name, _)| *executable_name == entry_point)
         .map(|(_, executable_path)| ScriptExecMapping {
             global_script_path: bin_dir.executable_script_path(exposed_name),
-            original_executable: executable_path,
+            original_executable: executable_path.clone(),
         })
         .ok_or_else(|| miette::miette!("Could not find {entry_point} in {environment_name}"))
 }
@@ -303,9 +297,7 @@ async fn map_executables_to_global_bin_scripts(
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
-///
-/// Returns true if a change was made.
-async fn create_executable_scripts(
+pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
@@ -431,22 +423,18 @@ pub(crate) fn prompt_user_to_continue(
 
 // Syncs the manifest with the local environment
 // Returns true if the global installation had to be updated
-pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miette::Error> {
-    // Create directories
-    let bin_dir = BinDir::from_env().await?;
-    let env_root = EnvRoot::from_env().await?;
-
-    let project = global::Project::discover_or_create(&bin_dir, &env_root, assume_yes)
-        .await?
-        .with_cli_config(config.clone());
-
+pub(crate) async fn sync(
+    project: &global::Project,
+    config: &Config,
+) -> Result<bool, miette::Error> {
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(config));
 
     let gateway = config.gateway(auth_client.clone());
 
     // Prune environments that are not listed
-    env_root
+    project
+        .env_root
         .prune(project.environments().keys().cloned())
         .await?;
 
@@ -458,10 +446,10 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miet
             environment
                 .exposed
                 .keys()
-                .map(|e| bin_dir.executable_script_path(e))
+                .map(|e| project.bin_dir.executable_script_path(e))
         })
         .collect_vec();
-    for file in bin_dir.files().await? {
+    for file in project.bin_dir.files().await? {
         let file_name = file
             .file_stem()
             .and_then(OsStr::to_str)
@@ -499,7 +487,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miet
             })
             .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
 
-        let env_dir = EnvDir::new(env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let repodata_records = prefix
@@ -520,7 +508,7 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miet
         if install_env {
             install_environment(
                 &specs,
-                &parsed_environment,
+                parsed_environment,
                 auth_client.clone(),
                 &prefix,
                 config,
@@ -529,14 +517,8 @@ pub(crate) async fn sync(config: &Config, assume_yes: bool) -> Result<bool, miet
             .await?;
         }
 
-        updated_env |= expose_executables(
-            &env_name,
-            &parsed_environment,
-            specs.keys().cloned().collect(),
-            &prefix,
-            &bin_dir,
-        )
-        .await?;
+        updated_env |=
+            expose_executables(env_name, parsed_environment, &prefix, &project.bin_dir).await?;
     }
 
     Ok(updated_env)

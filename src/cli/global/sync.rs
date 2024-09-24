@@ -1,4 +1,4 @@
-use crate::global::{self};
+use crate::global;
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
 
@@ -15,8 +15,10 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-
-    let updated_env = global::sync(&config, args.assume_yes).await?;
+    let project = global::Project::discover_or_create(args.assume_yes)
+        .await?
+        .with_cli_config(config.clone());
+    let updated_env = global::sync(&project, &config).await?;
 
     if !updated_env {
         eprintln!(

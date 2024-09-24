@@ -3,15 +3,16 @@ use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use pixi_manifest::PrioritizedChannel;
+use miette::Diagnostic;
+use pixi_manifest::{PrioritizedChannel, TomlError};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::Serialize;
 use serde_with::{serde_as, serde_derive::Deserialize};
+use thiserror::Error;
 
 use super::environment::EnvironmentName;
 
-use super::error::ManifestError;
 use super::ExposedData;
 use pixi_spec::PixiSpec;
 
@@ -19,7 +20,7 @@ use pixi_spec::PixiSpec;
 #[derive(Debug, Clone, Serialize)]
 pub struct ParsedManifest {
     /// The environments the project can create.
-    envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+    pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
 impl<I> From<I> for ParsedManifest
@@ -52,12 +53,8 @@ where
 
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
-    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestError> {
-        toml_edit::de::from_str(source).map_err(ManifestError::from)
-    }
-
-    pub(crate) fn environments(&self) -> IndexMap<EnvironmentName, ParsedEnvironment> {
-        self.envs.clone()
+    pub(crate) fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        toml_edit::de::from_str(source).map_err(TomlError::from)
     }
 
     pub(crate) fn get_mut_environment(
@@ -85,17 +82,17 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         let manifest = TomlManifest::deserialize(deserializer)?;
 
         // Check for duplicate keys in the exposed fields
-        let mut exposed_keys = IndexSet::new();
+        let mut exposed_names = IndexSet::new();
         let mut duplicates = IndexMap::new();
         for key in manifest.envs.values().flat_map(|env| env.exposed.keys()) {
-            if !exposed_keys.insert(key) {
+            if !exposed_names.insert(key) {
                 duplicates.entry(key).or_insert_with(Vec::new).push(key);
             }
         }
         if !duplicates.is_empty() {
             let duplicate_keys = duplicates.keys().map(|k| k.to_string()).collect_vec();
             return Err(serde::de::Error::custom(format!(
-                "Duplicate exposed keys found: '{}'",
+                "Duplicate exposed names found: '{}'",
                 duplicate_keys.join(", ")
             )));
         }
@@ -116,7 +113,8 @@ pub(crate) struct ParsedEnvironment {
     platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
-    pub(crate) exposed: IndexMap<ExposedKey, String>,
+    #[serde(default)]
+    pub(crate) exposed: IndexMap<ExposedName, String>,
 }
 
 impl ParsedEnvironment {
@@ -132,27 +130,27 @@ impl ParsedEnvironment {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-pub(crate) struct ExposedKey(String);
+pub(crate) struct ExposedName(String);
 
-impl fmt::Display for ExposedKey {
+impl fmt::Display for ExposedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl FromStr for ExposedKey {
+impl FromStr for ExposedName {
     type Err = miette::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
             miette::bail!("The key 'pixi' is not allowed in the exposed map");
         } else {
-            Ok(ExposedKey(value.to_string()))
+            Ok(ExposedName(value.to_string()))
         }
     }
 }
 
-impl<'de> Deserialize<'de> for ExposedKey {
+impl<'de> Deserialize<'de> for ExposedName {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -160,7 +158,7 @@ impl<'de> Deserialize<'de> for ExposedKey {
         struct ExposedKeyVisitor;
 
         impl<'de> Visitor<'de> for ExposedKeyVisitor {
-            type Value = ExposedKey;
+            type Value = ExposedName;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a string that is not 'pixi'")
@@ -170,13 +168,20 @@ impl<'de> Deserialize<'de> for ExposedKey {
             where
                 E: serde::de::Error,
             {
-                ExposedKey::from_str(value).map_err(serde::de::Error::custom)
+                ExposedName::from_str(value).map_err(serde::de::Error::custom)
             }
         }
 
         deserializer.deserialize_str(ExposedKeyVisitor)
     }
 }
+
+/// Represents an error that occurs when parsing an binary exposed name.
+///
+/// This error is returned when a string fails to be parsed as an environment name.
+#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
+#[error("pixi is not allowed as exposed name in the map")]
+pub struct ParseExposedKeyError {}
 
 #[cfg(test)]
 mod tests {

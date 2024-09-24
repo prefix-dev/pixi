@@ -1,3 +1,5 @@
+use std::fmt;
+
 use toml_edit::{self, Array, Item, Table, Value};
 
 pub mod project;
@@ -73,5 +75,11 @@ impl TomlManifest {
             .get_mut(array_name)
             .and_then(|a| a.as_array_mut());
         Ok(array)
+    }
+}
+
+impl fmt::Display for TomlManifest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

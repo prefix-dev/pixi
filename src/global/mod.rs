@@ -2,10 +2,11 @@ mod common;
 mod install;
 mod project;
 
-use crate::prefix::Prefix;
 pub(crate) use common::{BinDir, EnvDir, EnvRoot};
 pub(crate) use install::sync;
-pub(crate) use project::{EnvironmentName, ExposedKey, Project};
+pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
+
+use crate::prefix::Prefix;
 use rattler_conda_types::PrefixRecord;
 use std::path::{Path, PathBuf};
 

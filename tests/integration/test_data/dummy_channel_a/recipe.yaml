@@ -1,0 +1,27 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+
+outputs:
+  - package:
+      name: dummy-a
+      version: 0.1.0
+
+    build:
+      noarch: generic
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "dummy-a" > $PREFIX/bin/dummy-a.com
+        - chmod +x $PREFIX/bin/dummy-a.com
+
+  - package:
+      name: dummy-b
+      version: 0.1.0
+
+    build:
+      noarch: generic
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "dummy-b" > $PREFIX/bin/dummy-b.com
+        - chmod +x $PREFIX/bin/dummy-b.com
