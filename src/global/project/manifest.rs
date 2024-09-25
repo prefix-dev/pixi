@@ -93,6 +93,20 @@ impl Manifest {
         Ok(())
     }
 
+    /// Removes an environment by its name
+    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
+        // Update self.parsed
+        self.parsed.envs.shift_remove(env_name);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table("envs")?
+            .remove_entry(env_name.as_str());
+
+        tracing::debug!("Removed environment {env_name} from toml document");
+        Ok(())
+    }
+
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,

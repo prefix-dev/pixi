@@ -77,33 +77,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect::<miette::Result<Vec<_>>>()?,
         };
 
-        if !args.expose.is_empty() {
-            if env_names.len() == 1 {
-                for mapping in &args.expose {
-                    project_modified
-                        .manifest
-                        .add_exposed_mapping(&env_names[0], mapping)?;
-                }
-            } else {
-                miette::bail!("Cannot add exposed mappings for more than one environment");
-            }
+        if !args.expose.is_empty() && env_names.len() != 1 {
+            miette::bail!("Cannot add exposed mappings for more than one environment");
         }
 
         for env_name in &env_names {
             if project_modified.manifest.parsed.envs.contains_key(env_name) {
-                for channel in &args.channels {
-                    project_modified.manifest.add_channel(env_name, channel)?;
-                }
-            } else {
-                let channels = if args.channels.is_empty() {
-                    config.default_channels()
-                } else {
-                    args.channels.clone()
-                };
-                project_modified
-                    .manifest
-                    .add_environment(env_name, Some(channels))?;
+                project_modified.manifest.remove_environment(env_name)?;
             }
+
+            let channels = if args.channels.is_empty() {
+                config.default_channels()
+            } else {
+                args.channels.clone()
+            };
+            project_modified
+                .manifest
+                .add_environment(env_name, Some(channels))?;
 
             if let Some(platform) = args.platform {
                 project_modified.manifest.set_platform(env_name, platform)?;
@@ -115,10 +105,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .manifest
                 .add_dependency(env_name, package_name, spec)?;
         }
-        project_modified.manifest.save().await?;
-        global::sync(&project_modified, config).await?;
 
         if args.expose.is_empty() {
+            // We have to sync the manifest here, in order to find the installed executables
+            project_modified.manifest.save().await?;
+            global::sync(&project_modified, config).await?;
             for ((package_name, _), env_name) in specs.iter().zip(env_names.iter().cycle()) {
                 let env_dir =
                     EnvDir::from_env_root(project_modified.env_root.clone(), env_name.clone())
@@ -133,9 +124,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .add_exposed_mapping(env_name, &mapping)?;
                 }
             }
-            project_modified.manifest.save().await?;
-            global::sync(&project_modified, config).await?;
+        } else {
+            for mapping in &args.expose {
+                // If there env_names.len() != 1, we would have errored out earlier
+                project_modified
+                    .manifest
+                    .add_exposed_mapping(&env_names[0], mapping)?;
+            }
         }
+        project_modified.manifest.save().await?;
+        global::sync(&project_modified, config).await?;
         Ok(())
     }
 
