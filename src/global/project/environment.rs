@@ -1,8 +1,10 @@
-use std::{fmt, str::FromStr};
-
+use console::StyledObject;
+use fancy_display::FancyDisplay;
 use miette::Diagnostic;
+use pixi_consts::consts;
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
+use std::{fmt, str::FromStr};
 use thiserror::Error;
 
 /// Represents the name of an environment.
@@ -35,6 +37,12 @@ impl<'de> Deserialize<'de> for EnvironmentName {
     {
         let name = String::deserialize(deserializer)?;
         name.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl FancyDisplay for &EnvironmentName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
     }
 }
 
