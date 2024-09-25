@@ -11,7 +11,7 @@ use crate::{
 };
 use pixi_config::{self, Config, ConfigCli};
 
-/// Installs the defined package in a global accessible location.
+/// Installs the defined package in a globally accessible location.
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {

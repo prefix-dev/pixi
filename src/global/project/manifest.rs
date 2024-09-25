@@ -35,14 +35,14 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Create a new manifest from a path
+    /// Creates a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
         let contents = fs::read_to_string(path.as_ref()).into_diagnostic()?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
-    /// Create a new manifest from a string
+    /// Creates a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let contents = contents.into();
         let parsed = ParsedManifest::from_toml_str(&contents);
@@ -67,6 +67,7 @@ impl Manifest {
         Ok(manifest)
     }
 
+    /// Adds an environment to the manifest
     pub fn add_environment(
         &mut self,
         env_name: &EnvironmentName,
@@ -93,7 +94,7 @@ impl Manifest {
         Ok(())
     }
 
-    /// Removes an environment by its name
+    /// Removes a specific environment from the manifest
     pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
         // Update self.parsed
         self.parsed.envs.shift_remove(env_name);
@@ -107,6 +108,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Adds a dependency to the manifest
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
@@ -145,6 +147,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Sets the platform of a specific environment in the manifest
     pub fn set_platform(
         &mut self,
         env_name: &EnvironmentName,
@@ -178,6 +181,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Adds a channel to the manifest
     pub fn add_channel(
         &mut self,
         env_name: &EnvironmentName,
@@ -222,6 +226,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Adds exposed mapping to the manifest
     pub fn add_exposed_mapping(
         &mut self,
         env_name: &EnvironmentName,
@@ -253,6 +258,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Removes exposed mapping from the manifest
     pub fn remove_exposed_name(
         &mut self,
         env_name: &EnvironmentName,
@@ -274,7 +280,7 @@ impl Manifest {
         Ok(())
     }
 
-    /// Save the manifest to the file and update the parsed_manifest
+    /// Saves the manifest to the file system
     pub async fn save(&self) -> miette::Result<()> {
         let contents = self.document.to_string();
         tokio_fs::write(&self.path, contents)
