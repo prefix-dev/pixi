@@ -1,14 +1,14 @@
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
-};
-
 use super::{EnvironmentName, ExposedName};
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::IntoDiagnostic;
 use pixi_config::home_path;
 use pixi_consts::consts;
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
+use thiserror::Error;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
@@ -180,12 +180,41 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
 }
 
+/// Executable from path error
+#[derive(Debug, Error)]
+pub enum ExecutableFromPathError {
+    #[error("Path does not contain a correct executable name: {0}")]
+    NoExecutableName(PathBuf),
+}
+
+/// Get the executable name from a path
+/// Stripping to the file stem only when properly checked
+pub(crate) fn executable_from_path(path: &Path) -> Result<String, ExecutableFromPathError> {
+    let end = path
+        .iter()
+        .last()
+        .ok_or_else(|| ExecutableFromPathError::NoExecutableName(path.to_owned()))?;
+
+    if let Some(ext) = path.extension() {
+        if ext.to_string_lossy().chars().all(|c| c.is_numeric()) {
+            return Ok(end.to_string_lossy().to_string());
+        }
+        // Use file_stem if it's not purely numeric
+        let name = path
+            .file_stem()
+            .ok_or_else(|| ExecutableFromPathError::NoExecutableName(path.to_owned()))?;
+        return Ok(name.to_string_lossy().to_string());
+    }
+
+    Ok(end.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use fs_err::tokio as tokio_fs;
     use itertools::Itertools;
-
+    use rstest::rstest;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -245,5 +274,22 @@ mod tests {
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
+    }
+
+    #[rstest]
+    #[case::python312_linux("/usr/bin/python3.12", "python3.12")]
+    #[case::python3_linux("/usr/bin/python3", "python3")]
+    #[case::python_linux("/usr/bin/python", "python")]
+    #[case::python3121_linux("/usr/bin/python3.12.1", "python3.12.1")]
+    #[case::python_windows("python.exe", "python")]
+    #[case::python3_windows("python3.exe", "python3")]
+    #[case::python312_windows("python3.12.exe", "python3.12")]
+    #[case::bash_script("bash.sh", "bash")]
+    #[case::bash("bash", "bash")]
+    #[case::zsh59("zsh-5.9", "zsh-5.9")]
+    fn test_executable_from_path(#[case] path: &str, #[case] expected: &str) {
+        let path = Path::new(path);
+        let result = executable_from_path(path).unwrap();
+        assert_eq!(result, expected);
     }
 }
