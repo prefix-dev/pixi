@@ -458,10 +458,7 @@ pub(crate) async fn sync(
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
         if !exposed_paths.contains(&file) && file_name != "pixi" {
-            tokio_fs::remove_file(&file)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
+            tokio_fs::remove_file(&file).await.into_diagnostic()?;
             updated_env = true;
             eprintln!(
                 "{}Remove executable '{file_name}'.",

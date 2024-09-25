@@ -285,15 +285,11 @@ impl Project {
 
             tokio_fs::create_dir_all(&manifest_dir)
                 .await
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    format!("Couldn't create directory {}", manifest_dir.display())
-                })?;
+                .into_diagnostic()?;
 
             tokio_fs::File::create(&manifest_path)
                 .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not create file {}", manifest_path.display()))?;
+                .into_diagnostic()?;
         }
 
         Self::from_path(&manifest_path, env_root, bin_dir)
