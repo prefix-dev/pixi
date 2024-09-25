@@ -6,6 +6,10 @@ use pixi_config::{Config, ConfigCli};
 
 use crate::global::{self, EnvironmentName, ExposedName};
 
+/// Add exposed binaries from an environment to your global environment
+///
+/// `pixi global expose add python310=python3.10 python3=python3 --environment myenv`
+/// will expose the `python3.10` executable as `python310` and the `python3` executable as `python3`
 #[derive(Parser, Debug)]
 pub struct AddArgs {
     /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
@@ -38,6 +42,11 @@ fn parse_mapping(input: &str) -> miette::Result<global::Mapping> {
             ))
         })
 }
+
+/// Remove exposed binaries from the global environment
+///
+/// `pixi global expose remove python310 python3 --environment myenv`
+/// will remove the exposed names `python310` and `python3` from the environment `myenv`
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
@@ -54,6 +63,13 @@ pub struct RemoveArgs {
     config: ConfigCli,
 }
 
+/// Interact with the exposure of binaries in the global environment
+///
+/// `pixi global expose add python310=python3.10 --environment myenv`
+/// will expose the `python3.10` executable as `python310` from the environment `myenv`
+///
+/// `pixi global expose remove python310 --environment myenv`
+/// will remove the exposed name `python310` from the environment `myenv`
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
 pub enum SubCommand {
