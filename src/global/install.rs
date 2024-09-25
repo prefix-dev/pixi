@@ -23,7 +23,6 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsStr,
     path::PathBuf,
     str::FromStr,
 };
