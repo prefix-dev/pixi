@@ -1,1 +1,1 @@
-Added for testing purposes
+The existence of this file shouldn't break `find_package_records`
