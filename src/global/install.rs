@@ -30,7 +30,7 @@ use std::{
 
 use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
-    global::{self, BinDir, EnvDir},
+    global::{self, common::executable_from_path, BinDir, EnvDir},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
 };
@@ -127,6 +127,7 @@ pub(crate) async fn expose_executables(
     prefix: &Prefix,
     bin_dir: &BinDir,
 ) -> miette::Result<bool> {
+    tracing::debug!("Exposing executables for environment '{}'", env_name);
     // Determine the shell to use for the invocation script
     let shell: ShellEnum = if cfg!(windows) {
         rattler_shell::shell::CmdExe.into()
@@ -340,11 +341,7 @@ pub(crate) async fn create_executable_scripts(
                 .into_diagnostic()?;
         }
 
-        let executable_name = global_script_path
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(strip_executable_extension)
-            .expect("must always have at least a name");
+        let executable_name = executable_from_path(global_script_path);
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => eprintln!(
@@ -427,11 +424,7 @@ pub(crate) async fn sync(
         })
         .collect_vec();
     for file in project.bin_dir.files().await? {
-        let file_name = file
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(strip_executable_extension)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
+        let file_name = executable_from_path(&file);
         if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio_fs::remove_file(&file).await.into_diagnostic()?;
             updated_env = true;

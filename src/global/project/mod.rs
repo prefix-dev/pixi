@@ -1,6 +1,9 @@
 use super::{BinDir, EnvRoot};
 use crate::{
-    global::{common::is_text, find_executables, EnvDir},
+    global::{
+        common::{executable_from_path, is_text},
+        find_executables, EnvDir,
+    },
     prefix::Prefix,
 };
 pub(crate) use environment::EnvironmentName;
@@ -77,19 +80,10 @@ impl ExposedData {
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
     pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
-        let exposed = path
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))
-            .and_then(ExposedName::from_str)?;
+        let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
         let executable_path = extract_executable_from_script(path)?;
 
-        let executable = executable_path
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .map(String::from)
-            .ok_or_else(|| miette::miette!("Could not get file stem of {}", path.display()))?;
-
+        let executable = executable_from_path(&executable_path);
         let env_path = determine_env_path(&executable_path, env_root.path())?;
         let env_name = env_path
             .file_name()
@@ -191,7 +185,7 @@ async fn package_from_conda_meta(
 
             if find_executables(prefix, &prefix_record)
                 .iter()
-                .any(|exe_path| exe_path.file_stem().and_then(OsStr::to_str) == Some(executable))
+                .any(|exe_path| executable_from_path(exe_path) == executable)
             {
                 let platform = match Platform::from_str(
                     &prefix_record.repodata_record.package_record.subdir,
