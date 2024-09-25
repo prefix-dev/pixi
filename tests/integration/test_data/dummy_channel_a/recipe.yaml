@@ -9,19 +9,27 @@ outputs:
       version: 0.1.0
 
     build:
-      noarch: generic
       script:
         - mkdir -p $PREFIX/bin
-        - echo "dummy-a" > $PREFIX/bin/dummy-a.com
-        - chmod +x $PREFIX/bin/dummy-a.com
+        - if: win
+          then:
+            - echo "dummy-a" > $PREFIX/bin/dummy-a.bat
+          else:
+            - echo "dummy-a" > $PREFIX/bin/dummy-a
+            - chmod +x $PREFIX/bin/dummy-a
+
+
 
   - package:
       name: dummy-b
       version: 0.1.0
 
     build:
-      noarch: generic
       script:
         - mkdir -p $PREFIX/bin
-        - echo "dummy-b" > $PREFIX/bin/dummy-b.com
-        - chmod +x $PREFIX/bin/dummy-b.com
+        - if: win
+          then:
+            - echo "dummy-b" > $PREFIX/bin/dummy-b.bat
+          else:
+            - echo "dummy-b" > $PREFIX/bin/dummy-b
+            - chmod +x $PREFIX/bin/dummy-b
