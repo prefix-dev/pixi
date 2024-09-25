@@ -17,7 +17,7 @@ use super::ExposedData;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct ParsedManifest {
     /// The environments the project can create.
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,

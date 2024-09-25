@@ -22,7 +22,7 @@ use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 /// manifest. It encapsulates all logic related to the manifest's TOML format
 /// and structure. The manifest data is represented as a [`ParsedManifest`]
 /// struct for easy manipulation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Manifest {
     /// The path to the manifest file
     pub path: PathBuf,
@@ -332,11 +332,13 @@ impl FromStr for Mapping {
 mod tests {
     use std::str::FromStr;
 
+    use indexmap::IndexSet;
+
     use super::*;
 
     #[test]
     fn test_add_exposed_mapping_new_env() {
-        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let mut manifest = Manifest::default();
         let exposed_name = ExposedName::from_str("test_exposed").unwrap();
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
@@ -371,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_add_exposed_mapping_existing_env() {
-        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let mut manifest = Manifest::default();
         let exposed_name1 = ExposedName::from_str("test_exposed1").unwrap();
         let executable_name1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
@@ -433,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_remove_exposed_mapping() {
-        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let mut manifest = Manifest::default();
         let exposed_name = ExposedName::from_str("test_exposed").unwrap();
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
@@ -466,12 +468,76 @@ mod tests {
 
     #[test]
     fn test_remove_exposed_mapping_nonexistent() {
-        let mut manifest = Manifest::from_str(&PathBuf::from("pixi-global.toml"), "").unwrap();
+        let mut manifest = Manifest::default();
         let exposed_name = ExposedName::from_str("test_exposed").unwrap();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Removing an exposed name that doesn't exist should return an error
         let result = manifest.remove_exposed_name(&env_name, &exposed_name);
         assert!(result.is_err())
+    }
+
+    #[test]
+    fn test_add_environment_default_channel() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table("envs")
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_some());
+
+        // Check parsed
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+
+        // Check channels
+        let expected_channels = Config::load_global()
+            .default_channels()
+            .into_iter()
+            .map(From::from)
+            .collect::<IndexSet<_>>();
+        let actual_channels = env.channels.clone();
+        assert_eq!(expected_channels, actual_channels);
+    }
+
+    #[test]
+    fn test_add_environment_given_channel() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        let channels = Vec::from([
+            NamedChannelOrUrl::from_str("test-channel-1").unwrap(),
+            NamedChannelOrUrl::from_str("test-channel-2").unwrap(),
+        ]);
+
+        // Add environment
+        manifest
+            .add_environment(&env_name, Some(channels.clone()))
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table("envs")
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_some());
+
+        // Check parsed
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+
+        // Check channels
+        let expected_channels = channels
+            .into_iter()
+            .map(From::from)
+            .collect::<IndexSet<_>>();
+        let actual_channels = env.channels.clone();
+        assert_eq!(expected_channels, actual_channels);
     }
 }
