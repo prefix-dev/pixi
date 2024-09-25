@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "8c09ab6bfb1a20d0978f7834460be0df",
+      "md5": "c359f0545a7f69ae00bf9d6be164b386",
       "name": "dummy-a",
       "platform": "linux",
-      "sha256": "091b1de690fe66fdd67bb6f7e0c2401d7d6174ee5f351087144923f6ddf226f1",
-      "size": 503051,
+      "sha256": "f3248e380dd4fb3a8b53635d8ac9ed612181a18dda3015c54899682fdf8525e3",
+      "size": 1025820,
       "subdir": "linux-64",
-      "timestamp": 1727276989728,
+      "timestamp": 1727277198636,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-hb0f4dca_0.conda": {
@@ -25,13 +25,13 @@
       "build": "hb0f4dca_0",
       "build_number": 0,
       "depends": [],
-      "md5": "74a0d7da8d0e92847bcdca72ce609d71",
+      "md5": "cbc9f571de93529760b7bad4a06ae0e1",
       "name": "dummy-b",
       "platform": "linux",
-      "sha256": "7d9e3e6ad52d97fe1d994fbbf5884349659b2075d5a994d2e34fbc8ed58a272c",
-      "size": 472498,
+      "sha256": "96f836ebbab36bc4abe75ce202f5416f9de32191b50e4117b6eb43ef14c92b47",
+      "size": 1023833,
       "subdir": "linux-64",
-      "timestamp": 1727276989728,
+      "timestamp": 1727277198636,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-hb0f4dca_0.conda": {
@@ -39,13 +39,13 @@
       "build": "hb0f4dca_0",
       "build_number": 0,
       "depends": [],
-      "md5": "626f3e5ac7548d598d71e84aa519934d",
+      "md5": "c5abd0e73f333bd40f38ec12ecce48da",
       "name": "dummy-c",
       "platform": "linux",
-      "sha256": "31fce91d102acff70bc1dbc2b3c50cbceecef7714f9462f0950405198dd6ab82",
-      "size": 485300,
+      "sha256": "a226ef6acf6fae364da81d29fa605c115f47265c60b4c3fffbc45f677fa4c28c",
+      "size": 908119,
       "subdir": "linux-64",
-      "timestamp": 1727276989728,
+      "timestamp": 1727277198636,
       "version": "0.1.0"
     }
   },

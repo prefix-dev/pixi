@@ -296,9 +296,11 @@ def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> No
     dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
 
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
     dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
     # Install dummy-a, even though dummy-c is a dependency, it should not be exposed
+    # All of dummy-a's executables should be exposed though: 'dummy-a' and 'dummy-aa'
     verify_cli_command(
         [
             pixi,
@@ -312,6 +314,7 @@ def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> No
         env=env,
     )
     assert dummy_a.is_file()
+    assert dummy_aa.is_file()
     assert not dummy_c.is_file()
 
     # Install dummy-a, and expose dummy-c explicitly
@@ -331,4 +334,5 @@ def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> No
         env=env,
     )
     assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
     assert dummy_c.is_file()

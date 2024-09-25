@@ -18,9 +18,12 @@ outputs:
         - if: win
           then:
             - echo "dummy-a" > $PREFIX/bin/dummy-a.bat
+            - echo "dummy-aa" > $PREFIX/bin/dummy-aa.bat
           else:
             - echo "dummy-a" > $PREFIX/bin/dummy-a
+            - echo "dummy-aa" > $PREFIX/bin/dummy-aa
             - chmod +x $PREFIX/bin/dummy-a
+            - chmod +x $PREFIX/bin/dummy-aa
 
   - package:
       name: dummy-b
