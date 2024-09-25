@@ -540,4 +540,40 @@ mod tests {
         let actual_channels = env.channels.clone();
         assert_eq!(expected_channels, actual_channels);
     }
+
+    #[test]
+    fn test_remove_environment() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Remove environment
+        manifest.remove_environment(&env_name).unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table("envs")
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_none());
+
+        // Check parsed
+        let actual_value = manifest.parsed.envs.get(&env_name);
+        assert!(actual_value.is_none());
+    }
+
+    #[test]
+    fn test_remove_non_existent_environment() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("non-existent-env").unwrap();
+
+        // Remove non-existent environment
+        let result = manifest.remove_environment(&env_name);
+
+        // Ensure no panic and result is Ok
+        assert!(result.is_ok());
+    }
 }
