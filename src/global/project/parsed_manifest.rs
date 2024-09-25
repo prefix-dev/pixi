@@ -111,14 +111,24 @@ pub(crate) struct ParsedEnvironment {
 }
 
 impl ParsedEnvironment {
-    // If `self.platform` is `None` is not given, the current platform is used
+    /// Returns the platform associated with this platform, `None` means current platform
     pub(crate) fn platform(&self) -> Option<Platform> {
         self.platform
     }
 
-    /// Returns the channels associated with this collection.
+    /// Returns the channels associated with this environment.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+
+    /// Returns the dependencies associated with this environment.
+    pub(crate) fn dependencies(&self) -> &IndexMap<PackageName, PixiSpec> {
+        &self.dependencies
+    }
+
+    /// Returns the exposed names associated with this environment.
+    pub(crate) fn exposed(&self) -> &IndexMap<ExposedName, String> {
+        &self.exposed
     }
 }
 

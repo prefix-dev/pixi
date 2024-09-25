@@ -1,12 +1,14 @@
 use crate::global;
+use crate::global::common::find_package_records;
 use crate::global::{ExposedName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
+use pixi_consts::consts;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::PackageName;
+use rattler_conda_types::{PackageName, PrefixRecord, Version};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -36,7 +38,10 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
     let mut message = String::new();
 
     let len = envs.len();
-    for (idx, env) in envs.into_iter().enumerate() {
+    for (idx, (env_name, env)) in envs.into_iter().enumerate() {
+        let env_dir = project.env_root.path().join(env_name.as_str());
+        let records = find_package_records(&env_dir.join(consts::CONDA_META_DIR)).await?;
+
         let last = (idx + 1) == len;
 
         if last {
@@ -45,20 +50,40 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
             message.push_str("├──");
         }
 
-        message.push_str(&format!(" {}", env.0.fancy_display()));
+        if !env
+            .dependencies()
+            .iter()
+            .any(|(pkg_name, _spec)| pkg_name.as_normalized() != env_name.as_str())
+        {
+            if let Some(env_package) = records.iter().find(|rec| {
+                rec.repodata_record.package_record.name.as_normalized() == env_name.as_str()
+            }) {
+                message.push_str(&format!(
+                    " {}: {}",
+                    env_name.fancy_display(),
+                    console::style(env_package.repodata_record.package_record.version.clone())
+                        .blue()
+                ));
+            } else {
+                message.push_str(&format!(" {}", env_name.fancy_display()));
+            }
+        } else {
+            message.push_str(&format!(" {}", env_name.fancy_display()));
+        }
 
         // Write dependencies
         if let Some(dep_message) = format_dependencies(
-            env.0.as_str(),
-            &env.1.dependencies,
+            env_name.as_str(),
+            &env.dependencies,
+            &records,
             last,
-            !env.1.exposed.is_empty(),
+            !env.exposed.is_empty(),
         ) {
             message.push_str(&dep_message);
         }
 
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(env.0.as_str(), &env.1.exposed, last) {
+        if let Some(exp_message) = format_exposed(env_name.as_str(), env.exposed(), last) {
             message.push_str(&exp_message);
         }
 
@@ -73,18 +98,16 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
 }
 
 /// Display a dependency in a human-readable format.
-fn display_dependency(name: &PackageName, spec: &PixiSpec) -> String {
-    let version = if spec.has_version_spec() {
-        format!(" {}", spec.as_version_spec().expect("version spec is set"))
+fn display_dependency(name: &PackageName, version: Option<Version>) -> String {
+    if let Some(version) = version {
+        format!(
+            "{} {}",
+            console::style(name.as_normalized()).green(),
+            console::style(version).blue()
+        )
     } else {
-        String::new()
-    };
-
-    format!(
-        "{}{}",
-        console::style(name.as_normalized()).green(),
-        console::style(version).blue()
-    )
+        console::style(name.as_normalized()).green().to_string()
+    }
 }
 
 /// Creating the ASCII art representation of a section.
@@ -97,6 +120,7 @@ fn format_asciiart_section(label: &str, content: String, last: bool, more: bool)
 fn format_dependencies(
     env_name: &str,
     dependencies: &IndexMap<PackageName, PixiSpec>,
+    records: &[PrefixRecord],
     last: bool,
     more: bool,
 ) -> Option<String> {
@@ -106,7 +130,16 @@ fn format_dependencies(
     {
         let content = dependencies
             .iter()
-            .map(|(name, spec)| display_dependency(name, spec))
+            .map(|(name, _spec)| {
+                let version = records
+                    .iter()
+                    .find(|rec| {
+                        rec.repodata_record.package_record.name.as_normalized()
+                            == name.as_normalized()
+                    })
+                    .map(|rec| rec.repodata_record.package_record.version.version().clone());
+                display_dependency(name, version)
+            })
             .join(", ");
         Some(format_asciiart_section("dependencies", content, last, more))
     } else {
