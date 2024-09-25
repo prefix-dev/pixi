@@ -369,7 +369,7 @@ pub(crate) async fn create_executable_scripts(
                 .into_diagnostic()?;
         }
 
-        let executable_name = executable_from_path(global_script_path).into_diagnostic()?;
+        let executable_name = executable_from_path(global_script_path);
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => eprintln!(
@@ -452,7 +452,7 @@ pub(crate) async fn sync(
         })
         .collect_vec();
     for file in project.bin_dir.files().await? {
-        let file_name = executable_from_path(&file).into_diagnostic()?;
+        let file_name = executable_from_path(&file);
         if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio_fs::remove_file(&file).await.into_diagnostic()?;
             updated_env = true;

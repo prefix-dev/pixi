@@ -80,11 +80,10 @@ impl ExposedData {
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
     pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
-        let exposed =
-            ExposedName::from_str(executable_from_path(path).into_diagnostic()?.as_str())?;
+        let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
         let executable_path = extract_executable_from_script(path)?;
 
-        let executable = executable_from_path(&executable_path).into_diagnostic()?;
+        let executable = executable_from_path(&executable_path);
         let env_path = determine_env_path(&executable_path, env_root.path())?;
         let env_name = env_path
             .file_name()
@@ -186,7 +185,7 @@ async fn package_from_conda_meta(
 
             if find_executables(prefix, &prefix_record)
                 .iter()
-                .any(|exe_path| executable_from_path(exe_path).ok() == Some(executable.to_string()))
+                .any(|exe_path| executable_from_path(exe_path) == executable)
             {
                 let platform = match Platform::from_str(
                     &prefix_record.repodata_record.package_record.subdir,
