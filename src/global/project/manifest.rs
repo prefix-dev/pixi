@@ -338,6 +338,7 @@ mod tests {
     use std::str::FromStr;
 
     use indexmap::IndexSet;
+    use itertools::Itertools;
     use rattler_conda_types::ParseStrictness;
 
     use super::*;
@@ -706,5 +707,44 @@ mod tests {
             .platform
             .unwrap();
         assert_eq!(actual_platform, platform);
+    }
+
+    #[test]
+    fn test_add_channel() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel = NamedChannelOrUrl::from_str("test-channel").unwrap();
+        let mut channels = Config::load_global().default_channels();
+        channels.push(channel.clone());
+
+        // Add channel
+        manifest.add_channel(&env_name, &channel).unwrap();
+
+        // Check document
+        let actual_channels = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))
+            .unwrap()
+            .get("channels")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v.as_str())
+            .collect_vec();
+        let expected_channels = channels.iter().map(|c| c.as_str()).collect_vec();
+        assert_eq!(actual_channels, expected_channels);
+
+        // Check parsed
+        let actual_channels = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .channels
+            .clone();
+        let expected_channels: IndexSet<PrioritizedChannel> =
+            channels.into_iter().map(From::from).collect();
+        assert_eq!(actual_channels, expected_channels);
     }
 }
