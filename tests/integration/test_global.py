@@ -5,7 +5,7 @@ from .common import verify_cli_command, ExitCode
 import platform
 
 
-def exe_extension(exe_name: str) -> str:
+def exec_extension(exe_name: str) -> str:
     if platform.system() == "Windows":
         return exe_name + ".bat"
     else:
@@ -28,7 +28,7 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / exe_extension("python-injected")
+    python_injected = tmp_path / "bin" / exec_extension("python-injected")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
@@ -106,14 +106,14 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path, test_data: Path) 
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    dummy_a = tmp_path / "bin" / exe_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     assert dummy_a.is_file()
 
     # Add another expose
-    dummy_in_disguise_str = exe_extension("dummy-in-disguise")
+    dummy_in_disguise_str = exec_extension("dummy-in-disguise")
     dummy_in_disguise = tmp_path / "bin" / dummy_in_disguise_str
     parsed_toml["envs"]["test"]["exposed"][dummy_in_disguise_str] = "dummy-a"
     manifest.write_text(tomli_w.dumps(parsed_toml))
@@ -143,7 +143,7 @@ def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path, test_dat
     "dummy-a" = "dummy-a"
     """
     manifest.write_text(toml)
-    dummy_a = tmp_path / "bin" / exe_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
@@ -200,8 +200,8 @@ def test_global_expose_basic(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     dummy-a = "*"
     """
     manifest.write_text(toml)
-    dummy1 = tmp_path / "bin" / exe_extension("dummy1")
-    dummy3 = tmp_path / "bin" / exe_extension("dummy3")
+    dummy1 = tmp_path / "bin" / exec_extension("dummy1")
+    dummy3 = tmp_path / "bin" / exec_extension("dummy3")
 
     # Add dummy1
     verify_cli_command(
@@ -287,3 +287,48 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Pat
         env=env,
         stderr_contains="Could not add exposed mappings. Reverting also failed",
     )
+
+
+def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
+
+    # Install dummy-a, even though dummy-c is a dependency, it should not be exposed
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "dummy-a",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert not dummy_c.is_file()
+
+    # Install dummy-a, and expose dummy-c explicitly
+    # Only dummy-c should now be exposed
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "--expose",
+            "dummy-c=dummy-c",
+            "dummy-a",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert dummy_c.is_file()

@@ -8,6 +8,10 @@ outputs:
       name: dummy-a
       version: 0.1.0
 
+    requirements:
+      run:
+        - dummy-c
+
     build:
       script:
         - mkdir -p $PREFIX/bin
@@ -17,8 +21,6 @@ outputs:
           else:
             - echo "dummy-a" > $PREFIX/bin/dummy-a
             - chmod +x $PREFIX/bin/dummy-a
-
-
 
   - package:
       name: dummy-b
@@ -33,3 +35,17 @@ outputs:
           else:
             - echo "dummy-b" > $PREFIX/bin/dummy-b
             - chmod +x $PREFIX/bin/dummy-b
+
+  - package:
+      name: dummy-c
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-c" > $PREFIX/bin/dummy-c.bat
+          else:
+            - echo "dummy-c" > $PREFIX/bin/dummy-c
+            - chmod +x $PREFIX/bin/dummy-c
