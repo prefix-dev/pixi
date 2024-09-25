@@ -73,12 +73,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             if project_modified.manifest.parsed.envs.contains_key(env_name) {
                 for channel in &args.channels {
-                    project_modified.manifest.add_channel(env_name, channel);
+                    project_modified.manifest.add_channel(env_name, channel)?;
                 }
             } else {
                 project_modified
                     .manifest
-                    .add_environment(env_name, Some(args.channels.clone()));
+                    .add_environment(env_name, Some(args.channels.clone()))?;
             }
 
             if let Some(platform) = args.platform {
