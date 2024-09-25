@@ -1,29 +1,48 @@
 use crate::global;
 use crate::global::common::find_package_records;
+use crate::global::project::ParsedEnvironment;
 use crate::global::{EnvironmentName, ExposedName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use human_bytes::human_bytes;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::miette;
+use miette::{miette, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, PrefixRecord, Version};
+use rattler_conda_types::{PackageName, PackageRecord, PrefixRecord, Version};
+use serde::Serialize;
+use std::io::{stdout, Write};
 use std::str::FromStr;
+use thiserror::__private::AsDisplay;
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
+///
+/// All environments:
+/// - Yellow: the binaries that are exposed.
+/// - Green: the packages that are explicit dependencies of the environment.
+/// - Blue: the version of the installed package.
+/// - Cyan: the name of the environment.
+///
+/// Per environment:
+/// - Green: packages are explicitly installed.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", long = "assume-yes")]
     assume_yes: bool,
+
     #[clap(flatten)]
     config: ConfigCli,
 
     /// The name of the environment to list.
     #[clap(short, long)]
     environment: Option<String>,
+
+    /// Sorting strategy for the package table
+    #[arg(long, default_value = "name", value_enum)]
+    pub sort_by: GlobalSortBy,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -35,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if let Some(environment) = args.environment {
         let name = EnvironmentName::from_str(environment.as_str())?;
-        list_environment(project, &name).await?;
+        list_environment(project, &name, args.sort_by).await?;
     } else {
         list_global_environments(project).await?;
     }
@@ -43,12 +62,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+/// Sorting strategy for the package table
+#[derive(clap::ValueEnum, Clone, Debug, Serialize)]
+pub enum GlobalSortBy {
+    Size,
+    Name,
+}
+
+#[derive(Serialize, Hash, Eq, PartialEq)]
+struct PackageToOutput {
+    name: PackageName,
+    version: Version,
+    build: Option<String>,
+    size_bytes: Option<u64>,
+    is_explicit: bool,
+}
+
+impl PackageToOutput {
+    fn from_package_record(record: &PackageRecord, is_explicit: bool) -> Self {
+        Self {
+            name: record.name.clone(),
+            version: record.version.version().clone(),
+            build: Some(record.build.clone()),
+            size_bytes: record.size,
+            is_explicit,
+        }
+    }
+}
+
 /// List package and binaries in environment
 async fn list_environment(
     project: Project,
     environment_name: &EnvironmentName,
+    sort_by: GlobalSortBy,
 ) -> miette::Result<()> {
-    let _env = project
+    let env = project
         .environments()
         .get(environment_name)
         .ok_or_else(|| miette!("Environment '{}' not found", environment_name))?;
@@ -62,57 +110,123 @@ async fn list_environment(
     )
     .await?;
 
-    let mut message = String::new();
+    let mut packages_to_output: Vec<PackageToOutput> = records
+        .iter()
+        .map(|record| {
+            PackageToOutput::from_package_record(
+                &record.repodata_record.package_record,
+                env.dependencies()
+                    .contains_key(&record.repodata_record.package_record.name),
+            )
+        })
+        .collect();
 
-    message.push_str(&format!(
-        "Environment: {}\n",
-        environment_name.fancy_display()
-    ));
-    let len = records.len();
-    for (idx, record) in records.iter().enumerate() {
-        if (idx + 1) == len {
-            message.push_str("└──");
-        } else {
-            message.push_str("├──");
+    // Sort according to the sorting strategy
+    match sort_by {
+        GlobalSortBy::Size => {
+            packages_to_output
+                .sort_by(|a, b| a.size_bytes.unwrap_or(0).cmp(&b.size_bytes.unwrap_or(0)));
         }
-        message.push_str(&format!(
-            " {}: {} {}\n",
-            record.repodata_record.package_record.name.as_normalized(),
-            console::style(record.repodata_record.package_record.version.clone()).blue(),
-            record.repodata_record.package_record.build.clone(),
-        ));
-    }
-
-    // Write exposed binaries
-    let exposed = project
-        .environments()
-        .get(environment_name)
-        .map(|env| env.exposed());
-    if let Some(exposed) = exposed {
-        if !records.is_empty() {
-            message.push_str(&format!(
-                "Exposes: {}",
-                exposed
-                    .iter()
-                    .map(|(exp, from)| format!(
-                        "{}{}",
-                        console::style(exp).yellow().to_string(),
-                        if from != &exp.to_string() {
-                            format!(" from ({})", console::style(from).yellow())
-                        } else {
-                            "".to_string()
-                        }
-                    ))
-                    .join(", "),
-            ));
+        GlobalSortBy::Name => {
+            packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
         }
     }
-
-    println!("{}", message);
+    println!(
+        "The '{}' environment has {} packages:",
+        environment_name.fancy_display(),
+        console::style(packages_to_output.len()).bold()
+    );
+    print_package_table(packages_to_output).into_diagnostic()?;
+    println!();
+    print_meta_info(env);
 
     Ok(())
 }
 
+fn print_meta_info(environment: &ParsedEnvironment) {
+    // Print exposed binaries, if binary similar to path only print once.
+    let formatted_exposed = environment
+        .exposed
+        .iter()
+        .map(|(exp, path)| {
+            if &exp.to_string() == path {
+                exp.to_string()
+            } else {
+                format!("{} -> {}", exp, path)
+            }
+        })
+        .join(", ");
+    println!(
+        "{}\n{}",
+        console::style("Exposed:").bold().yellow(),
+        formatted_exposed
+    );
+
+    // Print channels
+    if !environment.channels().is_empty() {
+        println!(
+            "{}\n{}",
+            console::style("Channels:").bold().yellow(),
+            environment.channels().iter().join(", ")
+        );
+    }
+
+    // Print platform
+    if let Some(platform) = environment.platform() {
+        println!(
+            "{} {}",
+            console::style("Platform:").bold().yellow(),
+            platform
+        );
+    }
+}
+
+/// Create a human-readable representation of the global environment.
+/// Using a tabwriter to align the columns.
+fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
+    let mut writer = tabwriter::TabWriter::new(stdout());
+    let header_style = console::Style::new().bold().yellow();
+    let header = format!(
+        "{}\t{}\t{}\t{}",
+        header_style.apply_to("Package"),
+        header_style.apply_to("Version"),
+        header_style.apply_to("Build"),
+        header_style.apply_to("Size"),
+    );
+    writeln!(writer, "{}", &header)?;
+
+    for package in packages {
+        // Convert size to human-readable format
+        let size_human = package
+            .size_bytes
+            .map(|size| human_bytes(size as f64))
+            .unwrap_or_default();
+
+        let package_info = format!(
+            "{}\t{}\t{}\t{}",
+            package.name.as_normalized(),
+            &package.version,
+            package.build.as_deref().unwrap_or(""),
+            size_human
+        );
+
+        writeln!(
+            writer,
+            "{}",
+            if package.is_explicit {
+                console::style(package_info).green().to_string()
+            } else {
+                package_info
+            }
+        )?;
+    }
+
+    writeln!(writer, "{}", header)?;
+
+    writer.flush()
+}
+
+/// List all environments in the global environment
 async fn list_global_environments(project: Project) -> miette::Result<()> {
     let envs = project.environments();
 
@@ -173,7 +287,16 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
         }
     }
 
-    eprintln!("Global environments:\n{}", message);
+    eprintln!(
+        "Global environments at {}:\n{}",
+        project
+            .env_root
+            .path()
+            .parent()
+            .unwrap_or(project.env_root.path())
+            .as_display(),
+        message
+    );
 
     Ok(())
 }
