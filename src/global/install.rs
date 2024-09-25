@@ -48,7 +48,8 @@ pub(crate) async fn install_environment(
         .channels()
         .into_iter()
         .map(|channel| channel.clone().into_channel(config.global_channel_config()))
-        .collect_vec();
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     let platform = parsed_environment
         .platform()
