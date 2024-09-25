@@ -1,9 +1,11 @@
 use super::{EnvironmentName, ExposedName};
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_consts::consts;
+use rattler_conda_types::PrefixRecord;
+use std::ffi::OsStr;
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -179,6 +181,30 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
 }
 
+/// Finds the package record from the `conda-meta` directory.
+pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let mut records = Vec::new();
+
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
+        // Check if the entry is a file and has a .json extension
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+            let prefix_record = PrefixRecord::from_path(&path)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+
+            records.push(prefix_record);
+        }
+    }
+
+    if records.is_empty() {
+        miette::bail!("No package records found in {}", conda_meta.display());
+    }
+
+    Ok(records)
+}
+
 /// Strips known Windows executable extensions from a file name.
 pub(crate) fn strip_windows_executable_extension(file_name: String) -> String {
     let file_name = file_name.to_lowercase();
@@ -340,5 +366,28 @@ mod tests {
         let path = Path::new(path);
         let result = strip_windows_executable_extension(path.to_string_lossy().to_string());
         assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
+    async fn test_find_package_record() {
+        // Get meta file from test data folder relative to the current file
+        let dummy_conda_meta_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("global")
+            .join("test_data")
+            .join("conda-meta");
+        // Find the package record
+        let records = find_package_records(&dummy_conda_meta_path).await.unwrap();
+
+        // Verify that the package record was found
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0]
+                .repodata_record
+                .package_record
+                .name
+                .as_normalized(),
+            "python"
+        );
     }
 }
