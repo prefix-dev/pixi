@@ -1,14 +1,16 @@
 use crate::global;
 use crate::global::common::find_package_records;
-use crate::global::{ExposedName, Project};
+use crate::global::{EnvironmentName, ExposedName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use miette::miette;
 use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
+use std::str::FromStr;
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -18,6 +20,10 @@ pub struct Args {
     assume_yes: bool,
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// The name of the environment to list.
+    #[clap(short, long)]
+    environment: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -27,7 +33,82 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
     global::sync(&project, &config).await?;
 
-    list_global_environments(project).await?;
+    if let Some(environment) = args.environment {
+        let name = EnvironmentName::from_str(environment.as_str())?;
+        list_environment(project, &name).await?;
+    } else {
+        list_global_environments(project).await?;
+    }
+
+    Ok(())
+}
+
+/// List package and binaries in environment
+async fn list_environment(
+    project: Project,
+    environment_name: &EnvironmentName,
+) -> miette::Result<()> {
+    let _env = project
+        .environments()
+        .get(environment_name)
+        .ok_or_else(|| miette!("Environment '{}' not found", environment_name))?;
+
+    let records = find_package_records(
+        &project
+            .env_root
+            .path()
+            .join(environment_name.as_str())
+            .join(consts::CONDA_META_DIR),
+    )
+    .await?;
+
+    let mut message = String::new();
+
+    message.push_str(&format!(
+        "Environment: {}\n",
+        environment_name.fancy_display()
+    ));
+    let len = records.len();
+    for (idx, record) in records.iter().enumerate() {
+        if (idx + 1) == len {
+            message.push_str("└──");
+        } else {
+            message.push_str("├──");
+        }
+        message.push_str(&format!(
+            " {}: {} {}\n",
+            record.repodata_record.package_record.name.as_normalized(),
+            console::style(record.repodata_record.package_record.version.clone()).blue(),
+            record.repodata_record.package_record.build.clone(),
+        ));
+    }
+
+    // Write exposed binaries
+    let exposed = project
+        .environments()
+        .get(environment_name)
+        .map(|env| env.exposed());
+    if let Some(exposed) = exposed {
+        if !records.is_empty() {
+            message.push_str(&format!(
+                "Exposes: {}",
+                exposed
+                    .iter()
+                    .map(|(exp, from)| format!(
+                        "{}{}",
+                        console::style(exp).yellow().to_string(),
+                        if from != &exp.to_string() {
+                            format!(" from ({})", console::style(from).yellow())
+                        } else {
+                            "".to_string()
+                        }
+                    ))
+                    .join(", "),
+            ));
+        }
+    }
+
+    println!("{}", message);
 
     Ok(())
 }
