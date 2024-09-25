@@ -1,4 +1,5 @@
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 use crate::Project;
 use fancy_display::FancyDisplay;
@@ -24,17 +25,24 @@ pub(crate) fn execute(project: Project, args: Args) -> miette::Result<()> {
             );
             e.channels()
         })
-        .for_each(|c| {
-            c.into_iter().for_each(|channel| {
-                println!(
-                    "- {}",
-                    if args.urls {
-                        channel.clone().into_base_url(&channel_config).to_string()
-                    } else {
-                        channel.to_string()
-                    }
-                );
-            })
-        });
+        .try_for_each(|c| -> Result<(), rattler_conda_types::ParseChannelError> {
+            c.into_iter().try_for_each(
+                |channel| -> Result<(), rattler_conda_types::ParseChannelError> {
+                    println!(
+                        "- {}",
+                        if args.urls {
+                            match channel.clone().into_base_url(&channel_config) {
+                                Ok(url) => url.to_string(),
+                                Err(e) => return Err(e),
+                            }
+                        } else {
+                            channel.to_string()
+                        }
+                    );
+                    Ok(())
+                },
+            )
+        })
+        .into_diagnostic()?;
     Ok(())
 }

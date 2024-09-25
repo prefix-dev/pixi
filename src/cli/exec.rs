@@ -55,8 +55,8 @@ pub struct EnvironmentHash {
 }
 
 impl EnvironmentHash {
-    pub(crate) fn from_args(args: &Args, config: &Config) -> Self {
-        Self {
+    pub(crate) fn from_args(args: &Args, config: &Config) -> miette::Result<Self> {
+        Ok(Self {
             command: args
                 .command
                 .first()
@@ -65,11 +65,11 @@ impl EnvironmentHash {
             specs: args.specs.clone(),
             channels: args
                 .channels
-                .resolve_from_config(config)
+                .resolve_from_config(config)?
                 .iter()
                 .map(|c| c.base_url().to_string())
                 .collect(),
-        }
+        })
     }
 
     /// Returns the name of the environment.
@@ -118,7 +118,7 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from_args(args, config).name();
+    let environment_name = EnvironmentHash::from_args(args, config)?.name();
     let prefix = Prefix::new(
         cache_dir
             .join(pixi_consts::consts::CACHED_ENVS_DIR)
@@ -168,11 +168,13 @@ pub async fn create_exec_prefix(
         args.specs.clone()
     };
 
+    let channels = args.channels.resolve_from_config(config)?;
+
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
             .query(
-                args.channels.resolve_from_config(config),
+                channels,
                 [Platform::current(), Platform::NoArch],
                 specs.clone(),
             )
