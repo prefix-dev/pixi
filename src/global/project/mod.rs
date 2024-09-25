@@ -103,8 +103,8 @@ impl ExposedData {
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
-        let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
-        let prefix = Prefix::new(bin_env_dir.path());
+        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(env_dir.path());
 
         let (platform, channel, package) =
             package_from_conda_meta(&conda_meta, &executable, &prefix).await?;

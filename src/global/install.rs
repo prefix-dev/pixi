@@ -235,13 +235,8 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
     }
 }
 
-/// For each executable provided, map it to the installation path for its global
-/// executable script.
-#[allow(unused)]
-async fn map_executables_to_global_bin_scripts(
-    package_executables: impl IntoIterator<Item = PathBuf>,
-    bin_dir: &BinDir,
-) -> miette::Result<Vec<ScriptExecMapping>> {
+/// Strips known executable extensions from a file name based on the target operating system
+pub(crate) fn strip_executable_extension(file_name: &str) -> &str {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
         pathext.split(';').map(|s| s.to_lowercase()).collect()
@@ -267,33 +262,10 @@ async fn map_executables_to_global_bin_scripts(
     .map(|&s| s.to_owned())
     .collect();
 
-    let mut mappings = vec![];
-
-    for exec in package_executables {
-        // Remove the extension of a file if it is in the list of known extensions.
-        let Some(file_name) = exec
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(str::to_lowercase)
-        else {
-            continue;
-        };
-        let file_name = extensions_list
-            .iter()
-            .find_map(|ext| file_name.strip_suffix(ext))
-            .unwrap_or(file_name.as_str());
-
-        let mut executable_script_path = bin_dir.path().join(file_name);
-
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        };
-        mappings.push(ScriptExecMapping {
-            original_executable: exec,
-            global_script_path: executable_script_path,
-        });
-    }
-    Ok(mappings)
+    extensions_list
+        .iter()
+        .find_map(|ext| file_name.strip_suffix(ext))
+        .unwrap_or(file_name)
 }
 
 /// Create the executable scripts by modifying the activation script
@@ -369,8 +341,9 @@ pub(crate) async fn create_executable_scripts(
         }
 
         let executable_name = global_script_path
-            .file_stem()
+            .file_name()
             .and_then(OsStr::to_str)
+            .map(strip_executable_extension)
             .expect("must always have at least a name");
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
@@ -455,8 +428,9 @@ pub(crate) async fn sync(
         .collect_vec();
     for file in project.bin_dir.files().await? {
         let file_name = file
-            .file_stem()
+            .file_name()
             .and_then(OsStr::to_str)
+            .map(strip_executable_extension)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
         if !exposed_paths.contains(&file) && file_name != "pixi" {
             tokio_fs::remove_file(&file).await.into_diagnostic()?;

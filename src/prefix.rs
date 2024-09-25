@@ -6,12 +6,14 @@ use std::{
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{Platform, PrefixRecord};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
+
+use crate::global::strip_executable_extension;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -118,9 +120,9 @@ impl Prefix {
                     .iter()
                     .filter(|relative_path| self.is_executable(relative_path))
                     .filter_map(|path| {
-                        path.file_stem()
+                        path.file_name()
                             .and_then(OsStr::to_str)
-                            .map(|name| (name.to_string(), path.clone()))
+                            .map(|name| (strip_executable_extension(name).to_owned(), path.clone()))
                     })
             })
             .collect()
@@ -157,5 +159,21 @@ impl Prefix {
         // Check if the file is executable
         let absolute_path = self.root().join(relative_path);
         is_executable::is_executable(absolute_path)
+    }
+
+    /// Find the designated package in the given [`Prefix`]
+    ///
+    /// # Returns
+    ///
+    /// The PrefixRecord of the designated package
+    pub async fn find_designated_package(
+        &self,
+        package_name: &PackageName,
+    ) -> miette::Result<PrefixRecord> {
+        let prefix_records = self.find_installed_packages(None).await?;
+        prefix_records
+            .into_iter()
+            .find(|r| r.repodata_record.package_record.name == *package_name)
+            .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
     }
 }

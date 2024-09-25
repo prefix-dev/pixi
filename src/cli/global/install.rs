@@ -1,10 +1,13 @@
+use std::str::FromStr;
+
 use clap::Parser;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
 use crate::{
     cli::{global::revert_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName},
+    global::{self, EnvDir, EnvironmentName, ExposedName, Mapping},
+    prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
 
@@ -64,33 +67,75 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         config: &Config,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
+        let specs = args.specs()?;
 
-        for (package_name, spec) in args.specs()? {
-            let env_name = match &args.environment {
-                Some(env_name) => env_name,
-                None => &package_name.as_normalized().parse()?,
-            };
+        let env_names = match &args.environment {
+            Some(env_name) => Vec::from([env_name.clone()]),
+            None => specs
+                .iter()
+                .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
+                .collect::<miette::Result<Vec<_>>>()?,
+        };
 
+        if !args.expose.is_empty() {
+            if env_names.len() == 1 {
+                for mapping in &args.expose {
+                    project_modified
+                        .manifest
+                        .add_exposed_mapping(&env_names[0], mapping)?;
+                }
+            } else {
+                miette::bail!("Cannot add exposed mappings for more than one environment");
+            }
+        }
+
+        for env_name in &env_names {
             if project_modified.manifest.parsed.envs.contains_key(env_name) {
                 for channel in &args.channels {
                     project_modified.manifest.add_channel(env_name, channel)?;
                 }
             } else {
+                let channels = if args.channels.is_empty() {
+                    config.default_channels()
+                } else {
+                    args.channels.clone()
+                };
                 project_modified
                     .manifest
-                    .add_environment(env_name, Some(args.channels.clone()))?;
+                    .add_environment(env_name, Some(channels))?;
             }
 
             if let Some(platform) = args.platform {
                 project_modified.manifest.set_platform(env_name, platform)?;
             }
+        }
 
+        for ((package_name, spec), env_name) in specs.iter().zip(env_names.iter().cycle()) {
             project_modified
                 .manifest
-                .add_dependency(env_name, &package_name, &spec)?;
+                .add_dependency(env_name, package_name, spec)?;
         }
         project_modified.manifest.save().await?;
         global::sync(&project_modified, config).await?;
+
+        if args.expose.is_empty() {
+            for ((package_name, _), env_name) in specs.iter().zip(env_names.iter().cycle()) {
+                let env_dir =
+                    EnvDir::from_env_root(project_modified.env_root.clone(), env_name.clone())
+                        .await?;
+                let prefix = Prefix::new(env_dir.path());
+                let prefix_package = prefix.find_designated_package(package_name).await?;
+                for (executable_name, _) in prefix.find_executables(&[prefix_package]) {
+                    let mapping =
+                        Mapping::new(ExposedName::from_str(&executable_name)?, executable_name);
+                    project_modified
+                        .manifest
+                        .add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            project_modified.manifest.save().await?;
+            global::sync(&project_modified, config).await?;
+        }
         Ok(())
     }
 
