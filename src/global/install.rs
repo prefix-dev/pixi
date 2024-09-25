@@ -1,10 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ffi::OsStr,
-    path::PathBuf,
-    str::FromStr,
-};
-
+use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -27,6 +21,12 @@ use rattler_shell::{
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
@@ -341,7 +341,7 @@ pub(crate) async fn create_executable_scripts(
         }
 
         let added_or_changed = if global_script_path.exists() {
-            match tokio::fs::read_to_string(global_script_path).await {
+            match tokio_fs::read_to_string(global_script_path).await {
                 Ok(previous_script) if previous_script != script => AddedOrChanged::Changed,
                 Ok(_) => AddedOrChanged::Unchanged,
                 Err(_) => AddedOrChanged::Changed,
@@ -354,7 +354,7 @@ pub(crate) async fn create_executable_scripts(
             added_or_changed,
             AddedOrChanged::Changed | AddedOrChanged::Added
         ) {
-            tokio::fs::write(&global_script_path, script)
+            tokio_fs::write(&global_script_path, script)
                 .await
                 .into_diagnostic()?;
             changed = true;
@@ -427,16 +427,19 @@ pub(crate) async fn sync(
     project: &global::Project,
     config: &Config,
 ) -> Result<bool, miette::Error> {
+    let mut updated_env = false;
+
     // Fetch the repodata
     let (_, auth_client) = build_reqwest_clients(Some(config));
 
     let gateway = config.gateway(auth_client.clone());
 
     // Prune environments that are not listed
-    project
+    updated_env |= !project
         .env_root
         .prune(project.environments().keys().cloned())
-        .await?;
+        .await?
+        .is_empty();
 
     // Remove binaries that are not listed as exposed
     let exposed_paths = project
@@ -455,18 +458,14 @@ pub(crate) async fn sync(
             .and_then(OsStr::to_str)
             .ok_or_else(|| miette::miette!("Could not get file stem of {}", file.display()))?;
         if !exposed_paths.contains(&file) && file_name != "pixi" {
-            tokio::fs::remove_file(&file)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not remove {}", &file.display()))?;
+            tokio_fs::remove_file(&file).await.into_diagnostic()?;
+            updated_env = true;
             eprintln!(
                 "{}Remove executable '{file_name}'.",
                 console::style(console::Emoji("✔ ", "")).green()
             );
         }
     }
-
-    let mut updated_env = false;
 
     for (env_name, parsed_environment) in project.environments() {
         let specs = parsed_environment

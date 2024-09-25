@@ -518,7 +518,7 @@ impl Project {
                     let channel_to_location_map = map
                         .into_iter()
                         .map(|(key, value)| {
-                            let key = key.into_channel(channel_config);
+                            let key = key.into_channel(channel_config).into_diagnostic()?;
                             Ok((key, value))
                         })
                         .collect::<miette::Result<HashMap<Channel, String>>>()?;
@@ -534,7 +534,8 @@ impl Project {
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .collect();
+                        .try_collect()
+                        .into_diagnostic()?;
 
                     let feature_channels: HashSet<_> = manifest
                         .parsed
@@ -543,7 +544,8 @@ impl Project {
                         .flat_map(|feature| feature.channels.iter())
                         .flatten()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .collect();
+                        .try_collect()
+                        .into_diagnostic()?;
 
                     let project_and_feature_channels: HashSet<_> =
                         project_channels.union(&feature_channels).collect();

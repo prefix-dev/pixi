@@ -1,11 +1,11 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
+use super::{BinDir, EnvRoot};
+use crate::{
+    global::{common::is_text, find_executables, EnvDir},
+    prefix::Prefix,
 };
-
 pub(crate) use environment::EnvironmentName;
+use fs::tokio as tokio_fs;
+use fs_err as fs;
 use indexmap::IndexMap;
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{Context, IntoDiagnostic};
@@ -14,15 +14,15 @@ pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
+use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use regex::Regex;
-use tokio_stream::{wrappers::ReadDirStream, StreamExt};
-
-use super::{BinDir, EnvRoot};
-use crate::{
-    global::{common::is_text, find_executables, EnvDir},
-    prefix::Prefix,
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 mod environment;
@@ -30,6 +30,7 @@ mod manifest;
 mod parsed_manifest;
 
 pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
+pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
 /// project. This struct holds the `Manifest` and has functions to modify
@@ -101,8 +102,7 @@ impl ExposedData {
             })
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
-        let conda_meta = env_path.join("conda-meta");
-
+        let conda_meta = env_path.join(consts::CONDA_META_DIR);
         let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
         let prefix = Prefix::new(bin_env_dir.path());
 
@@ -127,7 +127,7 @@ impl ExposedData {
 /// the actual binary path from a wrapper script.
 fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
     // Read the script file into a string
-    let script_content = std::fs::read_to_string(script)
+    let script_content = fs::read_to_string(script)
         .into_diagnostic()
         .wrap_err_with(|| format!("Could not read {}", script.display()))?;
 
@@ -179,22 +179,10 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let read_dir = tokio::fs::read_dir(conda_meta)
-        .await
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Could not read directory {}", conda_meta.display()))?;
-    let mut entries = ReadDirStream::new(read_dir);
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
 
-    while let Some(entry) = entries.next().await {
-        let path = entry
-            .into_diagnostic()
-            .wrap_err_with(|| {
-                format!(
-                    "Could not read file from directory {}",
-                    conda_meta.display()
-                )
-            })?
-            .path();
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
         // Check if the entry is a file and has a .json extension
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
             let prefix_record = PrefixRecord::from_path(&path)
@@ -266,13 +254,8 @@ impl Project {
     /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
-
-        tokio::fs::create_dir_all(&manifest_dir)
-            .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Could not create directory {}", manifest_dir.display()))?;
-
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+        // Prompt user if the manifest is empty and the user wants to create one
 
         let bin_dir = BinDir::from_env().await?;
         let env_root = EnvRoot::from_env().await?;
@@ -300,10 +283,13 @@ impl Project {
                     });
             }
 
-            tokio::fs::File::create(&manifest_path)
+            tokio_fs::create_dir_all(&manifest_dir)
                 .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not create file {}", manifest_path.display()))?;
+                .into_diagnostic()?;
+
+            tokio_fs::File::create(&manifest_path)
+                .await
+                .into_diagnostic()?;
         }
 
         Self::from_path(&manifest_path, env_root, bin_dir)
@@ -330,11 +316,12 @@ impl Project {
                 }
             });
 
-        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await?;
-
+        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await.wrap_err_with(|| {
+            "Failed to extract exposed binaries from existing installation please clean up your installation."
+        })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
-        tokio::fs::write(&manifest_path, &toml)
+        tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
         Self::from_str(manifest_path, &toml, env_root, bin_dir)
@@ -343,7 +330,7 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         home_path()
-            .map(|dir| dir.join("manifests"))
+            .map(|dir| dir.join(MANIFESTS_DIR))
             .ok_or_else(|| miette::miette!("Could not get home directory"))
     }
 
@@ -409,7 +396,7 @@ mod tests {
         let bin_dir = BinDir::from_env().await.unwrap();
 
         // Create and write global manifest
-        let mut file = std::fs::File::create(&manifest_path).unwrap();
+        let mut file = fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
         let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
 

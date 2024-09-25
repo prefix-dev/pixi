@@ -2,7 +2,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use ahash::HashSet;
+use fs_err as fs;
+use fs_err::tokio as tokio_fs;
 use miette::IntoDiagnostic;
 
 use pixi_config::Config;
@@ -36,7 +37,7 @@ impl Manifest {
     /// Create a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
-        let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
+        let contents = fs::read_to_string(path.as_ref()).into_diagnostic()?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
@@ -261,7 +262,7 @@ impl Manifest {
     /// Save the manifest to the file and update the parsed_manifest
     pub async fn save(&self) -> miette::Result<()> {
         let contents = self.document.to_string();
-        tokio::fs::write(&self.path, contents)
+        tokio_fs::write(&self.path, contents)
             .await
             .into_diagnostic()?;
         Ok(())

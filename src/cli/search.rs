@@ -102,7 +102,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     // Resolve channels from project / CLI args
-    let channels = args.channels.resolve_from_project(project.as_ref());
+    let channels = args.channels.resolve_from_project(project.as_ref())?;
     eprintln!(
         "Using channels: {}",
         channels.iter().map(|c| c.name()).format(", ")
