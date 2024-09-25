@@ -2,6 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use ahash::HashSet;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::IntoDiagnostic;
