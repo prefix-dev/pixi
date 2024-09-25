@@ -679,4 +679,32 @@ mod tests {
             new_version_spec
         );
     }
+
+    #[test]
+    fn test_set_platform() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = Platform::LinuxRiscv64;
+
+        manifest.set_platform(&env_name, platform).unwrap();
+
+        // Check document
+        let actual_platform = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))
+            .unwrap()
+            .get("platform")
+            .unwrap();
+        assert_eq!(actual_platform.as_str().unwrap(), platform.as_str());
+
+        // Check parsed
+        let actual_platform = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .platform
+            .unwrap();
+        assert_eq!(actual_platform, platform);
+    }
 }
