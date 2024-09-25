@@ -232,6 +232,7 @@ impl Manifest {
         env_name: &EnvironmentName,
         mapping: &Mapping,
     ) -> miette::Result<()> {
+        // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
             self.add_environment(env_name, None)?;
         }
@@ -264,6 +265,10 @@ impl Manifest {
         env_name: &EnvironmentName,
         exposed_name: &ExposedName,
     ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
         self.parsed
             .envs
             .get_mut(env_name)
@@ -333,6 +338,7 @@ mod tests {
     use std::str::FromStr;
 
     use indexmap::IndexSet;
+    use rattler_conda_types::ParseStrictness;
 
     use super::*;
 
@@ -575,5 +581,102 @@ mod tests {
 
         // Ensure no panic and result is Ok
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_dependency() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let package_name_str = "pythonic";
+        let package_name = PackageName::from_str(package_name_str).unwrap();
+        let version_spec = "==3.15.0";
+        let match_spec = MatchSpec::from_str(
+            &format!("{package_name_str}{version_spec}"),
+            ParseStrictness::Strict,
+        )
+        .unwrap();
+
+        // Add dependency
+        manifest
+            .add_dependency(&env_name, &package_name, &match_spec)
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
+            .unwrap()
+            .get(package_name_str);
+        assert!(actual_value.is_some());
+        assert_eq!(actual_value.unwrap().as_str(), Some(version_spec));
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .get(&package_name)
+            .unwrap()
+            .clone();
+        assert_eq!(
+            actual_value.into_version().unwrap().to_string(),
+            version_spec
+        );
+    }
+
+    #[test]
+    fn test_add_existing_dependency() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let package_name_str = "pythonic";
+        let package_name = PackageName::from_str(package_name_str).unwrap();
+        let version_spec = "==3.15.0";
+        let match_spec = MatchSpec::from_str(
+            &format!("{package_name_str}{version_spec}"),
+            ParseStrictness::Strict,
+        )
+        .unwrap();
+
+        // Add dependency
+        manifest
+            .add_dependency(&env_name, &package_name, &match_spec)
+            .unwrap();
+
+        // Add the same dependency again, with a new match_spec
+        let new_version_spec = "==3.18.0";
+        let new_match_spec = MatchSpec::from_str(
+            &format!("{package_name_str}{new_version_spec}"),
+            ParseStrictness::Strict,
+        )
+        .unwrap();
+        manifest
+            .add_dependency(&env_name, &package_name, &new_match_spec)
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
+            .unwrap()
+            .get(package_name_str);
+        assert!(actual_value.is_some());
+        assert_eq!(actual_value.unwrap().as_str(), Some(new_version_spec));
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .get(&package_name)
+            .unwrap()
+            .clone();
+        assert_eq!(
+            actual_value.into_version().unwrap().to_string(),
+            new_version_spec
+        );
     }
 }
