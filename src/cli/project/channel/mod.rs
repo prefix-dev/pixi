@@ -4,6 +4,7 @@ pub mod remove;
 
 use crate::Project;
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
 use std::path::PathBuf;
@@ -54,14 +55,17 @@ impl AddRemoveArgs {
             .map_or(FeatureName::Default, FeatureName::Named)
     }
 
-    fn report(self, operation: &str, channel_config: &ChannelConfig) {
+    fn report(self, operation: &str, channel_config: &ChannelConfig) -> miette::Result<()> {
         for channel in self.channel {
             match channel {
                 NamedChannelOrUrl::Name(ref name) => eprintln!(
                     "{}{operation} {} ({}){}",
                     console::style(console::Emoji("✔ ", "")).green(),
                     name,
-                    channel.clone().into_base_url(channel_config),
+                    channel
+                        .clone()
+                        .into_base_url(channel_config)
+                        .into_diagnostic()?,
                     self.priority
                         .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p))
                 ),
@@ -72,8 +76,14 @@ impl AddRemoveArgs {
                     self.priority
                         .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p)),
                 ),
+                NamedChannelOrUrl::Path(path) => eprintln!(
+                    "{}{operation} {}",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    path
+                ),
             }
         }
+        Ok(())
     }
 }
 
