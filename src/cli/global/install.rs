@@ -129,9 +129,9 @@ async fn install_environment(
 
     if args.expose.is_empty() {
         // We have to sync the manifest here, in order to find the installed executables
-        project.sync_environment(env_name).await?;
+        project.install_environment(env_name).await?;
 
-        // Expose binaries for all the packages that were requested
+        // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
             let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
             let prefix = Prefix::new(env_dir.path());
@@ -155,7 +155,6 @@ async fn install_environment(
     })?;
     let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
     let prefix = Prefix::new(env_dir.path());
-
     expose_executables(
         env_name,
         &environment,
