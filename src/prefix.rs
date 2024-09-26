@@ -12,6 +12,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
+use pixi_utils::strip_executable_extension;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -121,7 +122,7 @@ impl Prefix {
                         path.iter()
                             .last()
                             .and_then(OsStr::to_str)
-                            .map(|name| (name.to_string(), path.clone()))
+                            .map(|name| (strip_executable_extension(name.to_string()), path.clone()))
                     })
             })
             .collect();

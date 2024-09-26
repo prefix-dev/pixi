@@ -1,7 +1,7 @@
 use super::{BinDir, EnvRoot};
 use crate::{
     global::{
-        common::{executable_from_path, is_text},
+        common::is_text,
         find_executables, EnvDir,
     },
     prefix::Prefix,
@@ -27,6 +27,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use pixi_utils::executable_from_path;
 
 mod environment;
 mod manifest;
@@ -81,7 +82,7 @@ impl ExposedData {
     /// the associated `conda-meta` directory.
     pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
         let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
-        let executable_path = extract_executable_from_script(path)?;
+        let executable_path = extract_executable_from_script(path).await?;
 
         let executable = executable_from_path(&executable_path);
         let env_path = determine_env_path(&executable_path, env_root.path())?;
@@ -119,17 +120,16 @@ impl ExposedData {
 /// This function reads the content of the script file and attempts to extract
 /// the path of the executable it references. It is used to determine
 /// the actual binary path from a wrapper script.
-fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
+async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
     // Read the script file into a string
-    let script_content = fs::read_to_string(script)
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Could not read {}", script.display()))?;
+    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
 
     // Compile the regex pattern
     #[cfg(unix)]
     const PATTERN: &str = r#""([^"]+)" "\$@""#;
+    // The pattern includes `"?` to also find old pixi global installations.
     #[cfg(windows)]
-    const PATTERN: &str = r#"@"([^"]+)" %/*"#;
+    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
     static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
     // Apply the regex to the script content
@@ -138,6 +138,7 @@ fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
             return Ok(PathBuf::from(matched.as_str()));
         }
     }
+    tracing::debug!("Failed to extract executable path from script {}", script_content);
 
     // Return an error if the executable path could not be extracted
     miette::bail!(
@@ -417,4 +418,48 @@ mod tests {
     fn test_project_manifest_dir() {
         Project::manifest_dir().unwrap();
     }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_windows() {
+        let script_without_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
+@C:\Users\USER\.pixi/envs\hyperfine\bin/hyperfine.exe %*
+"#;
+        let script_path = Path::new("hyperfine.bat");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_without_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(executable_path, Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe"));
+
+        let script_with_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\python"
+@"C:\Users\USER\.pixi\envs\python\Scripts/pydoc.exe" %*
+"#;
+        let script_path = Path::new("pydoc.bat");
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_with_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(executable_path, Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_unix() {
+        let script = r#"#!/bin/sh
+export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
+export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
+"/home/user/.pixi/envs/nushell/bin/nu" "$@"
+"#;
+        let script_path = Path::new("nu");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(executable_path, Path::new("/home/user/.pixi/envs/nushell/bin/nu"));
+    }
+
 }
