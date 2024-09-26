@@ -135,12 +135,18 @@ impl fmt::Display for ExposedName {
     }
 }
 
+#[derive(Error, Diagnostic, Debug, PartialEq)]
+pub(crate) enum ExposedNameError {
+    #[error("'pixi' is not allowed as exposed name in the map")]
+    PixiBinParseError,
+}
+
 impl FromStr for ExposedName {
-    type Err = miette::Report;
+    type Err = ExposedNameError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value == "pixi" {
-            miette::bail!("The key 'pixi' is not allowed in the exposed map");
+            Err(ExposedNameError::PixiBinParseError)
         } else {
             Ok(ExposedName(value.to_string()))
         }

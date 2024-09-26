@@ -7,6 +7,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
+use pixi_utils::strip_executable_extension;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
@@ -120,10 +121,9 @@ impl Prefix {
                     .iter()
                     .filter(|relative_path| self.is_executable(relative_path))
                     .filter_map(|path| {
-                        path.iter()
-                            .last()
-                            .and_then(OsStr::to_str)
-                            .map(|name| (strip_executable_extension(name).to_owned(), path.clone()))
+                        path.iter().last().and_then(OsStr::to_str).map(|name| {
+                            (strip_executable_extension(name.to_string()), path.clone())
+                        })
                     })
             })
             .collect();
