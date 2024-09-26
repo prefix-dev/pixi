@@ -13,9 +13,9 @@ pub(crate) fn strip_windows_executable_extension(file_name: String) -> String {
             ".COM", ".EXE", ".BAT", ".CMD", ".VBS", ".VBE", ".JS", ".JSE", ".WSF", ".WSH", ".MSC",
             ".CPL",
         ]
-            .iter()
-            .map(|s| s.to_lowercase())
-            .collect()
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect()
     };
 
     // Attempt to strip any known Windows executable extension

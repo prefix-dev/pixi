@@ -4,6 +4,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, default_channel_config, Config};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::executable_from_path;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
@@ -26,14 +27,10 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use pixi_utils::executable_from_path;
 
 use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
-    global::{
-        self,
-        BinDir, EnvDir,
-    },
+    global::{self, BinDir, EnvDir},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
 };

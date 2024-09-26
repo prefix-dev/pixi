@@ -1,9 +1,6 @@
 use super::{BinDir, EnvRoot};
 use crate::{
-    global::{
-        common::is_text,
-        find_executables, EnvDir,
-    },
+    global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
 pub(crate) use environment::EnvironmentName;
@@ -19,6 +16,7 @@ use parsed_manifest::ParsedManifest;
 use pixi_config::{home_path, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
+use pixi_utils::executable_from_path;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use regex::Regex;
 use std::{
@@ -27,7 +25,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use pixi_utils::executable_from_path;
 
 mod environment;
 mod manifest;
@@ -138,7 +135,10 @@ async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf
             return Ok(PathBuf::from(matched.as_str()));
         }
     }
-    tracing::debug!("Failed to extract executable path from script {}", script_content);
+    tracing::debug!(
+        "Failed to extract executable path from script {}",
+        script_content
+    );
 
     // Return an error if the executable path could not be extracted
     miette::bail!(
@@ -432,7 +432,10 @@ mod tests {
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_without_quote).unwrap();
         let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(executable_path, Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe"));
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
+        );
 
         let script_with_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
@@ -443,7 +446,10 @@ mod tests {
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_with_quote).unwrap();
         let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(executable_path, Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe"));
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
+        );
     }
 
     #[cfg(unix)]
@@ -459,7 +465,9 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script).unwrap();
         let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(executable_path, Path::new("/home/user/.pixi/envs/nushell/bin/nu"));
+        assert_eq!(
+            executable_path,
+            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
+        );
     }
-
 }

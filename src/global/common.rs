@@ -179,7 +179,6 @@ pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
