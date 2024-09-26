@@ -186,6 +186,27 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     )
 }
 
+/// Converts a `PrefixRecord` into package metadata, including platform, channel, and package name.
+fn convert_record_to_metadata(
+    prefix_record: &PrefixRecord,
+) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+    let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
+        Ok(Platform::NoArch) => None,
+        Ok(platform) if platform == Platform::current() => None,
+        Err(_) => None,
+        Ok(p) => Some(p),
+    };
+
+    let channel: PrioritizedChannel =
+        NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
+            .into_diagnostic()?
+            .into();
+
+    let name = prefix_record.repodata_record.package_record.name.clone();
+
+    Ok((platform, channel, name))
+}
+
 /// Extracts package metadata from the `conda-meta` directory for a given executable.
 ///
 /// This function reads the `conda-meta` directory to find the package metadata
@@ -196,38 +217,14 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let records = crate::global::common::find_package_records(conda_meta).await?;
 
-    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
-        let path = entry.path();
-        // Check if the entry is a file and has a .json extension
-        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
-            let prefix_record = PrefixRecord::from_path(&path)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
-
-            if find_executables(prefix, &prefix_record)
-                .iter()
-                .any(|exe_path| executable_from_path(exe_path) == executable)
-            {
-                let platform = match Platform::from_str(
-                    &prefix_record.repodata_record.package_record.subdir,
-                ) {
-                    Ok(Platform::NoArch) => None,
-                    Ok(platform) if platform == Platform::current() => None,
-                    Err(_) => None,
-                    Ok(p) => Some(p),
-                };
-
-                let channel: PrioritizedChannel =
-                    NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-                        .into_diagnostic()?
-                        .into();
-
-                let name = prefix_record.repodata_record.package_record.name;
-
-                return Ok((platform, channel, name));
-            }
+    for prefix_record in records {
+        if find_executables(prefix, &prefix_record)
+            .iter()
+            .any(|exe_path| executable_from_path(exe_path) == executable)
+        {
+            return convert_record_to_metadata(&prefix_record);
         }
     }
 
