@@ -10,6 +10,7 @@ mod prefix;
 mod project;
 mod prompt;
 pub mod task;
+pub(crate) mod repodata;
 
 mod uv_reporter;
 

@@ -1,18 +1,20 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use indexmap::IndexMap;
+use miette::{miette, Context, IntoDiagnostic};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
+use crate::global::expose_executables;
 use crate::{
     cli::{global::revert_after_error, has_specs::HasSpecs},
-    global::{self, EnvDir, EnvironmentName, ExposedName, Mapping},
+    global::{self, EnvDir, EnvironmentName, ExposedName, Mapping, Project},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
 
 /// Installs the defined package in a globally accessible location.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     /// Specifies the packages that are to be installed.
@@ -63,10 +65,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         args: Args,
-        project_original: global::Project,
-        config: &Config,
+        project: & mut Project,
     ) -> Result<(), miette::Error> {
-        let mut project_modified = project_original;
         let specs = args.specs()?;
 
         let env_names = match &args.environment {
@@ -81,67 +81,87 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             miette::bail!("Cannot add exposed mappings for more than one environment");
         }
 
-        for env_name in &env_names {
-            if project_modified.manifest.parsed.envs.contains_key(env_name) {
-                project_modified.manifest.remove_environment(env_name)?;
-            }
-
-            let channels = if args.channels.is_empty() {
-                config.default_channels()
-            } else {
-                args.channels.clone()
-            };
-            project_modified
-                .manifest
-                .add_environment(env_name, Some(channels))?;
-
-            if let Some(platform) = args.platform {
-                project_modified.manifest.set_platform(env_name, platform)?;
-            }
+        for env_name in env_names {
+            install_environment(&env_name, project, args.clone(), specs.clone()).await?;
         }
 
-        for ((package_name, spec), env_name) in specs.iter().zip(env_names.iter().cycle()) {
-            project_modified
-                .manifest
-                .add_dependency(env_name, package_name, spec)?;
-        }
-
-        if args.expose.is_empty() {
-            // We have to sync the manifest here, in order to find the installed executables
-            project_modified.manifest.save().await?;
-            global::sync(&project_modified, config).await?;
-            for ((package_name, _), env_name) in specs.iter().zip(env_names.iter().cycle()) {
-                let env_dir =
-                    EnvDir::from_env_root(project_modified.env_root.clone(), env_name.clone())
-                        .await?;
-                let prefix = Prefix::new(env_dir.path());
-                let prefix_package = prefix.find_designated_package(package_name).await?;
-                for (executable_name, _) in prefix.find_executables(&[prefix_package]) {
-                    let mapping =
-                        Mapping::new(ExposedName::from_str(&executable_name)?, executable_name);
-                    project_modified
-                        .manifest
-                        .add_exposed_mapping(env_name, &mapping)?;
-                }
-            }
-        } else {
-            for mapping in &args.expose {
-                // If there env_names.len() != 1, we would have errored out earlier
-                project_modified
-                    .manifest
-                    .add_exposed_mapping(&env_names[0], mapping)?;
-            }
-        }
-        project_modified.manifest.save().await?;
-        global::sync(&project_modified, config).await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        revert_after_error(&project_original, &config)
+    let mut project = project_original.clone();
+    if let Err(err) = apply_changes(args, &mut project).await {
+        revert_after_error(&project_original)
             .await
             .wrap_err("Could not install packages. Reverting also failed.")?;
         return Err(err);
     }
+    Ok(())
+}
+
+async fn install_environment(
+    env_name: &EnvironmentName,
+    project: &mut Project,
+    args: Args,
+    specs: IndexMap<PackageName, MatchSpec>,
+) -> miette::Result<()> {
+    // Modify the project to include the new environment
+    if project.manifest.parsed.envs.contains_key(env_name) {
+        project.manifest.remove_environment(env_name)?;
+    }
+
+    let channels = if args.channels.is_empty() {
+        project.config().default_channels()
+    } else {
+        args.channels.clone()
+    };
+    project.manifest.add_environment(env_name, Some(channels))?;
+
+    if let Some(platform) = args.platform {
+        project.manifest.set_platform(env_name, platform)?;
+    }
+
+    // Add the dependencies to the environment
+    for (package_name, spec) in &specs {
+        project
+            .manifest
+            .add_dependency(env_name, package_name, spec)?;
+    }
+
+    if args.expose.is_empty() {
+        // We have to sync the manifest here, in order to find the installed executables
+        project.sync_environment(env_name).await?;
+
+        // Expose binaries for all the packages that were requested
+        for (package_name, _spec) in &specs {
+            let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
+            let prefix = Prefix::new(env_dir.path());
+            let prefix_package = prefix.find_designated_package(package_name).await?;
+            for (executable_name, _) in prefix.find_executables(&[prefix_package]) {
+                let mapping =
+                    Mapping::new(ExposedName::from_str(&executable_name)?, executable_name);
+                project.manifest.add_exposed_mapping(env_name, &mapping)?;
+            }
+        }
+    } else {
+        // Only add the exposed mappings that were requested
+        for mapping in &args.expose {
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
+        }
+    }
+
+    // Expose executables of the new environment
+    let environment = project.environment(env_name).ok_or_else(|| {
+        miette!("Expected {} environment to be added.", env_name)
+    })?;
+    let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
+    let prefix = Prefix::new(env_dir.path());
+
+    expose_executables(
+        env_name,
+        &environment,
+        &prefix,
+        &project.bin_dir,
+    )
+    .await?;
     Ok(())
 }

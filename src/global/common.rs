@@ -63,7 +63,7 @@ impl BinDir {
     }
 }
 
-/// Global environoments directory, default to `$HOME/.pixi/envs`
+/// Global environments directory, default to `$HOME/.pixi/envs`
 #[derive(Debug, Clone)]
 pub struct EnvRoot(PathBuf);
 

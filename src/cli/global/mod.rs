@@ -52,9 +52,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 /// Reverts the changes made to the project after an error occurred.
 async fn revert_after_error(
     project_original: &global::Project,
-    config: &pixi_config::Config,
 ) -> miette::Result<()> {
     project_original.manifest.save().await?;
-    global::sync(project_original, config).await?;
+    project_original.sync().await?;
     Ok(())
 }

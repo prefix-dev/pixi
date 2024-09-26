@@ -1,5 +1,9 @@
-use super::{BinDir, EnvRoot};
+use super::{expose_executables, BinDir, EnvRoot};
+use crate::global::install::local_environment_matches_spec;
+use crate::repodata::Repodata;
+use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
+    global,
     global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
@@ -7,24 +11,36 @@ pub(crate) use environment::EnvironmentName;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
 use indexmap::IndexMap;
+use itertools::Itertools;
 pub(crate) use manifest::{Manifest, Mapping};
-use miette::{Context, IntoDiagnostic};
+use miette::{miette, Context, IntoDiagnostic};
 use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-use pixi_config::{home_path, Config};
+use pixi_config::{default_channel_config, home_path, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::executable_from_path;
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
+use pixi_utils::reqwest::build_reqwest_clients;
+use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
+use rattler_repodata_gateway::Gateway;
+use rattler_solve::resolvo::Solver;
+use rattler_solve::{SolverImpl, SolverTask};
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use regex::Regex;
+use reqwest_middleware::ClientWithMiddleware;
+use std::sync::OnceLock;
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
 };
+use pixi_spec::SpecConversionError;
 
 mod environment;
 mod manifest;
@@ -49,6 +65,12 @@ pub struct Project {
     pub(crate) env_root: EnvRoot,
     /// Binary directory
     pub(crate) bin_dir: BinDir,
+    /// Reqwest client shared for this project.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    repodata_gateway: OnceLock<Gateway>,
 }
 
 impl Debug for Project {
@@ -223,12 +245,16 @@ impl Project {
 
         let config = Config::load(&root);
 
+        let client = OnceLock::new();
+        let repodata_gateway = OnceLock::new();
         Self {
             root,
             manifest,
             config,
             env_root,
             bin_dir,
+            client,
+            repodata_gateway,
         }
     }
 
@@ -351,6 +377,240 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         &self.manifest.parsed.envs
+    }
+
+    /// Return the environment with the given name.
+    pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
+        self.manifest.parsed.envs.get(name)
+    }
+
+    /// Create an authenticated reqwest client for this project
+    /// use authentication from `rattler_networking`
+    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
+        &self.client_and_authenticated_client().1
+    }
+
+    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+        self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub(crate) async fn install_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+        let channels = environment
+            .sorted_named_channels()
+            .into_iter()
+            .map(|channel| {
+                channel
+                    .clone()
+                    .into_channel(self.config.global_channel_config())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        let platform = environment.platform.unwrap_or_else(Platform::current);
+
+
+
+        let match_specs = environment
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(name, spec)| {
+                if let Some(nameless_spec) = spec
+                    .clone()
+                    .try_into_nameless_match_spec(self.config().global_channel_config())
+                    .into_diagnostic()?
+                {
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
+                } else {
+                    Err(miette!("Could not convert {spec:?} to nameless match spec."))
+                }
+            })
+            .collect::<miette::Result<Vec<MatchSpec>>>()?;
+
+
+        let repodata = await_in_progress("querying repodata ", |_| async {
+            self.repodata_gateway()
+                .query(channels, [platform, Platform::NoArch], match_specs.clone())
+                .recursive(true)
+                .await
+                .into_diagnostic()
+        })
+        .await?;
+
+        // Determine virtual packages of the current platform
+        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
+            .into_diagnostic()
+            .context("failed to determine virtual packages")?
+            .iter()
+            .cloned()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        // Solve the environment
+
+        let solved_records = tokio::task::spawn_blocking(move || {
+            wrap_in_progress("solving environment", move || {
+                Solver.solve(SolverTask {
+                    specs: match_specs,
+                    virtual_packages,
+                    ..SolverTask::from_iter(&repodata)
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment")
+        })
+        .await
+        .into_diagnostic()??;
+
+        try_increase_rlimit_to_sensible();
+
+        // Install the environment
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let prefix = Prefix::new(
+            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
+                .await?
+                .path(),
+        );
+        await_in_progress("creating virtual environment", |pb| {
+            Installer::new()
+                .with_download_client(self.authenticated_client().clone())
+                .with_io_concurrency_limit(100)
+                .with_execute_link_scripts(false)
+                .with_package_cache(package_cache)
+                .with_target_platform(platform)
+                .with_reporter(
+                    IndicatifReporter::builder()
+                        .with_multi_progress(global_multi_progress())
+                        .with_placement(rattler::install::Placement::After(pb))
+                        .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
+                        .clear_when_done(true)
+                        .finish(),
+                )
+                .install(prefix.root(), solved_records)
+        })
+        .await
+        .into_diagnostic()?;
+
+        Ok(())
+    }
+
+    // Syncs the manifest with the local environments
+    // Returns true if the global installation had to be updated
+    pub(crate) async fn sync(&self) -> Result<bool, miette::Error> {
+        let mut updated_env = false;
+
+        // Prune environments that are not listed
+        updated_env |= !self
+            .env_root
+            .prune(self.environments().keys().cloned())
+            .await?
+            .is_empty();
+
+        // Remove binaries that are not listed as exposed
+        let exposed_paths = self
+            .environments()
+            .values()
+            .flat_map(|environment| {
+                environment
+                    .exposed
+                    .keys()
+                    .map(|e| self.bin_dir.executable_script_path(e))
+            })
+            .collect_vec();
+        for file in self.bin_dir.files().await? {
+            let file_name = executable_from_path(&file);
+            if !exposed_paths.contains(&file) && file_name != "pixi" {
+                tokio_fs::remove_file(&file).await.into_diagnostic()?;
+                updated_env = true;
+                eprintln!(
+                    "{}Remove executable '{file_name}'.",
+                    console::style(console::Emoji("✔ ", "")).green()
+                );
+            }
+        }
+
+        for (env_name, _parsed_environment) in self.environments() {
+            self.sync_environment(env_name).await?;
+        }
+
+        Ok(updated_env)
+    }
+
+    /// Syncs the parsed environment with the installation.
+    /// Returns true if the environment had to be updated.
+    pub(crate) async fn sync_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<bool> {
+        let mut updated_env = false;
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found.",
+            env_name.to_string()
+        ))?;
+
+        let specs = environment
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(name, spec)| {
+                let match_spec = MatchSpec::from_nameless(
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())
+                        .into_diagnostic()?
+                        .ok_or_else(|| {
+                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                        })?,
+                    Some(name.clone()),
+                );
+                Ok((name, match_spec))
+            })
+            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
+
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let repodata_records = prefix
+            .find_installed_packages(Some(50))
+            .await?
+            .into_iter()
+            .map(|r| r.repodata_record)
+            .collect_vec();
+
+        let install_env =
+            !local_environment_matches_spec(repodata_records, &specs, environment.platform);
+
+        updated_env |= install_env;
+
+        if install_env {
+            self.install_environment(env_name).await?;
+        }
+
+        updated_env |= expose_executables(env_name, environment, &prefix, &self.bin_dir).await?;
+
+        Ok(updated_env)
+    }
+}
+
+impl Repodata for Project {
+    /// Returns the [`Gateway`] used by this project.
+    fn repodata_gateway(&self) -> &Gateway {
+        self.repodata_gateway.get_or_init(|| {
+            Self::repodata_gateway_init(
+                self.authenticated_client().clone(),
+                self.config().clone().into(),
+            )
+        })
     }
 }
 

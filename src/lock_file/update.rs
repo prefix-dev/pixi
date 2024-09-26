@@ -54,6 +54,7 @@ use crate::{
     },
     Project,
 };
+use crate::repodata::Repodata;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.

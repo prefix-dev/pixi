@@ -92,12 +92,12 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
                 .add_exposed_mapping(&args.environment, &mapping)?;
         }
         project_modified.manifest.save().await?;
-        global::sync(&project_modified, config).await?;
+        project_modified.sync().await?;
         Ok(())
     }
 
     if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        revert_after_error(&project_original, &config)
+        revert_after_error(&project_original)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
         return Err(err);
@@ -114,7 +114,6 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     async fn apply_changes(
         args: RemoveArgs,
         project_original: global::Project,
-        config: &Config,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
 
@@ -124,12 +123,12 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 .remove_exposed_name(&args.environment, &exposed_name)?;
         }
         project_modified.manifest.save().await?;
-        global::sync(&project_modified, config).await?;
+        project_modified.sync().await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
-        revert_after_error(&project_original, &config)
+    if let Err(err) = apply_changes(args, project_original.clone()).await {
+        revert_after_error(&project_original)
             .await
             .wrap_err("Could not remove exposed name. Reverting also failed.")?;
         return Err(err);
