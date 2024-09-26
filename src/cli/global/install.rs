@@ -2,10 +2,9 @@ use std::str::FromStr;
 
 use clap::Parser;
 use indexmap::IndexMap;
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
-use crate::global::expose_executables;
 use crate::{
     cli::{global::revert_after_error, has_specs::HasSpecs},
     global::{self, EnvDir, EnvironmentName, ExposedName, Mapping, Project},
@@ -41,7 +40,7 @@ pub struct Args {
     /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
     /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
     #[arg(long)]
-    expose: Vec<global::Mapping>,
+    expose: Vec<Mapping>,
 
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", long = "assume-yes")]
@@ -79,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         for env_name in env_names {
-            install_environment(&env_name, project, args.clone(), specs.clone()).await?;
+            setup_environment(&env_name, project, args.clone(), specs.clone()).await?;
         }
 
         Ok(())
@@ -95,7 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-async fn install_environment(
+async fn setup_environment(
     env_name: &EnvironmentName,
     project: &mut Project,
     args: Args,
@@ -124,10 +123,10 @@ async fn install_environment(
             .add_dependency(env_name, package_name, spec)?;
     }
 
-    if args.expose.is_empty() {
-        // We have to sync the manifest here, in order to find the installed executables
-        project.install_environment(env_name).await?;
+    // Installing the environment to be able to find the bin paths later
+    project.install_environment(env_name).await?;
 
+    if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
             let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
@@ -147,11 +146,8 @@ async fn install_environment(
     }
 
     // Expose executables of the new environment
-    let environment = project
-        .environment(env_name)
-        .ok_or_else(|| miette!("Expected {} environment to be added.", env_name))?;
-    let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
-    let prefix = Prefix::new(env_dir.path());
-    expose_executables(env_name, environment, &prefix, &project.bin_dir).await?;
+    project
+        .expose_executables_from_environment(env_name)
+        .await?;
     Ok(())
 }

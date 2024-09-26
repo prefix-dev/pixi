@@ -111,9 +111,7 @@ pub(crate) struct ParsedEnvironment {
 }
 
 impl ParsedEnvironment {
-    pub(crate) fn new(
-        channels: impl IntoIterator<Item = pixi_manifest::PrioritizedChannel>,
-    ) -> Self {
+    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
         Self {
             channels: channels.into_iter().collect(),
             ..Default::default()

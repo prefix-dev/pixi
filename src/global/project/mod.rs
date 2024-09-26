@@ -1,11 +1,15 @@
-use super::{expose_executables, BinDir, EnvRoot};
-use crate::global::install::local_environment_matches_spec;
+use super::{extract_executable_from_script, BinDir, EnvRoot};
+use crate::global::install::{
+    create_activation_script, create_executable_scripts, local_environment_matches_spec,
+    script_exec_mapping,
+};
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
     global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
+use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
@@ -13,7 +17,6 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
-use once_cell::sync::Lazy;
 pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
@@ -29,10 +32,10 @@ use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
 };
 use rattler_repodata_gateway::Gateway;
+use rattler_shell::shell::ShellEnum;
 use rattler_solve::resolvo::Solver;
 use rattler_solve::{SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use regex::Regex;
 use reqwest_middleware::ClientWithMiddleware;
 use std::sync::OnceLock;
 use std::{
@@ -132,41 +135,6 @@ impl ExposedData {
             exposed,
         })
     }
-}
-
-/// Extracts the executable path from a script file.
-///
-/// This function reads the content of the script file and attempts to extract
-/// the path of the executable it references. It is used to determine
-/// the actual binary path from a wrapper script.
-async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
-    // Read the script file into a string
-    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
-
-    // Compile the regex pattern
-    #[cfg(unix)]
-    const PATTERN: &str = r#""([^"]+)" "\$@""#;
-    // The pattern includes `"?` to also find old pixi global installations.
-    #[cfg(windows)]
-    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
-
-    // Apply the regex to the script content
-    if let Some(caps) = RE.captures(&script_content) {
-        if let Some(matched) = caps.get(1) {
-            return Ok(PathBuf::from(matched.as_str()));
-        }
-    }
-    tracing::debug!(
-        "Failed to extract executable path from script {}",
-        script_content
-    );
-
-    // Return an error if the executable path could not be extracted
-    miette::bail!(
-        "Failed to extract executable path from script {}",
-        script.display()
-    )
 }
 
 fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result<PathBuf> {
@@ -501,6 +469,118 @@ impl Project {
         Ok(())
     }
 
+    /// Find all binaries related to the environment and remove those that are not listed as exposed.
+    pub async fn clean_environment_binaries(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Get all paths to the binaries from the scripts in the bin directory.
+        let exposed = self.bin_dir.files().await?;
+        let executable_paths = futures::future::join_all(exposed.iter().map(|path| {
+            let path = path.clone();
+            async move {
+                extract_executable_from_script(&path)
+                    .await
+                    .ok()
+                    .map(|exec| (path, exec))
+            }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        // Filter out all binaries that are related to the environment
+        let related_exposed = executable_paths
+            .into_iter()
+            .filter(|(_, exec)| exec.starts_with(self.env_root.path().join(env_name.as_str())))
+            .map(|(path, _)| path)
+            .collect_vec();
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+
+        // Remove all related expose scripts not required by the environment manifest
+        for binary_path in related_exposed {
+            if environment
+                .exposed
+                .iter()
+                .any(|(exposed_name, _)| binary_path.ends_with(exposed_name.to_string()))
+            {
+                continue;
+            }
+            tokio_fs::remove_file(&binary_path)
+                .await
+                .into_diagnostic()?;
+        }
+
+        Ok(())
+    }
+
+    /// Expose executables from the environment to the global bin directory.
+    ///
+    /// This function will first remove all binaries that are not listed as exposed.
+    /// It will then create an activation script for the shell and create the scripts.
+    pub async fn expose_executables_from_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<bool> {
+        // First clean up binaries that are not listed as exposed
+        self.clean_environment_binaries(env_name).await?;
+
+        // Determine the shell to use for the invocation script
+        let shell: ShellEnum = if cfg!(windows) {
+            rattler_shell::shell::CmdExe.into()
+        } else {
+            rattler_shell::shell::Bash.into()
+        };
+
+        let prefix = Prefix::new(
+            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
+                .await?
+                .path(),
+        );
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+
+        // Construct the reusable activation script for the shell and generate an
+        // invocation script for each executable added by the package to the
+        // environment.
+        let activation_script = create_activation_script(&prefix, shell.clone())?;
+
+        let prefix_records = &prefix.find_installed_packages(None).await?;
+
+        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+
+        let exposed: HashSet<&String> = environment.exposed.values().collect();
+
+        let exposed_executables: Vec<_> = all_executables
+            .iter()
+            .filter(|(name, _)| exposed.contains(name))
+            .cloned()
+            .collect();
+
+        let script_mapping = environment
+            .exposed
+            .iter()
+            .map(|(exposed_name, entry_point)| {
+                script_exec_mapping(
+                    exposed_name,
+                    entry_point,
+                    exposed_executables.iter(),
+                    &self.bin_dir,
+                    env_name,
+                )
+            })
+            .collect::<miette::Result<Vec<_>>>()?;
+
+        tracing::debug!("Exposing executables for environment '{}'", env_name);
+        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
+    }
+
     // Syncs the manifest with the local environments
     // Returns true if the global installation had to be updated
     pub(crate) async fn sync(&self) -> Result<bool, miette::Error> {
@@ -512,29 +592,6 @@ impl Project {
             .prune(self.environments().keys().cloned())
             .await?
             .is_empty();
-
-        // Remove binaries that are not listed as exposed
-        let exposed_paths = self
-            .environments()
-            .values()
-            .flat_map(|environment| {
-                environment
-                    .exposed
-                    .keys()
-                    .map(|e| self.bin_dir.executable_script_path(e))
-            })
-            .collect_vec();
-        for file in self.bin_dir.files().await? {
-            let file_name = executable_from_path(&file);
-            if !exposed_paths.contains(&file) && file_name != "pixi" {
-                tokio_fs::remove_file(&file).await.into_diagnostic()?;
-                updated_env = true;
-                eprintln!(
-                    "{}Remove executable '{file_name}'.",
-                    console::style(console::Emoji("✔ ", "")).green()
-                );
-            }
-        }
 
         for (env_name, _parsed_environment) in self.environments() {
             self.sync_environment(env_name).await?;
@@ -592,7 +649,8 @@ impl Project {
             self.install_environment(env_name).await?;
         }
 
-        updated_env |= expose_executables(env_name, environment, &prefix, &self.bin_dir).await?;
+        // Expose executables
+        updated_env |= self.expose_executables_from_environment(env_name).await?;
 
         Ok(updated_env)
     }
@@ -675,55 +733,71 @@ mod tests {
         Project::manifest_dir().unwrap();
     }
 
-    #[cfg(windows)]
     #[tokio::test]
-    async fn test_extract_executable_from_script_windows() {
-        let script_without_quote = r#"
-@SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
-@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
-@C:\Users\USER\.pixi/envs\hyperfine\bin/hyperfine.exe %*
-"#;
-        let script_path = Path::new("hyperfine.bat");
+    async fn test_remove_binaries() {
         let tempdir = tempfile::tempdir().unwrap();
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_without_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
-        );
+        let project = Project::from_str(
+            &PathBuf::from("dummy"),
+            r#"
+            [envs.test]
+            channels = ["conda-forge"]
+            [envs.test.dependencies]
+            python = "*"
+            [envs.test.exposed]
+            python = "python"
+            "#,
+            EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
+            BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
 
-        let script_with_quote = r#"
-@SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
-@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\python"
-@"C:\Users\USER\.pixi\envs\python\Scripts/pydoc.exe" %*
-"#;
-        let script_path = Path::new("pydoc.bat");
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_with_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
-        );
-    }
+        let env_name = "test".parse().unwrap();
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_extract_executable_from_script_unix() {
-        let script = r#"#!/bin/sh
-export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
-export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
-"/home/user/.pixi/envs/nushell/bin/nu" "$@"
-"#;
-        let script_path = Path::new("nu");
-        let tempdir = tempfile::tempdir().unwrap();
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
-        );
+        // Create non-exposed but related binary
+        let expose_name = ExposedName::from_str("not-python").unwrap();
+        let non_exposed_bin = project.bin_dir.executable_script_path(&expose_name);
+        let mut file = fs::File::create(&non_exposed_bin).unwrap();
+        #[cfg(unix)]
+        {
+            let path = project.env_root.path().join("test/bin/not-python");
+            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+        #[cfg(windows)]
+        {
+            let path = project.env_root.path().join("test/bin/not-python.exe");
+            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+
+        // Create a file that should be exposed
+        let expose_name = ExposedName::from_str("python").unwrap();
+        let bin = project.bin_dir.executable_script_path(&expose_name);
+        let mut file = fs::File::create(&bin).unwrap();
+        #[cfg(unix)]
+        {
+            let path = project.env_root.path().join("test/bin/python");
+            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+        #[cfg(windows)]
+        {
+            let path = project.env_root.path().join("test/bin/python.exe");
+            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+
+        // Create unrelated file
+        let unrelated = project.bin_dir.path().join("unrelated");
+        fs::File::create(&unrelated).unwrap();
+
+        // Remove the binary
+        project.clean_environment_binaries(&env_name).await.unwrap();
+
+        // Check if the non-exposed file was removed
+        assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 2);
+        assert!(bin.exists());
+        assert!(unrelated.exists());
+        assert!(!non_exposed_bin.exists());
     }
 }

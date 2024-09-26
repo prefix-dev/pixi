@@ -16,6 +16,14 @@ use std::{
 pub struct BinDir(PathBuf);
 
 impl BinDir {
+    /// Create the binary executable directory from path
+    #[cfg(test)]
+    pub fn new(root: PathBuf) -> miette::Result<Self> {
+        let path = root.join("bin");
+        std::fs::create_dir_all(&path).into_diagnostic()?;
+        Ok(Self(path))
+    }
+
     /// Create the binary executable directory from environment variables
     pub async fn from_env() -> miette::Result<Self> {
         let bin_dir = home_path()
@@ -72,8 +80,9 @@ pub struct EnvRoot(PathBuf);
 impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
-    pub async fn new(path: PathBuf) -> miette::Result<Self> {
-        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
+    pub fn new(root: PathBuf) -> miette::Result<Self> {
+        let path = root.join("envs");
+        std::fs::create_dir_all(&path).into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -218,7 +227,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
 
         // Set the env root to the temporary directory
-        let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
 
         // Define a test environment name
         let environment_name = "test-env".parse().unwrap();
@@ -239,7 +248,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
 
         // Set the env root to the temporary directory
-        let env_root = EnvRoot::new(temp_dir.path().to_owned()).await.unwrap();
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
 
         // Create some directories in the temporary directory
         let envs = ["env1", "env2", "env3", "non-conda-env-dir"];

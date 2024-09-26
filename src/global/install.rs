@@ -1,6 +1,9 @@
+use super::{EnvironmentName, ExposedName};
+use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
+use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
@@ -9,61 +12,9 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    str::FromStr,
-};
-
-use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
-use crate::{global::BinDir, prefix::Prefix};
-
-pub(crate) async fn expose_executables(
-    env_name: &EnvironmentName,
-    parsed_environment: &ParsedEnvironment,
-    prefix: &Prefix,
-    bin_dir: &BinDir,
-) -> miette::Result<bool> {
-    tracing::debug!("Exposing executables for environment '{}'", env_name);
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-
-    // Construct the reusable activation script for the shell and generate an
-    // invocation script for each executable added by the package to the
-    // environment.
-    let activation_script = create_activation_script(prefix, shell.clone())?;
-
-    let prefix_records = prefix.find_installed_packages(None).await?;
-
-    let all_executables = prefix.find_executables(prefix_records.as_slice());
-
-    let exposed: HashSet<&String> = parsed_environment.exposed.values().collect();
-
-    let exposed_executables: Vec<_> = all_executables
-        .into_iter()
-        .filter(|(name, _)| exposed.contains(name))
-        .collect();
-
-    let script_mapping = parsed_environment
-        .exposed
-        .iter()
-        .map(|(exposed_name, entry_point)| {
-            script_exec_mapping(
-                exposed_name,
-                entry_point,
-                exposed_executables.iter(),
-                bin_dir,
-                env_name,
-            )
-        })
-        .collect::<miette::Result<Vec<_>>>()?;
-
-    create_executable_scripts(&script_mapping, prefix, &shell, activation_script).await
-}
+use regex::Regex;
+use std::path::Path;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -95,7 +46,10 @@ pub(crate) fn script_exec_mapping<'a>(
 }
 
 /// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
     let activator =
         Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
     let result = activator
@@ -223,6 +177,41 @@ pub(crate) async fn create_executable_scripts(
     Ok(changed)
 }
 
+/// Extracts the executable path from a script file.
+///
+/// This function reads the content of the script file and attempts to extract
+/// the path of the executable it references. It is used to determine
+/// the actual binary path from a wrapper script.
+pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
+    // Read the script file into a string
+    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
+
+    // Compile the regex pattern
+    #[cfg(unix)]
+    const PATTERN: &str = r#""([^"]+)" "\$@""#;
+    // The pattern includes `"?` to also find old pixi global installations.
+    #[cfg(windows)]
+    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
+    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+
+    // Apply the regex to the script content
+    if let Some(caps) = RE.captures(&script_content) {
+        if let Some(matched) = caps.get(1) {
+            return Ok(PathBuf::from(matched.as_str()));
+        }
+    }
+    tracing::debug!(
+        "Failed to extract executable path from script {}",
+        script_content
+    );
+
+    // Return an error if the executable path could not be extracted
+    miette::bail!(
+        "Failed to extract executable path from script {}",
+        script.display()
+    )
+}
+
 /// Warn user on dangerous package installations, interactive yes no prompt
 #[allow(unused)]
 pub(crate) fn prompt_user_to_continue(
@@ -342,6 +331,7 @@ pub(crate) fn local_environment_matches_spec(
 
 #[cfg(test)]
 mod tests {
+    use fs_err as fs;
     use indexmap::IndexMap;
     use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
     use rattler_lock::LockFile;
@@ -461,6 +451,58 @@ mod tests {
         assert!(
             !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),
             "The record contains linux-64 entries, so the function should always return `false`"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_windows() {
+        let script_without_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
+@C:\Users\USER\.pixi/envs\hyperfine\bin/hyperfine.exe %*
+"#;
+        let script_path = Path::new("hyperfine.bat");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_without_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
+        );
+
+        let script_with_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\python"
+@"C:\Users\USER\.pixi\envs\python\Scripts/pydoc.exe" %*
+"#;
+        let script_path = Path::new("pydoc.bat");
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_with_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_unix() {
+        let script = r#"#!/bin/sh
+export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
+export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
+"/home/user/.pixi/envs/nushell/bin/nu" "$@"
+"#;
+        let script_path = Path::new("nu");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
         );
     }
 }
