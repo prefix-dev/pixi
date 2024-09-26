@@ -2,7 +2,6 @@ recipe:
   name: dummy
   version: 1.0.0
 
-
 outputs:
   - package:
       name: dummy-a
@@ -17,11 +16,11 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "dummy-a" > $PREFIX/bin/dummy-a.bat
-            - echo "dummy-aa" > $PREFIX/bin/dummy-aa.bat
+            - echo "dummy-a on windows" > $PREFIX/bin/dummy-a.bat
+            - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
           else:
-            - echo "dummy-a" > $PREFIX/bin/dummy-a
-            - echo "dummy-aa" > $PREFIX/bin/dummy-aa
+            - echo "dummy-a on unix" > $PREFIX/bin/dummy-a
+            - echo "dummy-aa on unix" > $PREFIX/bin/dummy-aa
             - chmod +x $PREFIX/bin/dummy-a
             - chmod +x $PREFIX/bin/dummy-aa
 
@@ -34,9 +33,9 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "dummy-b" > $PREFIX/bin/dummy-b.bat
+            - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
           else:
-            - echo "dummy-b" > $PREFIX/bin/dummy-b
+            - echo "dummy-b on unix" > $PREFIX/bin/dummy-b
             - chmod +x $PREFIX/bin/dummy-b
 
   - package:
@@ -48,7 +47,7 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "dummy-c" > $PREFIX/bin/dummy-c.bat
+            - echo "dummy-c on windows" > $PREFIX/bin/dummy-c.bat
           else:
-            - echo "dummy-c" > $PREFIX/bin/dummy-c
+            - echo "dummy-c on unix" > $PREFIX/bin/dummy-c
             - chmod +x $PREFIX/bin/dummy-c
