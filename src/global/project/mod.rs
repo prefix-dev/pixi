@@ -25,7 +25,9 @@ use pixi_utils::executable_from_path;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
+};
 use rattler_repodata_gateway::Gateway;
 use rattler_solve::resolvo::Solver;
 use rattler_solve::{SolverImpl, SolverTask};
@@ -417,8 +419,6 @@ impl Project {
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
 
-
-
         let match_specs = environment
             .dependencies
             .clone()
@@ -431,11 +431,12 @@ impl Project {
                 {
                     Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
                 } else {
-                    Err(miette!("Could not convert {spec:?} to nameless match spec."))
+                    Err(miette!(
+                        "Could not convert {spec:?} to nameless match spec."
+                    ))
                 }
             })
             .collect::<miette::Result<Vec<MatchSpec>>>()?;
-
 
         let repodata = await_in_progress("querying repodata ", |_| async {
             self.repodata_gateway()

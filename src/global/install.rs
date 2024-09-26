@@ -2,7 +2,9 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_utils::executable_from_path;
-use rattler_conda_types::{MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
+};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
@@ -14,10 +16,7 @@ use std::{
 };
 
 use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
-use crate::{
-    global::{BinDir},
-    prefix::Prefix,
-};
+use crate::{global::BinDir, prefix::Prefix};
 
 pub(crate) async fn expose_executables(
     env_name: &EnvironmentName,
@@ -133,7 +132,6 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
         _ => "\"$@\"",
     }
 }
-
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.

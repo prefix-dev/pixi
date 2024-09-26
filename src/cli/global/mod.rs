@@ -50,9 +50,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 }
 
 /// Reverts the changes made to the project after an error occurred.
-async fn revert_after_error(
-    project_original: &global::Project,
-) -> miette::Result<()> {
+async fn revert_after_error(project_original: &global::Project) -> miette::Result<()> {
     project_original.manifest.save().await?;
     project_original.sync().await?;
     Ok(())

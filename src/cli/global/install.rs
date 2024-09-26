@@ -63,10 +63,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(
-        args: Args,
-        project: & mut Project,
-    ) -> Result<(), miette::Error> {
+    async fn apply_changes(args: Args, project: &mut Project) -> Result<(), miette::Error> {
         let specs = args.specs()?;
 
         let env_names = match &args.environment {
@@ -150,17 +147,11 @@ async fn install_environment(
     }
 
     // Expose executables of the new environment
-    let environment = project.environment(env_name).ok_or_else(|| {
-        miette!("Expected {} environment to be added.", env_name)
-    })?;
+    let environment = project
+        .environment(env_name)
+        .ok_or_else(|| miette!("Expected {} environment to be added.", env_name))?;
     let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
     let prefix = Prefix::new(env_dir.path());
-    expose_executables(
-        env_name,
-        &environment,
-        &prefix,
-        &project.bin_dir,
-    )
-    .await?;
+    expose_executables(env_name, environment, &prefix, &project.bin_dir).await?;
     Ok(())
 }

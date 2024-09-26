@@ -9,8 +9,8 @@ mod lock_file;
 mod prefix;
 mod project;
 mod prompt;
-pub mod task;
 pub(crate) mod repodata;
+pub mod task;
 
 mod uv_reporter;
 

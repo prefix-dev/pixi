@@ -6,8 +6,8 @@ use std::{
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use pixi_utils::strip_executable_extension;
+use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
