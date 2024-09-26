@@ -192,18 +192,17 @@ mod test {
 
         // create symlinked directory
         let symlinked_dir = tempdir().unwrap();
-        std::os::unix::fs::symlink(
-            symlinked_dir.path(),
-            target_dir.path().join("link"),
-        ).unwrap();
+        std::os::unix::fs::symlink(symlinked_dir.path(), target_dir.path().join("link")).unwrap();
 
         write(symlinked_dir.path().join("main.rs"), "fn main() {}").unwrap();
 
         // Compute the hashes of all files in the directory that match a certain set of includes.
-        let hashes =
-            FileHashes::from_files(target_dir.path(), vec!["src/*.rs", "*.toml", "!**/lib.rs", "link/*.rs"])
-                .await
-                .unwrap();
+        let hashes = FileHashes::from_files(
+            target_dir.path(),
+            vec!["src/*.rs", "*.toml", "!**/lib.rs", "link/*.rs"],
+        )
+        .await
+        .unwrap();
 
         assert!(
             !hashes.files.contains_key(Path::new("build.rs")),
@@ -229,7 +228,10 @@ mod test {
         );
 
         assert_matches!(
-            hashes.files.get(Path::new("link/main.rs")).map(String::as_str),
+            hashes
+                .files
+                .get(Path::new("link/main.rs"))
+                .map(String::as_str),
             Some("2c806b6ebece677c")
         );
 
