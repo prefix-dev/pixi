@@ -1,31 +1,23 @@
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_utils::executable_from_path;
-use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord};
-use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use reqwest_middleware::ClientWithMiddleware;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
     str::FromStr,
 };
 
-use super::{project::ParsedEnvironment, EnvironmentName, ExposedName, Project};
+use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
 use crate::{
-    global::{self, BinDir, EnvDir},
+    global::{BinDir},
     prefix::Prefix,
-    rlimit::try_increase_rlimit_to_sensible,
 };
-use crate::repodata::Repodata;
 
 pub(crate) async fn expose_executables(
     env_name: &EnvironmentName,

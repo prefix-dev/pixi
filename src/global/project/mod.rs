@@ -3,7 +3,6 @@ use crate::global::install::local_environment_matches_spec;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
-    global,
     global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
@@ -26,7 +25,7 @@ use pixi_utils::executable_from_path;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
 use rattler_repodata_gateway::Gateway;
 use rattler_solve::resolvo::Solver;
 use rattler_solve::{SolverImpl, SolverTask};
@@ -40,7 +39,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use pixi_spec::SpecConversionError;
 
 mod environment;
 mod manifest;

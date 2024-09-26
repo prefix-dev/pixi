@@ -82,7 +82,6 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     async fn apply_changes(
         args: AddArgs,
         project_original: global::Project,
-        config: &Config,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
 
@@ -96,7 +95,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone(), &config).await {
+    if let Err(err) = apply_changes(args, project_original.clone()).await {
         revert_after_error(&project_original)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
