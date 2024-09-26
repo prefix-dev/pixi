@@ -14,8 +14,6 @@ use rattler_shell::{
 };
 use tokio::task::JoinHandle;
 
-use crate::global::strip_executable_extension;
-
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
 pub struct Prefix {
