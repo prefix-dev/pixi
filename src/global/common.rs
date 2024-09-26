@@ -205,7 +205,6 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,5 +270,4 @@ mod tests {
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
     }
-
 }
