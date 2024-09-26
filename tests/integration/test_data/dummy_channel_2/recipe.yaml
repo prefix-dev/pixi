@@ -1,0 +1,18 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: dummy-x
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-x on windows" > $PREFIX/bin/dummy-x.bat
+          else:
+            - echo "dummy-x on unix" > $PREFIX/bin/dummy-x
+            - chmod +x $PREFIX/bin/dummy-x

@@ -71,7 +71,6 @@ def test_global_sync_platform(pixi: Path, tmp_path: Path) -> None:
     platform = "win-64"
     [envs.test.dependencies]
     binutils = "2.40"
-    [envs.test.exposed]
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
@@ -94,7 +93,7 @@ def test_global_sync_change_expose(pixi: Path, tmp_path: Path, test_data: Path) 
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -132,7 +131,7 @@ def test_global_sync_manually_remove_binary(pixi: Path, tmp_path: Path, test_dat
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -162,7 +161,7 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -192,7 +191,7 @@ def test_global_expose_basic(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -241,7 +240,7 @@ def test_global_expose_revert_working(pixi: Path, tmp_path: Path, test_data: Pat
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     original_toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -267,7 +266,7 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Pat
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     original_toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
@@ -289,11 +288,43 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Pat
     )
 
 
-def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_global_install_multiple_packages(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
-    dummy_channel = test_data.joinpath("dummy_channel_a/output").as_uri()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
+
+    # Install dummy-a and dummy-b, even though dummy-c is a dependency of dummy-b, it should not be exposed
+    # All of dummy-a's and dummy-b's executables should be exposed though: 'dummy-a', 'dummy-aa' and 'dummy-b'
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "dummy-a",
+            "dummy-b",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+
+def test_global_install_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
 
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
@@ -336,3 +367,141 @@ def test_global_install_basic(pixi: Path, tmp_path: Path, test_data: Path) -> No
     assert not dummy_a.is_file()
     assert not dummy_aa.is_file()
     assert dummy_c.is_file()
+
+    # Multiple mappings works as well
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "--expose",
+            "dummy-a=dummy-a",
+            "--expose",
+            "dummy-aa=dummy-aa",
+            "--expose",
+            "dummy-c=dummy-c",
+            "dummy-a",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert dummy_c.is_file()
+
+    # Expose doesn't work with multiple environments
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "--expose",
+            "dummy-a=dummy-a",
+            "dummy-a",
+            "dummy-b",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Cannot add exposed mappings for more than one environment",
+    )
+
+    # But it does work with multiple packages and a single environment
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "--environment",
+            "common-env",
+            "--expose",
+            "dummy-a=dummy-a",
+            "dummy-a",
+            "dummy-b",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+
+def test_global_install_platform(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    # Exists on win-64
+    verify_cli_command(
+        [pixi, "global", "install", "--platform", "win-64", "binutils=2.40"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Does not exist on osx-64
+    verify_cli_command(
+        [pixi, "global", "install", "--platform", "osx-64", "binutils=2.40"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found",
+    )
+
+
+def test_global_install_channels(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    dummy_channel_1 = test_data.joinpath("dummy_channel_1/output").as_uri()
+    dummy_channel_2 = test_data.joinpath("dummy_channel_2/output").as_uri()
+
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_x = tmp_path / "bin" / exec_extension("dummy-x")
+
+    # Install dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_b.is_file()
+
+    # Install dummy-x from dummy-channel-2
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_2,
+            "dummy-x",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_x.is_file()
+
+    # Install dummy-b and dummy-x from dummy-channel-1 and dummy-channel-2
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--channel",
+            dummy_channel_2,
+            "dummy-b",
+            "dummy-x",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_b.is_file()
+    assert dummy_x.is_file()
