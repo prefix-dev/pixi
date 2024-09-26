@@ -1,9 +1,11 @@
 use super::{EnvironmentName, ExposedName};
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_consts::consts;
+use rattler_conda_types::PrefixRecord;
+use std::ffi::OsStr;
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -177,6 +179,30 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 /// If that returns `false`, then it is a text file and vice-versa.
 pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(!is_binary(file_path)?)
+}
+
+/// Finds the package record from the `conda-meta` directory.
+pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let mut records = Vec::new();
+
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
+        // Check if the entry is a file and has a .json extension
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+            let prefix_record = PrefixRecord::from_path(&path)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+
+            records.push(prefix_record);
+        }
+    }
+
+    if records.is_empty() {
+        miette::bail!("No package records found in {}", conda_meta.display());
+    }
+
+    Ok(records)
 }
 
 #[cfg(test)]
