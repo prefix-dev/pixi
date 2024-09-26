@@ -192,7 +192,17 @@ mod test {
 
         // create symlinked directory
         let symlinked_dir = tempdir().unwrap();
-        std::os::unix::fs::symlink(symlinked_dir.path(), target_dir.path().join("link")).unwrap();
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(symlinked_dir.path(), target_dir.path().join("link"))
+                .unwrap();
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(symlinked_dir.path(), target_dir.path().join("link"))
+                .unwrap();
+        }
 
         write(symlinked_dir.path().join("main.rs"), "fn main() {}").unwrap();
 
