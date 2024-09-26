@@ -6,4 +6,4 @@ TOML parse error at line 7, column 9
   |
 7 |         pixi = "python"
   |         ^^^^
-The key 'pixi' is not allowed in the exposed map
+'pixi' is not allowed as exposed name in the map
