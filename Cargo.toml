@@ -14,7 +14,6 @@ ahash = "0.8.11"
 assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 async-trait = "0.1.82"
-cfg-if = "1.0"
 chrono = "0.4.38"
 clap = { version = "4.5.9", default-features = false }
 clap-verbosity-flag = "2.2.0"
@@ -166,7 +165,6 @@ ahash = { workspace = true }
 assert_matches = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
-cfg-if = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",
@@ -190,11 +188,9 @@ distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
-fd-lock = { workspace = true }
 flate2 = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
-http-cache-reqwest = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
 ignore = { workspace = true }
@@ -203,7 +199,6 @@ indicatif = { workspace = true }
 install-wheel-rs = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
-lazy_static = { workspace = true }
 miette = { workspace = true, features = [
   "fancy",
   "supports-color",
@@ -219,7 +214,6 @@ parking_lot = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
-platform-tags = { workspace = true }
 pypi-types = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
@@ -250,14 +244,11 @@ reqwest = { workspace = true, features = [
   "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
-reqwest-retry = { workspace = true }
 rlimit = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
-serde_ignored = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
-serde_yaml = { workspace = true }
 shlex = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
@@ -288,7 +279,7 @@ zip = { workspace = true, features = ["deflate", "time"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
-nix = { workspace = true, features = ["fs", "signal", "term", "poll"] }
+nix = { workspace = true, features = ["poll", "term"] }
 pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
 
