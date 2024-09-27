@@ -57,7 +57,7 @@ impl BinDir {
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.bat`.
     pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
-        let mut executable_script_path = self.0.join(exposed_name.to_string());
+        let mut executable_script_path = self.path().join(exposed_name.to_string());
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         }
@@ -205,75 +205,11 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
-/// Strips known Windows executable extensions from a file name.
-pub(crate) fn strip_windows_executable_extension(file_name: String) -> String {
-    let file_name = file_name.to_lowercase();
-    // Attempt to retrieve the PATHEXT environment variable
-    let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
-        pathext.split(';').map(|s| s.to_lowercase()).collect()
-    } else {
-        // Fallback to a default list if PATHEXT is not set
-        tracing::debug!("Could not find 'PATHEXT' variable, using a default list");
-        [
-            ".COM", ".EXE", ".BAT", ".CMD", ".VBS", ".VBE", ".JS", ".JSE", ".WSF", ".WSH", ".MSC",
-            ".CPL",
-        ]
-        .iter()
-        .map(|s| s.to_lowercase())
-        .collect()
-    };
-
-    // Attempt to strip any known Windows executable extension
-    extensions_list
-        .iter()
-        .find_map(|ext| file_name.strip_suffix(ext))
-        .map(|f| f.to_string())
-        .unwrap_or(file_name)
-}
-
-/// Strips known Unix executable extensions from a file name.
-pub(crate) fn strip_unix_executable_extension(file_name: String) -> String {
-    let file_name = file_name.to_lowercase();
-
-    // Define a list of common Unix executable extensions
-    let extensions_list: Vec<&str> = vec![
-        ".sh", ".bash", ".zsh", ".csh", ".tcsh", ".ksh", ".fish", ".py", ".pl", ".rb", ".lua",
-        ".php", ".tcl", ".awk", ".sed",
-    ];
-
-    // Attempt to strip any known Unix executable extension
-    extensions_list
-        .iter()
-        .find_map(|&ext| file_name.strip_suffix(ext))
-        .map(|f| f.to_string())
-        .unwrap_or(file_name)
-}
-
-/// Strips known executable extensions from a file name based on the target operating system.
-///
-/// This function acts as a wrapper that calls either `strip_windows_executable_extension`
-/// or `strip_unix_executable_extension` depending on the target OS.
-pub(crate) fn executable_from_path(path: &Path) -> String {
-    let file_name = path
-        .iter()
-        .last()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .to_string();
-
-    if cfg!(target_family = "windows") {
-        strip_windows_executable_extension(file_name)
-    } else {
-        strip_unix_executable_extension(file_name)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use fs_err::tokio as tokio_fs;
     use itertools::Itertools;
-    use rstest::rstest;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -333,39 +269,6 @@ mod tests {
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
-    }
-
-    #[rstest]
-    #[case::python312_linux("python3.12", "python3.12")]
-    #[case::python3_linux("python3", "python3")]
-    #[case::python_linux("python", "python")]
-    #[case::python3121_linux("python3.12.1", "python3.12.1")]
-    #[case::bash_script("bash.sh", "bash")]
-    #[case::zsh59("zsh-5.9", "zsh-5.9")]
-    #[case::python_312config("python3.12-config", "python3.12-config")]
-    #[case::python3_config("python3-config", "python3-config")]
-    #[case::x2to3("2to3", "2to3")]
-    #[case::x2to3312("2to3-3.12", "2to3-3.12")]
-    fn test_strip_executable_unix(#[case] path: &str, #[case] expected: &str) {
-        let path = Path::new(path);
-        let result = strip_unix_executable_extension(path.to_string_lossy().to_string());
-        assert_eq!(result, expected);
-    }
-
-    #[rstest]
-    #[case::python_windows("python.exe", "python")]
-    #[case::python3_windows("python3.exe", "python3")]
-    #[case::python312_windows("python3.12.exe", "python3.12")]
-    #[case::bash("bash", "bash")]
-    #[case::zsh59("zsh-5.9", "zsh-5.9")]
-    #[case::python_312config("python3.12-config", "python3.12-config")]
-    #[case::python3_config("python3-config", "python3-config")]
-    #[case::x2to3("2to3", "2to3")]
-    #[case::x2to3312("2to3-3.12", "2to3-3.12")]
-    fn test_strip_executable_windows(#[case] path: &str, #[case] expected: &str) {
-        let path = Path::new(path);
-        let result = strip_windows_executable_extension(path.to_string_lossy().to_string());
-        assert_eq!(result, expected);
     }
 
     #[tokio::test]

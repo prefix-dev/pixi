@@ -3571,6 +3571,7 @@ dependencies = [
  "rattler_networking",
  "reqwest 0.12.5",
  "reqwest-middleware",
+ "rstest",
  "serde",
  "serde_json",
  "serde_yaml",
