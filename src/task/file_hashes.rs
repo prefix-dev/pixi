@@ -200,7 +200,7 @@ mod test {
         }
         // On Windows this test can fail, so we need to check if the symlink was created successfully.
         // This works in our CI but might not work on all Windows systems.
-        #[allow(unused_assignments)]
+        #[allow(unused_assignments, unused_mut)]
         let mut symlink_on_windows = false;
         #[cfg(windows)]
         {
