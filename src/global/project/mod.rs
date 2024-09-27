@@ -503,11 +503,9 @@ impl Project {
 
         // Remove all related expose scripts not required by the environment manifest
         for binary_path in related_exposed {
-            if environment
-                .exposed
-                .iter()
-                .any(|(exposed_name, _)| binary_path.ends_with(exposed_name.to_string()))
-            {
+            if environment.exposed.iter().any(|(exposed_name, _)| {
+                executable_from_path(&binary_path) == exposed_name.to_string()
+            }) {
                 continue;
             }
             tokio_fs::remove_file(&binary_path)
