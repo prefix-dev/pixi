@@ -111,6 +111,7 @@ impl FileHashes {
             .git_ignore(false)
             .git_global(false)
             .git_exclude(false)
+            .follow_links(true)
             .build_parallel()
             .run(|| {
                 let tx = tx.clone();
@@ -189,11 +190,36 @@ mod test {
         write(target_dir.path().join("src/bla/lib.rs"), "fn main() {}").unwrap();
         write(target_dir.path().join("Cargo.toml"), "[package]").unwrap();
 
-        // Compute the hashes of all files in the directory that match a certain set of includes.
-        let hashes =
-            FileHashes::from_files(target_dir.path(), vec!["src/*.rs", "*.toml", "!**/lib.rs"])
-                .await
+        // create symlinked directory
+        let symlinked_dir = tempdir().unwrap();
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(symlinked_dir.path(), target_dir.path().join("link"))
                 .unwrap();
+        }
+        // On Windows this test can fail, so we need to check if the symlink was created successfully.
+        // This works in our CI but might not work on all Windows systems.
+        #[allow(unused_assignments, unused_mut)]
+        let mut symlink_on_windows = false;
+        #[cfg(windows)]
+        {
+            symlink_on_windows = std::os::windows::fs::symlink_dir(
+                symlinked_dir.path(),
+                target_dir.path().join("link"),
+            )
+            .is_ok();
+        }
+
+        write(symlinked_dir.path().join("main.rs"), "fn main() {}").unwrap();
+
+        // Compute the hashes of all files in the directory that match a certain set of includes.
+        let hashes = FileHashes::from_files(
+            target_dir.path(),
+            vec!["src/*.rs", "*.toml", "!**/lib.rs", "link/*.rs"],
+        )
+        .await
+        .unwrap();
 
         assert!(
             !hashes.files.contains_key(Path::new("build.rs")),
@@ -218,12 +244,22 @@ mod test {
             Some("2c806b6ebece677c")
         );
 
+        if symlink_on_windows || cfg!(unix) {
+            assert_matches!(
+                hashes
+                    .files
+                    .get(Path::new("link/main.rs"))
+                    .map(String::as_str),
+                Some("2c806b6ebece677c")
+            );
+        }
+
         #[cfg(unix)]
         {
             let mut hasher = Xxh3::new();
             hashes.hash(&mut hasher);
             let s = format!("{:x}", hasher.finish());
-            assert_eq!(s, "be05bb5d7c6e8e6");
+            assert_eq!(s, "96308f0071086f62");
         }
 
         let hashes = FileHashes::from_files(target_dir.path(), vec!["src/"])
