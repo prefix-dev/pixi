@@ -198,10 +198,17 @@ mod test {
             std::os::unix::fs::symlink(symlinked_dir.path(), target_dir.path().join("link"))
                 .unwrap();
         }
+        // On Windows this test can fail, so we need to check if the symlink was created successfully.
+        // This works in our CI but might not work on all Windows systems.
+        #[allow(unused_assignments)]
+        let mut symlink_on_windows = false;
         #[cfg(windows)]
         {
-            std::os::windows::fs::symlink_dir(symlinked_dir.path(), target_dir.path().join("link"))
-                .unwrap();
+            symlink_on_windows = std::os::windows::fs::symlink_dir(
+                symlinked_dir.path(),
+                target_dir.path().join("link"),
+            )
+            .is_ok();
         }
 
         write(symlinked_dir.path().join("main.rs"), "fn main() {}").unwrap();
@@ -237,13 +244,15 @@ mod test {
             Some("2c806b6ebece677c")
         );
 
-        assert_matches!(
-            hashes
-                .files
-                .get(Path::new("link/main.rs"))
-                .map(String::as_str),
-            Some("2c806b6ebece677c")
-        );
+        if symlink_on_windows || cfg!(unix) {
+            assert_matches!(
+                hashes
+                    .files
+                    .get(Path::new("link/main.rs"))
+                    .map(String::as_str),
+                Some("2c806b6ebece677c")
+            );
+        }
 
         #[cfg(unix)]
         {
