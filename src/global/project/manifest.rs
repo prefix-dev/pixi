@@ -2,9 +2,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use ahash::HashSet;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
+use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
 use pixi_config::Config;
@@ -210,8 +210,8 @@ impl Manifest {
             .as_array_mut()
             .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
 
-        // Convert existing TOML array to a HashSet to ensure uniqueness
-        let mut existing_channels: HashSet<String> = channels_array
+        // Convert existing TOML array to a IndexSet to ensure uniqueness
+        let mut existing_channels: IndexSet<String> = channels_array
             .iter()
             .filter_map(|item| item.as_str().map(|s| s.to_string()))
             .collect();
