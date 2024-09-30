@@ -27,6 +27,7 @@ use thiserror::__private::AsDisplay;
 /// Per environment:
 /// - Green: packages that are explicitly installed.
 #[derive(Parser, Debug)]
+#[clap(verbatim_doc_comment)]
 pub struct Args {
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", long = "assume-yes")]
