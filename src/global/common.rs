@@ -157,6 +157,11 @@ pub(crate) struct EnvDir {
 }
 
 impl EnvDir {
+    // Create EnvDir from path
+    pub(crate) fn from_path(path: PathBuf) -> Self {
+        Self { path }
+    }
+
     /// Create a global environment directory based on passed global environment root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,

@@ -111,8 +111,8 @@ pub(crate) struct ParsedEnvironment {
 }
 
 impl ParsedEnvironment {
-  // Create parsed environment  
-  pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
+    // Create empty parsed environment
+    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
         Self {
             channels: channels.into_iter().collect(),
             ..Default::default()
@@ -124,7 +124,7 @@ impl ParsedEnvironment {
     }
 
     /// Returns the channels associated with this environment.
-    pub(crate) fn sorted_named_channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+    pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
     }
 

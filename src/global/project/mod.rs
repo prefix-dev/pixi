@@ -1,7 +1,9 @@
 use super::{extract_executable_from_script, BinDir, EnvRoot};
 use crate::global::install::{
-    create_activation_script, create_executable_scripts, local_environment_matches_spec,
-    script_exec_mapping,
+    create_activation_script, create_executable_scripts, script_exec_mapping,
+};
+use crate::global::project::environment::{
+    environment_specs_in_sync, get_expose_scripts_sync_status,
 };
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
@@ -13,8 +15,7 @@ use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
-use indexmap::IndexMap;
-use itertools::Itertools;
+use indexmap::{IndexMap, IndexSet};
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
@@ -372,7 +373,7 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
         let channels = environment
-            .sorted_named_channels()
+            .channels()
             .into_iter()
             .map(|channel| {
                 channel
@@ -474,40 +475,18 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<()> {
-        // Get all paths to the binaries from the scripts in the bin directory.
-        let exposed = self.bin_dir.files().await?;
-        let executable_paths = futures::future::join_all(exposed.iter().map(|path| {
-            let path = path.clone();
-            async move {
-                extract_executable_from_script(&path)
-                    .await
-                    .ok()
-                    .map(|exec| (path, exec))
-            }
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-
-        // Filter out all binaries that are related to the environment
-        let related_exposed = executable_paths
-            .into_iter()
-            .filter(|(_, exec)| exec.starts_with(self.env_root.path().join(env_name.as_str())))
-            .map(|(path, _)| path)
-            .collect_vec();
-
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let bin_dir = BinDir::from_env().await?;
 
-        // Remove all related expose scripts not required by the environment manifest
-        for binary_path in related_exposed {
-            if environment.exposed.iter().any(|(exposed_name, _)| {
-                executable_from_path(&binary_path) == exposed_name.to_string()
-            }) {
-                continue;
-            }
+        // Get all removable binaries related to the environment
+        let (to_remove, _to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &environment.exposed).await?;
+
+        // Remove all removable binaries
+        for binary_path in to_remove {
             tokio_fs::remove_file(&binary_path)
                 .await
                 .into_diagnostic()?;
@@ -516,6 +495,52 @@ impl Project {
         Ok(())
     }
 
+    /// Check if the environment is in sync with the manifest
+    ///
+    /// Validated the specs in the installed environment.
+    /// And verifies only and all required exposed binaries are in the bin dir.
+    pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found.",
+            env_name.to_string()
+        ))?;
+
+        let specs = environment
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(name, spec)| {
+                let match_spec = MatchSpec::from_nameless(
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())
+                        .into_diagnostic()?
+                        .ok_or_else(|| {
+                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                        })?,
+                    Some(name.clone()),
+                );
+                Ok(match_spec)
+            })
+            .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
+
+        let env_dir =
+            EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
+
+        let specs_in_sync =
+            environment_specs_in_sync(&env_dir, &specs, environment.platform).await?;
+        if !specs_in_sync {
+            return Ok(false);
+        }
+
+        // Verify the binaries to be in sync with the environment
+        let (to_remove, to_add) =
+            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+        if !to_remove.is_empty() || !to_add.is_empty() {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
     /// Expose executables from the environment to the global bin directory.
     ///
     /// This function will first remove all binaries that are not listed as exposed.
@@ -605,46 +630,13 @@ impl Project {
         env_name: &EnvironmentName,
     ) -> miette::Result<bool> {
         let mut updated_env = false;
-        let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment {} not found.",
-            env_name.to_string()
-        ))?;
-
-        let specs = environment
-            .dependencies
-            .clone()
-            .into_iter()
-            .map(|(name, spec)| {
-                let match_spec = MatchSpec::from_nameless(
-                    spec.clone()
-                        .try_into_nameless_match_spec(&default_channel_config())
-                        .into_diagnostic()?
-                        .ok_or_else(|| {
-                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
-                        })?,
-                    Some(name.clone()),
-                );
-                Ok((name, match_spec))
-            })
-            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
-
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
-        let prefix = Prefix::new(env_dir.path());
-
-        let repodata_records = prefix
-            .find_installed_packages(Some(50))
-            .await?
-            .into_iter()
-            .map(|r| r.repodata_record)
-            .collect_vec();
-
-        let install_env =
-            !local_environment_matches_spec(repodata_records, &specs, environment.platform);
-
-        updated_env |= install_env;
-
-        if install_env {
+        if !self.environment_in_sync(env_name).await? {
+            tracing::debug!(
+                "Environment '{}' specs not up to date, installing",
+                env_name
+            );
             self.install_environment(env_name).await?;
+            updated_env = true;
         }
 
         // Expose executables
