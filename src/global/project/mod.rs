@@ -1,24 +1,43 @@
-use super::{BinDir, EnvRoot};
+use super::{extract_executable_from_script, BinDir, EnvRoot};
+use crate::global::install::{
+    create_activation_script, create_executable_scripts, local_environment_matches_spec,
+    script_exec_mapping,
+};
+use crate::repodata::Repodata;
+use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
     global::{common::is_text, find_executables, EnvDir},
     prefix::Prefix,
 };
+use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
 use indexmap::IndexMap;
+use itertools::Itertools;
 pub(crate) use manifest::{Manifest, Mapping};
-use miette::{Context, IntoDiagnostic};
-use once_cell::sync::Lazy;
+use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-use pixi_config::{home_path, Config};
+use pixi_config::{default_channel_config, home_path, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::executable_from_path;
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, PrefixRecord};
-use regex::Regex;
+use pixi_utils::reqwest::build_reqwest_clients;
+use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
+};
+use rattler_repodata_gateway::Gateway;
+use rattler_shell::shell::ShellEnum;
+use rattler_solve::resolvo::Solver;
+use rattler_solve::{SolverImpl, SolverTask};
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use reqwest_middleware::ClientWithMiddleware;
+use std::sync::OnceLock;
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
@@ -49,6 +68,12 @@ pub struct Project {
     pub(crate) env_root: EnvRoot,
     /// Binary directory
     pub(crate) bin_dir: BinDir,
+    /// Reqwest client shared for this project.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    repodata_gateway: OnceLock<Gateway>,
 }
 
 impl Debug for Project {
@@ -95,8 +120,8 @@ impl ExposedData {
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
-        let bin_env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
-        let prefix = Prefix::new(bin_env_dir.path());
+        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(env_dir.path());
 
         let (platform, channel, package) =
             package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
@@ -110,41 +135,6 @@ impl ExposedData {
             exposed,
         })
     }
-}
-
-/// Extracts the executable path from a script file.
-///
-/// This function reads the content of the script file and attempts to extract
-/// the path of the executable it references. It is used to determine
-/// the actual binary path from a wrapper script.
-async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
-    // Read the script file into a string
-    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
-
-    // Compile the regex pattern
-    #[cfg(unix)]
-    const PATTERN: &str = r#""([^"]+)" "\$@""#;
-    // The pattern includes `"?` to also find old pixi global installations.
-    #[cfg(windows)]
-    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
-
-    // Apply the regex to the script content
-    if let Some(caps) = RE.captures(&script_content) {
-        if let Some(matched) = caps.get(1) {
-            return Ok(PathBuf::from(matched.as_str()));
-        }
-    }
-    tracing::debug!(
-        "Failed to extract executable path from script {}",
-        script_content
-    );
-
-    // Return an error if the executable path could not be extracted
-    miette::bail!(
-        "Failed to extract executable path from script {}",
-        script.display()
-    )
 }
 
 fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result<PathBuf> {
@@ -220,12 +210,16 @@ impl Project {
 
         let config = Config::load(&root);
 
+        let client = OnceLock::new();
+        let repodata_gateway = OnceLock::new();
         Self {
             root,
             manifest,
             config,
             env_root,
             bin_dir,
+            client,
+            repodata_gateway,
         }
     }
 
@@ -349,6 +343,327 @@ impl Project {
     pub(crate) fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         &self.manifest.parsed.envs
     }
+
+    /// Return the environment with the given name.
+    pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
+        self.manifest.parsed.envs.get(name)
+    }
+
+    /// Create an authenticated reqwest client for this project
+    /// use authentication from `rattler_networking`
+    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
+        &self.client_and_authenticated_client().1
+    }
+
+    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+        self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub(crate) async fn install_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+        let channels = environment
+            .sorted_named_channels()
+            .into_iter()
+            .map(|channel| {
+                channel
+                    .clone()
+                    .into_channel(self.config.global_channel_config())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        let platform = environment.platform.unwrap_or_else(Platform::current);
+
+        let match_specs = environment
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(name, spec)| {
+                if let Some(nameless_spec) = spec
+                    .clone()
+                    .try_into_nameless_match_spec(self.config().global_channel_config())
+                    .into_diagnostic()?
+                {
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
+                } else {
+                    Err(miette!(
+                        "Could not convert {spec:?} to nameless match spec."
+                    ))
+                }
+            })
+            .collect::<miette::Result<Vec<MatchSpec>>>()?;
+
+        let repodata = await_in_progress("querying repodata ", |_| async {
+            self.repodata_gateway()
+                .query(channels, [platform, Platform::NoArch], match_specs.clone())
+                .recursive(true)
+                .await
+                .into_diagnostic()
+        })
+        .await?;
+
+        // Determine virtual packages of the current platform
+        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
+            .into_diagnostic()
+            .context("failed to determine virtual packages")?
+            .iter()
+            .cloned()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        // Solve the environment
+
+        let solved_records = tokio::task::spawn_blocking(move || {
+            wrap_in_progress("solving environment", move || {
+                Solver.solve(SolverTask {
+                    specs: match_specs,
+                    virtual_packages,
+                    ..SolverTask::from_iter(&repodata)
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment")
+        })
+        .await
+        .into_diagnostic()??;
+
+        try_increase_rlimit_to_sensible();
+
+        // Install the environment
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let prefix = Prefix::new(
+            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
+                .await?
+                .path(),
+        );
+        await_in_progress("creating virtual environment", |pb| {
+            Installer::new()
+                .with_download_client(self.authenticated_client().clone())
+                .with_io_concurrency_limit(100)
+                .with_execute_link_scripts(false)
+                .with_package_cache(package_cache)
+                .with_target_platform(platform)
+                .with_reporter(
+                    IndicatifReporter::builder()
+                        .with_multi_progress(global_multi_progress())
+                        .with_placement(rattler::install::Placement::After(pb))
+                        .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
+                        .clear_when_done(true)
+                        .finish(),
+                )
+                .install(prefix.root(), solved_records)
+        })
+        .await
+        .into_diagnostic()?;
+
+        Ok(())
+    }
+
+    /// Find all binaries related to the environment and remove those that are not listed as exposed.
+    pub async fn clean_environment_binaries(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Get all paths to the binaries from the scripts in the bin directory.
+        let exposed = self.bin_dir.files().await?;
+        let executable_paths = futures::future::join_all(exposed.iter().map(|path| {
+            let path = path.clone();
+            async move {
+                extract_executable_from_script(&path)
+                    .await
+                    .ok()
+                    .map(|exec| (path, exec))
+            }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        // Filter out all binaries that are related to the environment
+        let related_exposed = executable_paths
+            .into_iter()
+            .filter(|(_, exec)| exec.starts_with(self.env_root.path().join(env_name.as_str())))
+            .map(|(path, _)| path)
+            .collect_vec();
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+
+        // Remove all related expose scripts not required by the environment manifest
+        for binary_path in related_exposed {
+            if environment.exposed.iter().any(|(exposed_name, _)| {
+                executable_from_path(&binary_path) == exposed_name.to_string()
+            }) {
+                continue;
+            }
+            tokio_fs::remove_file(&binary_path)
+                .await
+                .into_diagnostic()?;
+        }
+
+        Ok(())
+    }
+
+    /// Expose executables from the environment to the global bin directory.
+    ///
+    /// This function will first remove all binaries that are not listed as exposed.
+    /// It will then create an activation script for the shell and create the scripts.
+    pub async fn expose_executables_from_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<bool> {
+        // First clean up binaries that are not listed as exposed
+        self.clean_environment_binaries(env_name).await?;
+
+        // Determine the shell to use for the invocation script
+        let shell: ShellEnum = if cfg!(windows) {
+            rattler_shell::shell::CmdExe.into()
+        } else {
+            rattler_shell::shell::Bash.into()
+        };
+
+        let prefix = Prefix::new(
+            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
+                .await?
+                .path(),
+        );
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+
+        // Construct the reusable activation script for the shell and generate an
+        // invocation script for each executable added by the package to the
+        // environment.
+        let activation_script = create_activation_script(&prefix, shell.clone())?;
+
+        let prefix_records = &prefix.find_installed_packages(None).await?;
+
+        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+
+        let exposed: HashSet<&String> = environment.exposed.values().collect();
+
+        let exposed_executables: Vec<_> = all_executables
+            .iter()
+            .filter(|(name, _)| exposed.contains(name))
+            .cloned()
+            .collect();
+
+        let script_mapping = environment
+            .exposed
+            .iter()
+            .map(|(exposed_name, entry_point)| {
+                script_exec_mapping(
+                    exposed_name,
+                    entry_point,
+                    exposed_executables.iter(),
+                    &self.bin_dir,
+                    env_name,
+                )
+            })
+            .collect::<miette::Result<Vec<_>>>()?;
+
+        tracing::debug!("Exposing executables for environment '{}'", env_name);
+        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
+    }
+
+    // Syncs the manifest with the local environments
+    // Returns true if the global installation had to be updated
+    pub(crate) async fn sync(&self) -> Result<bool, miette::Error> {
+        let mut updated_env = false;
+
+        // Prune environments that are not listed
+        updated_env |= !self
+            .env_root
+            .prune(self.environments().keys().cloned())
+            .await?
+            .is_empty();
+
+        for (env_name, _parsed_environment) in self.environments() {
+            self.sync_environment(env_name).await?;
+        }
+
+        Ok(updated_env)
+    }
+
+    /// Syncs the parsed environment with the installation.
+    /// Returns true if the environment had to be updated.
+    pub(crate) async fn sync_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<bool> {
+        let mut updated_env = false;
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found.",
+            env_name.to_string()
+        ))?;
+
+        let specs = environment
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(name, spec)| {
+                let match_spec = MatchSpec::from_nameless(
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())
+                        .into_diagnostic()?
+                        .ok_or_else(|| {
+                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                        })?,
+                    Some(name.clone()),
+                );
+                Ok((name, match_spec))
+            })
+            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
+
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let repodata_records = prefix
+            .find_installed_packages(Some(50))
+            .await?
+            .into_iter()
+            .map(|r| r.repodata_record)
+            .collect_vec();
+
+        let install_env =
+            !local_environment_matches_spec(repodata_records, &specs, environment.platform);
+
+        updated_env |= install_env;
+
+        if install_env {
+            self.install_environment(env_name).await?;
+        }
+
+        // Expose executables
+        updated_env |= self.expose_executables_from_environment(env_name).await?;
+
+        Ok(updated_env)
+    }
+}
+
+impl Repodata for Project {
+    /// Returns the [`Gateway`] used by this project.
+    fn repodata_gateway(&self) -> &Gateway {
+        self.repodata_gateway.get_or_init(|| {
+            Self::repodata_gateway_init(
+                self.authenticated_client().clone(),
+                self.config().clone().into(),
+            )
+        })
+    }
 }
 
 #[cfg(test)]
@@ -416,55 +731,71 @@ mod tests {
         Project::manifest_dir().unwrap();
     }
 
-    #[cfg(windows)]
     #[tokio::test]
-    async fn test_extract_executable_from_script_windows() {
-        let script_without_quote = r#"
-@SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
-@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
-@C:\Users\USER\.pixi/envs\hyperfine\bin/hyperfine.exe %*
-"#;
-        let script_path = Path::new("hyperfine.bat");
+    async fn test_remove_binaries() {
         let tempdir = tempfile::tempdir().unwrap();
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_without_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
-        );
+        let project = Project::from_str(
+            &PathBuf::from("dummy"),
+            r#"
+            [envs.test]
+            channels = ["conda-forge"]
+            [envs.test.dependencies]
+            python = "*"
+            [envs.test.exposed]
+            python = "python"
+            "#,
+            EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
+            BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
 
-        let script_with_quote = r#"
-@SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
-@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\python"
-@"C:\Users\USER\.pixi\envs\python\Scripts/pydoc.exe" %*
-"#;
-        let script_path = Path::new("pydoc.bat");
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_with_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
-        );
-    }
+        let env_name = "test".parse().unwrap();
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_extract_executable_from_script_unix() {
-        let script = r#"#!/bin/sh
-export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
-export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
-"/home/user/.pixi/envs/nushell/bin/nu" "$@"
-"#;
-        let script_path = Path::new("nu");
-        let tempdir = tempfile::tempdir().unwrap();
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
-        );
+        // Create non-exposed but related binary
+        let expose_name = ExposedName::from_str("not-python").unwrap();
+        let non_exposed_bin = project.bin_dir.executable_script_path(&expose_name);
+        let mut file = fs::File::create(&non_exposed_bin).unwrap();
+        #[cfg(unix)]
+        {
+            let path = project.env_root.path().join("test/bin/not-python");
+            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+        #[cfg(windows)]
+        {
+            let path = project.env_root.path().join("test/bin/not-python.exe");
+            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+
+        // Create a file that should be exposed
+        let expose_name = ExposedName::from_str("python").unwrap();
+        let bin = project.bin_dir.executable_script_path(&expose_name);
+        let mut file = fs::File::create(&bin).unwrap();
+        #[cfg(unix)]
+        {
+            let path = project.env_root.path().join("test/bin/python");
+            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+        #[cfg(windows)]
+        {
+            let path = project.env_root.path().join("test/bin/python.exe");
+            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+        }
+
+        // Create unrelated file
+        let unrelated = project.bin_dir.path().join("unrelated");
+        fs::File::create(&unrelated).unwrap();
+
+        // Remove the binary
+        project.clean_environment_binaries(&env_name).await.unwrap();
+
+        // Check if the non-exposed file was removed
+        assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 2);
+        assert!(bin.exists());
+        assert!(unrelated.exists());
+        assert!(!non_exposed_bin.exists());
     }
 }

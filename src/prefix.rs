@@ -7,7 +7,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::strip_executable_extension;
-use rattler_conda_types::{Platform, PrefixRecord};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
@@ -160,5 +160,21 @@ impl Prefix {
         // Check if the file is executable
         let absolute_path = self.root().join(relative_path);
         is_executable::is_executable(absolute_path)
+    }
+
+    /// Find the designated package in the given [`Prefix`]
+    ///
+    /// # Returns
+    ///
+    /// The PrefixRecord of the designated package
+    pub async fn find_designated_package(
+        &self,
+        package_name: &PackageName,
+    ) -> miette::Result<PrefixRecord> {
+        let prefix_records = self.find_installed_packages(None).await?;
+        prefix_records
+            .into_iter()
+            .find(|r| r.repodata_record.package_record.name == *package_name)
+            .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
     }
 }

@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "osx-arm64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-x-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "2f442a05d9f8384ce08fd9416b6f68bc",
+      "name": "dummy-x",
+      "platform": "osx",
+      "sha256": "4bb821c92815ffe4d5382224ae5c55198653dc487917edb893004dd333151338",
+      "size": 11703,
+      "subdir": "osx-arm64",
+      "timestamp": 1727337510420,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use crate::global;
+
 mod expose;
 mod install;
 mod list;
@@ -44,5 +46,12 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
     };
+    Ok(())
+}
+
+/// Reverts the changes made to the project after an error occurred.
+async fn revert_after_error(project_original: &global::Project) -> miette::Result<()> {
+    project_original.manifest.save().await?;
+    project_original.sync().await?;
     Ok(())
 }

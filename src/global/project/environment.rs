@@ -1,8 +1,7 @@
-use std::{fmt, str::FromStr};
-
 use miette::Diagnostic;
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
+use std::{fmt, str::FromStr};
 use thiserror::Error;
 
 /// Represents the name of an environment.
