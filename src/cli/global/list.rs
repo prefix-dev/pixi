@@ -375,7 +375,7 @@ fn format_exposed(
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
-            console::style("Nothing").color256(214).to_string(),
+            console::style("Nothing").dim().red().to_string(),
             last,
             false,
         ))
