@@ -39,9 +39,9 @@ pub struct Args {
     #[clap(short, long)]
     environment: Option<String>,
 
-    /// Sorting strategy for the package table
-    #[arg(long, default_value = "name", value_enum)]
-    pub sort_by: GlobalSortBy,
+    /// Sorting strategy for the package table of an environment
+    #[arg(long, default_value = "name", value_enum, requires = "environment")]
+    sort_by: GlobalSortBy,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
