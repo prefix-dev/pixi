@@ -63,37 +63,3 @@ pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,
 }
-
-// struct GlobalEnvironment {
-//     name: EnvironmentName,
-//     prefix: Prefix,
-//     parsed_environment: ParsedEnvironment,
-// }
-//
-// impl GlobalEnvironment {
-//     /// Create a new global environment object.
-//     pub(crate) fn new(
-//         name: EnvironmentName,
-//         env_root: EnvRoot,
-//         parsed_environment: ParsedEnvironment,
-//     ) -> Self {
-//         let prefix = Prefix::new(env_root.path().join(name.as_str().into()));
-//         Self {
-//             name,
-//             prefix,
-//             parsed_environment,
-//         }
-//     }
-//
-//     /// Returns the name of the environment.
-//     pub fn name(&self) -> &EnvironmentName {
-//         &self.name
-//     }
-//
-//     /// Returns the prefix of the environment.
-//     pub fn prefix(&self) -> &Prefix {
-//         &self.prefix
-//     }
-//
-//
-// }
