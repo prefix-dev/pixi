@@ -479,11 +479,10 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
-        let bin_dir = BinDir::from_env().await?;
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &environment.exposed).await?;
+            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
         for binary_path in to_remove {
