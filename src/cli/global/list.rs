@@ -1,4 +1,3 @@
-use crate::global;
 use crate::global::common::find_package_records;
 use crate::global::project::ParsedEnvironment;
 use crate::global::{EnvironmentName, ExposedName, Project};
@@ -47,15 +46,20 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project = global::Project::discover_or_create(args.assume_yes)
+    let project = Project::discover_or_create(args.assume_yes)
         .await?
         .with_cli_config(config.clone());
-    global::sync(&project, &config).await?;
 
     if let Some(environment) = args.environment {
         let name = EnvironmentName::from_str(environment.as_str())?;
+        // Verify that the environment is in sync with the manifest and report to the user otherwise
+        if !project.environment_in_sync(&name).await? {
+            tracing::warn!("The environment '{}' is not in sync with the manifest, to sync run\n\tpixi global sync", name);
+        }
         list_environment(project, &name, args.sort_by).await?;
     } else {
+        // Verify that the environments are in sync with the manifest and report to the user otherwise
+        // TODO: Check sync logic
         list_global_environments(project).await?;
     }
 
@@ -286,17 +290,20 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
             message.push('\n');
         }
     }
-
-    eprintln!(
-        "Global environments at {}:\n{}",
-        project
-            .env_root
-            .path()
-            .parent()
-            .unwrap_or(project.env_root.path())
-            .as_display(),
-        message
-    );
+    if message.is_empty() {
+        println!("No global environments found.");
+    } else {
+        println!(
+            "Global environments at {}:\n{}",
+            project
+                .env_root
+                .path()
+                .parent()
+                .unwrap_or(project.env_root.path())
+                .as_display(),
+            message
+        );
+    }
 
     Ok(())
 }
