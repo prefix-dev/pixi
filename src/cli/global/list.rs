@@ -155,8 +155,9 @@ fn print_meta_info(environment: &ParsedEnvironment) {
         .exposed
         .iter()
         .map(|(exp, path)| {
-            if &exp.to_string() == path {
-                exp.to_string()
+            let exp = exp.to_string();
+            if &exp == path {
+                exp
             } else {
                 format!("{} -> {}", exp, path)
             }
