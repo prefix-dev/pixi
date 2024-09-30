@@ -16,9 +16,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build pixi and copy the executable to ~/.pixi/bin/"
     )
-    parser.add_argument(
-        "--name", type=str, default="pixid", help="Name of the executable to copy (default: pixid)"
-    )
+    parser.add_argument("name", type=str, help="Name of the executable (e.g. pixid)")
+
     args = parser.parse_args()
 
     built_executable_path = Path(os.environ["CARGO_TARGET_DIR"]).joinpath(
