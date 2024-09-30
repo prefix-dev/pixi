@@ -103,7 +103,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
     .await
     .into_iter()
     .flatten()
-    .collect::<Vec<_>>();
+    .collect_vec();
 
     // Filter out all binaries that are related to the environment
     let related_exposed = executable_paths
