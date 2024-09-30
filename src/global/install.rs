@@ -1,8 +1,8 @@
 use super::ExposedName;
 use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
-use itertools::Itertools;
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
