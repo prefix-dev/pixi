@@ -1,7 +1,6 @@
 from pathlib import Path
 import tomllib
 
-import pytest
 import tomli_w
 from .common import verify_cli_command, ExitCode
 import platform
@@ -12,16 +11,6 @@ def exec_extension(exe_name: str) -> str:
         return exe_name + ".bat"
     else:
         return exe_name
-
-
-@pytest.fixture
-def dummy_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("dummy_channel_1/output").as_uri()
-
-
-@pytest.fixture
-def dummy_channel_2(test_data: Path) -> str:
-    return test_data.joinpath("dummy_channel_2/output").as_uri()
 
 
 def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
