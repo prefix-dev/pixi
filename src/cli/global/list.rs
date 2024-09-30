@@ -25,7 +25,7 @@ use thiserror::__private::AsDisplay;
 /// - Cyan: the name of the environment.
 ///
 /// Per environment:
-/// - Green: packages are explicitly installed.
+/// - Green: packages that are explicitly installed.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Answer yes to all questions.
