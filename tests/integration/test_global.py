@@ -1,5 +1,6 @@
 from pathlib import Path
 import tomllib
+
 import tomli_w
 from .common import verify_cli_command, ExitCode
 import platform
@@ -480,11 +481,10 @@ def test_global_install_platform(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_global_install_channels(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_global_install_channels(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
-    dummy_channel_1 = test_data.joinpath("dummy_channel_1/output").as_uri()
-    dummy_channel_2 = test_data.joinpath("dummy_channel_2/output").as_uri()
-
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     dummy_x = tmp_path / "bin" / exec_extension("dummy-x")
 
@@ -555,4 +555,41 @@ def test_global_install_multi_env_install(pixi: Path, tmp_path: Path, test_data:
         ],
         ExitCode.SUCCESS,
         env=env,
+    )
+
+
+def test_global_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Verify empty list
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="No global environments found.",
+    )
+
+    # Install dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Verify list with dummy-b
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a, dummy-aa"],
     )

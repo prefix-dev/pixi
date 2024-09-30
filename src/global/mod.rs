@@ -1,6 +1,6 @@
-mod common;
+pub(crate) mod common;
 mod install;
-mod project;
+pub(crate) mod project;
 
 pub(crate) use common::{BinDir, EnvDir, EnvRoot};
 pub(crate) use install::extract_executable_from_script;
