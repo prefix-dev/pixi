@@ -3409,7 +3409,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "toml_edit 0.22.20",
  "tracing",
