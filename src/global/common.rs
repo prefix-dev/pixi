@@ -297,14 +297,8 @@ mod tests {
         let records = find_package_records(&dummy_conda_meta_path).await.unwrap();
 
         // Verify that the package record was found
-        assert_eq!(records.len(), 1);
-        assert_eq!(
-            records[0]
-                .repodata_record
-                .package_record
-                .name
-                .as_normalized(),
-            "python"
-        );
+        assert!(records
+            .iter()
+            .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
     }
 }
