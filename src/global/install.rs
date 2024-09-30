@@ -1,172 +1,20 @@
+use super::{EnvironmentName, ExposedName};
+use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
-use pixi_config::{self, default_channel_config, Config};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use miette::IntoDiagnostic;
+use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseStrictness, Platform,
-    RepoDataRecord,
+    MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::{Shell, ShellEnum},
 };
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use reqwest_middleware::ClientWithMiddleware;
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    str::FromStr,
-};
-
-use super::{project::ParsedEnvironment, EnvironmentName, ExposedName};
-use crate::{
-    global::{self, BinDir, EnvDir},
-    prefix::Prefix,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-
-/// Installs global environment records
-pub(crate) async fn install_environment(
-    specs: &IndexMap<PackageName, MatchSpec>,
-    parsed_environment: &ParsedEnvironment,
-    authenticated_client: ClientWithMiddleware,
-    prefix: &Prefix,
-    config: &Config,
-    gateway: &Gateway,
-) -> miette::Result<()> {
-    let channels = parsed_environment
-        .channels()
-        .into_iter()
-        .map(|channel| channel.clone().into_channel(config.global_channel_config()))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
-    let platform = parsed_environment
-        .platform()
-        .unwrap_or_else(Platform::current);
-
-    let repodata = await_in_progress("querying repodata ", |_| async {
-        gateway
-            .query(
-                channels,
-                [platform, Platform::NoArch],
-                specs.values().cloned().collect_vec(),
-            )
-            .recursive(true)
-            .await
-            .into_diagnostic()
-    })
-    .await?;
-
-    // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
-        .into_diagnostic()
-        .context("failed to determine virtual packages")?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
-    // Solve the environment
-    let solver_specs = specs.clone();
-    let solved_records = tokio::task::spawn_blocking(move || {
-        wrap_in_progress("solving environment", move || {
-            Solver.solve(SolverTask {
-                specs: solver_specs.values().cloned().collect_vec(),
-                virtual_packages,
-                ..SolverTask::from_iter(&repodata)
-            })
-        })
-        .into_diagnostic()
-        .context("failed to solve environment")
-    })
-    .await
-    .into_diagnostic()??;
-
-    try_increase_rlimit_to_sensible();
-
-    // Install the environment
-    let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
-
-    await_in_progress("creating virtual environment", |pb| {
-        Installer::new()
-            .with_download_client(authenticated_client)
-            .with_io_concurrency_limit(100)
-            .with_execute_link_scripts(false)
-            .with_package_cache(package_cache)
-            .with_target_platform(platform)
-            .with_reporter(
-                IndicatifReporter::builder()
-                    .with_multi_progress(global_multi_progress())
-                    .with_placement(rattler::install::Placement::After(pb))
-                    .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
-                    .clear_when_done(true)
-                    .finish(),
-            )
-            .install(prefix.root(), solved_records)
-    })
-    .await
-    .into_diagnostic()?;
-
-    Ok(())
-}
-
-pub(crate) async fn expose_executables(
-    env_name: &EnvironmentName,
-    parsed_environment: &ParsedEnvironment,
-    prefix: &Prefix,
-    bin_dir: &BinDir,
-) -> miette::Result<bool> {
-    tracing::debug!("Exposing executables for environment '{}'", env_name);
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-
-    // Construct the reusable activation script for the shell and generate an
-    // invocation script for each executable added by the package to the
-    // environment.
-    let activation_script = create_activation_script(prefix, shell.clone())?;
-
-    let prefix_records = prefix.find_installed_packages(None).await?;
-
-    let all_executables = prefix.find_executables(prefix_records.as_slice());
-
-    let exposed: HashSet<&String> = parsed_environment.exposed.values().collect();
-
-    let exposed_executables: Vec<_> = all_executables
-        .into_iter()
-        .filter(|(name, _)| exposed.contains(name))
-        .collect();
-
-    let script_mapping = parsed_environment
-        .exposed
-        .iter()
-        .map(|(exposed_name, entry_point)| {
-            script_exec_mapping(
-                exposed_name,
-                entry_point,
-                exposed_executables.iter(),
-                bin_dir,
-                env_name,
-            )
-        })
-        .collect::<miette::Result<Vec<_>>>()?;
-
-    create_executable_scripts(&script_mapping, prefix, &shell, activation_script).await
-}
+use regex::Regex;
+use std::path::Path;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -198,7 +46,10 @@ pub(crate) fn script_exec_mapping<'a>(
 }
 
 /// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
     let activator =
         Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
     let result = activator
@@ -326,6 +177,41 @@ pub(crate) async fn create_executable_scripts(
     Ok(changed)
 }
 
+/// Extracts the executable path from a script file.
+///
+/// This function reads the content of the script file and attempts to extract
+/// the path of the executable it references. It is used to determine
+/// the actual binary path from a wrapper script.
+pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
+    // Read the script file into a string
+    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
+
+    // Compile the regex pattern
+    #[cfg(unix)]
+    const PATTERN: &str = r#""([^"]+)" "\$@""#;
+    // The pattern includes `"?` to also find old pixi global installations.
+    #[cfg(windows)]
+    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
+    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+
+    // Apply the regex to the script content
+    if let Some(caps) = RE.captures(&script_content) {
+        if let Some(matched) = caps.get(1) {
+            return Ok(PathBuf::from(matched.as_str()));
+        }
+    }
+    tracing::debug!(
+        "Failed to extract executable path from script {}",
+        script_content
+    );
+
+    // Return an error if the executable path could not be extracted
+    miette::bail!(
+        "Failed to extract executable path from script {}",
+        script.display()
+    )
+}
+
 /// Warn user on dangerous package installations, interactive yes no prompt
 #[allow(unused)]
 pub(crate) fn prompt_user_to_continue(
@@ -359,111 +245,12 @@ pub(crate) fn prompt_user_to_continue(
     Ok(true)
 }
 
-// Syncs the manifest with the local environment
-// Returns true if the global installation had to be updated
-pub(crate) async fn sync(
-    project: &global::Project,
-    config: &Config,
-) -> Result<bool, miette::Error> {
-    let mut updated_env = false;
-
-    // Fetch the repodata
-    let (_, auth_client) = build_reqwest_clients(Some(config));
-
-    let gateway = config.gateway(auth_client.clone());
-
-    // Prune environments that are not listed
-    updated_env |= !project
-        .env_root
-        .prune(project.environments().keys().cloned())
-        .await?
-        .is_empty();
-
-    // Remove binaries that are not listed as exposed
-    let exposed_paths = project
-        .environments()
-        .values()
-        .flat_map(|environment| {
-            environment
-                .exposed
-                .keys()
-                .map(|e| project.bin_dir.executable_script_path(e))
-        })
-        .collect_vec();
-    for file in project.bin_dir.files().await? {
-        let file_name = executable_from_path(&file);
-        if !exposed_paths.contains(&file) && file_name != "pixi" {
-            tokio_fs::remove_file(&file).await.into_diagnostic()?;
-            updated_env = true;
-            eprintln!(
-                "{}Remove executable '{file_name}'.",
-                console::style(console::Emoji("✔ ", "")).green()
-            );
-        }
-    }
-
-    for (env_name, parsed_environment) in project.environments() {
-        let specs = parsed_environment
-            .dependencies
-            .clone()
-            .into_iter()
-            .map(|(name, spec)| {
-                let match_spec = MatchSpec::from_nameless(
-                    spec.clone()
-                        .try_into_nameless_match_spec(&default_channel_config())
-                        .into_diagnostic()?
-                        .ok_or_else(|| {
-                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
-                        })?,
-                    Some(name.clone()),
-                );
-                Ok((name, match_spec))
-            })
-            .collect::<Result<IndexMap<PackageName, MatchSpec>, miette::Report>>()?;
-
-        let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
-        let prefix = Prefix::new(env_dir.path());
-
-        let repodata_records = prefix
-            .find_installed_packages(Some(50))
-            .await?
-            .into_iter()
-            .map(|r| r.repodata_record)
-            .collect_vec();
-
-        let install_env = !local_environment_matches_spec(
-            repodata_records,
-            &specs,
-            parsed_environment.platform(),
-        );
-
-        updated_env |= install_env;
-
-        if install_env {
-            install_environment(
-                &specs,
-                parsed_environment,
-                auth_client.clone(),
-                &prefix,
-                config,
-                &gateway,
-            )
-            .await?;
-        }
-
-        updated_env |=
-            expose_executables(env_name, parsed_environment, &prefix, &project.bin_dir).await?;
-    }
-
-    Ok(updated_env)
-}
-
 /// Checks if the local environment matches the given specifications.
 ///
 /// This function verifies that all the given specifications are present in the
 /// local environment's prefix records and that there are no extra entries in
 /// the prefix records that do not match any of the specifications.
-fn local_environment_matches_spec(
+pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<RepoDataRecord>,
     specs: &IndexMap<PackageName, MatchSpec>,
     platform: Option<Platform>,
@@ -544,6 +331,7 @@ fn local_environment_matches_spec(
 
 #[cfg(test)]
 mod tests {
+    use fs_err as fs;
     use indexmap::IndexMap;
     use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
     use rattler_lock::LockFile;
@@ -663,6 +451,58 @@ mod tests {
         assert!(
             !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),
             "The record contains linux-64 entries, so the function should always return `false`"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_windows() {
+        let script_without_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
+@C:\Users\USER\.pixi/envs\hyperfine\bin/hyperfine.exe %*
+"#;
+        let script_path = Path::new("hyperfine.bat");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_without_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
+        );
+
+        let script_with_quote = r#"
+@SET "PATH=C:\Users\USER\.pixi/envs\python\bin;%PATH%"
+@SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\python"
+@"C:\Users\USER\.pixi\envs\python\Scripts/pydoc.exe" %*
+"#;
+        let script_path = Path::new("pydoc.bat");
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script_with_quote).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_unix() {
+        let script = r#"#!/bin/sh
+export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
+export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
+"/home/user/.pixi/envs/nushell/bin/nu" "$@"
+"#;
+        let script_path = Path::new("nu");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script).unwrap();
+        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
         );
     }
 }

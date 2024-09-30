@@ -17,7 +17,7 @@ use super::ExposedData;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct ParsedManifest {
     /// The environments the project can create.
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
@@ -101,9 +101,9 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
     #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
-    channels: IndexSet<pixi_manifest::PrioritizedChannel>,
+    pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
-    platform: Option<Platform>,
+    pub platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
     #[serde(default)]
@@ -111,13 +111,20 @@ pub(crate) struct ParsedEnvironment {
 }
 
 impl ParsedEnvironment {
+  // Create parsed environment  
+  pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
+        Self {
+            channels: channels.into_iter().collect(),
+            ..Default::default()
+        }
+    }
     /// Returns the platform associated with this platform, `None` means current platform
     pub(crate) fn platform(&self) -> Option<Platform> {
         self.platform
     }
 
     /// Returns the channels associated with this environment.
-    pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+    pub(crate) fn sorted_named_channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
     }
 

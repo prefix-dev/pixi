@@ -18,6 +18,7 @@ python = "3.12.*"
 build = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
+install-as = { cmd = "python scripts/install.py", depends-on = ["build"] }
 pypi-proxy = "python ./tests/pypi_proxy.py"
 release = "python scripts/release.py"
 run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
