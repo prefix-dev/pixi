@@ -165,8 +165,12 @@ fn print_meta_info(environment: &ParsedEnvironment) {
         .join(", ");
     println!(
         "{}\n{}",
-        console::style("Exposed:").bold().yellow(),
-        formatted_exposed
+        console::style("Exposes:").bold().yellow(),
+        if !formatted_exposed.is_empty() {
+            formatted_exposed
+        } else {
+            "Nothing".to_string()
+        }
     );
 
     // Print channels
@@ -367,7 +371,14 @@ fn format_exposed(
     exposed: &IndexMap<ExposedName, String>,
     last: bool,
 ) -> Option<String> {
-    if exposed.iter().any(|(exp, _)| exp.to_string() != env_name) {
+    if exposed.is_empty() {
+        Some(format_asciiart_section(
+            "exposes",
+            console::style("Nothing").color256(214).to_string(),
+            last,
+            false,
+        ))
+    } else if exposed.iter().any(|(exp, _)| exp.to_string() != env_name) {
         let content = exposed
             .iter()
             .map(|(exp, _)| console::style(exp).yellow().to_string())
