@@ -1,7 +1,7 @@
 use super::{EnvironmentName, ExposedName};
 use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
 use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
@@ -252,16 +252,17 @@ pub(crate) fn prompt_user_to_continue(
 /// the prefix records that do not match any of the specifications.
 pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<RepoDataRecord>,
-    specs: &IndexMap<PackageName, MatchSpec>,
+    specs: &IndexSet<MatchSpec>,
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
     let specs_in_manifest_are_present = specs
-        .values()
+        .iter()
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
     if !specs_in_manifest_are_present {
+        tracing::debug!("Not all specs in the manifest are present in the environment");
         return false;
     }
 
@@ -281,10 +282,12 @@ pub(crate) fn local_environment_matches_spec(
         });
 
         if !platform_specs_match_env {
+            tracing::debug!("Not all packages in the environment have the correct platform");
             return false;
         }
     }
 
+    // Prune dependencies from the repodata that are valid for the requested specs
     fn prune_dependencies(
         mut remaining_prefix_records: Vec<RepoDataRecord>,
         matched_record: &RepoDataRecord,
@@ -314,10 +317,8 @@ pub(crate) fn local_environment_matches_spec(
     }
 
     // Process each spec and remove matched entries and their dependencies
-    let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, (name, spec)| {
-        let Some(index) = acc.iter().position(|record| {
-            record.package_record.name == *name && spec.matches(record.as_ref())
-        }) else {
+    let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, spec| {
+        let Some(index) = acc.iter().position(|record| spec.matches(record.as_ref())) else {
             return acc;
         };
         let matched_record = acc.swap_remove(index);
@@ -326,25 +327,29 @@ pub(crate) fn local_environment_matches_spec(
 
     // If there are no remaining prefix records, then this means that
     // the environment doesn't contain records that don't match the manifest
-    remaining_prefix_records.is_empty()
+    if !remaining_prefix_records.is_empty() {
+        tracing::debug!(
+            "Environment contains extra entries that don't match the manifest: {:?}",
+            remaining_prefix_records
+        );
+        false
+    } else {
+        true
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use fs_err as fs;
-    use indexmap::IndexMap;
-    use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
+    use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
 
     use super::*;
 
     #[fixture]
-    fn ripgrep_specs() -> IndexMap<PackageName, MatchSpec> {
-        IndexMap::from([(
-            PackageName::from_str("ripgrep").unwrap(),
-            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-        )])
+    fn ripgrep_specs() -> IndexSet<MatchSpec> {
+        IndexSet::from([MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap()])
     }
 
     #[fixture]
@@ -359,16 +364,10 @@ mod tests {
     }
 
     #[fixture]
-    fn ripgrep_bat_specs() -> IndexMap<PackageName, MatchSpec> {
-        IndexMap::from([
-            (
-                PackageName::from_str("ripgrep").unwrap(),
-                MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
-            ),
-            (
-                PackageName::from_str("bat").unwrap(),
-                MatchSpec::from_str("bat=0.24.0", ParseStrictness::Strict).unwrap(),
-            ),
+    fn ripgrep_bat_specs() -> IndexSet<MatchSpec> {
+        IndexSet::from([
+            MatchSpec::from_str("ripgrep=14.1.0", ParseStrictness::Strict).unwrap(),
+            MatchSpec::from_str("bat=0.24.0", ParseStrictness::Strict).unwrap(),
         ])
     }
 
@@ -386,7 +385,7 @@ mod tests {
     #[rstest]
     fn test_local_environment_matches_spec(
         ripgrep_records: Vec<RepoDataRecord>,
-        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(local_environment_matches_spec(
             ripgrep_records,
@@ -398,7 +397,7 @@ mod tests {
     #[rstest]
     fn test_local_environment_misses_entries_for_specs(
         mut ripgrep_records: Vec<RepoDataRecord>,
-        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         // Remove last repodata record
         ripgrep_records.pop();
@@ -413,8 +412,8 @@ mod tests {
     #[rstest]
     fn test_local_environment_has_too_many_entries_to_match_spec(
         ripgrep_bat_records: Vec<RepoDataRecord>,
-        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
-        ripgrep_bat_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_specs: IndexSet<MatchSpec>,
+        ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
         assert!(!local_environment_matches_spec(
             ripgrep_bat_records.clone(),
@@ -431,7 +430,7 @@ mod tests {
     #[rstest]
     fn test_local_environment_matches_given_platform(
         ripgrep_records: Vec<RepoDataRecord>,
-        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
             local_environment_matches_spec(
@@ -446,7 +445,7 @@ mod tests {
     #[rstest]
     fn test_local_environment_doesnt_match_given_platform(
         ripgrep_records: Vec<RepoDataRecord>,
-        ripgrep_specs: IndexMap<PackageName, MatchSpec>,
+        ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
             !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),

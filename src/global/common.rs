@@ -157,6 +157,11 @@ pub(crate) struct EnvDir {
 }
 
 impl EnvDir {
+    // Create EnvDir from path
+    pub(crate) fn from_path(path: PathBuf) -> Self {
+        Self { path }
+    }
+
     /// Create a global environment directory based on passed global environment root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
@@ -278,5 +283,22 @@ mod tests {
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
+    }
+
+    #[tokio::test]
+    async fn test_find_package_record() {
+        // Get meta file from test data folder relative to the current file
+        let dummy_conda_meta_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("global")
+            .join("test_data")
+            .join("conda-meta");
+        // Find the package record
+        let records = find_package_records(&dummy_conda_meta_path).await.unwrap();
+
+        // Verify that the package record was found
+        assert!(records
+            .iter()
+            .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
     }
 }
