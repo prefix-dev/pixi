@@ -235,12 +235,13 @@ fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Er
 
 /// List all environments in the global environment
 async fn list_global_environments(project: Project) -> miette::Result<()> {
-    let envs = project.environments();
+    let mut envs = project.environments().clone();
+    envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
     let mut message = String::new();
 
     let len = envs.len();
-    for (idx, (env_name, env)) in envs.into_iter().enumerate() {
+    for (idx, (env_name, env)) in envs.iter().enumerate() {
         let env_dir = project.env_root.path().join(env_name.as_str());
         let records = find_package_records(&env_dir.join(consts::CONDA_META_DIR)).await?;
 
