@@ -262,6 +262,7 @@ pub(crate) fn local_environment_matches_spec(
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
     if !specs_in_manifest_are_present {
+        tracing::debug!("Not all specs in the manifest are present in the environment");
         return false;
     }
 
@@ -281,6 +282,7 @@ pub(crate) fn local_environment_matches_spec(
         });
 
         if !platform_specs_match_env {
+            tracing::debug!("Not all packages in the environment have the correct platform");
             return false;
         }
     }
@@ -325,7 +327,15 @@ pub(crate) fn local_environment_matches_spec(
 
     // If there are no remaining prefix records, then this means that
     // the environment doesn't contain records that don't match the manifest
-    remaining_prefix_records.is_empty()
+    if !remaining_prefix_records.is_empty() {
+        tracing::debug!(
+            "Environment contains extra entries that don't match the manifest: {:?}",
+            remaining_prefix_records
+        );
+        false
+    } else {
+        true
+    }
 }
 
 #[cfg(test)]

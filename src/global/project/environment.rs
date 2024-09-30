@@ -124,16 +124,20 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect::<IndexSet<PathBuf>>();
 
     // Get all required exposed binaries that are not yet exposed
-    let mut to_add = IndexSet::new();
-    for (exposed_name, _) in exposed.iter() {
-        if related_exposed
-            .iter()
-            .map(|path| executable_from_path(path))
-            .any(|exec| exec == exposed_name.to_string())
-        {
-            to_add.insert(exposed_name.clone());
-        }
-    }
+    let to_add = exposed
+        .iter()
+        .filter_map(|(exposed_name, _)| {
+            if related_exposed
+                .iter()
+                .map(|path| executable_from_path(path))
+                .any(|exec| exec == exposed_name.to_string())
+            {
+                None
+            } else {
+                Some(exposed_name.clone())
+            }
+        })
+        .collect::<IndexSet<ExposedName>>();
 
     Ok((to_remove, to_add))
 }
@@ -198,5 +202,74 @@ mod tests {
             .await
             .unwrap();
         assert!(result);
+    }
+
+    #[tokio::test]
+    async fn test_get_expose_scripts_sync_status() {
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        // Test empty
+        let exposed = IndexMap::new();
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test with exposed
+        let mut exposed = IndexMap::new();
+        exposed.insert(ExposedName::from_str("test").unwrap(), "test".to_string());
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert_eq!(to_add.len(), 1);
+
+        // Add a script to the bin directory
+        let script_path = if cfg!(windows) {
+            bin_dir.path().join("test.bat")
+        } else {
+            bin_dir.path().join("test")
+        };
+
+        let script = if cfg!(windows) {
+            format!(
+                r#"
+            @"{}" %*
+            "#,
+                env_dir
+                    .path()
+                    .join("bin")
+                    .join("test.exe")
+                    .to_string_lossy()
+            )
+        } else {
+            format!(
+                r#"#!/bin/sh
+            "{}" "$@"
+            "#,
+                env_dir.path().join("bin").join("test").to_string_lossy()
+            )
+        };
+        fs::write(script_path, script).unwrap();
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test to_remove
+        let (to_remove, to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexMap::new())
+                .await
+                .unwrap();
+        assert_eq!(to_remove.len(), 1);
+        assert!(to_add.is_empty());
     }
 }

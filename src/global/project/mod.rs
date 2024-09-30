@@ -536,10 +536,31 @@ impl Project {
         let (to_remove, to_add) =
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
         if !to_remove.is_empty() || !to_add.is_empty() {
+            tracing::debug!(
+                "Environment '{}' binaries not in sync: to_remove: {:?}, to_add: {:?}",
+                env_name,
+                to_remove,
+                to_add
+            );
             return Ok(false);
         }
 
         Ok(true)
+    }
+
+    /// Check if all environments are in sync with the manifest
+    pub async fn environments_in_sync(&self) -> miette::Result<bool> {
+        let mut in_sync = true;
+        for (env_name, _parsed_environment) in self.environments() {
+            if !self.environment_in_sync(env_name).await? {
+                tracing::debug!(
+                    "Environment '{}' not up to date with the manifest",
+                    env_name
+                );
+                in_sync = false;
+            }
+        }
+        Ok(in_sync)
     }
     /// Expose executables from the environment to the global bin directory.
     ///
@@ -632,7 +653,7 @@ impl Project {
         let mut updated_env = false;
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
-                "Environment '{}' specs not up to date, installing",
+                "Environment '{}' specs not up to date with manifest",
                 env_name
             );
             self.install_environment(env_name).await?;
