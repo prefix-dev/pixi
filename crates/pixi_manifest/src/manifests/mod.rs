@@ -1,6 +1,6 @@
-use std::fmt;
+use std::{fmt, thread::current};
 
-use toml_edit::{self, Array, Item, Table, Value};
+use toml_edit::{self, value, Array, InlineTable, Item, Table, TableLike, Value};
 
 pub mod project;
 
@@ -43,6 +43,52 @@ impl TomlManifest {
             current_table.set_implicit(true);
         }
         Ok(current_table)
+    }
+
+    pub fn get_or_insert_inline_table<'a>(
+        &'a mut self,
+        table_name: &str,
+    ) -> Result<&'a mut InlineTable, TomlError> {
+        let parts: Vec<&str> = table_name.split('.').collect();
+
+        let mut current_table = self.0.as_table_mut();
+
+        for (index, part) in parts.iter().enumerate() {
+            if current_table.contains_table(part) {
+                current_table = current_table
+                    .get_mut(part)
+                    .unwrap()
+                    .as_table_mut()
+                    .ok_or_else(|| TomlError::table_error(part, table_name))?;
+                // Avoid creating empty tables
+                current_table.set_implicit(true);
+                continue;
+            }
+
+            if index + 1 == parts.len() {
+                let new_table = current_table
+                    .entry(part)
+                    .or_insert(Item::Table(Table::new()))
+                    .as_table()
+                    .ok_or_else(|| TomlError::table_error(part, table_name))?;
+                current_table[part] = value(new_table.clone().into_inline_table());
+                return Ok(current_table
+                    .get_mut(part)
+                    .unwrap()
+                    .as_inline_table_mut()
+                    .unwrap());
+            }
+
+            let new_table = current_table
+                .entry(part)
+                .or_insert(Item::Table(Table::new()))
+                .as_table_mut()
+                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+            // Avoid creating empty tables
+            new_table.set_implicit(true);
+            current_table = new_table;
+        }
+        unreachable!();
     }
 
     /// Retrieves a mutable reference to a target array `array_name`

@@ -132,10 +132,10 @@ impl Manifest {
 
         // Update self.document
         self.document
-            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
+            .get_or_insert_inline_table(&format!("envs.{env_name}.dependencies"))?
             .insert(
                 dependency_name_string,
-                Item::Value(toml_edit::Value::from(version_string)),
+                toml_edit::Value::from(version_string),
             );
 
         tracing::debug!(
