@@ -258,7 +258,7 @@ def test_global_expose_revert_working(pixi: Path, tmp_path: Path, test_data: Pat
     )
 
     # The TOML has been reverted to the original state
-    assert original_toml == manifest.read_text()
+    assert manifest.read_text() == original_toml
 
 
 def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Path) -> None:
@@ -288,10 +288,45 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Pat
     )
 
 
-def test_global_install_multiple_packages(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel,
+            "dummy-a",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    expected_manifest = tomllib.loads(f"""
+    [envs.dummy-a]
+    channels = ["{dummy_channel}"]
+
+    [envs.dummy-a.dependencies]
+    dummy-a = "*"
+
+    [envs.dummy-a.exposed]
+    dummy-a = "dummy-a"
+    dummy-aa = "dummy-aa"
+    """)
+    actual_manifest = tomllib.loads(manifest.read_text())
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+
+def test_global_install_multiple_packages(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
     dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
 
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
@@ -322,8 +357,6 @@ def test_global_install_multiple_packages(pixi: Path, tmp_path: Path, test_data:
 
 def test_global_install_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
     dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
 
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
@@ -449,8 +482,6 @@ def test_global_install_platform(pixi: Path, tmp_path: Path) -> None:
 
 def test_global_install_channels(pixi: Path, tmp_path: Path, test_data: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
     dummy_channel_1 = test_data.joinpath("dummy_channel_1/output").as_uri()
     dummy_channel_2 = test_data.joinpath("dummy_channel_2/output").as_uri()
 

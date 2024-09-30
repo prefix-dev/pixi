@@ -80,7 +80,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         for env_name in env_names {
             setup_environment(&env_name, project, args.clone(), specs.clone()).await?;
         }
-
+        project.manifest.save().await?;
         Ok(())
     }
 
