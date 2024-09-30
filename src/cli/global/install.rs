@@ -77,8 +77,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             miette::bail!("Cannot add exposed mappings for more than one environment");
         }
 
+        let multiple_envs = env_names.len() > 1;
+
         for env_name in env_names {
-            setup_environment(&env_name, project, args.clone(), specs.clone()).await?;
+            let specs = if multiple_envs {
+                specs
+                    .clone()
+                    .into_iter()
+                    .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
+                    .collect()
+            } else {
+                specs.clone()
+            };
+
+            setup_environment(&env_name, project, args.clone(), specs).await?;
         }
         project.manifest.save().await?;
         Ok(())

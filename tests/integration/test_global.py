@@ -536,3 +536,23 @@ def test_global_install_channels(pixi: Path, tmp_path: Path, test_data: Path) ->
     )
     assert dummy_b.is_file()
     assert dummy_x.is_file()
+
+
+def test_global_install_multi_env_install(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    dummy_channel_1 = test_data.joinpath("dummy_channel_1/output").as_uri()
+
+    # Install dummy-a and dummy-b from dummy-channel-1 this will fail if both environment contains the same package as spec.
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-b",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
