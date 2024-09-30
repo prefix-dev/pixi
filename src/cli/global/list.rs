@@ -85,7 +85,7 @@ struct PackageToOutput {
 }
 
 impl PackageToOutput {
-    fn from_package_record(record: &PackageRecord, is_explicit: bool) -> Self {
+    fn new(record: &PackageRecord, is_explicit: bool) -> Self {
         Self {
             name: record.name.clone(),
             version: record.version.version().clone(),
@@ -119,7 +119,7 @@ async fn list_environment(
     let mut packages_to_output: Vec<PackageToOutput> = records
         .iter()
         .map(|record| {
-            PackageToOutput::from_package_record(
+            PackageToOutput::new(
                 &record.repodata_record.package_record,
                 env.dependencies()
                     .contains_key(&record.repodata_record.package_record.name),
