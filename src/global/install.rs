@@ -1,7 +1,8 @@
-use super::{EnvironmentName, ExposedName};
+use super::ExposedName;
 use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
@@ -34,7 +35,6 @@ pub(crate) fn script_exec_mapping<'a>(
     entry_point: &str,
     mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
     bin_dir: &BinDir,
-    environment_name: &EnvironmentName,
 ) -> miette::Result<ScriptExecMapping> {
     executables
         .find(|(executable_name, _)| *executable_name == entry_point)
@@ -42,7 +42,12 @@ pub(crate) fn script_exec_mapping<'a>(
             global_script_path: bin_dir.executable_script_path(exposed_name),
             original_executable: executable_path.clone(),
         })
-        .ok_or_else(|| miette::miette!("Could not find {entry_point} in {environment_name}"))
+        .ok_or_else(|| {
+            miette::miette!(
+                "Could not find executable {entry_point} in {:?}",
+                executables.map(|(name, _)| name).collect_vec()
+            )
+        })
 }
 
 /// Create the environment activation script

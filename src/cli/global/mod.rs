@@ -10,7 +10,6 @@ mod sync;
 
 #[derive(Debug, Parser)]
 pub enum Command {
-    // TODO: Needs to adapted
     #[clap(visible_alias = "i")]
     Install(install::Args),
     // TODO: Needs to adapted
