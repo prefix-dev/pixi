@@ -168,7 +168,7 @@ pub(crate) async fn environment_specs_in_sync(
 mod tests {
     use super::*;
     use crate::global::EnvRoot;
-    use fs_err as fs;
+    use fs_err::tokio as tokio_fs;
     use rattler_conda_types::ParseStrictness;
 
     #[tokio::test]
@@ -191,12 +191,14 @@ mod tests {
         // Copy from test data folder relative to this file to the conda-meta in environment directory
         let file_name = "_r-mutex-1.0.1-anacondar_1.json";
         let target_dir = PathBuf::from(env_dir.path()).join("conda-meta");
-        fs::create_dir_all(&target_dir).unwrap();
+        tokio_fs::create_dir_all(&target_dir).await.unwrap();
         let test_data_target = target_dir.join(file_name);
         let test_data_source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("src/global/test_data/conda-meta")
             .join(file_name);
-        fs::copy(test_data_source, test_data_target).unwrap();
+        tokio_fs::copy(test_data_source, test_data_target)
+            .await
+            .unwrap();
 
         let result = environment_specs_in_sync(&env_dir, &specs, None)
             .await
@@ -256,7 +258,7 @@ mod tests {
                 env_dir.path().join("bin").join("test").to_string_lossy()
             )
         };
-        fs::write(script_path, script).unwrap();
+        tokio_fs::write(script_path, script).await.unwrap();
 
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
