@@ -442,22 +442,12 @@ impl ManifestSource {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
 
     use insta::assert_snapshot;
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
     use rstest::rstest;
 
     use super::*;
-    use crate::manifests::manifest::Manifest;
-
-    const PROJECT_BOILERPLATE: &str = r#"
-        [project]
-        name = "foo"
-        version = "0.1.0"
-        channels = []
-        platforms = ["linux-64", "win-64", "osx-64"]
-        "#;
 
     fn default_channel_config() -> rattler_conda_types::ChannelConfig {
         rattler_conda_types::ChannelConfig::default_with_root_dir(
