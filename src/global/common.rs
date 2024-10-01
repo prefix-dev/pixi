@@ -3,7 +3,6 @@ use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
-use pixi_consts::consts;
 use rattler_conda_types::PrefixRecord;
 use std::ffi::OsStr;
 use std::{
@@ -113,42 +112,6 @@ impl EnvRoot {
 
         Ok(directories)
     }
-
-    /// Delete environments that are not listed
-    pub(crate) async fn prune(
-        &self,
-        environments_to_keep: impl IntoIterator<Item = EnvironmentName>,
-    ) -> miette::Result<Vec<PathBuf>> {
-        let env_set: ahash::HashSet<EnvironmentName> = environments_to_keep.into_iter().collect();
-
-        let mut pruned = Vec::new();
-        for env_path in self.directories().await? {
-            let Some(Ok(env_name)) = env_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.parse())
-            else {
-                continue;
-            };
-
-            if !env_set.contains(&env_name) {
-                // Test if the environment directory is a conda environment
-                if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
-                    // Remove the conda environment
-                    tokio_fs::remove_dir_all(&env_path)
-                        .await
-                        .into_diagnostic()?;
-                    pruned.push(env_path);
-                    eprintln!(
-                        "{} Remove environment '{env_name}'",
-                        console::style(console::Emoji("✔", " ")).green()
-                    );
-                }
-            }
-        }
-
-        Ok(pruned)
-    }
 }
 
 /// A global environment directory
@@ -222,8 +185,6 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fs_err::tokio as tokio_fs;
-    use itertools::Itertools;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -245,44 +206,6 @@ mod tests {
         // Verify that the directory was created
         assert!(bin_env_dir.path().exists());
         assert!(bin_env_dir.path().is_dir());
-    }
-
-    #[tokio::test]
-    async fn test_prune() {
-        // Create a temporary directory
-        let temp_dir = tempdir().unwrap();
-
-        // Set the env root to the temporary directory
-        let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
-
-        // Create some directories in the temporary directory
-        let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
-        for env in &envs {
-            EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
-                .await
-                .unwrap();
-        }
-        // Add conda meta data to env2 to make sure it's seen as a conda environment
-        tokio_fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
-            .await
-            .unwrap();
-
-        // Call the prune method with a list of environments to keep (env1 and env3) but not env4
-        env_root
-            .prune(["env1".parse().unwrap(), "env3".parse().unwrap()])
-            .await
-            .unwrap();
-
-        // Verify that only the specified directories remain
-        let remaining_dirs = fs::read_dir(env_root.path())
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.path().is_dir())
-            .map(|entry| entry.file_name().into_string().unwrap())
-            .sorted()
-            .collect_vec();
-
-        assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
     }
 
     #[tokio::test]
