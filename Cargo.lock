@@ -3946,9 +3946,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.27.12"
+version = "0.27.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "965ab8331a87c11c00d010c8762f0372ca5164fc48f138c65ad91a2623fed8cc"
+checksum = "e31c7a56e2cc0ceac84c2ae4bd78ab228e2c74e19d89b048d124e59f25a142f9"
 dependencies = [
  "anyhow",
  "clap",
@@ -4168,9 +4168,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.14"
+version = "0.21.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d50556663a532a0406e4458bbec71dd96e13a32b2c03a6ac309ad30bf0a44a65"
+checksum = "5e57d793493666d656e264be76b83a24925c095be0c1e5176c65cc1cdaf61c53"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4183,6 +4183,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "file_url",
+ "fs-err",
  "futures",
  "hex",
  "http 1.1.0",
@@ -4240,9 +4241,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3db40d5dee6267798c28c32c002fcc1a0a4de7cd6e13b3a70c2193be2656647"
+checksum = "6c403f3e93a3214f54f2f2ca67c58400f5e860289646b11da39e13eec8c98376"
 dependencies = [
  "chrono",
  "futures",
@@ -4608,15 +4609,16 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a472ebbac5a18c9e235e874df3aa0c8fb0b55611155dd5e5515a55a16520d76"
+checksum = "d68c0ae687bbcd99ab33236c7cbccd2ba1c526a7f7a59743cb991074414c5293"
 dependencies = [
  "ahash 0.8.11",
  "bitvec",
  "elsa",
  "event-listener",
  "futures",
+ "indexmap 2.3.0",
  "itertools 0.13.0",
  "petgraph",
  "tracing",
