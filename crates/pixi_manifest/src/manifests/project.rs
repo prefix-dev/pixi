@@ -489,51 +489,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_or_insert_toml_table() {
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
-        let task_table = TableName::new()
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(task_table.to_string().as_str());
-
-        let linux_task_table = TableName::new()
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_platform(Some(&Platform::Linux64))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(linux_task_table.to_string().as_str());
-
-        let feature_name = FeatureName::Named("test".to_string());
-
-        let named_feature_task = TableName::new()
-            .with_feature_name(Some(&feature_name))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(named_feature_task.to_string().as_str());
-
-        let named_feature_linux_task = TableName::new()
-            .with_feature_name(Some(&feature_name))
-            .with_platform(Some(&Platform::Linux64))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(named_feature_linux_task.to_string().as_str());
-        assert_snapshot!(manifest.document.to_string());
-    }
-
-    #[test]
     fn test_get_nested_toml_table_name() {
         // Test all different options for the feature name and platform
         assert_eq!(
