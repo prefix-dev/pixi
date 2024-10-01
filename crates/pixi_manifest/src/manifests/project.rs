@@ -498,8 +498,7 @@ mod tests {
         let _ = manifest
             .document
             .manifest()
-            .get_or_insert_nested_table(task_table.to_string().as_str())
-            .map(|t| t.set_implicit(false));
+            .get_or_insert_nested_table(task_table.to_string().as_str());
 
         let linux_task_table = TableName::new()
             .with_feature_name(Some(&FeatureName::Default))
@@ -509,8 +508,7 @@ mod tests {
         let _ = manifest
             .document
             .manifest()
-            .get_or_insert_nested_table(linux_task_table.to_string().as_str())
-            .map(|t| t.set_implicit(false));
+            .get_or_insert_nested_table(linux_task_table.to_string().as_str());
 
         let feature_name = FeatureName::Named("test".to_string());
 
@@ -521,8 +519,7 @@ mod tests {
         let _ = manifest
             .document
             .manifest()
-            .get_or_insert_nested_table(named_feature_task.to_string().as_str())
-            .map(|t| t.set_implicit(false));
+            .get_or_insert_nested_table(named_feature_task.to_string().as_str());
 
         let named_feature_linux_task = TableName::new()
             .with_feature_name(Some(&feature_name))
@@ -532,8 +529,7 @@ mod tests {
         let _ = manifest
             .document
             .manifest()
-            .get_or_insert_nested_table(named_feature_linux_task.to_string().as_str())
-            .map(|t| t.set_implicit(false));
+            .get_or_insert_nested_table(named_feature_linux_task.to_string().as_str());
         assert_snapshot!(manifest.document.to_string());
     }
 

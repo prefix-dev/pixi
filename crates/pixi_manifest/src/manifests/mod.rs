@@ -1,4 +1,4 @@
-use toml_edit::{self, Array, Item, Table, Value};
+use toml_edit::{self, Array, Item, Table, TableLike, Value};
 
 pub mod project;
 
@@ -26,19 +26,17 @@ impl TomlManifest {
     fn get_or_insert_nested_table<'a>(
         &'a mut self,
         table_name: &str,
-    ) -> Result<&'a mut Table, TomlError> {
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
         let parts: Vec<&str> = table_name.split('.').collect();
 
-        let mut current_table = self.0.as_table_mut();
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
 
         for part in parts {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
             current_table = item
-                .as_table_mut()
+                .as_table_like_mut()
                 .ok_or_else(|| TomlError::table_error(part, table_name))?;
-            // Avoid creating empty tables
-            current_table.set_implicit(true);
         }
         Ok(current_table)
     }
