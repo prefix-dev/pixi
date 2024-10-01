@@ -914,8 +914,9 @@ pixi config unset repodata-config.disable-zstd --system
 
 ## `global`
 
-Global is the main entry point for the part of pixi that executes on the
-global(system) level.
+Global is the main entry point for the part of pixi that executes on the global(system) level.
+All commands in this section are used to manage global installations of packages and environments through the global manifest.
+More info on the global manifest can be found [here](../features/global_tools.md).
 
 !!! tip
     Binaries and environments installed globally are stored in `~/.pixi`
@@ -924,17 +925,20 @@ global(system) level.
 
 ### `global install`
 
-This command installs package(s) into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
+This command installs package(s) into its own environment and adds the binary to `PATH`.
+Allowing you to access it anywhere on your system without activating the environment.
 
 ##### Arguments
 
-1.`<PACKAGE>`: The package(s) to install, this can also be a version constraint.
+1.`[PACKAGE]`: The package(s) to install, this can also be a version constraint.
 
 ##### Options
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
-- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
+- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
+- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
+- `--assume-yes (-y)`: Answer yes to all questions. (default: false)
 
 ```shell
 pixi global install ruff
@@ -953,9 +957,6 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 
 # Install for a specific platform, only useful on osx-arm64
 pixi global install --platform osx-64 ruff
-
-# Install without inserting activation code into the executable script
-pixi global install ruff --no-activation
 ```
 
 !!! tip
@@ -969,85 +970,77 @@ After using global install, you can use the package you installed anywhere on yo
 ### `global list`
 
 This command shows the current installed global environments including what binaries come with it.
-A global installed package/environment can possibly contain multiple binaries and
-they will be listed out in the command output. Here is an example of a few installed packages:
+A global installed package/environment can possibly contain multiple exposed binaries and they will be listed out in the command output.
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
+- `--assume-yes (-y)`: Answer yes to all questions. (default: false)
+
+We'll only show the dependencies and exposed binaries of the environment if they differ from the environment name.
+Here is an example of a few installed packages:
 
 ```
 > pixi global list
-Global install location: /home/hanabi/.pixi
-├── bat 0.24.0
-|   └─ exec: bat
-├── conda-smithy 3.31.1
-|   └─ exec: feedstocks, conda-smithy
-├── rattler-build 0.13.0
-|   └─ exec: rattler-build
-├── ripgrep 14.1.0
-|   └─ exec: rg
-└── uv 0.1.17
-    └─ exec: uv
+Global environments at /home/user/.pixi:
+├── gh: 2.57.0
+├── pixi-pack: 0.1.8
+├── python: 3.11.0
+│   └─ exposes: 2to3, 2to3-3.11, idle3, idle3.11, pydoc, pydoc3, pydoc3.11, python, python3, python3-config, python3.1, python3.11, python3.11-config
+├── rattler-build: 0.22.0
+├── ripgrep: 14.1.0
+│   └─ exposes: rg
+├── vim: 9.1.0611
+│   └─ exposes: ex, rview, rvim, view, vim, vimdiff, vimtutor, xxd
+└── zoxide: 0.9.6
+```
+
+Here is an example of list of a single environment:
+```
+> pixi g list -e pixi-pack
+The 'pixi-pack' environment has 8 packages:
+Package          Version    Build        Size
+_libgcc_mutex    0.1        conda_forge  2.5 KiB
+_openmp_mutex    4.5        2_gnu        23.1 KiB
+ca-certificates  2024.8.30  hbcca054_0   155.3 KiB
+libgcc           14.1.0     h77fa898_1   826.5 KiB
+libgcc-ng        14.1.0     h69a702a_1   50.9 KiB
+libgomp          14.1.0     h77fa898_1   449.4 KiB
+openssl          3.3.2      hb9d3cd8_0   2.8 MiB
+pixi-pack        0.1.8      hc762bcd_0   4.3 MiB
+Package          Version    Build        Size
+
+Exposes:
+pixi-pack
+Channels:
+conda-forge
+Platform: linux-64
+```
+
+### `global sync`
+As the global manifest can be manually edited, this command will sync the global manifest with the current state of the global environment.
+You can modify the manifest in `$HOME/manifests/pixi_global.toml`.
+
+##### Options
+- `--assume-yes (-y)`: Answer yes to all questions. (default: false)
+
+```shell
+pixi global sync
 ```
 
 ### `global upgrade`
 
-This command upgrades a globally installed package (to the latest version by default).
-
-##### Arguments
-
-1. `<PACKAGE>`: The package to upgrade.
-
-##### Options
-
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
-  Defaults to `conda-forge`. Note the channel the package was installed from
-  will be always used for upgrade. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: specify a platform that you want to upgrade the package for. (default: current platform)
-
-```shell
-pixi global upgrade ruff
-pixi global upgrade --channel conda-forge --channel bioconda trackplot
-# Or in a more concise form
-pixi global upgrade -c conda-forge -c bioconda trackplot
-
-# Conda matchspec is supported
-# You can specify the version to upgrade to when you don't want the latest version
-# or you can even use it to downgrade a globally installed package
-pixi global upgrade python=3.10
-```
+This command will be replaced, use `global install` instead.
+We'll bring it back as `pixi global update` ASAP.
 
 ### `global upgrade-all`
 
-This command upgrades all globally installed packages to their latest version.
-
-##### Options
-
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
-  Defaults to `conda-forge`. Note the channel the package was installed from
-  will be always used for upgrade. (Allowed to be used more than once)
-
-```shell
-pixi global upgrade-all
-pixi global upgrade-all --channel conda-forge --channel bioconda
-# Or in a more concise form
-pixi global upgrade-all -c conda-forge -c bioconda trackplot
-```
+This command will be replaced, use `global install` instead.
+We'll bring it back as `pixi global update-all` ASAP.
 
 ### `global remove`
 
-Removes a package previously installed into a globally accessible location via
-`pixi global install`
-
-Use `pixi global info` to find out what the package name is that belongs to the tool you want to remove.
-
-##### Arguments
-
-1. `<PACKAGE>`: The package(s) to remove.
-
-```shell
-pixi global remove pre-commit
-
-# multiple packages can be removed at once
-pixi global remove pre-commit starship
-```
+This command will be replaced, modify the `pixi_manifest.toml` by hand to remove the tool.
+We'll bring it back as `pixi global uninstall` ASAP.
 
 ## `project`
 
