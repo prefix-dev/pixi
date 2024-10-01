@@ -1,6 +1,5 @@
 use std::fmt;
 
-
 use toml_edit::{self, Array, Item, Table, TableLike, Value};
 
 pub mod project;

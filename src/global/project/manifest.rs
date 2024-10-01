@@ -102,7 +102,7 @@ impl Manifest {
         // Update self.document
         self.document
             .get_or_insert_nested_table("envs")?
-            .remove_entry(env_name.as_str());
+            .remove(env_name.as_str());
 
         tracing::debug!("Removed environment {env_name} from toml document");
         Ok(())
