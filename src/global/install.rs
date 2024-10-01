@@ -1,4 +1,4 @@
-use super::ExposedName;
+use super::{EnvDir, ExposedName};
 use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
@@ -35,6 +35,7 @@ pub(crate) fn script_exec_mapping<'a>(
     entry_point: &str,
     mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
     bin_dir: &BinDir,
+    env_dir: &EnvDir,
 ) -> miette::Result<ScriptExecMapping> {
     executables
         .find(|(executable_name, _)| *executable_name == entry_point)
@@ -44,7 +45,8 @@ pub(crate) fn script_exec_mapping<'a>(
         })
         .ok_or_else(|| {
             miette::miette!(
-                "Could not find executable {entry_point} in {:?}",
+                "Could not find executable {entry_point} in {}, found these executables: {:?}",
+                env_dir.path().display(),
                 executables.map(|(name, _)| name).collect_vec()
             )
         })

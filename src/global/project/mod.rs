@@ -611,6 +611,7 @@ impl Project {
                     entry_point,
                     exposed_executables.iter(),
                     &self.bin_dir,
+                    &env_dir,
                 )
             })
             .collect::<miette::Result<Vec<_>>>()
