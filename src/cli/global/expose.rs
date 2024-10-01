@@ -17,6 +17,7 @@ pub struct AddArgs {
     /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
     mappings: Vec<global::Mapping>,
 
+    /// The environment to which the binaries should be exposed
     #[clap(short, long)]
     environment: EnvironmentName,
 
@@ -37,6 +38,7 @@ pub struct RemoveArgs {
     /// The exposed names that should be removed
     exposed_names: Vec<ExposedName>,
 
+    /// The environment from which the exposed names should be removed
     #[clap(short, long)]
     environment: EnvironmentName,
 
@@ -84,13 +86,13 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
-
+        let env_name = &args.environment;
         for mapping in args.mappings {
             project_modified
                 .manifest
-                .add_exposed_mapping(&args.environment, &mapping)?;
+                .add_exposed_mapping(env_name, &mapping)?;
         }
-        project_modified.sync().await?;
+        project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
@@ -115,13 +117,13 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
-
+        let env_name = &args.environment;
         for exposed_name in args.exposed_names {
             project_modified
                 .manifest
-                .remove_exposed_name(&args.environment, &exposed_name)?;
+                .remove_exposed_name(env_name, &exposed_name)?;
         }
-        project_modified.sync().await?;
+        project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
