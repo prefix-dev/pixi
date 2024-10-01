@@ -104,4 +104,26 @@ dummy = "3.11.*"
 
         assert!(dep.is_some());
     }
+
+    #[test]
+    fn test_get_or_insert_inline_table() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+dependencies = { dummy = "3.11.*" }
+"#;
+        let dep_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
+
+        let dep = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get(dep_name);
+
+        assert!(dep.is_some());
+    }
 }
