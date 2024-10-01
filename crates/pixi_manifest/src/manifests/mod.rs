@@ -129,6 +129,14 @@ dependencies = { dummy = "3.11.*" }
             .get(dep_name);
 
         assert!(dep.is_some());
+
+        // Existing entries are also still there
+        let dummy = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get("dummy");
+
+        assert!(dummy.is_some())
     }
 
     #[test]
