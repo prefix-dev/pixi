@@ -34,6 +34,10 @@ impl TomlManifest {
         for part in parts {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
+            if let Some(table) = item.as_table_mut() {
+                // Avoid creating empty tables
+                table.set_implicit(true);
+            }
             current_table = item
                 .as_table_like_mut()
                 .ok_or_else(|| TomlError::table_error(part, table_name))?;
@@ -125,5 +129,19 @@ dependencies = { dummy = "3.11.*" }
             .get(dep_name);
 
         assert!(dep.is_some());
+    }
+
+    #[test]
+    fn test_get_or_insert_nested_table_no_empty_tables() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+"#;
+        let table_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest.get_or_insert_nested_table(table_name).unwrap();
+
+        // No empty table is being created
+        assert!(!manifest.0.to_string().contains("[test]"));
     }
 }
