@@ -248,6 +248,10 @@ impl Project {
         let env_root = EnvRoot::from_env().await?;
 
         if !manifest_path.exists() {
+            tokio_fs::create_dir_all(&manifest_dir)
+                .await
+                .into_diagnostic()?;
+
             let prompt = format!(
                 "{} You don't have a global manifest yet.\n\
                 Do you want to create one based on your existing installation?\n\
@@ -268,15 +272,11 @@ impl Project {
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
                     });
+            } else {
+                tokio_fs::File::create(&manifest_path)
+                    .await
+                    .into_diagnostic()?;
             }
-
-            tokio_fs::create_dir_all(&manifest_dir)
-                .await
-                .into_diagnostic()?;
-
-            tokio_fs::File::create(&manifest_path)
-                .await
-                .into_diagnostic()?;
         }
 
         Self::from_path(&manifest_path, env_root, bin_dir)
