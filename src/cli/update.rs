@@ -47,6 +47,7 @@ pub struct Args {
     #[clap(flatten)]
     pub specs: UpdateSpecsArgs,
 
+    /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
 }
