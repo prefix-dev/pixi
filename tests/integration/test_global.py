@@ -593,3 +593,24 @@ def test_global_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a, dummy-aa"],
     )
+
+
+def test_auto_self_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    non_self_expose_channel = test_data.joinpath("non_self_expose_channel/output").as_uri()
+
+    # Install dummy from non_self_expose_channel
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", non_self_expose_channel, "dummy"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Verify that dummy is exposed as 'dummy' through dummy-x as the delivery of the executable.
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains=["dummy: 0.1.0"],
+        stdout_excludes=["Nothing"],
+    )

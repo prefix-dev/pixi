@@ -1,0 +1,27 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+outputs:
+  # Dummy-x exposes the dummy tool, while dummy only depends on dummy-x
+  - package:
+      name: dummy-x
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy on windows" > $PREFIX/bin/dummy.bat
+          else:
+            - echo "dummy on unix" > $PREFIX/bin/dummy
+            - chmod +x $PREFIX/bin/dummy
+
+  - package:
+      name: dummy
+      version: 0.1.0
+
+    requirements:
+        run:
+            - dummy-x

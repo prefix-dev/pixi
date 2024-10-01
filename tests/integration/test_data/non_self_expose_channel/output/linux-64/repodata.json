@@ -1,0 +1,39 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "a0010438449166d62b5af24ee05791ca",
+      "name": "dummy",
+      "platform": "linux",
+      "sha256": "2086fdfb5f854b2b8039feddbb6d79fbb6a4377322d86c93aaf5dd4a465b31ec",
+      "size": 14448,
+      "subdir": "linux-64",
+      "timestamp": 1727808460185,
+      "version": "0.1.0"
+    },
+    "dummy-x-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "1a7ce75c67fee7f1ad66a250b68579ce",
+      "name": "dummy-x",
+      "platform": "linux",
+      "sha256": "257090fac46dbc59c3e40ecf2407d86aa7639ded56f9d63aabd4e33f4194558c",
+      "size": 11802,
+      "subdir": "linux-64",
+      "timestamp": 1727808460185,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

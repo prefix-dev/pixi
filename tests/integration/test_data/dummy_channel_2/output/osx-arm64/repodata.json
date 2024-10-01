@@ -9,13 +9,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "2f442a05d9f8384ce08fd9416b6f68bc",
+      "md5": "441096d272d3b79b3eb9980bf1baa71e",
       "name": "dummy-x",
       "platform": "osx",
-      "sha256": "4bb821c92815ffe4d5382224ae5c55198653dc487917edb893004dd333151338",
-      "size": 11703,
+      "sha256": "0a0f98bc4afe3da5a543bb94a163381c2dc25963485a084f570e38eab0ce30ef",
+      "size": 11824,
       "subdir": "osx-arm64",
-      "timestamp": 1727337510420,
+      "timestamp": 1727808460099,
       "version": "0.1.0"
     }
   },

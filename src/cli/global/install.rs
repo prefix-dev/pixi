@@ -144,10 +144,31 @@ async fn setup_environment(
             let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
             let prefix = Prefix::new(env_dir.path());
             let prefix_package = prefix.find_designated_package(package_name).await?;
-            for (executable_name, _) in prefix.find_executables(&[prefix_package]) {
-                let mapping =
-                    Mapping::new(ExposedName::from_str(&executable_name)?, executable_name);
+            let package_executables = prefix.find_executables(&[prefix_package]);
+            for (executable_name, _) in &package_executables {
+                let mapping = Mapping::new(
+                    ExposedName::from_str(executable_name)?,
+                    executable_name.clone(),
+                );
                 project.manifest.add_exposed_mapping(env_name, &mapping)?;
+            }
+            // If no executables were found, automatically expose the package name itself from the other packages.
+            // This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+            if !package_executables
+                .iter()
+                .any(|(name, _)| name.as_str() == package_name.as_normalized())
+            {
+                let installed_packages = prefix.find_installed_packages(None).await?;
+                let all_executables = prefix.find_executables(&installed_packages);
+                // Find package name in all executables
+                if let Some(executable) = all_executables
+                    .iter()
+                    .find(|(name, _)| name.as_str() == package_name.as_normalized())
+                {
+                    let mapping =
+                        Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone());
+                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
             }
         }
     } else {

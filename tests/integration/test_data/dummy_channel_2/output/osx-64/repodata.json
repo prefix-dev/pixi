@@ -9,13 +9,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "2df37a2fbdce7376961e1ce9015e3fc6",
+      "md5": "6deaa8fbf9b5a794016b5f4d3b5db82d",
       "name": "dummy-x",
       "platform": "osx",
-      "sha256": "9ada98c647d5d0aa35633f30c5bbd6f64ea97d2ff25c06c51d1f9264600bb598",
-      "size": 14313,
+      "sha256": "3b3532c83006b25f423a1be98321904168dc3bb367319c8f8cc92007ee98d44e",
+      "size": 14508,
       "subdir": "osx-64",
-      "timestamp": 1727337510468,
+      "timestamp": 1727808460127,
       "version": "0.1.0"
     }
   },
