@@ -73,3 +73,35 @@ impl TomlManifest {
         Ok(array)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use toml_edit::DocumentMut;
+
+    use super::*;
+
+    #[test]
+    fn test_get_or_insert_nested_table() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+[envs.python.dependencies]
+dummy = "3.11.*"
+"#;
+        let dep_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
+
+        let dep = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get(dep_name);
+
+        assert!(dep.is_some());
+    }
+}
