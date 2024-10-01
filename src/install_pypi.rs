@@ -4,8 +4,9 @@ use std::{
 
 use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexLocations, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
-    RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
+    BuiltDist, CachedDist, DependencyMetadata, Dist, IndexCapabilities, IndexLocations, IndexUrl,
+    InstalledDist, Name, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    UrlString,
 };
 use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
@@ -27,7 +28,7 @@ use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, IndexStrategy};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
@@ -646,23 +647,27 @@ pub async fn update_python_distributions(
         isolated_names_to_packages(non_isolated_packages.as_deref()).into_diagnostic()?;
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
+    let dependency_metadata = DependencyMetadata::default();
     let git_resolver = GitResolver::default();
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
-        &[],
+        Constraints::default(),
         venv.interpreter(),
         &index_locations,
         &flat_index,
+        &dependency_metadata,
         &in_memory_index,
         &git_resolver,
+        &uv_context.index_capabilities,
         &uv_context.in_flight,
         IndexStrategy::default(),
         &config_settings,
         build_isolation,
         LinkMode::default(),
         &uv_context.build_options,
+        &uv_context.hash_strategy,
         None,
         uv_context.source_strategy,
         uv_context.concurrency,
@@ -671,6 +676,7 @@ pub async fn update_python_distributions(
 
     let _lock = venv
         .lock()
+        .await
         .into_diagnostic()
         .with_context(|| "error locking installation directory")?;
 

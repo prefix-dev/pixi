@@ -90,7 +90,10 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 .or_insert(1);
 
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
-                BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
+                FlatDistributions(BTreeMap::from_iter([(
+                    identifier.version.clone(),
+                    prioritized_dist,
+                )])),
             )])))
             .right_future();
         }

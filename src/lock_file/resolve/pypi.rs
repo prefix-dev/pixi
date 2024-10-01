@@ -10,8 +10,8 @@ use std::{
 };
 
 use distribution_types::{
-    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
+    InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
 };
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -47,7 +47,7 @@ use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     lock_file::{
@@ -308,22 +308,25 @@ pub async fn resolve_pypi(
         ..Options::default()
     };
     let git_resolver = GitResolver::default();
+    let dependency_metadata = DependencyMetadata::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
-        &[],
+        Constraints::default(),
         &interpreter,
         &index_locations,
         &flat_index,
+        &dependency_metadata,
         &build_dispatch_in_memory_index,
         &git_resolver,
+        &context.index_capabilities,
         &context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        // BuildIsolation::Shared(&env),
         build_isolation,
         LinkMode::default(),
         &context.build_options,
+        &context.hash_strategy,
         None,
         context.source_strategy,
         context.concurrency,
@@ -367,6 +370,7 @@ pub async fn resolve_pypi(
                 version: package_data.version.clone(),
                 // This is not used, so we can just set it to a random value
                 path: PathBuf::new().join("does_not_exist"),
+                cache_info: None,
             };
             Preference::from_installed(&InstalledDist::Registry(installed))
         })
@@ -407,7 +411,7 @@ pub async fn resolve_pypi(
         ),
         &flat_index,
         Some(&tags),
-        Some(&requires_python),
+        &requires_python,
         AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
@@ -433,6 +437,7 @@ pub async fn resolve_pypi(
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,
+        &context.index_capabilities,
         provider,
         EmptyInstalledPackages,
     )
@@ -462,6 +467,7 @@ pub async fn resolve_pypi(
         &registry_client,
         resolution,
         context.concurrency.downloads,
+        &context.index_capabilities,
     )
     .await
 }
@@ -473,6 +479,7 @@ async fn lock_pypi_packages<'a>(
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     concurrent_downloads: usize,
+    index_capabilities: &IndexCapabilities,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
@@ -519,7 +526,7 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 let metadata = registry_client
-                    .wheel_metadata(dist)
+                    .wheel_metadata(dist, index_capabilities)
                     .await
                     .expect("failed to get wheel metadata");
                 PypiPackageData {
