@@ -137,7 +137,7 @@ impl Manifest {
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.dependencies"),
             name.clone().as_normalized(),
-            toml_edit::Value::from(spec.clone().to_toml_value()),
+            spec.clone().to_toml_value(),
         )?;
 
         tracing::debug!(
