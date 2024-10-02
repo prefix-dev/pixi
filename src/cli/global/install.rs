@@ -62,32 +62,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(
-        args: Args,
-        project: &mut Project,
-        env_names: &Vec<EnvironmentName>,
-    ) -> Result<(), miette::Error> {
-        let specs = args.specs()?;
-
-        let multiple_envs = env_names.len() > 1;
-
-        for env_name in env_names {
-            let specs = if multiple_envs {
-                specs
-                    .clone()
-                    .into_iter()
-                    .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                    .collect()
-            } else {
-                specs.clone()
-            };
-
-            setup_environment(env_name, project, args.clone(), specs).await?;
-        }
-        project.manifest.save().await?;
-        Ok(())
-    }
-
     let env_names = match &args.environment {
         Some(env_name) => Vec::from([env_name.clone()]),
         None => args
@@ -97,26 +71,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect::<miette::Result<Vec<_>>>()?,
     };
 
+    let multiple_envs = env_names.len() > 1;
+
     if !args.expose.is_empty() && env_names.len() != 1 {
         miette::bail!("Cannot add exposed mappings for more than one environment");
     }
 
     let mut project = project_original.clone();
-    if let Err(err) = apply_changes(args, &mut project, &env_names).await {
-        for env_name in &env_names {
-            revert_environment_after_error(env_name, &project_original)
-                .await
-                .wrap_err("Could not install packages. Reverting also failed.")?;
+    let specs = args.specs()?;
+    for env_name in &env_names {
+        let specs = if multiple_envs {
+            specs
+                .clone()
+                .into_iter()
+                .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
+                .collect()
+        } else {
+            specs.clone()
+        };
+
+        if let Err(err) = setup_environment(env_name, &args, &mut project, specs).await {
+            if project_original.environment(env_name).is_some() {
+                revert_environment_after_error(env_name, &project_original)
+                    .await
+                    .wrap_err("Could not install packages. Reverting also failed.")?;
+            }
+            return Err(err);
         }
-        return Err(err);
     }
+
+    project.manifest.save().await?;
+
     Ok(())
 }
 
 async fn setup_environment(
     env_name: &EnvironmentName,
+    args: &Args,
     project: &mut Project,
-    args: Args,
     specs: IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<()> {
     // Modify the project to include the new environment

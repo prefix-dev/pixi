@@ -59,14 +59,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             }
             Err(err) => {
-                revert_environment_after_error(env_name, &project_original)
-                    .await
-                    .wrap_err_with(|| {
-                        format!(
+                if project_original.environment(env_name).is_some() {
+                    revert_environment_after_error(env_name, &project_original)
+                        .await
+                        .wrap_err_with(|| {
+                            format!(
                             "Could not uninstall environment '{env_name}'. Reverting also failed."
                         )
-                    })?;
-                return Err(err);
+                        })?;
+                    return Err(err);
+                }
             }
         }
     }
