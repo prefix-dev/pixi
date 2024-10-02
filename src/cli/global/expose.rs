@@ -3,7 +3,7 @@ use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
 use crate::{
-    cli::global::revert_after_error,
+    cli::global::revert_environment_after_error,
     global::{self, EnvironmentName, ExposedName},
 };
 
@@ -82,23 +82,23 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     async fn apply_changes(
-        args: AddArgs,
+        args: &AddArgs,
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
         let env_name = &args.environment;
-        for mapping in args.mappings {
+        for mapping in &args.mappings {
             project_modified
                 .manifest
-                .add_exposed_mapping(env_name, &mapping)?;
+                .add_exposed_mapping(env_name, mapping)?;
         }
         project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone()).await {
-        revert_after_error(&project_original)
+    if let Err(err) = apply_changes(&args, project_original.clone()).await {
+        revert_environment_after_error(&project_original, &args.environment)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
         return Err(err);
@@ -113,23 +113,23 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     async fn apply_changes(
-        args: RemoveArgs,
+        args: &RemoveArgs,
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
         let env_name = &args.environment;
-        for exposed_name in args.exposed_names {
+        for exposed_name in &args.exposed_names {
             project_modified
                 .manifest
-                .remove_exposed_name(env_name, &exposed_name)?;
+                .remove_exposed_name(env_name, exposed_name)?;
         }
         project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone()).await {
-        revert_after_error(&project_original)
+    if let Err(err) = apply_changes(&args, project_original.clone()).await {
+        revert_environment_after_error(&project_original, &args.environment)
             .await
             .wrap_err("Could not remove exposed name. Reverting also failed.")?;
         return Err(err);

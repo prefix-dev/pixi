@@ -1,4 +1,4 @@
-use crate::cli::global::revert_after_error;
+use crate::cli::global::revert_environment_after_error;
 use crate::global;
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
@@ -62,9 +62,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             project.manifest.path.display()
         ))),
         Err(err) => {
-            revert_after_error(&project_original)
-                .await
-                .wrap_err("Could not uninstall environments. Reverting also failed.")?;
+            for env_name in &args.environment {
+                revert_environment_after_error(&project_original, env_name)
+                    .await
+                    .wrap_err("Could not uninstall environments. Reverting also failed.")?;
+            }
             Err(err)
         }
     }

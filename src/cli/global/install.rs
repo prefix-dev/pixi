@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
-    cli::{global::revert_after_error, has_specs::HasSpecs},
+    cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{self, EnvDir, EnvironmentName, ExposedName, Mapping, Project},
     prefix::Prefix,
 };
@@ -62,20 +62,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(args: Args, project: &mut Project) -> Result<(), miette::Error> {
+    async fn apply_changes(
+        args: Args,
+        project: &mut Project,
+        env_names: &Vec<EnvironmentName>,
+    ) -> Result<(), miette::Error> {
         let specs = args.specs()?;
-
-        let env_names = match &args.environment {
-            Some(env_name) => Vec::from([env_name.clone()]),
-            None => specs
-                .iter()
-                .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
-                .collect::<miette::Result<Vec<_>>>()?,
-        };
-
-        if !args.expose.is_empty() && env_names.len() != 1 {
-            miette::bail!("Cannot add exposed mappings for more than one environment");
-        }
 
         let multiple_envs = env_names.len() > 1;
 
@@ -90,17 +82,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 specs.clone()
             };
 
-            setup_environment(&env_name, project, args.clone(), specs).await?;
+            setup_environment(env_name, project, args.clone(), specs).await?;
         }
         project.manifest.save().await?;
         Ok(())
     }
 
+    let env_names = match &args.environment {
+        Some(env_name) => Vec::from([env_name.clone()]),
+        None => args
+            .specs()?
+            .iter()
+            .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
+            .collect::<miette::Result<Vec<_>>>()?,
+    };
+
+    if !args.expose.is_empty() && env_names.len() != 1 {
+        miette::bail!("Cannot add exposed mappings for more than one environment");
+    }
+
     let mut project = project_original.clone();
-    if let Err(err) = apply_changes(args, &mut project).await {
-        revert_after_error(&project_original)
-            .await
-            .wrap_err("Could not install packages. Reverting also failed.")?;
+    if let Err(err) = apply_changes(args, &mut project, &env_names).await {
+        for env_name in &env_names {
+            revert_environment_after_error(&project_original, env_name)
+                .await
+                .wrap_err("Could not install packages. Reverting also failed.")?;
+        }
         return Err(err);
     }
     Ok(())
