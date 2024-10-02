@@ -45,6 +45,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use toml_edit::DocumentMut;
 
 mod environment;
 mod manifest;
@@ -307,7 +308,27 @@ impl Project {
             "Failed to extract exposed binaries from existing installation please clean up your installation."
         })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
-        let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
+        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
+        let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
+
+        if let Some(envs) = document
+            .get_mut("envs")
+            .and_then(|item| item.as_table_mut())
+        {
+            for (_, env_table) in envs.iter_mut() {
+                let Some(env_table) = env_table.as_table_mut() else {
+                    continue;
+                };
+
+                for entry in ["dependencies", "exposed"] {
+                    if let Some(table) = env_table.get(entry).and_then(|item| item.as_table()) {
+                        env_table
+                            .insert(entry, toml_edit::value(table.clone().into_inline_table()));
+                    }
+                }
+            }
+        }
+        let toml = document.to_string();
         tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
