@@ -137,12 +137,11 @@ impl Manifest {
             .insert(name.clone(), spec.clone());
 
         // Update self.document
-        self.document
-            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
-            .insert(
-                name.clone().as_normalized(),
-                Item::Value(spec.clone().to_toml_value()),
-            );
+        self.document.insert_into_inline_table(
+            &format!("envs.{env_name}.dependencies"),
+            name.clone().as_normalized(),
+            spec.clone().to_toml_value(),
+        )?;
 
         tracing::debug!(
             "Added dependency {}={} to toml document for environment {}",
@@ -255,12 +254,11 @@ impl Manifest {
             );
 
         // Update self.document
-        self.document
-            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
-            .insert(
-                &mapping.exposed_name.to_string(),
-                Item::Value(toml_edit::Value::from(mapping.executable_name.clone())),
-            );
+        self.document.insert_into_inline_table(
+            &format!("envs.{env_name}.exposed"),
+            &mapping.exposed_name.to_string(),
+            toml_edit::Value::from(mapping.executable_name.clone()),
+        )?;
 
         tracing::debug!("Added exposed mapping {mapping} to toml document");
         Ok(())
