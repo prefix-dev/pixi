@@ -4,7 +4,6 @@ use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use std::str::FromStr;
 
 /// Uninstalls environments from the global environment.
 ///
@@ -37,8 +36,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     async fn apply_changes(args: Args, project: &mut Project) -> miette::Result<bool> {
         let mut removed = Vec::new();
         for env in args.environment {
-            let env = EnvironmentName::from_str(&env)
-                .wrap_err_with(|| format!("Could not parse environment name: {}", env))?;
             if project.manifest.remove_environment(&env)? {
                 removed.push(env);
             };

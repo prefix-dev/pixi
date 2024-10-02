@@ -622,9 +622,11 @@ def test_global_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         env=env,
     )
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
     assert dummy_a.is_file()
+    assert dummy_aa.is_file()
     assert dummy_b.is_file()
     assert dummy_c.is_file()
 
@@ -635,6 +637,7 @@ def test_global_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         env=env,
     )
     assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
     assert dummy_b.is_file()
     assert dummy_c.is_file()
     # Verify only the dummy-a environment is removed
@@ -649,6 +652,7 @@ def test_global_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         env=env,
     )
     assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
     assert not dummy_b.is_file()
     assert not dummy_c.is_file()
 
