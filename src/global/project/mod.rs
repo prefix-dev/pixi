@@ -423,7 +423,6 @@ impl Project {
             .collect();
 
         // Solve the environment
-
         let solved_records = tokio::task::spawn_blocking(move || {
             wrap_in_progress("solving environment", move || {
                 Solver.solve(SolverTask {
@@ -474,7 +473,7 @@ impl Project {
     pub async fn clean_environment_binaries(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<IndexSet<PathBuf>> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
@@ -485,13 +484,11 @@ impl Project {
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
-        for binary_path in to_remove {
-            tokio_fs::remove_file(&binary_path)
-                .await
-                .into_diagnostic()?;
+        for binary_path in &to_remove {
+            tokio_fs::remove_file(binary_path).await.into_diagnostic()?;
         }
 
-        Ok(())
+        Ok(to_remove)
     }
 
     /// Check if the environment is in sync with the manifest
