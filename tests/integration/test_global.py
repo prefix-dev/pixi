@@ -601,7 +601,7 @@ def test_auto_self_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
 
     # Install dummy from non_self_expose_channel
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel, "dummy"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel, "non-expose"],
         ExitCode.SUCCESS,
         env=env,
     )
@@ -611,6 +611,6 @@ def test_auto_self_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
         [pixi, "global", "list"],
         ExitCode.SUCCESS,
         env=env,
-        stdout_contains=["dummy: 0.1.0"],
+        stdout_contains=["non-expose: 0.1.0"],
         stdout_excludes=["Nothing"],
     )
