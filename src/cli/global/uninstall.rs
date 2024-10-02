@@ -18,7 +18,7 @@ use std::str::FromStr;
 pub struct Args {
     /// Specifies the environments that are to be removed.
     #[arg(num_args = 1..)]
-    environment: Vec<String>,
+    environment: Vec<EnvironmentName>,
 
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", long = "assume-yes")]
