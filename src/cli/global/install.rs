@@ -129,10 +129,12 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for (package_name, spec) in &specs {
-        project
-            .manifest
-            .add_dependency(env_name, package_name, spec)?;
+    for (_package_name, spec) in &specs {
+        project.manifest.add_dependency(
+            env_name,
+            spec,
+            project.clone().config().global_channel_config(),
+        )?;
     }
 
     // Installing the environment to be able to find the bin paths later
