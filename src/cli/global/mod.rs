@@ -7,6 +7,7 @@ mod install;
 mod list;
 mod remove;
 mod sync;
+mod uninstall;
 
 #[derive(Debug, Parser)]
 pub enum Command {

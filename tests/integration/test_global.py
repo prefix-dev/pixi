@@ -593,3 +593,16 @@ def test_global_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a, dummy-aa"],
     )
+
+def test_global_remove(pixi: : Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Verify empty list
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="No global environments found.",
+)
