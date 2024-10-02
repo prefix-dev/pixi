@@ -7,10 +7,16 @@ use pixi_config::{Config, ConfigCli};
 use std::str::FromStr;
 
 /// Uninstalls environments from the global environment.
-#[derive(Parser, Debug)]
+///
+/// Example:
+/// # Uninstall one environment
+/// pixi global uninstall pixi-pack
+/// # Uninstall multiple environments
+/// pixi global uninstall pixi-pack rattler-build
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the packages that are to be removed.
+    /// Specifies the environments that are to be removed.
     #[arg(num_args = 1..)]
     environment: Vec<String>,
 
@@ -28,27 +34,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(args: Args, project: &mut Project) -> Result<(), miette::Error> {
+    async fn apply_changes(args: Args, project: &mut Project) -> miette::Result<bool> {
+        let mut removed = Vec::new();
         for env in args.environment {
             let env = EnvironmentName::from_str(&env)
                 .wrap_err_with(|| format!("Could not parse environment name: {}", env))?;
-            project.remove_environment(&env).await?;
+            if project.manifest.remove_environment(&env)? {
+                removed.push(env);
+            };
         }
 
-        // TODO: Remove the environment from the environment directory.
-        // project.prune_old_environments().await?;
+        // If no environments were removed, we can return early.
+        if removed.is_empty() {
+            return Ok(false);
+        }
+
+        // Cleanup the project after removing the environments.
+        project.prune_old_environments().await?;
 
         project.manifest.save().await?;
-        Ok(())
+        Ok(true)
     }
 
     let mut project = project_original.clone();
-    if let Err(err) = apply_changes(args, &mut project).await {
-        revert_after_error(&project_original)
-            .await
-            .wrap_err("Could not uninstall environments. Reverting also failed.")?;
-        return Err(err);
+    match apply_changes(args.clone(), &mut project).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(miette::miette!(format!(
+            "Environments not found: {:?} in manifest: {}",
+            args.environment,
+            project.manifest.path.display()
+        ))),
+        Err(err) => {
+            revert_after_error(&project_original)
+                .await
+                .wrap_err("Could not uninstall environments. Reverting also failed.")?;
+            Err(err)
+        }
     }
-
-    Ok(())
 }
