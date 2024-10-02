@@ -98,7 +98,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(&args, project_original.clone()).await {
-        revert_environment_after_error(&project_original, &args.environment)
+        revert_environment_after_error(&args.environment, &project_original)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
         return Err(err);
@@ -129,7 +129,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     }
 
     if let Err(err) = apply_changes(&args, project_original.clone()).await {
-        revert_environment_after_error(&project_original, &args.environment)
+        revert_environment_after_error(&args.environment, &project_original)
             .await
             .wrap_err("Could not remove exposed name. Reverting also failed.")?;
         return Err(err);

@@ -104,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = project_original.clone();
     if let Err(err) = apply_changes(args, &mut project, &env_names).await {
         for env_name in &env_names {
-            revert_environment_after_error(&project_original, env_name)
+            revert_environment_after_error(env_name, &project_original)
                 .await
                 .wrap_err("Could not install packages. Reverting also failed.")?;
         }

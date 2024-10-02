@@ -33,18 +33,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(args: Args, project: &mut Project) -> miette::Result<bool> {
-        let mut removed = Vec::new();
-        for env in args.environment {
-            if project.manifest.remove_environment(&env)? {
-                removed.push(env);
-            };
-        }
-
-        // If no environments were removed, we can return early.
-        if removed.is_empty() {
+    async fn apply_changes(
+        env_name: &EnvironmentName,
+        project: &mut Project,
+    ) -> miette::Result<bool> {
+        if !project.manifest.remove_environment(env_name)? {
             return Ok(false);
-        }
+        };
 
         // Cleanup the project after removing the environments.
         project.prune_old_environments().await?;
@@ -54,20 +49,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut project = project_original.clone();
-    match apply_changes(args.clone(), &mut project).await {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(miette::miette!(format!(
-            "Environments not found: {:?} in manifest: {}",
-            args.environment,
-            project.manifest.path.display()
-        ))),
-        Err(err) => {
-            for env_name in &args.environment {
-                revert_environment_after_error(&project_original, env_name)
-                    .await
-                    .wrap_err("Could not uninstall environments. Reverting also failed.")?;
+    for env_name in &args.environment {
+        match apply_changes(env_name, &mut project).await {
+            Ok(true) => (),
+            Ok(false) => {
+                miette::bail!(
+                    "Environment '{env_name}' not found in manifest '{}'",
+                    project.manifest.path.display()
+                );
             }
-            Err(err)
+            Err(err) => {
+                revert_environment_after_error(env_name, &project_original)
+                    .await
+                    .wrap_err_with(|| {
+                        format!(
+                            "Could not uninstall environment '{env_name}'. Reverting also failed."
+                        )
+                    })?;
+                return Err(err);
+            }
         }
     }
+    Ok(())
 }

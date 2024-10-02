@@ -53,8 +53,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 
 /// Reverts the changes made to the project for a specific environment after an error occurred.
 async fn revert_environment_after_error(
-    project_original: &global::Project,
     env_name: &EnvironmentName,
+    project_original: &global::Project,
 ) -> miette::Result<()> {
     project_original.sync_environment(env_name).await?;
     Ok(())
