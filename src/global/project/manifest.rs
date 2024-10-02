@@ -102,7 +102,7 @@ impl Manifest {
         // Update self.document
         self.document
             .get_or_insert_nested_table("envs")?
-            .remove_entry(env_name.as_str());
+            .remove(env_name.as_str());
 
         tracing::debug!("Removed environment {env_name} from toml document");
         Ok(())
@@ -131,12 +131,11 @@ impl Manifest {
             .insert(dependency_name.clone(), version.into());
 
         // Update self.document
-        self.document
-            .get_or_insert_inline_table(&format!("envs.{env_name}.dependencies"))?
-            .insert(
-                dependency_name_string,
-                toml_edit::Value::from(version_string),
-            );
+        self.document.insert_into_inline_table(
+            &format!("envs.{env_name}.dependencies"),
+            dependency_name_string,
+            toml_edit::Value::from(version_string),
+        )?;
 
         tracing::debug!(
             "Added dependency {}={} to toml document for environment {}",
@@ -248,12 +247,11 @@ impl Manifest {
             );
 
         // Update self.document
-        self.document
-            .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
-            .insert(
-                &mapping.exposed_name.to_string(),
-                Item::Value(toml_edit::Value::from(mapping.executable_name.clone())),
-            );
+        self.document.insert_into_inline_table(
+            &format!("envs.{env_name}.exposed"),
+            &mapping.exposed_name.to_string(),
+            toml_edit::Value::from(mapping.executable_name.clone()),
+        )?;
 
         tracing::debug!("Added exposed mapping {mapping} to toml document");
         Ok(())

@@ -248,6 +248,10 @@ impl Project {
         let env_root = EnvRoot::from_env().await?;
 
         if !manifest_path.exists() {
+            tokio_fs::create_dir_all(&manifest_dir)
+                .await
+                .into_diagnostic()?;
+
             let prompt = format!(
                 "{} You don't have a global manifest yet.\n\
                 Do you want to create one based on your existing installation?\n\
@@ -268,15 +272,11 @@ impl Project {
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
                     });
+            } else {
+                tokio_fs::File::create(&manifest_path)
+                    .await
+                    .into_diagnostic()?;
             }
-
-            tokio_fs::create_dir_all(&manifest_dir)
-                .await
-                .into_diagnostic()?;
-
-            tokio_fs::File::create(&manifest_path)
-                .await
-                .into_diagnostic()?;
         }
 
         Self::from_path(&manifest_path, env_root, bin_dir)
@@ -578,12 +578,8 @@ impl Project {
         } else {
             rattler_shell::shell::Bash.into()
         };
-
-        let prefix = Prefix::new(
-            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
-                .await?
-                .path(),
-        );
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let prefix = Prefix::new(env_dir.path());
 
         let environment = self
             .environment(env_name)
@@ -615,10 +611,14 @@ impl Project {
                     entry_point,
                     exposed_executables.iter(),
                     &self.bin_dir,
-                    env_name,
+                    &env_dir,
                 )
             })
-            .collect::<miette::Result<Vec<_>>>()?;
+            .collect::<miette::Result<Vec<_>>>()
+            .wrap_err(format!(
+                "Failed to add executables for environment: {}",
+                env_name
+            ))?;
 
         tracing::debug!("Exposing executables for environment '{}'", env_name);
         create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
