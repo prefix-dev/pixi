@@ -238,8 +238,7 @@ def test_global_expose_revert_working(pixi: Path, tmp_path: Path, test_data: Pat
     original_toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
+    dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(original_toml)
 
@@ -302,18 +301,13 @@ def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, test_data: P
         env=env,
     )
 
-    expected_manifest = tomllib.loads(f"""
-    [envs.dummy-a]
-    channels = ["{dummy_channel}"]
-
-    [envs.dummy-a.dependencies]
-    dummy-a = "*"
-
-    [envs.dummy-a.exposed]
-    dummy-a = "dummy-a"
-    dummy-aa = "dummy-aa"
-    """)
-    actual_manifest = tomllib.loads(manifest.read_text())
+    expected_manifest = f"""\
+[envs.dummy-a]
+channels = ["{dummy_channel}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
 
     # Ensure that the manifest is correctly adapted
     assert actual_manifest == expected_manifest
