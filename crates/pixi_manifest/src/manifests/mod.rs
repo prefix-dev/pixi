@@ -49,7 +49,7 @@ impl TomlManifest {
 
     /// Inserts a value into a certain table
     /// If the most inner table doesn't exist, an inline table will be created.
-    /// If it doesn already exist, it will be left alone
+    /// If it already exists, the formatting of the table will be preserved
     pub fn insert_into_inline_table<'a>(
         &'a mut self,
         table_name: &str,
