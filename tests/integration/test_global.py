@@ -175,6 +175,7 @@ exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dumm
     # Test migration from existing environments
     original_manifest = manifest.read_text()
     manifest.unlink()
+    manifests.rmdir()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = manifest.read_text()
     assert migrated_manifest == original_manifest
