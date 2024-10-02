@@ -18,7 +18,7 @@ use std::path::PathBuf;
 /// Project configuration
 #[derive(Parser, Debug, Default)]
 pub struct ProjectConfig {
-    /// The path to 'pixi.toml' or 'pyproject.toml'
+    /// The path to `pixi.toml` or `pyproject.toml`
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }
