@@ -311,6 +311,7 @@ impl Project {
         let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
 
+        // Ensure that the manifest uses inline tables for "dependencies" and "exposed"
         if let Some(envs) = document
             .get_mut("envs")
             .and_then(|item| item.as_table_mut())
