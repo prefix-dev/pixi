@@ -100,7 +100,7 @@ jobs:
     name: Cargo Test | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    if: ${{ (github.event_name != 'pull_request') || matrix.if }}
+    if: ${{ (github.event_name != 'pull_request') || matrix.run_if }}
     strategy:
       fail-fast: false
       matrix:
@@ -108,11 +108,11 @@ jobs:
           - name: Linux
             target: x86_64-unknown-linux-musl
             os: ${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}
-            if: true
+            run_if: true
           - name: macOS
             target: x86_64-apple-darwin
             os: macos-13
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
           - name: "macOS-arm"
             target: aarch64-apple-darwin
             os: macos-14
@@ -120,7 +120,7 @@ jobs:
           - name: "Windows"
             target: x86_64-pc-windows-msvc
             os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
 
 
     steps:
@@ -160,7 +160,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: [ crate_metadata ]
     # Run full set on main branch and on tags, otherwise run linux and all labels defined in the PR
-    if: ${{ (github.event_name != 'pull_request') || matrix.if }}
+    if: ${{ (github.event_name != 'pull_request') || matrix.run_if }}
     strategy:
       fail-fast: false
       matrix:
@@ -168,27 +168,27 @@ jobs:
           - name: Linux
             target: x86_64-unknown-linux-musl
             os: ${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}
-            if: true
+            run_if: true
           - name: "Linux-aarch64"
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:all') }}
           - name: macOS
             target: x86_64-apple-darwin
             os: macos-13
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
           - name: "macOS-arm"
             target: aarch64-apple-darwin
             os: macos-14
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos-arm') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos-arm') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
           - name: "Windows"
             target: x86_64-pc-windows-msvc
             os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
           - name: "Windows-arm"
             target: aarch64-pc-windows-msvc
             os: windows-latest
-            if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win-arm') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
+            run_if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:win-arm') || contains(github.event.pull_request.labels.*.name, 'ci:all') }}
 
     env:
       #
