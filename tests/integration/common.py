@@ -22,6 +22,7 @@ def verify_cli_command(
     env: dict[str, str] | None = None,
 ) -> None:
     complete_env = os.environ if env is None else os.environ | env
+    complete_env = complete_env | {"NO_GRAPHICS": "1"}  # Avoid to have miette splitting up lines
     process = subprocess.run(command, capture_output=True, text=True, env=complete_env)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
