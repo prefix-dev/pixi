@@ -16,8 +16,8 @@ use pixi_consts::consts;
 use rattler_conda_types::RepoDataRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_resolver::{
-    DefaultResolverProvider, MetadataResponse, ResolverProvider, VersionMap, VersionsResponse,
-    WheelMetadataResult,
+    DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
+    VersionsResponse, WheelMetadataResult,
 };
 use uv_types::BuildContext;
 
@@ -133,10 +133,6 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
         self.fallback
             .get_or_build_wheel_metadata(dist)
             .right_future()
-    }
-
-    fn index_locations(&self) -> &IndexLocations {
-        self.fallback.index_locations()
     }
 
     fn with_reporter(self, reporter: impl uv_distribution::Reporter + 'static) -> Self {
