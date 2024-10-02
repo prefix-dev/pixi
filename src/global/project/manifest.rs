@@ -95,17 +95,20 @@ impl Manifest {
     }
 
     /// Removes a specific environment from the manifest
-    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
+    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<bool> {
+        let mut removed;
         // Update self.parsed
-        self.parsed.envs.shift_remove(env_name);
+        removed = self.parsed.envs.shift_remove(env_name).is_some();
 
         // Update self.document
-        self.document
+        removed |= self
+            .document
             .get_or_insert_nested_table("envs")?
-            .remove(env_name.as_str());
+            .remove(env_name.as_str())
+            .is_some();
 
         tracing::debug!("Removed environment {env_name} from toml document");
-        Ok(())
+        Ok(removed)
     }
 
     /// Adds a dependency to the manifest

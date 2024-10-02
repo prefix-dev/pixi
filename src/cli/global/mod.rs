@@ -7,11 +7,13 @@ mod install;
 mod list;
 mod remove;
 mod sync;
+mod uninstall;
 
 #[derive(Debug, Parser)]
 pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    Uninstall(uninstall::Args),
     // TODO: Needs to adapted
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
@@ -40,6 +42,7 @@ pub struct Args {
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Install(args) => install::execute(args).await?,
+        Command::Uninstall(args) => uninstall::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,
         Command::List(args) => list::execute(args).await?,
         Command::Sync(args) => sync::execute(args).await?,

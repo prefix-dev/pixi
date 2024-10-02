@@ -593,3 +593,81 @@ def test_global_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a, dummy-aa"],
     )
+
+
+def test_global_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Verify empty list
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="No global environments found.",
+    )
+
+    # Install dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-b",
+            "dummy-c",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+
+    # Uninstall dummy-b
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+    # Verify only the dummy-a environment is removed
+    assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+    assert tmp_path.joinpath("envs", "dummy-c").is_dir()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
+
+    # Uninstall dummy-b and dummy-c
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-b", "dummy-c"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert not dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+    # Verify empty list
+    verify_cli_command(
+        [pixi, "global", "list"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="No global environments found.",
+    )
+
+    # Uninstall non-existing package
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["not found", "dummy-a"],
+    )
