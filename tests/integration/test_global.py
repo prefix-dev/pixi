@@ -57,7 +57,7 @@ def test_global_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
         [pixi, "global", "sync"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Could not find python in test",
+        stderr_contains=["Could not find executable", "Failed to add executables for environment"],
     )
 
 
@@ -255,7 +255,7 @@ def test_global_expose_revert_working(pixi: Path, tmp_path: Path, test_data: Pat
         [pixi, "global", "expose", "add", "--environment=test", "dummy-b=dummy-b"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Could not find dummy-b in test",
+        stderr_contains=["Could not find executable dummy-b in", "test", "executables"],
     )
 
     # The TOML has been reverted to the original state

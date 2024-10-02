@@ -7,12 +7,12 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
+use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform, VersionSpec};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
 use toml_edit::{DocumentMut, Item};
-
-use crate::global::project::ParsedEnvironment;
 
 use super::parsed_manifest::ParsedManifest;
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
@@ -112,35 +112,38 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        dependency_name: &PackageName,
         spec: &MatchSpec,
+        channel_config: &ChannelConfig,
     ) -> miette::Result<()> {
-        let version = spec.version.clone().unwrap_or(VersionSpec::Any);
-        let dependency_name_string = dependency_name.as_normalized();
-        let version_string = version.to_string();
+        // Determine the name of the package to add
+        let (Some(name), spec) = spec.clone().into_nameless() else {
+            miette::bail!("pixi does not support wildcard dependencies")
+        };
+        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
         if !self.parsed.envs.contains_key(env_name) {
             self.add_environment(env_name, None)?;
         }
+
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
             .ok_or_else(|| miette::miette!("This should be impossible"))?
             .dependencies
-            .insert(dependency_name.clone(), version.into());
+            .insert(name.clone(), spec.clone());
 
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.dependencies"),
-            dependency_name_string,
-            toml_edit::Value::from(version_string),
+            name.clone().as_normalized(),
+            toml_edit::Value::from(spec.clone().to_toml_value()),
         )?;
 
         tracing::debug!(
             "Added dependency {}={} to toml document for environment {}",
-            dependency_name_string,
-            spec,
+            name.as_normalized(),
+            spec.to_toml_value().to_string(),
             env_name
         );
         Ok(())
@@ -161,8 +164,9 @@ impl Manifest {
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
-            .platform = Some(platform);
+            .ok_or_else(|| miette::miette!("Can't find {} yet", env_name))?
+            .platform
+            .replace(platform);
 
         // Update self.document
         self.document
@@ -336,6 +340,7 @@ mod tests {
     use std::str::FromStr;
 
     use indexmap::IndexSet;
+    use insta::assert_snapshot;
     use itertools::Itertools;
     use rattler_conda_types::ParseStrictness;
 
@@ -585,19 +590,15 @@ mod tests {
     #[test]
     fn test_add_dependency() {
         let mut manifest = Manifest::default();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let package_name_str = "pythonic";
-        let package_name = PackageName::from_str(package_name_str).unwrap();
-        let version_spec = "==3.15.0";
-        let match_spec = MatchSpec::from_str(
-            &format!("{package_name_str}{version_spec}"),
-            ParseStrictness::Strict,
-        )
-        .unwrap();
+
+        let version_match_spec =
+            MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add dependency
         manifest
-            .add_dependency(&env_name, &package_name, &match_spec)
+            .add_dependency(&env_name, &version_match_spec, &channel_config)
             .unwrap();
 
         // Check document
@@ -605,9 +606,12 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(package_name_str);
+            .get(version_match_spec.name.clone().unwrap().as_normalized());
         assert!(actual_value.is_some());
-        assert_eq!(actual_value.unwrap().as_str(), Some(version_spec));
+        assert_eq!(
+            actual_value.unwrap().to_string().replace('"', ""),
+            version_match_spec.clone().version.unwrap().to_string()
+        );
 
         // Check parsed
         let actual_value = manifest
@@ -616,52 +620,65 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .dependencies
-            .get(&package_name)
+            .get(&version_match_spec.clone().name.unwrap())
             .unwrap()
             .clone();
         assert_eq!(
-            actual_value.into_version().unwrap().to_string(),
-            version_spec
+            actual_value,
+            PixiSpec::from_nameless_matchspec(
+                version_match_spec.into_nameless().1,
+                &channel_config
+            )
         );
+
+        // Add another dependency
+        let build_match_spec = MatchSpec::from_str(
+            "python [version='3.11.0', build=he550d4f_1_cpython]",
+            ParseStrictness::Strict,
+        )
+        .unwrap();
+        manifest
+            .add_dependency(&env_name, &build_match_spec, &channel_config)
+            .unwrap();
+        let any_spec = MatchSpec::from_str("any-spec", ParseStrictness::Strict).unwrap();
+        manifest
+            .add_dependency(&env_name, &any_spec, &channel_config)
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
     fn test_add_existing_dependency() {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let package_name_str = "pythonic";
-        let package_name = PackageName::from_str(package_name_str).unwrap();
-        let version_spec = "==3.15.0";
-        let match_spec = MatchSpec::from_str(
-            &format!("{package_name_str}{version_spec}"),
-            ParseStrictness::Strict,
-        )
-        .unwrap();
 
+        let match_spec = MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         // Add dependency
         manifest
-            .add_dependency(&env_name, &package_name, &match_spec)
+            .add_dependency(&env_name, &match_spec, &channel_config)
             .unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_version_spec = "==3.18.0";
-        let new_match_spec = MatchSpec::from_str(
-            &format!("{package_name_str}{new_version_spec}"),
-            ParseStrictness::Strict,
-        )
-        .unwrap();
+        let new_match_spec =
+            MatchSpec::from_str("pythonic==3.18.0", ParseStrictness::Strict).unwrap();
         manifest
-            .add_dependency(&env_name, &package_name, &new_match_spec)
+            .add_dependency(&env_name, &new_match_spec, &channel_config)
             .unwrap();
 
         // Check document
+        let name = match_spec.name.clone().unwrap();
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(package_name_str);
+            .get(name.clone().as_normalized());
         assert!(actual_value.is_some());
-        assert_eq!(actual_value.unwrap().as_str(), Some(new_version_spec));
+        assert_eq!(
+            actual_value.unwrap().to_string().replace('"', ""),
+            "==3.18.0"
+        );
 
         // Check parsed
         let actual_value = manifest
@@ -670,12 +687,12 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .dependencies
-            .get(&package_name)
+            .get(&name)
             .unwrap()
             .clone();
         assert_eq!(
             actual_value.into_version().unwrap().to_string(),
-            new_version_spec
+            "==3.18.0".to_string()
         );
     }
 
