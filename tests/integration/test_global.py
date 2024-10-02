@@ -163,27 +163,20 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
-    toml = f"""
-    [envs.test]
-    channels = ["{dummy_channel}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
-    dummy-b = "*"
-
-    [envs.test.exposed]
-    dummy-1 = "dummy-a"
-    dummy-2 = "dummy-a"
-    dummy-3 = "dummy-b"
-    dummy-4 = "dummy-b"
-    """
+    toml = f"""\
+[envs.test]
+channels = ["{dummy_channel}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dummy-4 = "dummy-b" }}
+"""
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
 
     # Test migration from existing environments
-    original_manifest = tomllib.loads(manifest.read_text())
+    original_manifest = manifest.read_text()
     manifest.unlink()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
-    migrated_manifest = tomllib.loads(manifest.read_text())
+    migrated_manifest = manifest.read_text()
     assert migrated_manifest == original_manifest
 
 
