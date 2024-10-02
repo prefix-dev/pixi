@@ -159,15 +159,26 @@ async fn setup_environment(
                 .any(|(name, _)| name.as_str() == package_name.as_normalized())
             {
                 let installed_packages = prefix.find_installed_packages(None).await?;
-                let all_executables = prefix.find_executables(&installed_packages);
-                // Find package name in all executables
-                if let Some(executable) = all_executables
-                    .iter()
-                    .find(|(name, _)| name.as_str() == package_name.as_normalized())
-                {
-                    let mapping =
-                        Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone());
-                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                for package in &installed_packages {
+                    let executables = prefix.find_executables(&[package.clone()]);
+
+                    // Check if any of the executables match the package name
+                    if let Some(executable) = executables
+                        .iter()
+                        .find(|(name, _)| name.as_str() == package_name.as_normalized())
+                    {
+                        let mapping = Mapping::new(
+                            ExposedName::from_str(&executable.0)?,
+                            executable.0.clone(),
+                        );
+                        project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                        tracing::warn!(
+                            "Automatically exposing `{}` from package `{}`",
+                            package_name.as_normalized(),
+                            package.repodata_record.package_record.name.as_normalized()
+                        );
+                        break; // Stop once we found the match
+                    }
                 }
             }
         }
