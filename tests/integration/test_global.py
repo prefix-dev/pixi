@@ -639,6 +639,10 @@ def test_global_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     assert not dummy_a.is_file()
     assert dummy_b.is_file()
     assert dummy_c.is_file()
+    # Verify only the dummy-a environment is removed
+    assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+    assert tmp_path.joinpath("envs", "dummy-c").is_dir()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
 
     # Uninstall dummy-b and dummy-c
     verify_cli_command(
