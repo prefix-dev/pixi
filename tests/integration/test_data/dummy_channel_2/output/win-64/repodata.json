@@ -9,13 +9,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "831ed124af36e1c6d4eb313dd2a6d9d1",
+      "md5": "0a82fb2f6e9da49968cba40b9187833d",
       "name": "dummy-x",
       "platform": "win",
-      "sha256": "52bb369518a9653eec1624d906d480fd3fd12c43ac7a388fa9aa54449af04328",
-      "size": 2934,
+      "sha256": "39b394c995a29f180f6543771e7a70abcad9feadba7d9663eed80c7296babb19",
+      "size": 2824,
       "subdir": "win-64",
-      "timestamp": 1727808460044,
+      "timestamp": 1727337510326,
       "version": "0.1.0"
     }
   },
