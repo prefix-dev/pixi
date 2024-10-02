@@ -162,27 +162,21 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    toml = f"""
-    [envs.test]
-    channels = ["{dummy_channel_1}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
-    dummy-b = "*"
-
-    [envs.test.exposed]
-    dummy-1 = "dummy-a"
-    dummy-2 = "dummy-a"
-    dummy-3 = "dummy-b"
-    dummy-4 = "dummy-b"
-    """
+    toml = f"""\
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dummy-4 = "dummy-b" }}
+"""
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
 
     # Test migration from existing environments
-    original_manifest = tomllib.loads(manifest.read_text())
+    original_manifest = manifest.read_text()
     manifest.unlink()
+    manifests.rmdir()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
-    migrated_manifest = tomllib.loads(manifest.read_text())
+    migrated_manifest = manifest.read_text()
     assert migrated_manifest == original_manifest
 
 
@@ -194,8 +188,7 @@ def test_global_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel_1}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
+    dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(toml)
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
@@ -242,8 +235,7 @@ def test_global_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_
     original_toml = f"""
     [envs.test]
     channels = ["{dummy_channel_1}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
+    dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(original_toml)
 
@@ -285,10 +277,34 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, dummy_channel_
     )
 
 
-def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str):
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [env.test.dependencies]
+    dummy-a = "*"
+    [env.test.exposed]
+    dummy-a = "dummy-a"
+    """
+    manifest.write_text(original_toml)
+
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-aa"],
+        ExitCode.FAILURE,
+        env=env,
+    )
+
+    # The TOML has been reverted to the original state
+    assert manifest.read_text() == original_toml
+
+
+def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
 
     verify_cli_command(
@@ -304,18 +320,13 @@ def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channe
         env=env,
     )
 
-    expected_manifest = tomllib.loads(f"""
-    [envs.dummy-a]
-    channels = ["{dummy_channel_1}"]
-
-    [envs.dummy-a.dependencies]
-    dummy-a = "*"
-
-    [envs.dummy-a.exposed]
-    dummy-a = "dummy-a"
-    dummy-aa = "dummy-aa"
-    """)
-    actual_manifest = tomllib.loads(manifest.read_text())
+    expected_manifest = f"""\
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
 
     # Ensure that the manifest is correctly adapted
     assert actual_manifest == expected_manifest
