@@ -162,7 +162,6 @@ def test_global_sync_migrate(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
     toml = f"""\
 [envs.test]
 channels = ["{dummy_channel_1}"]
@@ -303,12 +302,10 @@ def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_
     assert manifest.read_text() == original_toml
 
 
-def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
-    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
-
 
     verify_cli_command(
         [
