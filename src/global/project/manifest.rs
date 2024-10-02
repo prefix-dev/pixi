@@ -647,16 +647,7 @@ mod tests {
             .add_dependency(&env_name, &any_spec, &channel_config)
             .unwrap();
 
-        assert_snapshot!(manifest.document.to_string(),
-            @r#"
-[envs.test-env]
-channels = ["conda-forge"]
-
-[envs.test-env.dependencies]
-pythonic = "==3.15.0"
-python = { version = "==3.11.0", build = "he550d4f_1_cpython" }
-any-spec = "*""#
-        );
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
