@@ -189,8 +189,7 @@ def test_global_expose_basic(pixi: Path, tmp_path: Path, test_data: Path) -> Non
     toml = f"""
     [envs.test]
     channels = ["{dummy_channel}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
+    dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(toml)
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
@@ -281,10 +280,35 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, test_data: Pat
     )
 
 
-def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, test_data: Path):
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
+    original_toml = f"""
+    [envs.test]
+    channels = ["{dummy_channel}"]
+    [env.test.dependencies]
+    dummy-a = "*"
+    [env.test.exposed]
+    dummy-a = "dummy-a"
+    """
+    manifest.write_text(original_toml)
+
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-aa"],
+        ExitCode.FAILURE,
+        env=env,
+    )
+
+    # The TOML has been reverted to the original state
+    assert manifest.read_text() == original_toml
+
+
+def test_global_install_adapts_manifest(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
     dummy_channel = test_data.joinpath("dummy_channel_1/output").as_uri()
 
