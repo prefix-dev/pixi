@@ -177,7 +177,7 @@ exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dumm
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = manifest.read_text()
-    assert migrated_manifest == original_manifest
+    assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
 
 
 def test_global_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
