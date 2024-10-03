@@ -4,34 +4,34 @@
   },
   "packages": {},
   "packages.conda": {
-    "expose-non-expose-0.1.0-h9490d1a_0.conda": {
-      "arch": "x86_64",
-      "build": "h9490d1a_0",
-      "build_number": 0,
-      "depends": [],
-      "md5": "dbd56b16421392fa6662d6b4ccee4c42",
-      "name": "expose-non-expose",
-      "platform": "win",
-      "sha256": "95d9a39f354ec078bd4814b376cd03a6c6e0bddf17b87fe47dfdd3aceb82fd36",
-      "size": 3040,
-      "subdir": "win-64",
-      "timestamp": 1727858026338,
-      "version": "0.1.0"
-    },
-    "non-expose-0.1.0-h9490d1a_0.conda": {
+    "jupyter-0.1.0-h9490d1a_0.conda": {
       "arch": "x86_64",
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [
-        "expose-non-expose"
+        "jupyter-core"
       ],
-      "md5": "11212d984d598f500a6c3f81f6064c10",
-      "name": "non-expose",
+      "md5": "61e600ea701d4202b7a937e2dbcc2c84",
+      "name": "jupyter",
       "platform": "win",
-      "sha256": "cb386b5a195bbe2a635b66ff9293631633282a334b325936947a1a2aad7f8db0",
-      "size": 5856,
+      "sha256": "2a17735958829734ed4e6a18db17c20edd3992b5e2c8108b4c28cd7c1151fadf",
+      "size": 5870,
       "subdir": "win-64",
-      "timestamp": 1727858026339,
+      "timestamp": 1727938184848,
+      "version": "0.1.0"
+    },
+    "jupyter-core-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "e86723bf0ab5c38255d6faa638d1c753",
+      "name": "jupyter-core",
+      "platform": "win",
+      "sha256": "5fc30283def412ecf492f0f28e4cd8974e03846c0aeb2badef993a8d31dbc3d3",
+      "size": 3035,
+      "subdir": "win-64",
+      "timestamp": 1727938184848,
       "version": "0.1.0"
     }
   },

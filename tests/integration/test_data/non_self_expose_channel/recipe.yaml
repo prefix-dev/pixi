@@ -1,11 +1,11 @@
 recipe:
-  name: expose
+  name: self-expose-test
   version: 1.0.0
 
 outputs:
-  # expose-non-expose the non-expose tool, while non-expose only depends on expose-non-expose
+  # jupyter-core exposes the jupyter tool, while jupyter only depends on jupyter-core
   - package:
-      name: expose-non-expose
+      name: jupyter-core
       version: 0.1.0
 
     build:
@@ -13,15 +13,15 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "non-expose on windows" > $PREFIX/bin/non-expose.bat
+            - echo "jupyter on windows" > $PREFIX/bin/jupyter.bat
           else:
-            - echo "non-expose on unix" > $PREFIX/bin/non-expose
-            - chmod +x $PREFIX/bin/non-expose
+            - echo "jupyter on unix" > $PREFIX/bin/jupyter
+            - chmod +x $PREFIX/bin/jupyter
 
   - package:
-      name: non-expose
+      name: jupyter
       version: 0.1.0
 
     requirements:
         run:
-            - expose-non-expose
+            - jupyter-core

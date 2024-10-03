@@ -277,7 +277,9 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, dummy_channel_
     )
 
 
-def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str):
+def test_global_expose_preserves_table_format(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -728,22 +730,14 @@ def test_global_uninstall_only_reverts_failing(
     assert tmp_path.joinpath("envs", "dummy-b").is_dir()
 
 
-def test_auto_self_expose(pixi: Path, tmp_path: Path, test_data: Path) -> None:
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
-    non_self_expose_channel = test_data.joinpath("non_self_expose_channel/output").as_uri()
 
-    # Install dummy from non_self_expose_channel
+    # Install jupyter and expose it as 'jupyter'
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel, "non-expose"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter"],
         ExitCode.SUCCESS,
         env=env,
     )
-
-    # Verify that dummy is exposed as 'dummy' through dummy-x as the delivery of the executable.
-    verify_cli_command(
-        [pixi, "global", "list"],
-        ExitCode.SUCCESS,
-        env=env,
-        stdout_contains=["non-expose: 0.1.0"],
-        stdout_excludes=["Nothing"],
-    )
+    jupyter = tmp_path / "bin" / exec_extension("jupyter")
+    assert jupyter.is_file()

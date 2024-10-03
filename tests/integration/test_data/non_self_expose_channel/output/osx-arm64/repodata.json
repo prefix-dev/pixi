@@ -4,34 +4,34 @@
   },
   "packages": {},
   "packages.conda": {
-    "expose-non-expose-0.1.0-h60d57d3_0.conda": {
-      "arch": "arm64",
-      "build": "h60d57d3_0",
-      "build_number": 0,
-      "depends": [],
-      "md5": "d1ddff4cf0ecc48fe6772fccb03b716c",
-      "name": "expose-non-expose",
-      "platform": "osx",
-      "sha256": "62d8a066591f9b72bf18cbe1b5cdcfa4fb620627b69191f90c143ce9a50aa22c",
-      "size": 17912,
-      "subdir": "osx-arm64",
-      "timestamp": 1727858026437,
-      "version": "0.1.0"
-    },
-    "non-expose-0.1.0-h60d57d3_0.conda": {
+    "jupyter-0.1.0-h60d57d3_0.conda": {
       "arch": "arm64",
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [
-        "expose-non-expose"
+        "jupyter-core"
       ],
-      "md5": "506524dba95b25e0377ae9b943d9a06d",
-      "name": "non-expose",
+      "md5": "c99ef1add69dbd2f4f9ec238eed9699a",
+      "name": "jupyter",
       "platform": "osx",
-      "sha256": "fdb86ee8324af493f628aea28224842c706d16298a3c1c62b20e2aef2bb1aabc",
-      "size": 21532,
+      "sha256": "6f53f339754aed0955af6e9aaf6d06409808e19bc301f7bc9e933da6037f9fe5",
+      "size": 21429,
       "subdir": "osx-arm64",
-      "timestamp": 1727858026437,
+      "timestamp": 1727938184936,
+      "version": "0.1.0"
+    },
+    "jupyter-core-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "bdccdd9dd27f6f453621d30655d1e3bd",
+      "name": "jupyter-core",
+      "platform": "osx",
+      "sha256": "c6fa67942056e5fc06687ebac0155902338687a31343f3ef9ce8d067c6496627",
+      "size": 17876,
+      "subdir": "osx-arm64",
+      "timestamp": 1727938184936,
       "version": "0.1.0"
     }
   },
