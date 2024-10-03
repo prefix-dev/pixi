@@ -2,6 +2,7 @@ use clap::Parser;
 
 use crate::global::{self, EnvironmentName};
 
+mod add;
 mod expose;
 mod install;
 mod list;
@@ -11,6 +12,8 @@ mod uninstall;
 
 #[derive(Debug, Parser)]
 pub enum Command {
+    #[clap(visible_alias = "a")]
+    Add(add::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Uninstall(uninstall::Args),
@@ -41,6 +44,7 @@ pub struct Args {
 
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
+        Command::Add(args) => add::execute(args).await?,
         Command::Install(args) => install::execute(args).await?,
         Command::Uninstall(args) => uninstall::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,
