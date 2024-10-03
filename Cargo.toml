@@ -89,16 +89,16 @@ typed-path = "0.9.1"
 
 # Rattler crates
 file_url = "0.1.4"
-rattler = { version = "0.27.13", default-features = false }
-rattler_cache = { version = "0.2.4", default-features = false }
-rattler_conda_types = { version = "0.28.0", default-features = false }
+rattler = { version = "0.27.14", default-features = false }
+rattler_cache = { version = "0.2.5", default-features = false }
+rattler_conda_types = { version = "0.28.1", default-features = false }
 rattler_digest = { version = "1.0.1", default-features = false }
-rattler_lock = { version = "0.22.25", default-features = false }
+rattler_lock = { version = "0.22.26", default-features = false }
 rattler_networking = { version = "0.21.4", default-features = false }
-rattler_repodata_gateway = { version = "0.21.15", default-features = false }
-rattler_shell = { version = "0.22.2", default-features = false }
-rattler_solve = { version = "1.0.9", default-features = false }
-rattler_virtual_packages = { version = "1.1.5", default-features = false }
+rattler_repodata_gateway = { version = "0.21.16", default-features = false }
+rattler_shell = { version = "0.22.3", default-features = false }
+rattler_solve = { version = "1.0.10", default-features = false }
+rattler_virtual_packages = { version = "1.1.6", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.0"
