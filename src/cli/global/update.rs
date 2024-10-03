@@ -1,10 +1,11 @@
-use crate::cli::global::revert_after_error;
+use crate::cli::global::revert_environment_after_error;
 use crate::global;
 use crate::global::{EnvDir, EnvironmentName, Project};
 use crate::prefix::Prefix;
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
+use pixi_utils::executable_from_path;
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]
@@ -26,6 +27,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
+    // TODO: Parrallelize the update process, so that all environments are updated at the same time
+    //       We need to ensure the manifest is not updated until all environments are updated.
+    //       And find a way to deal with the intermediate state of the project.
     async fn apply_changes(
         env_name: &EnvironmentName,
         project: &mut Project,
@@ -45,11 +49,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .exposed
                 .iter()
                 .filter_map(|(exposed_name, entrypoint)| {
-                    // If the entrypoint is not an executable keep it
-                    if !all_executables
+                    // If the entrypoint is not an executable keep it to be removed
+                    if all_executables
                         .iter()
-                        .any(|(_, path)| path.to_string_lossy() == entrypoint.clone())
+                        .any(|(_, path)| executable_from_path(path) == entrypoint.clone())
                     {
+                        tracing::debug!("Not removing entrypoint: {}", entrypoint);
                         return None;
                     }
                     Some(exposed_name.clone())
@@ -90,7 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     for env_name in env_names {
         let mut project = last_updated_project.clone();
         if let Err(err) = apply_changes(&env_name, &mut project).await {
-            revert_after_error(&last_updated_project).await?;
+            revert_environment_after_error(&env_name, &last_updated_project).await?;
             return Err(err);
         }
         last_updated_project = project.clone();

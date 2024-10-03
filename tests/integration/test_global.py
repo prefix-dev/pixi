@@ -726,3 +726,93 @@ def test_global_uninstall_only_reverts_failing(
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
     assert dummy_b.is_file()
     assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+
+
+def test_global_update_single_package(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    # Test update with no environments
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Test update of a single package
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package 0.1.0"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    # Replace the version with a "*"
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+    manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    # After update be left with only the binary that was in both versions.
+    assert package.is_file()
+    assert not package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+
+def test_global_update_all_packages(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            global_update_channel_1,
+            "package2==0.1.0",
+            "package==0.1.0",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+    package2 = tmp_path / "bin" / exec_extension("package2")
+    assert package2.is_file()
+    assert package.is_file()
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Replace the version with a "*"
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+    manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
+
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert package2.is_file()
+    assert package.is_file()
+    assert not package0_1_0.is_file()
+    # After update be left with only the binary that was in both versions.
+    assert not package0_2_0.is_file()
+
+    # Check the manifest for removed binaries
+    manifest_content = manifest.read_text()
+    assert "package0.1.0" not in manifest_content
+    assert "package0.2.0" not in manifest_content
+    assert "package2" in manifest_content
+    assert "package" in manifest_content
+
+    # Check content of package2 file to be updated
+    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / "package2"
+    assert "0.2.0" in bin_file_package2.read_text()
