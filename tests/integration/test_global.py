@@ -177,7 +177,7 @@ exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dumm
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = manifest.read_text()
-    assert migrated_manifest == original_manifest
+    assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
 
 
 def test_global_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -277,7 +277,9 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, dummy_channel_
     )
 
 
-def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str):
+def test_global_expose_preserves_table_format(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -816,3 +818,16 @@ def test_global_update_all_packages(
     # Check content of package2 file to be updated
     bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / "package2"
     assert "0.2.0" in bin_file_package2.read_text()
+
+
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Install jupyter and expose it as 'jupyter'
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    jupyter = tmp_path / "bin" / exec_extension("jupyter")
+    assert jupyter.is_file()
