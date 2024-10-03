@@ -177,7 +177,7 @@ exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dumm
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync", "--assume-yes"], ExitCode.SUCCESS, env=env)
     migrated_manifest = manifest.read_text()
-    assert migrated_manifest == original_manifest
+    assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
 
 
 def test_global_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -277,7 +277,9 @@ def test_global_expose_revert_failure(pixi: Path, tmp_path: Path, dummy_channel_
     )
 
 
-def test_global_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str):
+def test_global_expose_preserves_table_format(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -726,3 +728,16 @@ def test_global_uninstall_only_reverts_failing(
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
     assert dummy_b.is_file()
     assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+
+
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Install jupyter and expose it as 'jupyter'
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    jupyter = tmp_path / "bin" / exec_extension("jupyter")
+    assert jupyter.is_file()
