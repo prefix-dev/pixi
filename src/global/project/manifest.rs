@@ -313,6 +313,10 @@ impl Mapping {
             executable_name,
         }
     }
+
+    pub fn exposed_name(&self) -> &ExposedName {
+        &self.exposed_name
+    }
 }
 
 impl fmt::Display for Mapping {

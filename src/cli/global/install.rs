@@ -159,27 +159,15 @@ async fn setup_environment(
                 .iter()
                 .any(|(name, _)| name.as_str() == package_name.as_normalized())
             {
-                let installed_packages = prefix.find_installed_packages(None).await?;
-                for package in &installed_packages {
-                    let executables = prefix.find_executables(&[package.clone()]);
-
-                    // Check if any of the executables match the package name
-                    if let Some(executable) = executables
-                        .iter()
-                        .find(|(name, _)| name.as_str() == package_name.as_normalized())
-                    {
-                        let mapping = Mapping::new(
-                            ExposedName::from_str(&executable.0)?,
-                            executable.0.clone(),
-                        );
-                        project.manifest.add_exposed_mapping(env_name, &mapping)?;
-                        tracing::warn!(
-                            "Automatically exposing `{}` from package `{}`",
-                            package_name.as_normalized(),
-                            package.repodata_record.package_record.name.as_normalized()
-                        );
-                        break; // Stop once we found the match
-                    }
+                if let Some((mapping, source_package_name)) =
+                    find_binary_by_name(&prefix, package_name).await?
+                {
+                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                    tracing::warn!(
+                        "Automatically exposed `{}` from `{}`",
+                        mapping.exposed_name(),
+                        source_package_name.as_normalized()
+                    );
                 }
             }
         }
@@ -195,4 +183,29 @@ async fn setup_environment(
         .expose_executables_from_environment(env_name)
         .await?;
     Ok(())
+}
+
+/// Finds the package name in the prefix and automatically exposes it if an executable is found.
+/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+/// This function will return the mapping and the package name of the package in which the binary was found.
+async fn find_binary_by_name(
+    prefix: &Prefix,
+    package_name: &PackageName,
+) -> miette::Result<Option<(Mapping, PackageName)>> {
+    let installed_packages = prefix.find_installed_packages(None).await?;
+    for package in &installed_packages {
+        let executables = prefix.find_executables(&[package.clone()]);
+
+        // Check if any of the executables match the package name
+        if let Some(executable) = executables
+            .iter()
+            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+        {
+            return Ok(Some((
+                Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone()),
+                package.repodata_record.package_record.name.clone(),
+            )));
+        }
+    }
+    Ok(None)
 }
