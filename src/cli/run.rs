@@ -26,10 +26,9 @@ use tracing::Level;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true, arg_required_else_help = true)]
+#[clap(trailing_var_arg = true)]
 pub struct Args {
     /// The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.
-    #[arg(required = true)]
     pub task: Vec<String>,
 
     #[clap(flatten)]
@@ -55,6 +54,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.prefix_update_config.config.clone());
+
+    // Print all available tasks if no task is provided
+    if args.task.is_empty() {
+        command_not_found(
+            &project,
+            args.environment
+                .clone()
+                .and_then(|env| project.environment_from_name_or_env_var(Some(env)).ok()),
+        );
+        return Ok(());
+    }
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
