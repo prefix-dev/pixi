@@ -47,6 +47,49 @@ impl TomlManifest {
         Ok(current_table)
     }
 
+    /// Inserts a value into a certain table
+    /// If the most inner table doesn't exist, an inline table will be created.
+    /// If it already exists, the formatting of the table will be preserved
+    pub fn insert_into_inline_table<'a>(
+        &'a mut self,
+        table_name: &str,
+        key: &str,
+        value: Value,
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
+        let mut parts: Vec<&str> = table_name.split('.').collect();
+
+        let last = parts.pop();
+
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
+
+        for part in parts {
+            let entry = current_table.entry(part);
+            let item = entry.or_insert(Item::Table(Table::new()));
+            if let Some(table) = item.as_table_mut() {
+                // Avoid creating empty tables
+                table.set_implicit(true);
+            }
+            current_table = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+        }
+
+        // Add dependency as inline table if it doesn't exist
+        if let Some(last) = last {
+            if let Some(dependency) = current_table.get_mut(last) {
+                dependency
+                    .as_table_like_mut()
+                    .map(|table| table.insert(key, Item::Value(value)));
+            } else {
+                let mut dependency = toml_edit::InlineTable::new();
+                dependency.insert(key, value);
+                current_table.insert(last, toml_edit::value(dependency));
+            }
+        }
+
+        Ok(current_table)
+    }
+
     /// Retrieves a mutable reference to a target array `array_name`
     /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
     ///

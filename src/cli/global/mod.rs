@@ -1,18 +1,20 @@
 use clap::Parser;
 
-use crate::global;
+use crate::global::{self, EnvironmentName};
 
 mod expose;
 mod install;
 mod list;
 mod remove;
 mod sync;
+mod uninstall;
 mod update;
 
 #[derive(Debug, Parser)]
 pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    Uninstall(uninstall::Args),
     // TODO: Needs to adapted
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
@@ -43,6 +45,7 @@ pub struct Args {
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Install(args) => install::execute(args).await?,
+        Command::Uninstall(args) => uninstall::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,
         Command::List(args) => list::execute(args).await?,
         Command::Sync(args) => sync::execute(args).await?,
@@ -52,8 +55,11 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Reverts the changes made to the project after an error occurred.
-async fn revert_after_error(project_original: &global::Project) -> miette::Result<()> {
-    project_original.sync().await?;
+/// Reverts the changes made to the project for a specific environment after an error occurred.
+async fn revert_environment_after_error(
+    env_name: &EnvironmentName,
+    project_original: &global::Project,
+) -> miette::Result<()> {
+    project_original.sync_environment(env_name).await?;
     Ok(())
 }
