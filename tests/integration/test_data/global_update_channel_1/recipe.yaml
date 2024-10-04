@@ -15,7 +15,7 @@ outputs:
         # Expose two binaries, with and without version number
         - if: win
           then:
-            - echo "package%PKG_VERSION% on windows" > $PREFIX/bin/package%PKG_VERSION%.bat
+            - echo "package$PKG_VERSION on windows" > $PREFIX/bin/package$PKG_VERSION.bat
             - echo "package on windows" > $PREFIX/bin/package.bat
           else:
             - echo "package$PKG_VERSION on unix" > "$PREFIX/bin/package$PKG_VERSION"
