@@ -8,7 +8,8 @@ use miette::Diagnostic;
 use pixi_manifest::{PrioritizedChannel, TomlError};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::Serialize;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use thiserror::Error;
 
@@ -116,6 +117,21 @@ where
         .collect())
 }
 
+/// Custom serializer for a map of exposed names to executable names.
+fn serialize_expose_mappings<S>(
+    mappings: &IndexSet<Mapping>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(mappings.len()))?;
+    for mapping in mappings {
+        map.serialize_entry(&mapping.exposed_name(), &mapping.executable_name())?;
+    }
+    map.end()
+}
+
 #[serde_as]
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -126,7 +142,11 @@ pub(crate) struct ParsedEnvironment {
     pub platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
-    #[serde(default, deserialize_with = "deserialize_expose_mappings")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_expose_mappings",
+        serialize_with = "serialize_expose_mappings"
+    )]
     pub(crate) exposed: IndexSet<Mapping>,
 }
 
