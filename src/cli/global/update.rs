@@ -1,7 +1,6 @@
 use crate::cli::global::revert_environment_after_error;
 use crate::global;
-use crate::global::{EnvDir, EnvironmentName, Project};
-use crate::prefix::Prefix;
+use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
@@ -37,8 +36,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove the outdated exposed binaries from the manifest
         if let Some(environment) = project.environment(env_name) {
             // Find all installed records and executables
-            let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
-            let prefix = Prefix::new(env_dir.path());
+            let prefix = project.environment_prefix(env_name).await?;
             let prefix_records = &prefix.find_installed_packages(None).await?;
             let all_executables = &prefix.find_executables(prefix_records.as_slice());
 
