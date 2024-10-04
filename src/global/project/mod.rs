@@ -372,6 +372,15 @@ impl Project {
         self.manifest.parsed.envs.get(name)
     }
 
+    /// Returns the prefix of the environment with the given name.
+    pub(crate) async fn environment_prefix(
+        &self,
+        name: &EnvironmentName,
+    ) -> miette::Result<Prefix> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), name.clone()).await?;
+        Ok(Prefix::new(env_dir.path()))
+    }
+
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {

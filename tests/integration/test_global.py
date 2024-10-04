@@ -831,3 +831,35 @@ def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: s
     )
     jupyter = tmp_path / "bin" / exec_extension("jupyter")
     assert jupyter.is_file()
+
+
+def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    assert dummy_a.is_file()
+
+    verify_cli_command(
+        [pixi, "global", "add", "-e" "dummy-a", "dummy-b"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains=["Added", "dummy-b", "0.1.0"],
+    )
+    # Make sure it doesn't expose a binary from this package
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    assert not dummy_b.is_file()
+
+    verify_cli_command(
+        [pixi, "global", "add", "-e" "dummy-a", "dummy-b", "--expose", "dummy-b=dummy-b"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains=["Added", "executable", "dummy-b", "0.1.0"],
+    )
+    # Make sure it doesn't expose a binary from this package
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    assert dummy_b.is_file()

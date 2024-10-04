@@ -169,12 +169,12 @@ pub(crate) async fn create_executable_scripts(
         let executable_name = executable_from_path(global_script_path);
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
-            AddedOrChanged::Added => eprintln!(
+            AddedOrChanged::Added => println!(
                 "{}Added executable '{}'.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 executable_name
             ),
-            AddedOrChanged::Changed => eprintln!(
+            AddedOrChanged::Changed => println!(
                 "{}Updated executable '{}'.",
                 console::style(console::Emoji("~ ", "")).yellow(),
                 executable_name
