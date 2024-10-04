@@ -176,7 +176,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let env_root = EnvRoot::new(home.into_path()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
-        let env_dir = EnvDir::from_env_root(env_root, env_name).await.unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
 
         // Test empty
         let specs = IndexSet::new();
@@ -212,7 +212,7 @@ mod tests {
         let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
         let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
-        let env_dir = EnvDir::from_env_root(env_root, env_name).await.unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
         let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
 
         // Test empty

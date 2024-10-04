@@ -128,7 +128,7 @@ impl EnvDir {
     /// Create a global environment directory based on passed global environment root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
-        environment_name: EnvironmentName,
+        environment_name: &EnvironmentName,
     ) -> miette::Result<Self> {
         let path = env_root.path().join(environment_name.as_str());
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
@@ -185,6 +185,7 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -196,7 +197,7 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
 
         // Define a test environment name
-        let environment_name = "test-env".parse().unwrap();
+        let environment_name = &EnvironmentName::from_str("test-env").unwrap();
 
         // Create a new binary env dir
         let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
