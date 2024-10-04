@@ -13,8 +13,8 @@ use crate::{
 /// will expose the `python3.10` executable as `python310` and the `python3` executable as `python3`
 #[derive(Parser, Debug)]
 pub struct AddArgs {
-    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
-    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
     mappings: Vec<global::Mapping>,
 
     /// The environment to which the binaries should be exposed

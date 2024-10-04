@@ -1,4 +1,5 @@
 use crate::cli::global::revert_environment_after_error;
+use crate::cli::has_specs::HasSpecs;
 use crate::global::{EnvironmentName, Mapping, Project};
 use clap::Parser;
 use itertools::Itertools;
@@ -9,20 +10,21 @@ use rattler_conda_types::{MatchSpec, Matches};
 /// Adds dependencies to an environment
 ///
 /// Example:
-/// pixi global add -e python numpy
-/// pixi global add -e my_env pytest pytest-cov --expose pytest=pytest
+/// pixi global add --environment python numpy
+/// pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Packages match specs to install
-    packages: Vec<MatchSpec>,
+    /// Specifies the packages that are to be added to the environment.
+    #[arg(num_args = 1..)]
+    packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be added to.
-    #[clap(short = 'e', long = "environment", required = true)]
+    #[clap(short, long, required = true)]
     environment: EnvironmentName,
 
-    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
-    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
     #[arg(long)]
     expose: Vec<Mapping>,
 
@@ -34,11 +36,21 @@ pub struct Args {
     config: ConfigCli,
 }
 
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.packages.iter().map(AsRef::as_ref).collect()
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project_original = Project::discover_or_create(args.assume_yes)
         .await?
         .with_cli_config(config.clone());
+
+    if project_original.environment(&args.environment).is_none() {
+        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", &args.environment);
+    }
 
     async fn apply_changes(
         env_name: &EnvironmentName,
@@ -65,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Figure out version of the added packages
         let added_package_records = project
-            .environment_prefix(env_name)
+            .environment_prefix(env_name.clone())
             .await?
             .find_installed_packages(None)
             .await?
@@ -75,8 +87,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect_vec();
 
         for record in added_package_records {
-            println!(
-                "{}Added package {}",
+            eprintln!(
+                "{}Added package '{}'",
                 console::style(console::Emoji("✔ ", "")).green(),
                 record
             );
@@ -87,10 +99,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut project = project_original.clone();
+    let specs = args
+        .specs()?
+        .into_iter()
+        .map(|(_, specs)| specs)
+        .collect_vec();
 
     if let Err(err) = apply_changes(
         &args.environment,
-        args.packages.as_slice(),
+        specs.as_slice(),
         args.expose.as_slice(),
         &mut project,
     )

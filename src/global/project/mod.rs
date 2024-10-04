@@ -375,9 +375,9 @@ impl Project {
     /// Returns the prefix of the environment with the given name.
     pub(crate) async fn environment_prefix(
         &self,
-        name: &EnvironmentName,
+        env_name: EnvironmentName,
     ) -> miette::Result<Prefix> {
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         Ok(Prefix::new(env_dir.path()))
     }
 
@@ -473,11 +473,7 @@ impl Project {
 
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
-        let prefix = Prefix::new(
-            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
-                .await?
-                .path(),
-        );
+        let prefix = self.environment_prefix(env_name.clone()).await?;
         await_in_progress("creating virtual environment", |pb| {
             Installer::new()
                 .with_download_client(self.authenticated_client().clone())
