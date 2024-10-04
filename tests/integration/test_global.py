@@ -189,8 +189,17 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(toml)
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
     dummy3 = tmp_path / "bin" / exec_extension("dummy3")
+
+    # Add dummy-a with simple syntax
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment=test", "dummy-a"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
 
     # Add dummy1
     verify_cli_command(
@@ -394,7 +403,7 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
             "--channel",
             dummy_channel_1,
             "--expose",
-            "dummy-c=dummy-c",
+            "dummy-c",
             "dummy-a",
         ],
         ExitCode.SUCCESS,
@@ -413,11 +422,11 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
             "--channel",
             dummy_channel_1,
             "--expose",
-            "dummy-a=dummy-a",
+            "dummy-a",
             "--expose",
-            "dummy-aa=dummy-aa",
+            "dummy-aa",
             "--expose",
-            "dummy-c=dummy-c",
+            "dummy-c",
             "dummy-a",
         ],
         ExitCode.SUCCESS,
@@ -436,7 +445,7 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
             "--channel",
             dummy_channel_1,
             "--expose",
-            "dummy-a=dummy-a",
+            "dummy-a",
             "dummy-a",
             "dummy-b",
         ],
@@ -456,7 +465,7 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
             "--environment",
             "common-env",
             "--expose",
-            "dummy-a=dummy-a",
+            "dummy-a",
             "dummy-a",
             "dummy-b",
         ],
@@ -773,7 +782,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "dummy-a",
             "dummy-b",
             "--expose",
-            "dummy-b=dummy-b",
+            "dummy-b",
         ],
         ExitCode.SUCCESS,
         env=env,

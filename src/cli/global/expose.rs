@@ -4,7 +4,7 @@ use pixi_config::{Config, ConfigCli};
 
 use crate::{
     cli::global::revert_environment_after_error,
-    global::{self, EnvironmentName, ExposedName},
+    global::{self, EnvironmentName, ExposedName, Mapping},
 };
 
 /// Add exposed binaries from an environment to your global environment
@@ -15,7 +15,9 @@ use crate::{
 pub struct AddArgs {
     /// Add one or more mapping which describe which executables are exposed.
     /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
-    mappings: Vec<global::Mapping>,
+    /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
+    #[arg(num_args = 1..)]
+    mappings: Vec<Mapping>,
 
     /// The environment to which the binaries should be exposed
     #[clap(short, long)]
@@ -36,6 +38,7 @@ pub struct AddArgs {
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
+    #[arg(num_args = 1..)]
     exposed_names: Vec<ExposedName>,
 
     /// The environment from which the exposed names should be removed
