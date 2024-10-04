@@ -125,7 +125,14 @@ impl Prefix {
                     })
             })
             .collect();
-        tracing::debug!("Found executables: {:?}", executables);
+        tracing::debug!(
+            "Found executables: {:?} in {:?}",
+            executables,
+            prefix_packages
+                .iter()
+                .map(|p| p.repodata_record.package_record.name.as_source())
+                .collect::<Vec<_>>()
+        );
         executables
     }
 
