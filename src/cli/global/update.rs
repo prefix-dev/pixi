@@ -27,9 +27,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    // TODO: Parrallelize the update process, so that all environments are updated at the same time
-    //       We need to ensure the manifest is not updated until all environments are updated.
-    //       And find a way to deal with the intermediate state of the project.
     async fn apply_changes(
         env_name: &EnvironmentName,
         project: &mut Project,

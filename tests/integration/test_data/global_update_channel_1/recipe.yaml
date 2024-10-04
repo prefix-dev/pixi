@@ -3,6 +3,7 @@ recipe:
   version: 1.0.0
 
 context:
+  # Change this version to create the multiple versions of the package
   version: 0.1.0
 outputs:
   - package:
