@@ -74,26 +74,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let state_changes = project.sync_environment(env_name).await?;
+        let mut state_changes = project.sync_environment(env_name).await?;
 
         // Figure out version of the added packages
-        let added_package_records = project
-            .environment_prefix(env_name.clone())
-            .await?
-            .find_installed_packages(None)
-            .await?
-            .into_iter()
-            .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
-            .map(|r| r.repodata_record.package_record)
-            .collect_vec();
-
-        for record in added_package_records {
-            eprintln!(
-                "{}Added package '{}'",
-                console::style(console::Emoji("✔ ", "")).green(),
-                record
-            );
-        }
+        state_changes.added_packages.extend(
+            project
+                .environment_prefix(env_name.clone())
+                .await?
+                .find_installed_packages(None)
+                .await?
+                .into_iter()
+                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .map(|r| r.repodata_record.package_record),
+        );
 
         project.manifest.save().await?;
         Ok(())
