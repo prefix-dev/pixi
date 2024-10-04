@@ -1,4 +1,4 @@
-use super::{extract_executable_from_script, BinDir, EnvRoot};
+use super::{extract_executable_from_script, BinDir, EnvRoot, StateChanges};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
@@ -595,7 +595,7 @@ impl Project {
     pub async fn expose_executables_from_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<bool> {
+    ) -> miette::Result<StateChanges> {
         // First clean up binaries that are not listed as exposed
         self.clean_environment_binaries(env_name).await?;
 
@@ -653,17 +653,17 @@ impl Project {
 
     // Syncs the manifest with the local environments
     // Returns true if the global installation had to be updated
-    pub(crate) async fn sync(&self) -> Result<bool, miette::Error> {
-        let mut updated_env = false;
+    pub(crate) async fn sync(&self) -> Result<StateChanges, miette::Error> {
+        let mut state_changes = StateChanges::default();
 
         // Prune environments that are not listed
-        updated_env |= !self.prune_old_environments().await?.is_empty();
+        state_changes |= self.prune_old_environments().await?;
 
         for (env_name, _parsed_environment) in self.environments() {
-            self.sync_environment(env_name).await?;
+            state_changes |= self.sync_environment(env_name).await?;
         }
 
-        Ok(updated_env)
+        Ok(state_changes)
     }
 
     /// Syncs the parsed environment with the installation.
@@ -671,28 +671,28 @@ impl Project {
     pub(crate) async fn sync_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<bool> {
-        let mut updated_env = false;
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
                 "Environment '{}' specs not up to date with manifest",
                 env_name
             );
             self.install_environment(env_name).await?;
-            updated_env = true;
+            state_changes.set_changed(true);
         }
 
         // Expose executables
-        updated_env |= self.expose_executables_from_environment(env_name).await?;
+        state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        Ok(updated_env)
+        Ok(state_changes)
     }
 
     /// Delete all non required environments
-    pub(crate) async fn prune_old_environments(&self) -> miette::Result<Vec<PathBuf>> {
+    pub(crate) async fn prune_old_environments(&self) -> miette::Result<StateChanges> {
         let env_set: HashSet<&EnvironmentName> = self.environments().keys().collect();
 
-        let mut pruned = Vec::new();
+        let mut state_changes = StateChanges::default();
         for env_path in self.env_root.directories().await? {
             let Some(Ok(env_name)) = env_path
                 .file_name()
@@ -723,17 +723,12 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    pruned.push(env_path);
-
-                    eprintln!(
-                        "{} Removed environment '{env_name}' as it was not part of the manifest.",
-                        console::style(console::Emoji("✔", " ")).green()
-                    );
+                    state_changes.removed_environments.push(env_name);
                 }
             }
         }
 
-        Ok(pruned)
+        Ok(state_changes)
     }
 }
 
@@ -930,7 +925,7 @@ mod tests {
         );
 
         // Call the prune method with a list of environments to keep (env1 and env3) but not env4
-        project.prune_old_environments().await.unwrap();
+        let _ = project.prune_old_environments().await.unwrap();
 
         // Verify that only the specified directories remain
         let remaining_dirs = fs::read_dir(env_root.path())

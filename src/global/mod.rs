@@ -2,7 +2,7 @@ pub(crate) mod common;
 mod install;
 pub(crate) mod project;
 
-pub(crate) use common::{BinDir, EnvDir, EnvRoot};
+pub(crate) use common::{BinDir, EnvDir, EnvRoot, StateChanges};
 pub(crate) use install::extract_executable_from_script;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 

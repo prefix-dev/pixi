@@ -74,7 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        project.sync_environment(env_name).await?;
+        let state_changes = project.sync_environment(env_name).await?;
 
         // Figure out version of the added packages
         let added_package_records = project

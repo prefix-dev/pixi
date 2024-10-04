@@ -7,7 +7,7 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChanges},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -111,7 +111,7 @@ async fn setup_environment(
     args: &Args,
     project: &mut Project,
     specs: IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<()> {
+) -> miette::Result<StateChanges> {
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
         project.manifest.remove_environment(env_name)?;
@@ -179,10 +179,7 @@ async fn setup_environment(
     }
 
     // Expose executables of the new environment
-    project
-        .expose_executables_from_environment(env_name)
-        .await?;
-    Ok(())
+    project.expose_executables_from_environment(env_name).await
 }
 
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.

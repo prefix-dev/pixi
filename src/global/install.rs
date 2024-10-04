@@ -1,4 +1,4 @@
-use super::{EnvDir, ExposedName};
+use super::{EnvDir, ExposedName, StateChanges};
 use crate::{global::BinDir, prefix::Prefix};
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
@@ -101,13 +101,14 @@ pub(crate) async fn create_executable_scripts(
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
-) -> miette::Result<bool> {
-    let mut changed = false;
+) -> miette::Result<StateChanges> {
     enum AddedOrChanged {
         Unchanged,
         Added,
         Changed,
     }
+
+    let mut state_changes = StateChanges::default();
 
     for ScriptExecMapping {
         global_script_path,
@@ -156,7 +157,7 @@ pub(crate) async fn create_executable_scripts(
             tokio_fs::write(&global_script_path, script)
                 .await
                 .into_diagnostic()?;
-            changed = true;
+            state_changes.set_changed(true);
         }
 
         #[cfg(unix)]
@@ -169,19 +170,13 @@ pub(crate) async fn create_executable_scripts(
         let executable_name = executable_from_path(global_script_path);
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
-            AddedOrChanged::Added => eprintln!(
-                "{}Added executable '{}'.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                executable_name
-            ),
-            AddedOrChanged::Changed => eprintln!(
-                "{}Updated executable '{}'.",
-                console::style(console::Emoji("~ ", "")).yellow(),
-                executable_name
-            ),
+            AddedOrChanged::Added => {
+                state_changes.added_executables.push(executable_name);
+            }
+            AddedOrChanged::Changed => state_changes.updated_executables.push(executable_name),
         }
     }
-    Ok(changed)
+    Ok(state_changes)
 }
 
 /// Extracts the executable path from a script file.

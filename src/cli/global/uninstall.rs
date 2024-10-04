@@ -42,7 +42,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Cleanup the project after removing the environments.
-        project.prune_old_environments().await?;
+        let state_changes = project.prune_old_environments().await?;
 
         project.manifest.save().await?;
         Ok(true)

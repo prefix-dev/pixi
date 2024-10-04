@@ -3,8 +3,9 @@ use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
-use rattler_conda_types::PrefixRecord;
+use rattler_conda_types::{PackageRecord, PrefixRecord};
 use std::ffi::OsStr;
+use std::ops::BitOrAssign;
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -180,6 +181,40 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     }
 
     Ok(records)
+}
+
+#[derive(Debug, Default)]
+#[must_use]
+pub(crate) struct StateChanges {
+    pub(crate) added_executables: Vec<String>,
+    pub(crate) updated_executables: Vec<String>,
+    pub(crate) added_packages: Vec<PackageRecord>,
+    pub(crate) removed_environments: Vec<EnvironmentName>,
+    changed: bool,
+}
+
+impl StateChanges {
+    pub(crate) fn changed(&self) -> bool {
+        self.changed
+            || !self.added_executables.is_empty()
+            || !self.updated_executables.is_empty()
+            || !self.added_packages.is_empty()
+            || !self.removed_environments.is_empty()
+    }
+
+    pub(crate) fn set_changed(&mut self, changed: bool) {
+        self.changed = changed;
+    }
+}
+
+impl BitOrAssign for StateChanges {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.added_executables.extend(rhs.added_executables);
+        self.updated_executables.extend(rhs.updated_executables);
+        self.added_packages.extend(rhs.added_packages);
+        self.removed_environments.extend(rhs.removed_environments);
+        self.changed |= rhs.changed;
+    }
 }
 
 #[cfg(test)]
