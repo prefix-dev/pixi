@@ -36,27 +36,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Remove the outdated exposed binaries from the manifest
         if let Some(environment) = project.environment(env_name) {
-            // find all records
+            // Find all installed records and executables
             let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
             let prefix = Prefix::new(env_dir.path());
             let prefix_records = &prefix.find_installed_packages(None).await?;
             let all_executables = &prefix.find_executables(prefix_records.as_slice());
 
+            // Find the exposed names that are no longer installed in the environment
             let to_remove = environment
                 .exposed
                 .iter()
-                .filter_map(|(exposed_name, entrypoint)| {
-                    // If the entrypoint is not an executable keep it to be removed
+                .filter_map(|mapping| {
+                    //
                     if all_executables
                         .iter()
-                        .any(|(_, path)| executable_from_path(path) == entrypoint.clone())
+                        .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
                     {
-                        tracing::debug!("Not removing entrypoint: {}", entrypoint);
+                        tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
                         return None;
                     }
-                    Some(exposed_name.clone())
+                    Some(mapping.exposed_name().clone())
                 })
                 .collect_vec();
+
+            // Removed the removable exposed names from the manifest
             for exposed_name in &to_remove {
                 project
                     .manifest

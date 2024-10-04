@@ -622,21 +622,25 @@ impl Project {
 
         let all_executables = &prefix.find_executables(prefix_records.as_slice());
 
-        let exposed: HashSet<&String> = environment.exposed.values().collect();
+        let exposed: HashSet<&str> = environment
+            .exposed
+            .iter()
+            .map(|map| map.executable_name())
+            .collect();
 
         let exposed_executables: Vec<_> = all_executables
             .iter()
-            .filter(|(name, _)| exposed.contains(name))
+            .filter(|(name, _)| exposed.contains(name.as_str()))
             .cloned()
             .collect();
 
         let script_mapping = environment
             .exposed
             .iter()
-            .map(|(exposed_name, entry_point)| {
+            .map(|mapping| {
                 script_exec_mapping(
-                    exposed_name,
-                    entry_point,
+                    mapping.exposed_name(),
+                    mapping.executable_name(),
                     exposed_executables.iter(),
                     &self.bin_dir,
                     &env_dir,
@@ -714,7 +718,7 @@ impl Project {
                     let (to_remove, _to_add) = get_expose_scripts_sync_status(
                         &self.bin_dir,
                         &EnvDir::from_path(env_path.clone()),
-                        &IndexMap::new(),
+                        &IndexSet::new(),
                     )
                     .await?;
 

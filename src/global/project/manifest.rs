@@ -12,6 +12,7 @@ use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
+use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
 use super::parsed_manifest::ParsedManifest;
@@ -248,10 +249,7 @@ impl Manifest {
             .get_mut(env_name)
             .ok_or_else(|| miette::miette!("This should be impossible"))?
             .exposed
-            .insert(
-                mapping.exposed_name.clone(),
-                mapping.executable_name.clone(),
-            );
+            .insert(mapping.clone());
 
         // Update self.document
         self.document.insert_into_inline_table(
@@ -274,13 +272,18 @@ impl Manifest {
         if !self.parsed.envs.contains_key(env_name) {
             self.add_environment(env_name, None)?;
         }
-        self.parsed
+        let environment = self
+            .parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?
-            .exposed
-            .shift_remove(exposed_name);
+            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?;
 
+        // Remove exposed_name from parsed environment
+        environment
+            .exposed
+            .retain(|map| map.exposed_name() != exposed_name);
+
+        // Remove from the document
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
             .remove(&exposed_name.to_string())
@@ -300,7 +303,7 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct Mapping {
     exposed_name: ExposedName,
     executable_name: String,
@@ -316,6 +319,10 @@ impl Mapping {
 
     pub fn exposed_name(&self) -> &ExposedName {
         &self.exposed_name
+    }
+
+    pub fn executable_name(&self) -> &str {
+        &self.executable_name
     }
 }
 
@@ -383,8 +390,10 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .exposed
-            .get(&exposed_name)
-            .unwrap();
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name)
+            .unwrap()
+            .executable_name();
         assert_eq!(expected_value, actual_value)
     }
 
@@ -422,8 +431,10 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .exposed
-            .get(&exposed_name1)
-            .unwrap();
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name1)
+            .unwrap()
+            .executable_name();
         assert_eq!(expected_value1, actual_value1);
 
         // Check document for executable2
@@ -445,9 +456,11 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .exposed
-            .get(&exposed_name2)
-            .unwrap();
-        assert_eq!(expected_value2, actual_value2)
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name2)
+            .unwrap()
+            .executable_name();
+        assert_eq!(expected_value2, actual_value2);
     }
 
     #[test]
@@ -473,14 +486,14 @@ mod tests {
         assert!(actual_value.is_none());
 
         // Check parsed
-        let actual_value = manifest
+        assert!(!manifest
             .parsed
             .envs
             .get(&env_name)
             .unwrap()
             .exposed
-            .get(&exposed_name);
-        assert!(actual_value.is_none())
+            .iter()
+            .any(|map| map.exposed_name() == &exposed_name));
     }
 
     #[test]
