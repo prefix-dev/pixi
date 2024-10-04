@@ -55,31 +55,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.prefix_update_config.config.clone());
 
+    // Extract the passed in environment name.
+    let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
+
+    // Find the environment to run the task in, if any were specified.
+    let explicit_environment = if environment.is_default() {
+        None
+    } else {
+        Some(environment.clone())
+    };
+
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(
-            &project,
-            args.environment
-                .clone()
-                .and_then(|env| project.environment_from_name_or_env_var(Some(env)).ok()),
-        );
+        command_not_found(&project, explicit_environment);
         return Ok(());
     }
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
-    // Extract the passed in environment name.
-    let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
-
     let best_platform = environment.best_platform();
-
-    // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if environment.is_default() {
-        None
-    } else {
-        Some(environment)
-    };
 
     // Verify that the current platform has the required virtual packages for the environment.
     if let Some(ref explicit_environment) = explicit_environment {
