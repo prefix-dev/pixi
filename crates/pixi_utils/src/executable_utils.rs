@@ -93,6 +93,7 @@ mod tests {
     #[case::python_windows("python.exe", "python")]
     #[case::python3_windows("python3.exe", "python3")]
     #[case::python312_windows("python3.12.exe", "python3.12")]
+    #[case::package010_windows("package0.1.0.bat", "package0.1.0")]
     #[case::bash("bash", "bash")]
     #[case::zsh59("zsh-5.9", "zsh-5.9")]
     #[case::python_312config("python3.12-config", "python3.12-config")]
@@ -105,9 +106,19 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    #[test]
-    fn test_strip_executable_extension() {
-        let result = strip_executable_extension("python3.12".to_string());
-        assert_eq!(result, "python3.12");
+    #[rstest]
+    #[case::bash("bash", "bash")]
+    #[case::zsh59("zsh-5.9", "zsh-5.9")]
+    #[case::python_312config("python3.12-config", "python3.12-config")]
+    #[case::python3_config("python3-config", "python3-config")]
+    #[case::package010("package0.1.0", "package0.1.0")]
+    #[case::x2to3("2to3", "2to3")]
+    #[case::x2to3312("2to3-3.12", "2to3-3.12")]
+    fn test_strip_executable_extension(#[case] path: &str, #[case] expected: &str) {
+        let result = strip_executable_extension(path.into());
+        assert_eq!(result, expected);
+        // Make sure running it twice doesn't break it
+        let result = strip_executable_extension(result);
+        assert_eq!(result, expected);
     }
 }
