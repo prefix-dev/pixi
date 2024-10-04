@@ -7,7 +7,7 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvDir, EnvironmentName, ExposedName, Mapping, Project},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -37,8 +37,8 @@ pub struct Args {
     #[clap(short, long)]
     environment: Option<EnvironmentName>,
 
-    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
-    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
     #[arg(long)]
     expose: Vec<Mapping>,
 
@@ -142,8 +142,7 @@ async fn setup_environment(
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
-            let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
-            let prefix = Prefix::new(env_dir.path());
+            let prefix = project.environment_prefix(env_name.clone()).await?;
             let prefix_package = prefix.find_designated_package(package_name).await?;
             let package_executables = prefix.find_executables(&[prefix_package]);
             for (executable_name, _) in &package_executables {
