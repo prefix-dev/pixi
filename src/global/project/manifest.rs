@@ -329,16 +329,10 @@ impl FromStr for Mapping {
     type Err = miette::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        input
-            .split_once('=')
-            .ok_or_else(|| {
-                miette::miette!(
-                    "Could not parse mapping `exposed_name=executable_name` from {input}"
-                )
-            })
-            .and_then(|(key, value)| {
-                Ok(Mapping::new(ExposedName::from_str(key)?, value.to_string()))
-            })
+        // If we can't parse exposed_name=executable_name, assume input=input
+        let (exposed_name, executable_name) = input.split_once('=').unwrap_or((input, input));
+        let exposed_name = ExposedName::from_str(exposed_name)?;
+        Ok(Mapping::new(exposed_name, executable_name.to_string()))
     }
 }
 

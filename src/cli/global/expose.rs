@@ -15,6 +15,7 @@ use crate::{
 pub struct AddArgs {
     /// Add one or more mapping which describe which executables are exposed.
     /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
     #[arg(num_args = 1..)]
     mappings: Vec<Mapping>,
 
