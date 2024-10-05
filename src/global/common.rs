@@ -71,8 +71,7 @@ impl BinDir {
         } else {
             exposed_name.to_string()
         };
-        let mut executable_script_path = self.path().join(exposed_name);
-        executable_script_path
+        self.path().join(exposed_name)
     }
 }
 
