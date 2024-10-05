@@ -110,8 +110,9 @@ def test_sync_change_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) ->
     assert dummy_a.is_file()
 
     # Add another expose
-    dummy_in_disguise_str = exec_extension("dummy-in-disguise")
-    dummy_in_disguise = tmp_path / "bin" / dummy_in_disguise_str
+    dummy_in_disguise_str = "dummy-in-disguise"
+    dummy_in_disguise_file_name = exec_extension(dummy_in_disguise_str)
+    dummy_in_disguise = tmp_path / "bin" / dummy_in_disguise_file_name
     parsed_toml["envs"]["test"]["exposed"][dummy_in_disguise_str] = "dummy-a"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
