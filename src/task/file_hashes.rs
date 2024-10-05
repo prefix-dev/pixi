@@ -135,7 +135,34 @@ impl FileHashes {
                             tracing::info!("Added hash for file: {:?}", path);
                             (path.to_owned(), hash)
                         }),
-                        Err(e) => Err(FileHashesError::from(e)),
+                        Err(e) => {
+                            // Special handling of broken symlinks
+                            match e {
+                                ignore::Error::WithPath { path, err } => {
+                                    match err.as_ref() {
+                                        ignore::Error::Io(io_err)
+                                            if io_err.kind() == std::io::ErrorKind::NotFound =>
+                                        {
+                                            // Ignore broken symlinks
+                                            tracing::info!("Skipping broken symlink: {:?}", path);
+                                            return ignore::WalkState::Continue;
+                                        }
+                                        _ => Err(FileHashesError::from(ignore::Error::WithPath {
+                                            path,
+                                            err,
+                                        })),
+                                    }
+                                }
+                                ignore::Error::Io(io_err)
+                                    if io_err.kind() == std::io::ErrorKind::NotFound =>
+                                {
+                                    // Ignore broken symlinks
+                                    tracing::info!("Skipping broken symlink: {:?}", io_err);
+                                    return ignore::WalkState::Continue;
+                                }
+                                _ => Err(FileHashesError::from(e)),
+                            }
+                        }
                     };
                     match (result.is_err(), tx.send(result)) {
                         (true, _) => ignore::WalkState::Quit,
