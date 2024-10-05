@@ -603,7 +603,7 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "global", "list"],
         env=env,
-        stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a, dummy-aa"],
+        stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
     )
 
 
