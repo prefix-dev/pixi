@@ -9,6 +9,7 @@
 
 use ignore::{overrides::OverrideBuilder, WalkBuilder};
 use itertools::Itertools;
+use pixi_consts::consts::PIXI_DIR;
 use std::hash::Hash;
 use std::{
     collections::HashMap,
@@ -95,6 +96,8 @@ impl FileHashes {
             }
             ignore_builder.add(&pat)?;
         }
+        // Do not recurse into the .pixi directory
+        ignore_builder.add(&format!("!/{PIXI_DIR}"))?;
 
         let filter = ignore_builder.build()?;
 
@@ -105,6 +108,7 @@ impl FileHashes {
 
         // Iterate over all entries in parallel and send them over a channel to the collection thread.
         let collect_root = root.to_owned();
+        println!("Collecting hashes for files in {:?}", root);
         WalkBuilder::new(root)
             .overrides(filter)
             .hidden(false)
@@ -112,6 +116,7 @@ impl FileHashes {
             .git_global(false)
             .git_exclude(false)
             .follow_links(true)
+            .parents(false)
             .build_parallel()
             .run(|| {
                 let tx = tx.clone();
@@ -119,6 +124,7 @@ impl FileHashes {
                 Box::new(move |entry| {
                     let result = match entry {
                         Ok(entry) if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) => {
+                            tracing::info!("Recursing into directory: {:?}", entry.path());
                             return ignore::WalkState::Continue;
                         }
                         Ok(entry) => compute_file_hash(entry.path()).map(|hash| {
