@@ -786,7 +786,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         ],
         ExitCode.SUCCESS,
         env=env,
-        stderr_contains=["Added executable 'dummy-b"],
+        stderr_contains=["Added exposed 'dummy-b"],
     )
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")

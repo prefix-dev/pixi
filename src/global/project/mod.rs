@@ -864,8 +864,8 @@ mod tests {
         let env_name = "test".parse().unwrap();
 
         // Create non-exposed but related binary
-        let expose_name = ExposedName::from_str("not-python").unwrap();
-        let non_exposed_bin = project.bin_dir.executable_script_path(&expose_name);
+        let not_python = ExposedName::from_str("not-python").unwrap();
+        let non_exposed_bin = project.bin_dir.executable_script_path(&not_python);
         let mut file = fs::File::create(&non_exposed_bin).unwrap();
         #[cfg(unix)]
         {
@@ -881,8 +881,8 @@ mod tests {
         }
 
         // Create a file that should be exposed
-        let expose_name = ExposedName::from_str("python").unwrap();
-        let bin = project.bin_dir.executable_script_path(&expose_name);
+        let python = ExposedName::from_str("python").unwrap();
+        let bin = project.bin_dir.executable_script_path(&python);
         let mut file = fs::File::create(&bin).unwrap();
         #[cfg(unix)]
         {
@@ -906,7 +906,7 @@ mod tests {
         assert_eq!(
             state_changes.changes(),
             vec![StateChange::RemovedExposed(
-                expose_name.to_string(),
+                not_python.to_string(),
                 env_name.clone()
             )]
         );
