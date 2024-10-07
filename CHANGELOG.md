@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.32.0] - 2024-10-07
+#### ✨ Highlights
+
+
+
+#### Changed
+
+- Bump version of rattler and other crates
+
+
+#### Fixed
+
+- Check environment name before returning not found print by @ruben-arts in [#2198](https://github.com/prefix-dev/pixi/pull/2198)
+
+
+- Turn off symlink follow for task cache by @ruben-arts in [#2209](https://github.com/prefix-dev/pixi/pull/2209)
+
+
+- Taplo on windows by @ruben-arts in [#2217](https://github.com/prefix-dev/pixi/pull/2217)
+
+
+
 ### [0.31.0] - 2024-10-03
 #### ✨ Highlights
 Thanks to our maintainer @baszamstra!
