@@ -111,7 +111,10 @@ impl FileHashes {
             .git_ignore(false)
             .git_global(false)
             .git_exclude(false)
-            .follow_links(true)
+            // Turn this back off as it can cause issues with symlinks:
+            // https://github.com/prefix-dev/pixi/issues/2196
+            // TODO: The current idea is to completely reimplement this without the `ignore` crate.
+            // .follow_links(true)
             .build_parallel()
             .run(|| {
                 let tx = tx.clone();
