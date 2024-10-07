@@ -6,8 +6,8 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
-    cli::{global::revert_after_error, has_specs::HasSpecs},
-    global::{self, EnvDir, EnvironmentName, ExposedName, Mapping, Project},
+    cli::{global::revert_environment_after_error, has_specs::HasSpecs},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -37,8 +37,9 @@ pub struct Args {
     #[clap(short, long)]
     environment: Option<EnvironmentName>,
 
-    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
-    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
     #[arg(long)]
     expose: Vec<Mapping>,
 
@@ -62,54 +63,53 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(args: Args, project: &mut Project) -> Result<(), miette::Error> {
-        let specs = args.specs()?;
+    let env_names = match &args.environment {
+        Some(env_name) => Vec::from([env_name.clone()]),
+        None => args
+            .specs()?
+            .iter()
+            .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
+            .collect::<miette::Result<Vec<_>>>()?,
+    };
 
-        let env_names = match &args.environment {
-            Some(env_name) => Vec::from([env_name.clone()]),
-            None => specs
-                .iter()
-                .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
-                .collect::<miette::Result<Vec<_>>>()?,
-        };
+    let multiple_envs = env_names.len() > 1;
 
-        if !args.expose.is_empty() && env_names.len() != 1 {
-            miette::bail!("Cannot add exposed mappings for more than one environment");
-        }
-
-        let multiple_envs = env_names.len() > 1;
-
-        for env_name in env_names {
-            let specs = if multiple_envs {
-                specs
-                    .clone()
-                    .into_iter()
-                    .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                    .collect()
-            } else {
-                specs.clone()
-            };
-
-            setup_environment(&env_name, project, args.clone(), specs).await?;
-        }
-        project.manifest.save().await?;
-        Ok(())
+    if !args.expose.is_empty() && env_names.len() != 1 {
+        miette::bail!("Cannot add exposed mappings for more than one environment");
     }
 
     let mut project = project_original.clone();
-    if let Err(err) = apply_changes(args, &mut project).await {
-        revert_after_error(&project_original)
-            .await
-            .wrap_err("Could not install packages. Reverting also failed.")?;
-        return Err(err);
+    let specs = args.specs()?;
+    for env_name in &env_names {
+        let specs = if multiple_envs {
+            specs
+                .clone()
+                .into_iter()
+                .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
+                .collect()
+        } else {
+            specs.clone()
+        };
+
+        if let Err(err) = setup_environment(env_name, &args, &mut project, specs).await {
+            if project_original.environment(env_name).is_some() {
+                revert_environment_after_error(env_name, &project_original)
+                    .await
+                    .wrap_err("Could not install packages. Reverting also failed.")?;
+            }
+            return Err(err);
+        }
     }
+
+    project.manifest.save().await?;
+
     Ok(())
 }
 
 async fn setup_environment(
     env_name: &EnvironmentName,
+    args: &Args,
     project: &mut Project,
-    args: Args,
     specs: IndexMap<PackageName, MatchSpec>,
 ) -> miette::Result<()> {
     // Modify the project to include the new environment
@@ -129,10 +129,12 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for (package_name, spec) in &specs {
-        project
-            .manifest
-            .add_dependency(env_name, package_name, spec)?;
+    for (_package_name, spec) in &specs {
+        project.manifest.add_dependency(
+            env_name,
+            spec,
+            project.clone().config().global_channel_config(),
+        )?;
     }
 
     // Installing the environment to be able to find the bin paths later
@@ -141,13 +143,32 @@ async fn setup_environment(
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
-            let env_dir = EnvDir::from_env_root(project.env_root.clone(), env_name.clone()).await?;
-            let prefix = Prefix::new(env_dir.path());
+            let prefix = project.environment_prefix(env_name.clone()).await?;
             let prefix_package = prefix.find_designated_package(package_name).await?;
-            for (executable_name, _) in prefix.find_executables(&[prefix_package]) {
-                let mapping =
-                    Mapping::new(ExposedName::from_str(&executable_name)?, executable_name);
+            let package_executables = prefix.find_executables(&[prefix_package]);
+            for (executable_name, _) in &package_executables {
+                let mapping = Mapping::new(
+                    ExposedName::from_str(executable_name)?,
+                    executable_name.clone(),
+                );
                 project.manifest.add_exposed_mapping(env_name, &mapping)?;
+            }
+            // If no executables were found, automatically expose the package name itself from the other packages.
+            // This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+            if !package_executables
+                .iter()
+                .any(|(name, _)| name.as_str() == package_name.as_normalized())
+            {
+                if let Some((mapping, source_package_name)) =
+                    find_binary_by_name(&prefix, package_name).await?
+                {
+                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                    tracing::warn!(
+                        "Automatically exposed `{}` from `{}`",
+                        mapping.exposed_name(),
+                        source_package_name.as_normalized()
+                    );
+                }
             }
         }
     } else {
@@ -162,4 +183,29 @@ async fn setup_environment(
         .expose_executables_from_environment(env_name)
         .await?;
     Ok(())
+}
+
+/// Finds the package name in the prefix and automatically exposes it if an executable is found.
+/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+/// This function will return the mapping and the package name of the package in which the binary was found.
+async fn find_binary_by_name(
+    prefix: &Prefix,
+    package_name: &PackageName,
+) -> miette::Result<Option<(Mapping, PackageName)>> {
+    let installed_packages = prefix.find_installed_packages(None).await?;
+    for package in &installed_packages {
+        let executables = prefix.find_executables(&[package.clone()]);
+
+        // Check if any of the executables match the package name
+        if let Some(executable) = executables
+            .iter()
+            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+        {
+            return Ok(Some((
+                Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone()),
+                package.repodata_record.package_record.name.clone(),
+            )));
+        }
+    }
+    Ok(None)
 }

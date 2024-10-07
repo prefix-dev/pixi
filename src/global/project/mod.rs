@@ -45,6 +45,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use toml_edit::DocumentMut;
 
 mod environment;
 mod manifest;
@@ -307,7 +308,28 @@ impl Project {
             "Failed to extract exposed binaries from existing installation please clean up your installation."
         })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
-        let toml = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
+        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
+        let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
+
+        // Ensure that the manifest uses inline tables for "dependencies" and "exposed"
+        if let Some(envs) = document
+            .get_mut("envs")
+            .and_then(|item| item.as_table_mut())
+        {
+            for (_, env_table) in envs.iter_mut() {
+                let Some(env_table) = env_table.as_table_mut() else {
+                    continue;
+                };
+
+                for entry in ["dependencies", "exposed"] {
+                    if let Some(table) = env_table.get(entry).and_then(|item| item.as_table()) {
+                        env_table
+                            .insert(entry, toml_edit::value(table.clone().into_inline_table()));
+                    }
+                }
+            }
+        }
+        let toml = document.to_string();
         tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
@@ -348,6 +370,15 @@ impl Project {
     /// Return the environment with the given name.
     pub(crate) fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
         self.manifest.parsed.envs.get(name)
+    }
+
+    /// Returns the prefix of the environment with the given name.
+    pub(crate) async fn environment_prefix(
+        &self,
+        env_name: EnvironmentName,
+    ) -> miette::Result<Prefix> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        Ok(Prefix::new(env_dir.path()))
     }
 
     /// Create an authenticated reqwest client for this project
@@ -442,11 +473,7 @@ impl Project {
 
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
-        let prefix = Prefix::new(
-            EnvDir::from_env_root(self.env_root.clone(), env_name.clone())
-                .await?
-                .path(),
-        );
+        let prefix = self.environment_prefix(env_name.clone()).await?;
         await_in_progress("creating virtual environment", |pb| {
             Installer::new()
                 .with_download_client(self.authenticated_client().clone())
@@ -630,11 +657,7 @@ impl Project {
         let mut updated_env = false;
 
         // Prune environments that are not listed
-        updated_env |= !self
-            .env_root
-            .prune(self.environments().keys().cloned())
-            .await?
-            .is_empty();
+        updated_env |= !self.prune_old_environments().await?.is_empty();
 
         for (env_name, _parsed_environment) in self.environments() {
             self.sync_environment(env_name).await?;
@@ -664,6 +687,54 @@ impl Project {
 
         Ok(updated_env)
     }
+
+    /// Delete all non required environments
+    pub(crate) async fn prune_old_environments(&self) -> miette::Result<Vec<PathBuf>> {
+        let env_set: HashSet<&EnvironmentName> = self.environments().keys().collect();
+
+        let mut pruned = Vec::new();
+        for env_path in self.env_root.directories().await? {
+            let Some(Ok(env_name)) = env_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(EnvironmentName::from_str)
+            else {
+                continue;
+            };
+
+            if !env_set.contains(&env_name) {
+                // Test if the environment directory is a conda environment
+                if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
+                    // Remove the conda environment
+                    tokio_fs::remove_dir_all(&env_path)
+                        .await
+                        .into_diagnostic()?;
+                    // Get all removable binaries related to the environment
+                    let (to_remove, _to_add) = get_expose_scripts_sync_status(
+                        &self.bin_dir,
+                        &EnvDir::from_path(env_path.clone()),
+                        &IndexMap::new(),
+                    )
+                    .await?;
+
+                    // Remove all removable binaries
+                    for binary_path in to_remove {
+                        tokio_fs::remove_file(&binary_path)
+                            .await
+                            .into_diagnostic()?;
+                    }
+                    pruned.push(env_path);
+
+                    eprintln!(
+                        "{} Removed environment '{env_name}' as it was not part of the manifest.",
+                        console::style(console::Emoji("✔", " ")).green()
+                    );
+                }
+            }
+        }
+
+        Ok(pruned)
+    }
 }
 
 impl Repodata for Project {
@@ -682,9 +753,10 @@ impl Repodata for Project {
 mod tests {
     use std::io::Write;
 
-    use fake::{faker::filesystem::zh_tw::FilePath, Fake};
-
     use super::*;
+    use fake::{faker::filesystem::zh_tw::FilePath, Fake};
+    use itertools::Itertools;
+    use tempfile::tempdir;
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]
@@ -809,5 +881,66 @@ mod tests {
         assert!(bin.exists());
         assert!(unrelated.exists());
         assert!(!non_exposed_bin.exists());
+    }
+
+    #[tokio::test]
+    async fn test_prune() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
+
+        // Set the env root to the temporary directory
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
+
+        // Create some directories in the temporary directory
+        let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
+        for env in &envs {
+            EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
+                .await
+                .unwrap();
+        }
+        // Add conda meta data to env2 to make sure it's seen as a conda environment
+        tokio_fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
+            .await
+            .unwrap();
+
+        // Create project with env1 and env3
+        let manifest = Manifest::from_str(
+            &env_root.path().join(MANIFEST_DEFAULT_NAME),
+            r#"
+            [envs.env1]
+            channels = ["conda-forge"]
+            [envs.env1.dependencies]
+            python = "*"
+            [envs.env1.exposed]
+            python1 = "python"
+
+            [envs.env3]
+            channels = ["conda-forge"]
+            [envs.env3.dependencies]
+            python = "*"
+            [envs.env3.exposed]
+            python2 = "python"
+            "#,
+        )
+        .unwrap();
+        let project = Project::from_manifest(
+            manifest,
+            env_root.clone(),
+            BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
+        );
+
+        // Call the prune method with a list of environments to keep (env1 and env3) but not env4
+        project.prune_old_environments().await.unwrap();
+
+        // Verify that only the specified directories remain
+        let remaining_dirs = fs::read_dir(env_root.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().into_string().unwrap())
+            .sorted()
+            .collect_vec();
+
+        assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
     }
 }

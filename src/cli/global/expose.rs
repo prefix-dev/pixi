@@ -3,8 +3,8 @@ use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
 use crate::{
-    cli::global::revert_after_error,
-    global::{self, EnvironmentName, ExposedName},
+    cli::global::revert_environment_after_error,
+    global::{self, EnvironmentName, ExposedName, Mapping},
 };
 
 /// Add exposed binaries from an environment to your global environment
@@ -13,9 +13,11 @@ use crate::{
 /// will expose the `python3.10` executable as `python310` and the `python3` executable as `python3`
 #[derive(Parser, Debug)]
 pub struct AddArgs {
-    /// Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
-    /// The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
-    mappings: Vec<global::Mapping>,
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
+    #[arg(num_args = 1..)]
+    mappings: Vec<Mapping>,
 
     /// The environment to which the binaries should be exposed
     #[clap(short, long)]
@@ -36,6 +38,7 @@ pub struct AddArgs {
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
+    #[arg(num_args = 1..)]
     exposed_names: Vec<ExposedName>,
 
     /// The environment from which the exposed names should be removed
@@ -82,23 +85,23 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     async fn apply_changes(
-        args: AddArgs,
+        args: &AddArgs,
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
         let env_name = &args.environment;
-        for mapping in args.mappings {
+        for mapping in &args.mappings {
             project_modified
                 .manifest
-                .add_exposed_mapping(env_name, &mapping)?;
+                .add_exposed_mapping(env_name, mapping)?;
         }
         project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone()).await {
-        revert_after_error(&project_original)
+    if let Err(err) = apply_changes(&args, project_original.clone()).await {
+        revert_environment_after_error(&args.environment, &project_original)
             .await
             .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
         return Err(err);
@@ -113,23 +116,23 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     async fn apply_changes(
-        args: RemoveArgs,
+        args: &RemoveArgs,
         project_original: global::Project,
     ) -> Result<(), miette::Error> {
         let mut project_modified = project_original;
         let env_name = &args.environment;
-        for exposed_name in args.exposed_names {
+        for exposed_name in &args.exposed_names {
             project_modified
                 .manifest
-                .remove_exposed_name(env_name, &exposed_name)?;
+                .remove_exposed_name(env_name, exposed_name)?;
         }
         project_modified.sync_environment(env_name).await?;
         project_modified.manifest.save().await?;
         Ok(())
     }
 
-    if let Err(err) = apply_changes(args, project_original.clone()).await {
-        revert_after_error(&project_original)
+    if let Err(err) = apply_changes(&args, project_original.clone()).await {
+        revert_environment_after_error(&args.environment, &project_original)
             .await
             .wrap_err("Could not remove exposed name. Reverting also failed.")?;
         return Err(err);
