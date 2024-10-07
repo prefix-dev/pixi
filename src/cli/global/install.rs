@@ -79,7 +79,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut state_changes = StateChanges::default();
-    let mut project_modified = project_original.clone();
+    let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
         let specs = if multiple_envs {
@@ -91,24 +91,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             specs.clone()
         };
-
-        match setup_environment(env_name, &args, specs, &mut project_modified).await {
+        let mut project = last_updated_project.clone();
+        match setup_environment(env_name, &args, specs, &mut project).await {
             Ok(sc) => {
                 state_changes |= sc;
             }
             Err(err) => {
                 state_changes.report();
-                if project_original.environment(env_name).is_some() {
-                    revert_environment_after_error(env_name, &project_original)
+                if last_updated_project.environment(env_name).is_some() {
+                    revert_environment_after_error(env_name, &last_updated_project)
                         .await
                         .wrap_err("Could not install packages. Reverting also failed.")?;
                 }
                 return Err(err);
             }
         }
+        last_updated_project = project;
     }
+    last_updated_project.manifest.save().await?;
     state_changes.report();
-    project_modified.manifest.save().await?;
 
     Ok(())
 }

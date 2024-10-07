@@ -57,33 +57,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         specs: &[MatchSpec],
         expose: &[Mapping],
-        project_modified: &mut Project,
+        project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
 
         // Add specs to the manifest
         for spec in specs {
-            project_modified.manifest.add_dependency(
+            project.manifest.add_dependency(
                 env_name,
                 spec,
-                project_modified.clone().config().global_channel_config(),
+                project.clone().config().global_channel_config(),
             )?;
         }
 
         // Add expose mappings to the manifest
         for mapping in expose {
-            project_modified
-                .manifest
-                .add_exposed_mapping(env_name, mapping)?;
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
 
         // Sync environment
-        state_changes |= project_modified.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name).await?;
 
         // Figure out added packages and their corresponding versions
-        state_changes |= project_modified.added_packages(specs, env_name).await?;
+        state_changes |= project.added_packages(specs, env_name).await?;
 
-        project_modified.manifest.save().await?;
         Ok(state_changes)
     }
 
@@ -103,6 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await
     {
         Ok(state_changes) => {
+            project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
         }

@@ -69,9 +69,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Remove outdated binaries
         state_changes |= project.prune_exposed(env_name).await?;
-
-        // Save the manifest after each changed environment
-        project.manifest.save().await?;
+        eprintln!(
+            "{}Updated environment: '{}'.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            env_name
+        );
 
         Ok(state_changes)
     }
@@ -83,7 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Apply changes to each environment, only revert changes if an error occurs
-    let mut last_updated_project = project_original.clone();
+    let mut last_updated_project = project_original;
     let mut state_changes = StateChanges::default();
     for env_name in env_names {
         let mut project = last_updated_project.clone();
@@ -96,5 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
+    last_updated_project.manifest.save().await?;
+    state_changes.report();
     Ok(())
 }

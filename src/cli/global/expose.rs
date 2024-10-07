@@ -86,23 +86,21 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 
     async fn apply_changes(
         args: &AddArgs,
-        project_modified: &mut global::Project,
+        project: &mut global::Project,
     ) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::default();
         let env_name = &args.environment;
         for mapping in &args.mappings {
-            project_modified
-                .manifest
-                .add_exposed_mapping(env_name, mapping)?;
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        state_changes |= project_modified.sync_environment(env_name).await?;
-        project_modified.manifest.save().await?;
+        state_changes |= project.sync_environment(env_name).await?;
         Ok(state_changes)
     }
 
     let mut project_modified = project_original.clone();
     match apply_changes(&args, &mut project_modified).await {
         Ok(state_changes) => {
+            project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
         }
@@ -123,17 +121,16 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
 
     async fn apply_changes(
         args: &RemoveArgs,
-        project_modified: &mut global::Project,
+        project: &mut global::Project,
     ) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::default();
         let env_name = &args.environment;
         for exposed_name in &args.exposed_names {
-            project_modified
+            project
                 .manifest
                 .remove_exposed_name(env_name, exposed_name)?;
         }
-        state_changes |= project_modified.sync_environment(env_name).await?;
-        project_modified.manifest.save().await?;
+        state_changes |= project.sync_environment(env_name).await?;
         Ok(state_changes)
     }
 
@@ -141,6 +138,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
 
     match apply_changes(&args, &mut project_modified).await {
         Ok(state_changes) => {
+            project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
         }

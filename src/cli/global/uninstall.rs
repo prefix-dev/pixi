@@ -43,21 +43,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Cleanup the project after removing the environments.
         state_changes |= project_modified.prune_old_environments().await?;
 
-        project_modified.manifest.save().await?;
-
         Ok(state_changes)
     }
 
-    let mut project_modified = project_original.clone();
+    let mut last_updated_project = project_original;
     let mut state_changes = StateChanges::default();
     for env_name in &args.environment {
-        match apply_changes(env_name, &mut project_modified).await {
+        let mut project = last_updated_project.clone();
+        match apply_changes(env_name, &mut project).await {
             Ok(sc) => {
                 state_changes |= sc;
             }
             Err(err) => {
                 state_changes.report();
-                revert_environment_after_error(env_name, &project_original)
+                revert_environment_after_error(env_name, &last_updated_project)
                     .await
                     .wrap_err_with(|| {
                         format!(
@@ -67,7 +66,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 return Err(err);
             }
         }
+        last_updated_project = project;
     }
+    last_updated_project.manifest.save().await?;
     state_changes.report();
     Ok(())
 }
