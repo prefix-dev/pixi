@@ -363,6 +363,11 @@ mod tests {
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
         let result = manifest.add_exposed_mapping(&env_name, &mapping);
         assert!(result.is_ok());
 
@@ -398,6 +403,11 @@ mod tests {
         let executable_name1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
         let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
@@ -461,6 +471,13 @@ mod tests {
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
+        // Add environment
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
+
         // Add and remove mapping again
         manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
         manifest
@@ -503,7 +520,11 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let _ = manifest.add_environment(&env_name, None).unwrap();
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
 
         // Check document
         let actual_value = manifest
@@ -537,9 +558,13 @@ mod tests {
         ]);
 
         // Add environment
-        let _ = manifest
+        let state_change = manifest
             .add_environment(&env_name, Some(channels.clone()))
             .unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
 
         // Check document
         let actual_value = manifest
@@ -567,10 +592,18 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let _ = manifest.add_environment(&env_name, None).unwrap();
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
 
         // Remove environment
-        let _ = manifest.remove_environment(&env_name).unwrap();
+        let state_change = manifest.remove_environment(&env_name).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::RemovedEnvironment(env_name.clone())
+        );
 
         // Check document
         let actual_value = manifest
@@ -593,8 +626,8 @@ mod tests {
         // Remove non-existent environment
         let result = manifest.remove_environment(&env_name);
 
-        // Ensure no panic and result is Ok
-        assert!(result.is_ok());
+        // This should fail
+        assert!(result.is_err());
     }
 
     #[test]
@@ -605,6 +638,13 @@ mod tests {
 
         let version_match_spec =
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
+
+        // Add environment
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
 
         // Add dependency
         manifest
@@ -665,6 +705,14 @@ mod tests {
 
         let match_spec = MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
+        // Add environment
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
+
         // Add dependency
         manifest
             .add_dependency(&env_name, &match_spec, &channel_config)
@@ -712,6 +760,14 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let platform = Platform::LinuxRiscv64;
 
+        // Add environment
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
+
+        // Set platform
         manifest.set_platform(&env_name, platform).unwrap();
 
         // Check document
@@ -741,6 +797,13 @@ mod tests {
         let channel = NamedChannelOrUrl::from_str("test-channel").unwrap();
         let mut channels = Config::load_global().default_channels();
         channels.push(channel.clone());
+
+        // Add environment
+        let state_change = manifest.add_environment(&env_name, None).unwrap();
+        assert_eq!(
+            state_change,
+            StateChange::AddedEnvironment(env_name.clone())
+        );
 
         // Add channel
         manifest.add_channel(&env_name, &channel).unwrap();

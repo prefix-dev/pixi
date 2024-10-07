@@ -174,12 +174,10 @@ pub(crate) async fn create_executable_scripts(
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
-                state_changes.push_change(StateChange::AddedExecutable(
-                    executable_name,
-                    env_name.clone(),
-                ));
+                state_changes
+                    .push_change(StateChange::AddedExposed(executable_name, env_name.clone()));
             }
-            AddedOrChanged::Changed => state_changes.push_change(StateChange::UpdatedExecutable(
+            AddedOrChanged::Changed => state_changes.push_change(StateChange::UpdatedExposed(
                 executable_name,
                 env_name.clone(),
             )),

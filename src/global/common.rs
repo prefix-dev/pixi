@@ -1,6 +1,7 @@
 use super::{EnvironmentName, ExposedName};
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use rattler_conda_types::{PackageRecord, PrefixRecord};
@@ -183,21 +184,23 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
-    AddedExecutable(String, EnvironmentName),
-    UpdatedExecutable(String, EnvironmentName),
+    AddedExposed(String, EnvironmentName),
+    RemovedExposed(String, EnvironmentName),
+    UpdatedExposed(String, EnvironmentName),
     AddedPackage(PackageRecord, EnvironmentName),
     AddedEnvironment(EnvironmentName),
     RemovedEnvironment(EnvironmentName),
 }
 
 impl StateChange {
-    fn environment(&self) -> &EnvironmentName {
+    fn env(&self) -> &EnvironmentName {
         match self {
-            StateChange::AddedExecutable(_, env)
-            | StateChange::UpdatedExecutable(_, env)
+            StateChange::AddedExposed(_, env)
+            | StateChange::RemovedExposed(_, env)
+            | StateChange::UpdatedExposed(_, env)
             | StateChange::AddedPackage(_, env)
             | StateChange::AddedEnvironment(env)
             | StateChange::RemovedEnvironment(env) => env,
@@ -208,24 +211,33 @@ impl StateChange {
 impl fmt::Display for StateChange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StateChange::AddedExecutable(exe, env) => {
+            StateChange::AddedExposed(exposed, env) => {
                 write!(
                     f,
-                    "{}Added executable '{exe}' for environment '{env}'.",
+                    "{}Added exposed '{exposed}' for environment '{env}'.",
                     console::style(console::Emoji("✔ ", "")).green(),
                 )
             }
-            StateChange::UpdatedExecutable(exe, env) => {
+            StateChange::RemovedExposed(exposed, env) => {
                 write!(
                     f,
-                    "{}Updated executable '{exe}' for environment '{env}'.",
+                    "{}Removed exposed '{exposed}' for environment '{env}'.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                )
+            }
+            StateChange::UpdatedExposed(exposed, env) => {
+                write!(
+                    f,
+                    "{}Updated exposed '{exposed}' for environment '{env}'.",
                     console::style(console::Emoji("✔ ", "")).green(),
                 )
             }
             StateChange::AddedPackage(pkg, env) => write!(
                 f,
-                "{}Added package '{pkg}' to environment '{env}'.",
+                "{}Added package '{}={}' to environment '{env}'.",
                 console::style(console::Emoji("✔ ", "")).green(),
+                pkg.name.as_normalized(),
+                pkg.version,
             ),
             StateChange::AddedEnvironment(env) => write!(
                 f,
@@ -265,6 +277,11 @@ impl StateChanges {
         self.changes.extend(changes);
     }
 
+    #[cfg(test)]
+    pub fn changes(self) -> Vec<StateChange> {
+        self.changes
+    }
+
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
         // Remove changes if the environment is removed afterwards
@@ -272,7 +289,10 @@ impl StateChanges {
         for change in &self.changes {
             match change {
                 StateChange::RemovedEnvironment(env) => {
-                    pruned_changes.retain(|c| c.environment() != env);
+                    pruned_changes.retain(|change| match change {
+                        StateChange::RemovedEnvironment(_) => true,
+                        c => c.env() != env,
+                    });
                 }
                 _ => {
                     pruned_changes.push(change.clone());
@@ -284,9 +304,8 @@ impl StateChanges {
 
     pub(crate) fn report(mut self) {
         self.prune();
-        for change in &self.changes {
-            eprintln!("{change}");
-        }
+        let report = self.changes.iter().join("\n");
+        eprintln!("{report}");
     }
 }
 

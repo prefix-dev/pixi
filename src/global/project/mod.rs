@@ -499,10 +499,8 @@ impl Project {
     }
 
     /// Find all binaries related to the environment and remove those that are not listed as exposed.
-    pub async fn clean_environment_binaries(
-        &self,
-        env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
+    pub async fn prune_exposed(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
@@ -513,13 +511,17 @@ impl Project {
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
-        for binary_path in to_remove {
-            tokio_fs::remove_file(&binary_path)
+        for exposed_path in to_remove {
+            state_changes.push_change(StateChange::RemovedExposed(
+                executable_from_path(&exposed_path),
+                env_name.clone(),
+            ));
+            tokio_fs::remove_file(&exposed_path)
                 .await
                 .into_diagnostic()?;
         }
 
-        Ok(())
+        Ok(state_changes)
     }
 
     /// Check if the environment is in sync with the manifest
@@ -597,8 +599,10 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
         // First clean up binaries that are not listed as exposed
-        self.clean_environment_binaries(env_name).await?;
+        state_changes |= self.prune_exposed(env_name).await?;
 
         // Determine the shell to use for the invocation script
         let shell: ShellEnum = if cfg!(windows) {
@@ -649,14 +653,16 @@ impl Project {
             ))?;
 
         tracing::debug!("Exposing executables for environment '{}'", env_name);
-        create_executable_scripts(
+        state_changes |= create_executable_scripts(
             &script_mapping,
             &prefix,
             &shell,
             activation_script,
             env_name,
         )
-        .await
+        .await?;
+
+        Ok(state_changes)
     }
 
     // Syncs the manifest with the local environments
@@ -838,7 +844,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_binaries() {
+    async fn test_prune_exposed() {
         let tempdir = tempfile::tempdir().unwrap();
         let project = Project::from_str(
             &PathBuf::from("dummy"),
@@ -895,8 +901,15 @@ mod tests {
         let unrelated = project.bin_dir.path().join("unrelated");
         fs::File::create(&unrelated).unwrap();
 
-        // Remove the binary
-        project.clean_environment_binaries(&env_name).await.unwrap();
+        // Remove exposed
+        let state_changes = project.prune_exposed(&env_name).await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            vec![StateChange::RemovedExposed(
+                expose_name.to_string(),
+                env_name.clone()
+            )]
+        );
 
         // Check if the non-exposed file was removed
         assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 2);
