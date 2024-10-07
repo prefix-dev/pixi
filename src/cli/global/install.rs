@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use clap::Parser;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
@@ -187,6 +188,10 @@ async fn setup_environment(
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
     }
+
+    // Figure out added packages and their corresponding versions
+    let specs = specs.values().cloned().collect_vec();
+    state_changes |= project.added_packages(specs.as_slice(), env_name).await?;
 
     // Expose executables of the new environment
     state_changes |= project
