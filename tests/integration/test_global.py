@@ -161,10 +161,18 @@ def test_sync_migrate(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""\
+# Test with special channel
 [envs.test]
 channels = ["{dummy_channel_1}"]
 dependencies = {{ dummy-a = "*", dummy-b = "*" }}
 exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dummy-4 = "dummy-b" }}
+
+# Test with conda-forge channel
+[envs.test2]
+channels = ["conda-forge"]
+# Small package with binary for testing purposes
+dependencies = {{ xz = "*" }}
+exposed = {{ xz = "xz", xz_static = "xz_static" }}
 """
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)

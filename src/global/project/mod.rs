@@ -30,7 +30,8 @@ use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
+    Platform, PrefixRecord,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::shell::ShellEnum;
@@ -46,6 +47,7 @@ use std::{
     str::FromStr,
 };
 use toml_edit::DocumentMut;
+use url::Url;
 
 mod environment;
 mod manifest;
@@ -104,7 +106,11 @@ impl ExposedData {
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
-    pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
+    pub async fn from_exposed_path(
+        path: &Path,
+        env_root: &EnvRoot,
+        channel_config: &ChannelConfig,
+    ) -> miette::Result<Self> {
         let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
         let executable_path = extract_executable_from_script(path).await?;
 
@@ -126,7 +132,7 @@ impl ExposedData {
         let prefix = Prefix::new(env_dir.path());
 
         let (platform, channel, package) =
-            package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
+            package_from_conda_meta(&conda_meta, &executable, &prefix, channel_config).await?;
 
         Ok(ExposedData {
             env_name,
@@ -159,6 +165,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 /// Converts a `PrefixRecord` into package metadata, including platform, channel, and package name.
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
+    channel_config: &ChannelConfig,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
     let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
         Ok(Platform::NoArch) => None,
@@ -167,14 +174,37 @@ fn convert_record_to_metadata(
         Ok(p) => Some(p),
     };
 
+    let package_name = prefix_record.repodata_record.package_record.name.clone();
+
+    // Repodata channel contains channel config alias as a substring, don't use it as a URL
+    if prefix_record
+        .repodata_record
+        .channel
+        .contains(channel_config.channel_alias.as_str())
+    {
+        // Create channel from URL for parsing
+        let channel = Channel::from_url(
+            Url::from_str(prefix_record.repodata_record.channel.as_str())
+                .expect("channel should be url"),
+        );
+        // If it has a name return as named channel
+        if let Some(name) = channel.name {
+            // If the channel has a name, use it as the channel
+            return Ok((
+                platform,
+                NamedChannelOrUrl::from_str(&name).into_diagnostic()?.into(),
+                package_name,
+            ));
+        }
+    }
+
+    // Return as url if the channel is not part of the channel config alias
     let channel: PrioritizedChannel =
         NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
             .into_diagnostic()?
             .into();
 
-    let name = prefix_record.repodata_record.package_record.name.clone();
-
-    Ok((platform, channel, name))
+    Ok((platform, channel, package_name))
 }
 
 /// Extracts package metadata from the `conda-meta` directory for a given executable.
@@ -186,6 +216,7 @@ async fn package_from_conda_meta(
     conda_meta: &Path,
     executable: &str,
     prefix: &Prefix,
+    channel_config: &ChannelConfig,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
     let records = crate::global::common::find_package_records(conda_meta).await?;
 
@@ -194,7 +225,7 @@ async fn package_from_conda_meta(
             .iter()
             .any(|exe_path| executable_from_path(exe_path) == executable)
         {
-            return convert_record_to_metadata(&prefix_record);
+            return convert_record_to_metadata(&prefix_record, channel_config);
         }
     }
 
@@ -288,6 +319,8 @@ impl Project {
         env_root: EnvRoot,
         bin_dir: BinDir,
     ) -> miette::Result<Self> {
+        let config = Config::load(env_root.path());
+
         let futures = bin_dir
             .files()
             .await?
@@ -299,7 +332,14 @@ impl Project {
             })
             .map(|result| async {
                 match result {
-                    Ok(path) => ExposedData::from_exposed_path(&path, &env_root).await,
+                    Ok(path) => {
+                        ExposedData::from_exposed_path(
+                            &path,
+                            &env_root,
+                            config.global_channel_config(),
+                        )
+                        .await
+                    }
                     Err(e) => Err(e),
                 }
             });
@@ -756,6 +796,7 @@ mod tests {
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
     use itertools::Itertools;
+    use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, VersionWithSource};
     use tempfile::tempdir;
 
     const SIMPLE_MANIFEST: &str = r#"
@@ -942,5 +983,70 @@ mod tests {
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
+    }
+
+    #[test]
+    fn test_convert_repodata_to_exposed_data() {
+        let temp_dir = tempdir().unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(temp_dir.path().to_owned());
+        let mut package_record = PackageRecord::new(
+            "python".parse().unwrap(),
+            VersionWithSource::from_str("3.9.7").unwrap(),
+            "build_string".to_string(),
+        );
+
+        // Set platform to something different than current
+        package_record.subdir = Platform::LinuxRiscv32.to_string();
+
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            file_name: "doesnt_matter.conda".to_string(),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: format!("{}{}", channel_config.channel_alias.clone(), "test-channel"),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(
+            repodata_record,
+            None,
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+
+        // Test with default channel alias
+        let (platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("test-channel").unwrap().into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
+        assert_eq!(platform, Some(Platform::LinuxRiscv32));
+
+        // Test with different from default channel alias
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            file_name: "doesnt_matter.conda".to_string(),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: "https://test-channel.com/idk".to_string(),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(
+            repodata_record,
+            None,
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+
+        let (_platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("https://test-channel.com/idk")
+                .unwrap()
+                .into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
     }
 }
