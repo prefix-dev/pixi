@@ -64,7 +64,6 @@ reqwest-middleware = "0.3.0"
 reqwest-retry = "0.5.0"
 rlimit = "0.10.1"
 rstest = "0.19.0"
-same-file = "1.0.6"
 self-replace = "1.3.7"
 serde = "1.0.198"
 serde-untagged = "0.1.5"
@@ -185,7 +184,6 @@ crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
-dirs = { workspace = true }
 distribution-filename = { workspace = true }
 distribution-types = { workspace = true }
 dunce = { workspace = true }
@@ -247,7 +245,6 @@ reqwest = { workspace = true, features = [
 ] }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
-same-file = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
