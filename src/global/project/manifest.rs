@@ -153,6 +153,42 @@ impl Manifest {
         Ok(())
     }
 
+    /// Removes a dependency from the manifest
+    pub fn remove_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        spec: &MatchSpec,
+    ) -> miette::Result<()> {
+        // Determine the name of the package to add
+        let (Some(name), _spec) = spec.clone().into_nameless() else {
+            miette::bail!("pixi does not support wildcard dependencies")
+        };
+
+        if !self.parsed.envs.contains_key(env_name) {
+            self.add_environment(env_name, None)?;
+        }
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .dependencies
+            .retain(|package_name, _| package_name != &name);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
+            .remove(name.as_normalized());
+
+        tracing::debug!(
+            "Removed dependency {} to toml document for environment {}",
+            name.as_normalized(),
+            env_name
+        );
+        Ok(())
+    }
+
     /// Sets the platform of a specific environment in the manifest
     pub fn set_platform(
         &mut self,
@@ -775,5 +811,42 @@ mod tests {
         let expected_channels: IndexSet<PrioritizedChannel> =
             channels.into_iter().map(From::from).collect();
         assert_eq!(actual_channels, expected_channels);
+    }
+
+    #[test]
+    fn test_remove_dependency() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["test-channel"]
+dependencies = { "python" = "*", pytest = "*"}
+"#,
+        )
+        .unwrap();
+
+        // Remove dependency
+        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+
+        // Check document
+        assert!(!manifest
+            .document
+            .to_string()
+            .contains(match_spec.name.clone().unwrap().as_normalized()));
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .get(&match_spec.name.unwrap());
+        assert!(actual_value.is_none());
+
+        assert_snapshot!(manifest.document.to_string());
     }
 }
