@@ -229,7 +229,7 @@ class PyPIPathRequirement(_PyPIRequirement):
     )
     no_deps: bool = Field(
         False,
-        description="If `true` (default is `false`), the package will be installed without dependencies (matches `--no-deps` in `pip install`)"
+        description="If `true` (default is `false`), the package will be installed without dependencies (matches `--no-deps` in `pip install`)",
     )
 
 
