@@ -9,6 +9,7 @@ mod list;
 mod remove;
 mod sync;
 mod uninstall;
+mod update;
 
 #[derive(Debug, Parser)]
 pub enum Command {
@@ -28,6 +29,8 @@ pub enum Command {
     #[clap(visible_alias = "e")]
     #[command(subcommand)]
     Expose(expose::SubCommand),
+    #[clap(visible_alias = "u")]
+    Update(update::Args),
 }
 
 /// Subcommand for global package management actions
@@ -51,6 +54,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::List(args) => list::execute(args).await?,
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
+        Command::Update(args) => update::execute(args).await?,
     };
     Ok(())
 }

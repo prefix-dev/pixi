@@ -152,7 +152,7 @@ async fn setup_environment(
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
-            let prefix = project.environment_prefix(env_name.clone()).await?;
+            let prefix = project.environment_prefix(env_name).await?;
             let prefix_package = prefix.find_designated_package(package_name).await?;
             let package_executables = prefix.find_executables(&[prefix_package]);
             for (executable_name, _) in &package_executables {

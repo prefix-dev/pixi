@@ -66,11 +66,14 @@ impl BinDir {
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.bat`.
     pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
-        let mut executable_script_path = self.path().join(exposed_name.to_string());
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        }
-        executable_script_path
+        // Add .bat to the windows executable
+        let exposed_name = if cfg!(windows) {
+            // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
+            format!("{}.bat", exposed_name)
+        } else {
+            exposed_name.to_string()
+        };
+        self.path().join(exposed_name)
     }
 }
 
@@ -130,7 +133,7 @@ impl EnvDir {
     /// Create a global environment directory based on passed global environment root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
-        environment_name: EnvironmentName,
+        environment_name: &EnvironmentName,
     ) -> miette::Result<Self> {
         let path = env_root.path().join(environment_name.as_str());
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
@@ -319,6 +322,8 @@ impl std::ops::BitOrAssign for StateChanges {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
+    use std::str::FromStr;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -330,7 +335,7 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
 
         // Define a test environment name
-        let environment_name = "test-env".parse().unwrap();
+        let environment_name = &EnvironmentName::from_str("test-env").unwrap();
 
         // Create a new binary env dir
         let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
@@ -357,5 +362,24 @@ mod tests {
         assert!(records
             .iter()
             .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
+    }
+
+    #[rstest]
+    #[case("python3.9.1")]
+    #[case("python3.9")]
+    #[case("python3")]
+    #[case("python")]
+    fn test_executable_script_path(#[case] exposed_name: &str) {
+        let path = PathBuf::from("/home/user/.pixi/bin");
+        let bin_dir = BinDir(path.clone());
+        let exposed_name = ExposedName::from_str(exposed_name).unwrap();
+        let executable_script_path = bin_dir.executable_script_path(&exposed_name);
+
+        if cfg!(windows) {
+            let expected = format!("{}.bat", exposed_name);
+            assert_eq!(executable_script_path, path.join(expected));
+        } else {
+            assert_eq!(executable_script_path, path.join(exposed_name.to_string()));
+        }
     }
 }

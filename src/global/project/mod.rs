@@ -123,7 +123,7 @@ impl ExposedData {
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
-        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(env_root.clone(), &env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let (platform, channel, package) =
@@ -376,7 +376,7 @@ impl Project {
     /// Returns the prefix of the environment with the given name.
     pub(crate) async fn environment_prefix(
         &self,
-        env_name: EnvironmentName,
+        env_name: &EnvironmentName,
     ) -> miette::Result<Prefix> {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         Ok(Prefix::new(env_dir.path()))
@@ -455,7 +455,6 @@ impl Project {
             .collect();
 
         // Solve the environment
-
         let solved_records = tokio::task::spawn_blocking(move || {
             wrap_in_progress("solving environment", move || {
                 Solver.solve(SolverTask {
@@ -474,7 +473,7 @@ impl Project {
 
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
-        let prefix = self.environment_prefix(env_name.clone()).await?;
+        let prefix = self.environment_prefix(env_name).await?;
         await_in_progress("creating virtual environment", |pb| {
             Installer::new()
                 .with_download_client(self.authenticated_client().clone())
@@ -504,7 +503,7 @@ impl Project {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
@@ -610,7 +609,7 @@ impl Project {
         } else {
             rattler_shell::shell::Bash.into()
         };
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name.clone()).await?;
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let environment = self
@@ -626,21 +625,25 @@ impl Project {
 
         let all_executables = &prefix.find_executables(prefix_records.as_slice());
 
-        let exposed: HashSet<&String> = environment.exposed.values().collect();
+        let exposed: HashSet<&str> = environment
+            .exposed
+            .iter()
+            .map(|map| map.executable_name())
+            .collect();
 
         let exposed_executables: Vec<_> = all_executables
             .iter()
-            .filter(|(name, _)| exposed.contains(name))
+            .filter(|(name, _)| exposed.contains(name.as_str()))
             .cloned()
             .collect();
 
         let script_mapping = environment
             .exposed
             .iter()
-            .map(|(exposed_name, entry_point)| {
+            .map(|mapping| {
                 script_exec_mapping(
-                    exposed_name,
-                    entry_point,
+                    mapping.exposed_name(),
+                    mapping.executable_name(),
                     exposed_executables.iter(),
                     &self.bin_dir,
                     &env_dir,
@@ -727,7 +730,7 @@ impl Project {
                     let (to_remove, _to_add) = get_expose_scripts_sync_status(
                         &self.bin_dir,
                         &EnvDir::from_path(env_path.clone()),
-                        &IndexMap::new(),
+                        &IndexSet::new(),
                     )
                     .await?;
 
@@ -753,7 +756,7 @@ impl Project {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         state_changes.push_changes(
-            self.environment_prefix(env_name.clone())
+            self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages(None)
                 .await?
@@ -929,8 +932,8 @@ mod tests {
 
         // Create some directories in the temporary directory
         let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
-        for env in &envs {
-            EnvDir::from_env_root(env_root.clone(), env.parse().unwrap())
+        for env in envs {
+            EnvDir::from_env_root(env_root.clone(), &EnvironmentName::from_str(env).unwrap())
                 .await
                 .unwrap();
         }
