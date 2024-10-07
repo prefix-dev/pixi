@@ -78,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Figure out version of the added packages
         let added_package_records = project
-            .environment_prefix(env_name.clone())
+            .environment_prefix(env_name)
             .await?
             .find_installed_packages(None)
             .await?
