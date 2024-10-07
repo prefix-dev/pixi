@@ -49,3 +49,28 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
     In the above example, we mount the `.pixi` directory into a volume.
     This is needed since the `.pixi` directory shouldn't be on a case insensitive filesystem (default on macOS, Windows) but instead in its own volume.
     There are some conda packages (for example [ncurses-feedstock#73](https://github.com/conda-forge/ncurses-feedstock/issues/73)) that contain files that only differ in case which leads to errors on case insensitive filesystems.
+
+## Secrets
+
+If you want to authenticate to a private conda channel, you can add secrets to your devcontainer.
+
+```json title=".devcontainer/devcontainer.json"
+{
+    "build": "Dockerfile",
+    "context": "..",
+    "options": [
+        "--secret",
+        "id=prefix_dev_token,env=PREFIX_DEV_TOKEN",
+    ],
+    // ...
+}
+```
+
+```dockerfile title=".devcontainer/Dockerfile"
+# ...
+RUN --mount=type=secret,id=prefix_dev_token,uid=1000 \
+    test -s /run/secrets/prefix_dev_token \
+    && pixi auth login --token "$(cat /run/secrets/prefix_dev_token)" https://repo.prefix.dev
+```
+
+These secrets need to be present either as an environment variable when starting the devcontainer locally or in your [GitHub Codespaces settings](https://github.com/settings/codespaces) under `Secrets`.
