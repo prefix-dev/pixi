@@ -1,4 +1,5 @@
 use super::{extract_executable_from_script, BinDir, EnvRoot};
+use crate::global::common::{channel_url_to_prioritized_channel, find_package_records};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
@@ -30,8 +31,7 @@ use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
-    Platform, PrefixRecord,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
 };
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::shell::ShellEnum;
@@ -47,7 +47,6 @@ use std::{
     str::FromStr,
 };
 use toml_edit::DocumentMut;
-use url::Url;
 
 mod environment;
 mod manifest;
@@ -94,7 +93,7 @@ impl Debug for Project {
 struct ExposedData {
     env_name: EnvironmentName,
     platform: Option<Platform>,
-    channel: PrioritizedChannel,
+    channels: Vec<PrioritizedChannel>,
     package: PackageName,
     exposed: ExposedName,
     executable_name: String,
@@ -134,10 +133,27 @@ impl ExposedData {
         let (platform, channel, package) =
             package_from_conda_meta(&conda_meta, &executable, &prefix, channel_config).await?;
 
+        let mut channels = vec![channel];
+
+        // Find all channels used to create the environment
+        let all_channels = prefix
+            .find_installed_packages(None)
+            .await?
+            .iter()
+            .map(|prefix_record| prefix_record.repodata_record.channel.clone())
+            .collect::<HashSet<_>>();
+        for channel in all_channels {
+            tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
+            channels.push(channel_url_to_prioritized_channel(
+                &channel,
+                channel_config,
+            )?);
+        }
+
         Ok(ExposedData {
             env_name,
             platform,
-            channel,
+            channels,
             package,
             executable_name: executable,
             exposed,
@@ -176,33 +192,8 @@ fn convert_record_to_metadata(
 
     let package_name = prefix_record.repodata_record.package_record.name.clone();
 
-    // Repodata channel contains channel config alias as a substring, don't use it as a URL
-    if prefix_record
-        .repodata_record
-        .channel
-        .contains(channel_config.channel_alias.as_str())
-    {
-        // Create channel from URL for parsing
-        let channel = Channel::from_url(
-            Url::from_str(prefix_record.repodata_record.channel.as_str())
-                .expect("channel should be url"),
-        );
-        // If it has a name return as named channel
-        if let Some(name) = channel.name {
-            // If the channel has a name, use it as the channel
-            return Ok((
-                platform,
-                NamedChannelOrUrl::from_str(&name).into_diagnostic()?.into(),
-                package_name,
-            ));
-        }
-    }
-
-    // Return as url if the channel is not part of the channel config alias
-    let channel: PrioritizedChannel =
-        NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-            .into_diagnostic()?
-            .into();
+    let channel =
+        channel_url_to_prioritized_channel(&prefix_record.repodata_record.channel, channel_config)?;
 
     Ok((platform, channel, package_name))
 }
@@ -218,7 +209,7 @@ async fn package_from_conda_meta(
     prefix: &Prefix,
     channel_config: &ChannelConfig,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let records = crate::global::common::find_package_records(conda_meta).await?;
+    let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
         if find_executables(prefix, &prefix_record)
@@ -796,8 +787,11 @@ mod tests {
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
     use itertools::Itertools;
-    use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, VersionWithSource};
+    use rattler_conda_types::{
+        NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+    };
     use tempfile::tempdir;
+    use url::Url;
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]

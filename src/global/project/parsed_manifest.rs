@@ -33,13 +33,13 @@ where
             let ExposedData {
                 env_name,
                 platform,
-                channel,
+                channels,
                 package,
                 executable_name,
                 exposed,
             } = data;
             let parsed_environment = envs.entry(env_name).or_default();
-            parsed_environment.channels.insert(channel);
+            parsed_environment.channels.extend(channels);
             parsed_environment.platform = platform;
             parsed_environment
                 .dependencies
