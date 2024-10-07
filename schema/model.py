@@ -228,7 +228,8 @@ class PyPIPathRequirement(_PyPIRequirement):
         None, description="The subdirectory in the repo, a path from the root of the repo."
     )
     no_deps: bool = Field(
-        False, description="If `true` (default is `false`), the package will be installed without dependencies (matches `--no-deps` in `pip install`)"
+        False,
+        description="If `true` (default is `false`), the package will be installed without dependencies (matches `--no-deps` in `pip install`)"
     )
 
 
