@@ -745,6 +745,7 @@ impl Project {
         Ok(state_changes)
     }
 
+    // Figure which packages have been added
     pub async fn added_packages(
         &self,
         specs: &[MatchSpec],
@@ -965,7 +966,11 @@ mod tests {
         );
 
         // Call the prune method with a list of environments to keep (env1 and env3) but not env4
-        let _ = project.prune_old_environments().await.unwrap();
+        let state_changes = project.prune_old_environments().await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            vec![StateChange::RemovedEnvironment("env2".parse().unwrap())]
+        );
 
         // Verify that only the specified directories remain
         let remaining_dirs = fs::read_dir(env_root.path())
