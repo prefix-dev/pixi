@@ -78,7 +78,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Cannot add exposed mappings for more than one environment");
     }
 
-    let mut project = project_original.clone();
+    let mut project_modified = project_original.clone();
+    let mut state_changes = StateChanges::default();
     let specs = args.specs()?;
     for env_name in &env_names {
         let specs = if multiple_envs {
@@ -91,7 +92,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             specs.clone()
         };
 
-        if let Err(err) = setup_environment(env_name, &args, &mut project, specs).await {
+        if let Err(err) = setup_environment(
+            env_name,
+            &args,
+            specs,
+            &mut project_modified,
+            &mut state_changes,
+        )
+        .await
+        {
+            state_changes.report();
             if project_original.environment(env_name).is_some() {
                 revert_environment_after_error(env_name, &project_original)
                     .await
@@ -100,8 +110,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             return Err(err);
         }
     }
-
-    project.manifest.save().await?;
+    state_changes.report();
+    project_modified.manifest.save().await?;
 
     Ok(())
 }
@@ -109,12 +119,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    project: &mut Project,
     specs: IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<StateChanges> {
+    project: &mut Project,
+    state_changes: &mut StateChanges,
+) -> miette::Result<()> {
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
-        project.manifest.remove_environment(env_name)?;
+        state_changes.push_change(project.manifest.remove_environment(env_name)?);
     }
 
     let channels = if args.channels.is_empty() {
@@ -122,7 +133,7 @@ async fn setup_environment(
     } else {
         args.channels.clone()
     };
-    project.manifest.add_environment(env_name, Some(channels))?;
+    state_changes.push_change(project.manifest.add_environment(env_name, Some(channels))?);
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
@@ -179,7 +190,11 @@ async fn setup_environment(
     }
 
     // Expose executables of the new environment
-    project.expose_executables_from_environment(env_name).await
+    *state_changes |= project
+        .expose_executables_from_environment(env_name)
+        .await?;
+
+    Ok(())
 }
 
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.

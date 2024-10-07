@@ -5,7 +5,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use rattler_conda_types::{PackageRecord, PrefixRecord};
 use std::ffi::OsStr;
-use std::ops::BitOrAssign;
+use std::fmt;
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -183,37 +183,127 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 #[must_use]
+pub(crate) enum StateChange {
+    AddedExecutable(String, EnvironmentName),
+    UpdatedExecutable(String, EnvironmentName),
+    AddedPackage(PackageRecord, EnvironmentName),
+    AddedEnvironment(EnvironmentName),
+    RemovedEnvironment(EnvironmentName),
+}
+
+impl StateChange {
+    fn environment(&self) -> &EnvironmentName {
+        match self {
+            StateChange::AddedExecutable(_, env)
+            | StateChange::UpdatedExecutable(_, env)
+            | StateChange::AddedPackage(_, env)
+            | StateChange::AddedEnvironment(env)
+            | StateChange::RemovedEnvironment(env) => &env,
+        }
+    }
+}
+
+impl fmt::Display for StateChange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StateChange::AddedExecutable(exe, env) => {
+                write!(
+                    f,
+                    "{}Added executable '{exe}' for environment '{env}'.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                )
+            }
+            StateChange::UpdatedExecutable(exe, env) => {
+                write!(
+                    f,
+                    "{}Updated executable '{exe}' for environment '{env}'.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                )
+            }
+            StateChange::AddedPackage(pkg, env) => write!(
+                f,
+                "{}Added package '{pkg}' to environment '{env}'.",
+                console::style(console::Emoji("✔ ", "")).green(),
+            ),
+            StateChange::AddedEnvironment(env) => write!(
+                f,
+                "{}Added environment '{env}'.",
+                console::style(console::Emoji("✔ ", "")).green()
+            ),
+            StateChange::RemovedEnvironment(env) => write!(
+                f,
+                "{}Removed environment '{env}'.",
+                console::style(console::Emoji("✔ ", "")).green()
+            ),
+        }
+    }
+}
+
+#[must_use]
+#[derive(Debug, Default)]
 pub(crate) struct StateChanges {
-    pub(crate) added_executables: Vec<String>,
-    pub(crate) updated_executables: Vec<String>,
-    pub(crate) added_packages: Vec<PackageRecord>,
-    pub(crate) removed_environments: Vec<EnvironmentName>,
-    changed: bool,
+    changes: Vec<StateChange>,
+    has_updated: bool,
 }
 
 impl StateChanges {
-    pub(crate) fn changed(&self) -> bool {
-        self.changed
-            || !self.added_executables.is_empty()
-            || !self.updated_executables.is_empty()
-            || !self.added_packages.is_empty()
-            || !self.removed_environments.is_empty()
+    pub(crate) fn has_changed(&self) -> bool {
+        self.has_updated || !self.changes.is_empty()
     }
 
-    pub(crate) fn set_changed(&mut self, changed: bool) {
-        self.changed = changed;
+    pub(crate) fn set_has_updated(&mut self, has_updated: bool) {
+        self.has_updated = has_updated;
+    }
+
+    pub(crate) fn push_change(&mut self, change: StateChange) {
+        self.changes.push(change);
+    }
+
+    pub(crate) fn push_changes(&mut self, changes: impl IntoIterator<Item = StateChange>) {
+        self.changes.extend(changes);
+    }
+
+    fn prune(&mut self) {
+        use std::collections::HashSet;
+
+        let mut removed_envs = HashSet::new();
+        let mut pruned_changes = Vec::new();
+
+        for change in &self.changes {
+            match change {
+                StateChange::RemovedEnvironment(env) => {
+                    removed_envs.insert(env.clone());
+                    pruned_changes.retain(|c| match c {
+                        StateChange::AddedExecutable(_, e)
+                        | StateChange::UpdatedExecutable(_, e)
+                        | StateChange::AddedPackage(_, e)
+                        | StateChange::AddedEnvironment(e) => e != env,
+                        _ => true,
+                    });
+                }
+                _ => {
+                    if !removed_envs.contains(change.environment()) {
+                        pruned_changes.push(change.clone());
+                    }
+                }
+            }
+        }
+
+        self.changes = pruned_changes;
+    }
+
+    pub(crate) fn report(&mut self) {
+        self.prune();
+        todo!()
     }
 }
 
-impl BitOrAssign for StateChanges {
+impl std::ops::BitOrAssign for StateChanges {
     fn bitor_assign(&mut self, rhs: Self) {
-        self.added_executables.extend(rhs.added_executables);
-        self.updated_executables.extend(rhs.updated_executables);
-        self.added_packages.extend(rhs.added_packages);
-        self.removed_environments.extend(rhs.removed_environments);
-        self.changed |= rhs.changed;
+        self.changes.extend(rhs.changes);
+        self.has_updated |= rhs.has_updated;
     }
 }
 

@@ -21,7 +21,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let state_changes = project.sync().await?;
 
-    if !state_changes.changed() {
+    if state_changes.has_changed() {
+        state_changes.report();
+    } else {
         eprintln!(
             "{} Nothing to do. The pixi global installation is already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()

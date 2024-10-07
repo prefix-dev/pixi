@@ -1,5 +1,5 @@
 use crate::cli::global::revert_environment_after_error;
-use crate::global;
+use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use miette::Context;
@@ -35,42 +35,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        project: &mut Project,
-    ) -> miette::Result<bool> {
-        if !project.manifest.remove_environment(env_name)? {
-            return Ok(false);
-        };
+        project_modified: &mut Project,
+        state_changes: &mut StateChanges,
+    ) -> miette::Result<()> {
+        state_changes.push_change(project_modified.manifest.remove_environment(env_name)?);
 
         // Cleanup the project after removing the environments.
-        let state_changes = project.prune_old_environments().await?;
+        *state_changes |= project_modified.prune_old_environments().await?;
 
-        project.manifest.save().await?;
-        Ok(true)
+        project_modified.manifest.save().await?;
+
+        Ok(())
     }
 
-    let mut project = project_original.clone();
+    let mut project_modified = project_original.clone();
+    let mut state_changes = StateChanges::default();
     for env_name in &args.environment {
-        match apply_changes(env_name, &mut project).await {
-            Ok(true) => (),
-            Ok(false) => {
-                miette::bail!(
-                    "Environment '{env_name}' not found in manifest '{}'",
-                    project.manifest.path.display()
-                );
-            }
-            Err(err) => {
-                if project_original.environment(env_name).is_some() {
-                    revert_environment_after_error(env_name, &project_original)
-                        .await
-                        .wrap_err_with(|| {
-                            format!(
-                            "Could not uninstall environment '{env_name}'. Reverting also failed."
-                        )
-                        })?;
-                    return Err(err);
-                }
-            }
+        if let Err(err) = apply_changes(env_name, &mut project_modified, &mut state_changes).await {
+            state_changes.report();
+            revert_environment_after_error(env_name, &project_original)
+                .await
+                .wrap_err_with(|| {
+                    format!("Could not uninstall environment '{env_name}'. Reverting also failed.")
+                })?;
+            return Err(err);
         }
     }
+    state_changes.report();
     Ok(())
 }

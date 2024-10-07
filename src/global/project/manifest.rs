@@ -8,6 +8,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
 use crate::global::project::ParsedEnvironment;
+use crate::global::StateChange;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
 use pixi_spec::PixiSpec;
@@ -72,15 +73,19 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         channels: Option<Vec<NamedChannelOrUrl>>,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<StateChange> {
         let channels = channels
             .filter(|c| !c.is_empty())
             .unwrap_or_else(|| Config::load_global().default_channels());
 
         // Update self.parsed
-        self.parsed.envs.entry(env_name.clone()).or_insert_with(|| {
-            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from))
-        });
+        if self.parsed.envs.get(env_name).is_some() {
+            miette::bail!("Environment {env_name} already exists.");
+        }
+        self.parsed.envs.insert(
+            env_name.clone(),
+            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from)),
+        );
 
         // Update self.document
         let channels_array = self
@@ -91,24 +96,28 @@ impl Manifest {
         }
 
         tracing::debug!("Added environment {} to toml document", env_name);
-        Ok(())
+        Ok(StateChange::AddedEnvironment(env_name.clone()))
     }
 
     /// Removes a specific environment from the manifest
-    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<bool> {
-        let mut removed;
+    pub fn remove_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChange> {
         // Update self.parsed
-        removed = self.parsed.envs.shift_remove(env_name).is_some();
+        self.parsed
+            .envs
+            .shift_remove(env_name)
+            .ok_or_else(|| miette::miette!("'{env_name}' does not exist."))?;
 
         // Update self.document
-        removed |= self
-            .document
+        self.document
             .get_or_insert_nested_table("envs")?
             .remove(env_name.as_str())
-            .is_some();
+            .ok_or_else(|| miette::miette!("'{env_name}' does not exist."))?;
 
         tracing::debug!("Removed environment {env_name} from toml document");
-        Ok(removed)
+        Ok(StateChange::RemovedEnvironment(env_name.clone()))
     }
 
     /// Adds a dependency to the manifest
@@ -125,7 +134,7 @@ impl Manifest {
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
         if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
+            miette::bail!("Environment '{env_name}' doesn't exist");
         }
 
         // Update self.parsed
@@ -160,7 +169,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
+            miette::bail!("Environment '{env_name}' doesn't exist");
         }
 
         // Update self.parsed
@@ -195,7 +204,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
+            miette::bail!("Environment '{env_name}' doesn't exist");
         }
 
         // Update self.parsed
@@ -240,7 +249,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
+            miette::bail!("Environment '{env_name}' doesn't exist");
         }
         // Update self.parsed
         self.parsed
@@ -272,7 +281,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
+            miette::bail!("Environment '{env_name}' doesn't exist");
         }
         self.parsed
             .envs
@@ -494,7 +503,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let _ = manifest.add_environment(&env_name, None).unwrap();
 
         // Check document
         let actual_value = manifest
@@ -528,7 +537,7 @@ mod tests {
         ]);
 
         // Add environment
-        manifest
+        let _ = manifest
             .add_environment(&env_name, Some(channels.clone()))
             .unwrap();
 
@@ -558,10 +567,10 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let _ = manifest.add_environment(&env_name, None).unwrap();
 
         // Remove environment
-        manifest.remove_environment(&env_name).unwrap();
+        let _ = manifest.remove_environment(&env_name).unwrap();
 
         // Check document
         let actual_value = manifest

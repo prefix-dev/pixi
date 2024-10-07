@@ -1,5 +1,8 @@
-use super::{EnvDir, ExposedName, StateChanges};
-use crate::{global::BinDir, prefix::Prefix};
+use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
+use crate::{
+    global::{BinDir, StateChange},
+    prefix::Prefix,
+};
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -101,6 +104,7 @@ pub(crate) async fn create_executable_scripts(
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
+    env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
     enum AddedOrChanged {
         Unchanged,
@@ -157,7 +161,6 @@ pub(crate) async fn create_executable_scripts(
             tokio_fs::write(&global_script_path, script)
                 .await
                 .into_diagnostic()?;
-            state_changes.set_changed(true);
         }
 
         #[cfg(unix)]
@@ -171,9 +174,15 @@ pub(crate) async fn create_executable_scripts(
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
-                state_changes.added_executables.push(executable_name);
+                state_changes.push_change(StateChange::AddedExecutable(
+                    executable_name,
+                    env_name.clone(),
+                ));
             }
-            AddedOrChanged::Changed => state_changes.updated_executables.push(executable_name),
+            AddedOrChanged::Changed => state_changes.push_change(StateChange::UpdatedExecutable(
+                executable_name,
+                env_name.clone(),
+            )),
         }
     }
     Ok(state_changes)

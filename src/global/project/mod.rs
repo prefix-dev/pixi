@@ -1,4 +1,4 @@
-use super::{extract_executable_from_script, BinDir, EnvRoot, StateChanges};
+use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
@@ -32,6 +32,7 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
 };
+use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::shell::ShellEnum;
 use rattler_solve::resolvo::Solver;
@@ -648,7 +649,14 @@ impl Project {
             ))?;
 
         tracing::debug!("Exposing executables for environment '{}'", env_name);
-        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
+        create_executable_scripts(
+            &script_mapping,
+            &prefix,
+            &shell,
+            activation_script,
+            env_name,
+        )
+        .await
     }
 
     // Syncs the manifest with the local environments
@@ -679,7 +687,7 @@ impl Project {
                 env_name
             );
             self.install_environment(env_name).await?;
-            state_changes.set_changed(true);
+            state_changes.set_has_updated(true);
         }
 
         // Expose executables
@@ -723,11 +731,30 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    state_changes.removed_environments.push(env_name);
+                    state_changes.push_change(StateChange::RemovedEnvironment(env_name));
                 }
             }
         }
 
+        Ok(state_changes)
+    }
+
+    pub async fn added_packages(
+        &self,
+        specs: &[MatchSpec],
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        state_changes.push_changes(
+            self.environment_prefix(env_name.clone())
+                .await?
+                .find_installed_packages(None)
+                .await?
+                .into_iter()
+                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .map(|r| r.repodata_record.package_record)
+                .map(|record| StateChange::AddedPackage(record, env_name.clone())),
+        );
         Ok(state_changes)
     }
 }

@@ -1,11 +1,11 @@
 use crate::cli::global::revert_environment_after_error;
 use crate::cli::has_specs::HasSpecs;
-use crate::global::{EnvironmentName, Mapping, Project};
+use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use rattler_conda_types::{MatchSpec, Matches};
+use rattler_conda_types::MatchSpec;
 
 /// Adds dependencies to an environment
 ///
@@ -57,42 +57,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         specs: &[MatchSpec],
         expose: &[Mapping],
-        project: &mut Project,
+        project_modified: &mut Project,
+        state_changes: &mut StateChanges,
     ) -> miette::Result<()> {
         // Add specs to the manifest
         for spec in specs {
-            project.manifest.add_dependency(
+            project_modified.manifest.add_dependency(
                 env_name,
                 spec,
-                project.clone().config().global_channel_config(),
+                project_modified.clone().config().global_channel_config(),
             )?;
         }
 
         // Add expose mappings to the manifest
         for mapping in expose {
-            project.manifest.add_exposed_mapping(env_name, mapping)?;
+            project_modified
+                .manifest
+                .add_exposed_mapping(env_name, mapping)?;
         }
 
         // Sync environment
-        let mut state_changes = project.sync_environment(env_name).await?;
+        *state_changes |= project_modified.sync_environment(env_name).await?;
 
         // Figure out version of the added packages
-        state_changes.added_packages.extend(
-            project
-                .environment_prefix(env_name.clone())
-                .await?
-                .find_installed_packages(None)
-                .await?
-                .into_iter()
-                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
-                .map(|r| r.repodata_record.package_record),
-        );
+        *state_changes |= project_modified.added_packages(specs, env_name).await?;
 
-        project.manifest.save().await?;
+        project_modified.manifest.save().await?;
         Ok(())
     }
 
-    let mut project = project_original.clone();
+    let mut state_changes = StateChanges::default();
+    let mut project_modified = project_original.clone();
     let specs = args
         .specs()?
         .into_iter()
@@ -103,18 +98,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &args.environment,
         specs.as_slice(),
         args.expose.as_slice(),
-        &mut project,
+        &mut project_modified,
+        &mut state_changes,
     )
     .await
     {
+        state_changes.report();
         revert_environment_after_error(&args.environment, &project_original)
             .await
             .wrap_err(format!(
                 "Could not add {:?}. Reverting also failed.",
                 args.packages
             ))?;
-        return Err(err);
+        Err(err)
+    } else {
+        state_changes.report();
+        Ok(())
     }
-
-    Ok(())
 }
