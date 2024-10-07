@@ -200,7 +200,7 @@ impl StateChange {
             | StateChange::UpdatedExecutable(_, env)
             | StateChange::AddedPackage(_, env)
             | StateChange::AddedEnvironment(env)
-            | StateChange::RemovedEnvironment(env) => &env,
+            | StateChange::RemovedEnvironment(env) => env,
         }
     }
 }
@@ -265,38 +265,28 @@ impl StateChanges {
         self.changes.extend(changes);
     }
 
+    /// Remove changes that cancel each other out
     fn prune(&mut self) {
-        use std::collections::HashSet;
-
-        let mut removed_envs = HashSet::new();
-        let mut pruned_changes = Vec::new();
-
+        // Remove changes if the environment is removed afterwards
+        let mut pruned_changes: Vec<StateChange> = Vec::new();
         for change in &self.changes {
             match change {
                 StateChange::RemovedEnvironment(env) => {
-                    removed_envs.insert(env.clone());
-                    pruned_changes.retain(|c| match c {
-                        StateChange::AddedExecutable(_, e)
-                        | StateChange::UpdatedExecutable(_, e)
-                        | StateChange::AddedPackage(_, e)
-                        | StateChange::AddedEnvironment(e) => e != env,
-                        _ => true,
-                    });
+                    pruned_changes.retain(|c| c.environment() != env);
                 }
                 _ => {
-                    if !removed_envs.contains(change.environment()) {
-                        pruned_changes.push(change.clone());
-                    }
+                    pruned_changes.push(change.clone());
                 }
             }
         }
-
         self.changes = pruned_changes;
     }
 
-    pub(crate) fn report(&mut self) {
+    pub(crate) fn report(mut self) {
         self.prune();
-        todo!()
+        for change in &self.changes {
+            eprintln!("{change}");
+        }
     }
 }
 

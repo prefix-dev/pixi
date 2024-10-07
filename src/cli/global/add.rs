@@ -58,8 +58,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         specs: &[MatchSpec],
         expose: &[Mapping],
         project_modified: &mut Project,
-        state_changes: &mut StateChanges,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
         // Add specs to the manifest
         for spec in specs {
             project_modified.manifest.add_dependency(
@@ -77,16 +78,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        *state_changes |= project_modified.sync_environment(env_name).await?;
+        state_changes |= project_modified.sync_environment(env_name).await?;
 
         // Figure out version of the added packages
-        *state_changes |= project_modified.added_packages(specs, env_name).await?;
+        state_changes |= project_modified.added_packages(specs, env_name).await?;
 
         project_modified.manifest.save().await?;
-        Ok(())
+        Ok(state_changes)
     }
 
-    let mut state_changes = StateChanges::default();
     let mut project_modified = project_original.clone();
     let specs = args
         .specs()?
@@ -94,25 +94,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|(_, specs)| specs)
         .collect_vec();
 
-    if let Err(err) = apply_changes(
+    match apply_changes(
         &args.environment,
         specs.as_slice(),
         args.expose.as_slice(),
         &mut project_modified,
-        &mut state_changes,
     )
     .await
     {
-        state_changes.report();
-        revert_environment_after_error(&args.environment, &project_original)
-            .await
-            .wrap_err(format!(
-                "Could not add {:?}. Reverting also failed.",
-                args.packages
-            ))?;
-        Err(err)
-    } else {
-        state_changes.report();
-        Ok(())
+        Ok(state_changes) => {
+            state_changes.report();
+            Ok(())
+        }
+        Err(err) => {
+            revert_environment_after_error(&args.environment, &project_original)
+                .await
+                .wrap_err(format!(
+                    "Could not add {:?}. Reverting also failed.",
+                    args.packages
+                ))?;
+            Err(err)
+        }
     }
 }

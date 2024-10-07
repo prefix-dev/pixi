@@ -528,7 +528,7 @@ impl Project {
     /// And verifies only and all required exposed binaries are in the bin dir.
     pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
         let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment {} not found.",
+            "Environment '{}' not found in manifest.",
             env_name.to_string()
         ))?;
 

@@ -78,8 +78,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Cannot add exposed mappings for more than one environment");
     }
 
-    let mut project_modified = project_original.clone();
     let mut state_changes = StateChanges::default();
+    let mut project_modified = project_original.clone();
     let specs = args.specs()?;
     for env_name in &env_names {
         let specs = if multiple_envs {
@@ -92,22 +92,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             specs.clone()
         };
 
-        if let Err(err) = setup_environment(
-            env_name,
-            &args,
-            specs,
-            &mut project_modified,
-            &mut state_changes,
-        )
-        .await
-        {
-            state_changes.report();
-            if project_original.environment(env_name).is_some() {
-                revert_environment_after_error(env_name, &project_original)
-                    .await
-                    .wrap_err("Could not install packages. Reverting also failed.")?;
+        match setup_environment(env_name, &args, specs, &mut project_modified).await {
+            Ok(sc) => {
+                state_changes |= sc;
             }
-            return Err(err);
+            Err(err) => {
+                state_changes.report();
+                if project_original.environment(env_name).is_some() {
+                    revert_environment_after_error(env_name, &project_original)
+                        .await
+                        .wrap_err("Could not install packages. Reverting also failed.")?;
+                }
+                return Err(err);
+            }
         }
     }
     state_changes.report();
@@ -121,8 +118,9 @@ async fn setup_environment(
     args: &Args,
     specs: IndexMap<PackageName, MatchSpec>,
     project: &mut Project,
-    state_changes: &mut StateChanges,
-) -> miette::Result<()> {
+) -> miette::Result<StateChanges> {
+    let mut state_changes = StateChanges::default();
+
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
         state_changes.push_change(project.manifest.remove_environment(env_name)?);
@@ -190,11 +188,11 @@ async fn setup_environment(
     }
 
     // Expose executables of the new environment
-    *state_changes |= project
+    state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
 
-    Ok(())
+    Ok(state_changes)
 }
 
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.
