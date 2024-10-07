@@ -172,7 +172,7 @@ exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dumm
 channels = ["conda-forge"]
 # Small package with binary for testing purposes
 dependencies = {{ xz = "*" }}
-exposed = {{ xz = "xz", xz_static = "xz_static" }}
+exposed = {{ xz = "xz" }}
 """
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
