@@ -1007,6 +1007,12 @@
             "minLength": 1
           }
         },
+        "no_deps": {
+          "title": "No Deps",
+          "description": "If `true` (default is `false`), the package will be installed without dependencies (matches `--no-deps` in `pip install`)",
+          "type": "boolean",
+          "default": false
+        },
         "path": {
           "title": "Path",
           "description": "A path to a local source or wheel",
