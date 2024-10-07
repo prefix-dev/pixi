@@ -1,7 +1,4 @@
-use std::{
-    env,
-    io::{Seek, Write},
-};
+use std::io::{Seek, Write};
 
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -12,19 +9,11 @@ use reqwest::Client;
 use serde::Deserialize;
 
 /// Update pixi to the latest version or a specific version.
-///
-/// If the pixi binary is not found in the default location
-/// (e.g. `~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc).
-/// The behaviour can be overridden with the `--force` flag.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
     /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
     #[clap(long)]
     version: Option<String>,
-
-    /// Force the update even if the pixi binary is not found in the default location.
-    #[clap(long)]
-    force: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,25 +55,6 @@ fn default_archive_name() -> Option<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // If args.force is false and pixi is not installed in the default location, stop here.
-    match (args.force, is_pixi_binary_default_location()) {
-        (false, false) => {
-            miette::bail!(
-                "pixi is not installed in the default location:
-
-- Default pixi location: {}
-- Pixi location detected: {}
-
-It can happen when pixi has been installed via a dedicated package manager (such as Homebrew on macOS).
-You can always use `pixi self-update --force` to force the update.",
-                default_pixi_binary_path().to_str().expect("Could not convert the default pixi binary path to a string"),
-                env::current_exe().expect("Failed to retrieve the current pixi binary path").to_str().expect("Could not convert the current pixi binary path to a string")
-            );
-        }
-        (false, true) => {}
-        (true, _) => {}
-    }
-
     // Retrieve the target version information from github.
     let target_version_json = match retrieve_target_version(&args.version).await {
         Ok(target_version_json) => target_version_json,
@@ -242,19 +212,6 @@ fn pixi_binary_name() -> String {
     format!("pixi{}", std::env::consts::EXE_SUFFIX)
 }
 
-fn default_pixi_binary_path() -> std::path::PathBuf {
-    dirs::home_dir()
-        .expect("Could not find the home directory")
-        .join(".pixi")
-        .join("bin")
-        .join(pixi_binary_name())
-}
-
-// check current binary is in the default pixi location
-fn is_pixi_binary_default_location() -> bool {
-    same_file::is_same_file(
-        std::env::current_exe().expect("Failed to retrieve the current pixi binary path"),
-        default_pixi_binary_path(),
-    )
-    .unwrap_or(false)
+pub async fn execute_stub(_: Args) -> miette::Result<()> {
+    miette::bail!("This version of pixi was built without self-update support. Please use your package manager to update pixi.")
 }

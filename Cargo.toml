@@ -159,6 +159,7 @@ rustls-tls = [
   "rattler/rustls-tls",
   "pixi_utils/rustls-tls",
 ]
+self_update = []
 slow_integration_tests = []
 
 [dependencies]

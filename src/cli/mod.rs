@@ -272,7 +272,10 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
+        #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+        #[cfg(not(feature = "self_update"))]
+        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
