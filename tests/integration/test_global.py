@@ -789,7 +789,7 @@ def test_global_update_all_packages(
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
-    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / "package2"
+    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / exec_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
