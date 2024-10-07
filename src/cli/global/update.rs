@@ -45,7 +45,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .exposed
                 .iter()
                 .filter_map(|mapping| {
-                    //
+                    // If the executable is still requested, do not remove the mapping
                     if all_executables
                         .iter()
                         .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
@@ -53,6 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
                         return None;
                     }
+                    // Else do remove the mapping
                     Some(mapping.exposed_name().clone())
                 })
                 .collect_vec();
