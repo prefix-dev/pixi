@@ -16,8 +16,6 @@ mod update;
 pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    /// Edit the configuration file
-    #[clap(alias = "e")]
     Edit(edit::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
