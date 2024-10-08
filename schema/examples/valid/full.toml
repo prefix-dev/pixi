@@ -16,6 +16,11 @@ readme = "README.md"
 repository = "https://github.com/author/project"
 version = "0.1.0"
 
+[build]
+build-backend = "pixi-build-python"
+dependencies = ["pixi-build-python *"]
+
+
 [dependencies]
 detailed = { version = ">=1.2.3" }
 detailed-full = { version = ">=1.2.3", build = "py34_0", channel = "pytorch", subdir = "linux-64", md5 = "6f5902ac237024bdd0c176cb93063dc4", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
@@ -45,8 +50,8 @@ no-build-isolation = ["requests"]
 
 [pypi-dependencies]
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
-  "security",
-  "tests",
+    "security",
+    "tests",
 ] } # Using the map allows the user to add `extras`
 testpypi = "*"
 testpypi1 = "*"
@@ -68,7 +73,7 @@ test1 = "*"
 build = "conda build ."
 # deprecated depends_on
 test = { cmd = "pytest", cwd = "tests", depends_on = [
-  "build",
+    "build",
 ], description = "Run tests using pytests after building." }
 test2 = { cmd = "pytest", cwd = "tests" }
 test3 = { cmd = "pytest", depends-on = ["test2"] }
@@ -76,10 +81,10 @@ test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends-on = ["test5"] }
 test7 = { cmd = "pytest", cwd = "tests", depends-on = [
-  "test5",
+    "test5",
 ], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" } }
 test8 = { cmd = "pytest", cwd = "tests", depends-on = [
-  "test5",
+    "test5",
 ], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" }, clean-env = true }
 test9 = { cmd = "pytest", clean-env = false }
 [system-requirements]
@@ -123,8 +128,8 @@ test1 = "*"
 
 [target.osx-arm64.pypi-dependencies]
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
-  "security",
-  "tests",
+    "security",
+    "tests",
 ] } # Using the map allows the user to add `extras`
 testpypi = "*"
 testpypi1 = "*"
@@ -156,8 +161,8 @@ test = "*"
 [feature.cuda]
 activation = { scripts = ["cuda_activation.sh"] }
 channels = [
-  "nvidia",
-  { channel = "pytorch", priority = -1 },
+    "nvidia",
+    { channel = "pytorch", priority = -1 },
 ] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
 dependencies = { cuda = "x.y.z", cudnn = "12.0" }
 platforms = ["linux-64", "osx-arm64"]

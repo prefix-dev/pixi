@@ -42,9 +42,6 @@ impl<'e> From<ErrorObject<'e>> for BackendError {
             .and_then(|value| serde_json::from_str(value.get()).ok())
             .unwrap_or_default();
 
-        let error_data = value.data().map(|b| b.get()).unwrap_or("");
-        dbg!(error_data);
-
         let source = error.causes.0.into_iter().fold(None, |previous, cause| {
             Some(Box::new(BackendErrorCause {
                 message: cause,

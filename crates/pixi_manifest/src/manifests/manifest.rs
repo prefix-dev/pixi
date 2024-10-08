@@ -21,9 +21,9 @@ use crate::{
     manifests::{ManifestSource, TomlManifest},
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
-    to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target, TargetSelector, Task,
-    TaskName,
+    to_options, BuildSection, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
+    FeatureName, GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target,
+    TargetSelector, Task, TaskName,
 };
 
 #[derive(Debug, Clone)]
@@ -705,6 +705,11 @@ impl Manifest {
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
+    }
+
+    /// Return the build section from the parsed manifest
+    pub fn build_section(&self) -> Option<&BuildSection> {
+        self.parsed.build.as_ref()
     }
 }
 

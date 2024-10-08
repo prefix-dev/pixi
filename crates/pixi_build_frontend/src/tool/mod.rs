@@ -79,9 +79,7 @@ impl Tool {
     /// Construct a new command that enables invocation of the tool.
     pub fn command(&self) -> std::process::Command {
         match self {
-            Tool::Isolated(_tool) => {
-                todo!("invocation of isolated tools is not implemented yet");
-            }
+            Tool::Isolated(tool) => std::process::Command::new(&tool.command),
             Tool::System(tool) => std::process::Command::new(&tool.command),
         }
     }

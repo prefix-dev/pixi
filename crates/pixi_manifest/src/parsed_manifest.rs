@@ -25,6 +25,7 @@ use crate::{
     target::{Target, TargetSelector, Targets},
     task::{Task, TaskName},
     utils::PixiSpanned,
+    BuildSection,
 };
 
 /// Describes the contents of a parsed project manifest.
@@ -41,6 +42,9 @@ pub struct ParsedManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The build section of the project.
+    pub build: Option<BuildSection>,
 }
 
 impl ParsedManifest {
@@ -157,6 +161,10 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             #[serde(default, skip_serializing, rename = "tool")]
             _tool: serde::de::IgnoredAny,
 
+            /// The build section
+            #[serde(default)]
+            build: Option<BuildSection>,
+
             /// The URI for the manifest schema which is unused by pixi
             #[allow(dead_code)]
             #[serde(rename = "$schema")]
@@ -252,11 +260,14 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             }));
         }
 
+        let build = toml_manifest.build;
+
         Ok(Self {
             project: toml_manifest.project,
             features,
             environments,
             solve_groups,
+            build,
         })
     }
 }
@@ -726,5 +737,40 @@ mod tests {
         test = "test"
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_build_section_deserialization() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [build]
+        dependencies = ["python-build-backend > 12"]
+        build-backend = "python-build-backend"
+        "#
+        .to_string();
+        let manifest =
+            toml_edit::de::from_str::<ParsedManifest>(&contents).expect("parsing should succeed!");
+        assert_yaml_snapshot!(manifest.build.clone().unwrap());
+    }
+
+    #[test]
+    fn test_build_invalid_matchspec() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [build]
+        dependencies = ["python-build-backend > > 12"]
+        build-backend = "python-build-backend"
+        "#
+        .to_string();
+        let err = ParsedManifest::from_toml_str(&contents).err();
+        assert_yaml_snapshot!(err.unwrap().to_string());
     }
 }

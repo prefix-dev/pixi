@@ -5,7 +5,7 @@ use jsonrpsee::{
     core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
     types::ErrorCode,
 };
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{

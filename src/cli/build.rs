@@ -47,13 +47,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_channel_config(channel_config.clone())
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_overrides: BackendOverrides {
-                spec: None,
-                path: Some("pixi-build-python".into()),
-            },
+            build_tool_overrides: Default::default(),
         })
         .await
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("unable to setup the build-backend to build the project")?;
 
     // Build the individual packages.
     let result = protocol
@@ -73,7 +71,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             },
             outputs: None,
         })
-        .await?;
+        .await
+        .wrap_err("during the building of the project the following error occured")?;
 
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;
