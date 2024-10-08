@@ -3,12 +3,15 @@ use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
-use rattler_conda_types::PrefixRecord;
+use pixi_manifest::PrioritizedChannel;
+use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PrefixRecord};
 use std::ffi::OsStr;
+use std::str::FromStr;
 use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use url::Url;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
@@ -185,6 +188,27 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
+/// converts a channel url string to a PrioritizedChannel
+pub(crate) fn channel_url_to_prioritized_channel(
+    channel: &str,
+    channel_config: &ChannelConfig,
+) -> miette::Result<PrioritizedChannel> {
+    // If channel url contains channel config alias as a substring, don't use it as a URL
+    if channel.contains(channel_config.channel_alias.as_str()) {
+        // Create channel from URL for parsing
+        let channel = Channel::from_url(Url::from_str(channel).expect("channel should be url"));
+        // If it has a name return as named channel
+        if let Some(name) = channel.name {
+            // If the channel has a name, use it as the channel
+            return Ok(NamedChannelOrUrl::from_str(&name).into_diagnostic()?.into());
+        }
+    }
+    // If channel doesn't contain the alias or has no name, use it as a URL
+    Ok(NamedChannelOrUrl::from_str(channel)
+        .into_diagnostic()?
+        .into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +252,44 @@ mod tests {
         assert!(records
             .iter()
             .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
+    }
+
+    #[test]
+    fn test_channel_url_to_prioritized_channel() {
+        let channel_config = ChannelConfig {
+            channel_alias: Url::from_str("https://conda.anaconda.org").unwrap(),
+            root_dir: PathBuf::from("/tmp"),
+        };
+        // Same host as alias
+        let channel = "https://conda.anaconda.org/conda-forge";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(NamedChannelOrUrl::from_str("conda-forge").unwrap()),
+            prioritized_channel
+        );
+
+        // Different host
+        let channel = "https://prefix.dev/conda-forge";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(
+                NamedChannelOrUrl::from_str("https://prefix.dev/conda-forge").unwrap()
+            ),
+            prioritized_channel
+        );
+
+        // File URL
+        let channel = "file:///C:/Users/user/channel/output";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(
+                NamedChannelOrUrl::from_str("file:///C:/Users/user/channel/output").unwrap()
+            ),
+            prioritized_channel
+        );
     }
 
     #[rstest]
