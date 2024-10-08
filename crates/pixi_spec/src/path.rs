@@ -1,8 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
-use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
+use typed_path::{Utf8NativePathBuf, Utf8TypedPath, Utf8TypedPathBuf};
 
 use crate::SpecConversionError;
 
@@ -61,6 +61,15 @@ impl PathSpec {
         }))
     }
 
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(self.path.to_path(), root_dir)
+    }
+
     /// Converts this instance into a [`PathSourceSpec`] if the path points to a
     /// source package. Otherwise, returns this instance unmodified.
     #[allow(clippy::result_large_err)]
@@ -109,5 +118,36 @@ pub struct PathSourceSpec {
 impl From<PathSourceSpec> for PathSpec {
     fn from(value: PathSourceSpec) -> Self {
         Self { path: value.path }
+    }
+}
+
+impl PathSourceSpec {
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(self.path.to_path(), root_dir)
+    }
+}
+
+/// Resolves the path relative to `root_dir`. If the path is absolute,
+/// it is returned verbatim.
+///
+/// May return an error if the path is prefixed with `~` and the home
+/// directory is undefined.
+fn resolve_path(
+    path: Utf8TypedPath<'_>,
+    root_dir: impl AsRef<Path>,
+) -> Result<PathBuf, SpecConversionError> {
+    if path.is_absolute() {
+        Ok(PathBuf::from(path.as_str()))
+    } else if let Ok(user_path) = path.strip_prefix("~/") {
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| SpecConversionError::InvalidPath(path.to_string()))?;
+        Ok(home_dir.join(Path::new(user_path.as_str())))
+    } else {
+        Ok(root_dir.as_ref().join(Path::new(path.as_str())))
     }
 }
