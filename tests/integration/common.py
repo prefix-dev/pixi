@@ -14,7 +14,7 @@ class ExitCode(IntEnum):
 
 def verify_cli_command(
     command: list[Path | str],
-    expected_exit_code: ExitCode,
+    expected_exit_code: ExitCode = ExitCode.SUCCESS,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,

@@ -1,10 +1,10 @@
 use crate::global::common::find_package_records;
 use crate::global::project::ParsedEnvironment;
-use crate::global::{EnvironmentName, ExposedName, Project};
+use crate::global::{EnvironmentName, Mapping, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
@@ -155,12 +155,12 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     let formatted_exposed = environment
         .exposed
         .iter()
-        .map(|(exp, path)| {
-            let exp = exp.to_string();
-            if &exp == path {
+        .map(|mapping| {
+            let exp = mapping.exposed_name().to_string();
+            if exp == mapping.executable_name() {
                 exp
             } else {
-                format!("{} -> {}", exp, path)
+                format!("{} -> {}", exp, mapping.executable_name())
             }
         })
         .join(", ");
@@ -367,11 +367,7 @@ fn format_dependencies(
     }
 }
 
-fn format_exposed(
-    env_name: &str,
-    exposed: &IndexMap<ExposedName, String>,
-    last: bool,
-) -> Option<String> {
+fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
@@ -379,10 +375,13 @@ fn format_exposed(
             last,
             false,
         ))
-    } else if exposed.iter().any(|(exp, _)| exp.to_string() != env_name) {
+    } else if exposed
+        .iter()
+        .any(|mapping| mapping.exposed_name().to_string() != env_name)
+    {
         let content = exposed
             .iter()
-            .map(|(exp, _)| console::style(exp).yellow().to_string())
+            .map(|mapping| console::style(mapping.exposed_name()).yellow().to_string())
             .join(", ");
         Some(format_asciiart_section("exposes", content, last, false))
     } else {

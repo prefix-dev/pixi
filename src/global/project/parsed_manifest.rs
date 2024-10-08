@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
@@ -7,13 +8,15 @@ use miette::Diagnostic;
 use pixi_manifest::{PrioritizedChannel, TomlError};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::Serialize;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use thiserror::Error;
 
 use super::environment::EnvironmentName;
 
 use super::ExposedData;
+use crate::global::Mapping;
 use pixi_spec::PixiSpec;
 
 /// Describes the contents of a parsed global project manifest.
@@ -44,7 +47,9 @@ where
             parsed_environment
                 .dependencies
                 .insert(package, PixiSpec::default());
-            parsed_environment.exposed.insert(exposed, executable_name);
+            parsed_environment
+                .exposed
+                .insert(Mapping::new(exposed, executable_name));
         }
 
         Self { envs }
@@ -77,7 +82,11 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         // Check for duplicate keys in the exposed fields
         let mut exposed_names = IndexSet::new();
         let mut duplicates = IndexMap::new();
-        for key in manifest.envs.values().flat_map(|env| env.exposed.keys()) {
+        for key in manifest
+            .envs
+            .values()
+            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+        {
             if !exposed_names.insert(key) {
                 duplicates.entry(key).or_insert_with(Vec::new).push(key);
             }
@@ -86,7 +95,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
             let duplicate_keys = duplicates.keys().map(|k| k.to_string()).collect_vec();
             return Err(serde::de::Error::custom(format!(
                 "Duplicate exposed names found: '{}'",
-                duplicate_keys.join(", ")
+                duplicate_keys.into_iter().sorted().join(", ")
             )));
         }
 
@@ -94,6 +103,33 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
             envs: manifest.envs,
         })
     }
+}
+
+/// Deserialize a map of exposed names to executable names.
+fn deserialize_expose_mappings<'de, D>(deserializer: D) -> Result<IndexSet<Mapping>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map: HashMap<ExposedName, String> = HashMap::deserialize(deserializer)?;
+    Ok(map
+        .into_iter()
+        .map(|(exposed_name, executable_name)| Mapping::new(exposed_name, executable_name))
+        .collect())
+}
+
+/// Custom serializer for a map of exposed names to executable names.
+fn serialize_expose_mappings<S>(
+    mappings: &IndexSet<Mapping>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(mappings.len()))?;
+    for mapping in mappings {
+        map.serialize_entry(&mapping.exposed_name(), &mapping.executable_name())?;
+    }
+    map.end()
 }
 
 #[serde_as]
@@ -106,8 +142,12 @@ pub(crate) struct ParsedEnvironment {
     pub platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
-    #[serde(default)]
-    pub(crate) exposed: IndexMap<ExposedName, String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_expose_mappings",
+        serialize_with = "serialize_expose_mappings"
+    )]
+    pub(crate) exposed: IndexSet<Mapping>,
 }
 
 impl ParsedEnvironment {
@@ -133,8 +173,8 @@ impl ParsedEnvironment {
         &self.dependencies
     }
 
-    /// Returns the exposed names associated with this environment.
-    pub(crate) fn exposed(&self) -> &IndexMap<ExposedName, String> {
+    /// Returns the exposed name mappings associated with this environment.
+    pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
         &self.exposed
     }
 }
