@@ -21,7 +21,7 @@ pub(crate) struct ProtocolBuilder {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ProtocolBuildError {
-    #[error("No build section found in the manifest at")]
+    #[error("No build section found")]
     NoBuildSection,
 }
 
