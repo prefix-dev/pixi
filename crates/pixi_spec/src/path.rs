@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
-use typed_path::{Utf8NativePathBuf, Utf8TypedPath, Utf8TypedPathBuf};
+use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
 use crate::SpecConversionError;
 
@@ -67,7 +67,7 @@ impl PathSpec {
     /// May return an error if the path is prefixed with `~` and the home
     /// directory is undefined.
     pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
-        resolve_path(self.path.to_path(), root_dir)
+        resolve_path(Path::new(self.path.as_str()), root_dir)
     }
 
     /// Converts this instance into a [`PathSourceSpec`] if the path points to a
@@ -128,7 +128,7 @@ impl PathSourceSpec {
     /// May return an error if the path is prefixed with `~` and the home
     /// directory is undefined.
     pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
-        resolve_path(self.path.to_path(), root_dir)
+        resolve_path(Path::new(self.path.as_str()), root_dir)
     }
 }
 
@@ -137,17 +137,14 @@ impl PathSourceSpec {
 ///
 /// May return an error if the path is prefixed with `~` and the home
 /// directory is undefined.
-fn resolve_path(
-    path: Utf8TypedPath<'_>,
-    root_dir: impl AsRef<Path>,
-) -> Result<PathBuf, SpecConversionError> {
+fn resolve_path(path: &Path, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
     if path.is_absolute() {
-        Ok(PathBuf::from(path.as_str()))
+        Ok(PathBuf::from(path))
     } else if let Ok(user_path) = path.strip_prefix("~/") {
-        let home_dir =
-            dirs::home_dir().ok_or_else(|| SpecConversionError::InvalidPath(path.to_string()))?;
-        Ok(home_dir.join(Path::new(user_path.as_str())))
+        let home_dir = dirs::home_dir()
+            .ok_or_else(|| SpecConversionError::InvalidPath(path.display().to_string()))?;
+        Ok(home_dir.join(user_path))
     } else {
-        Ok(root_dir.as_ref().join(Path::new(path.as_str())))
+        Ok(root_dir.as_ref().join(path))
     }
 }
