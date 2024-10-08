@@ -468,6 +468,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#0320-2024-10-08" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.32.0] - 2024-10-08
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#0310-2024-10-03" class="md-nav__link">
     <span class="md-ellipsis">
       [0.31.0] - 2024-10-03
@@ -1925,6 +1934,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#0320-2024-10-08" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.32.0] - 2024-10-08
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#0310-2024-10-03" class="md-nav__link">
     <span class="md-ellipsis">
       [0.31.0] - 2024-10-03
@@ -2410,8 +2428,21 @@
 <p>All notable changes to this project will be documented in this file.</p>
 <p>The format is based on <a href="https://keepachangelog.com/en/1.0.0/">Keep a Changelog</a>,
 and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
-<h3 id="0310-2024-10-03">[0.31.0] - 2024-10-03<a class="headerlink" href="#0310-2024-10-03" title="Permanent link">#</a></h3>
+<h3 id="0320-2024-10-08">[0.32.0] - 2024-10-08<a class="headerlink" href="#0320-2024-10-08" title="Permanent link">#</a></h3>
 <h4 id="highlights">✨ Highlights<a class="headerlink" href="#highlights" title="Permanent link">#</a></h4>
+<p>The biggest fix in this PR is the move to the latest rattler as it came with some major bug fixes for macOS and Rust 1.81 compatibility.</p>
+<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">#</a></h4>
+<ul>
+<li>Correctly implement total ordering for dependency provider by @tdejager in <a href="https://github.com/conda/rattler/pull/892">rattler/#892</a></li>
+</ul>
+<h4 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">#</a></h4>
+<ul>
+<li>Fixed self-clobber issue when up/down grading packages by @wolfv in <a href="https://github.com/conda/rattler/pull/893">rattler/#893</a></li>
+<li>Check environment name before returning not found print by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/2198">#2198</a></li>
+<li>Turn off symlink follow for task cache by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/2209">#2209</a></li>
+</ul>
+<h3 id="0310-2024-10-03">[0.31.0] - 2024-10-03<a class="headerlink" href="#0310-2024-10-03" title="Permanent link">#</a></h3>
+<h4 id="highlights_1">✨ Highlights<a class="headerlink" href="#highlights_1" title="Permanent link">#</a></h4>
 <p>Thanks to our maintainer @baszamstra!
 He sped up the resolver for all cases we could think of in <a href="https://github.com/prefix-dev/pixi/pull/2162">#2162</a>
 Check the result of times it takes to solve the environments in our test set:
@@ -2423,7 +2454,7 @@ Check the result of times it takes to solve the environments in our test set:
 <li>Add <code>--no-activation</code> option to prevent env activation during global install/upgrade by @183amir in <a href="https://github.com/prefix-dev/pixi/pull/1980">#1980</a></li>
 <li>Add <code>--priority</code> arg to <code>project channel add</code> by @minrk in <a href="https://github.com/prefix-dev/pixi/pull/2086">#2086</a></li>
 </ul>
-<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">#</a></h4>
+<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">#</a></h4>
 <ul>
 <li>Use pixi spec for conda environment yml by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/2096">#2096</a></li>
 <li>Update rattler by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/2120">#2120</a></li>
@@ -2440,7 +2471,7 @@ Check the result of times it takes to solve the environments in our test set:
 <li>Add description for <code>pixi update --json</code> by @scottamain in <a href="https://github.com/prefix-dev/pixi/pull/2160">#2160</a></li>
 <li>Fixes backticks for doc strings by @rachfop in <a href="https://github.com/prefix-dev/pixi/pull/2174">#2174</a></li>
 </ul>
-<h4 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">#</a></h4>
+<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">#</a></h4>
 <ul>
 <li>Sort exported conda explicit spec topologically by @synapticarbors in <a href="https://github.com/prefix-dev/pixi/pull/2101">#2101</a></li>
 <li><code>--import env_file</code> breaks channel priority by @fecet in <a href="https://github.com/prefix-dev/pixi/pull/2113">#2113</a></li>
@@ -2467,7 +2498,7 @@ Check the result of times it takes to solve the environments in our test set:
 <li>@lucascolley made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/2107">#2107</a></li>
 </ul>
 <h3 id="0300-2024-09-19">[0.30.0] - 2024-09-19<a class="headerlink" href="#0300-2024-09-19" title="Permanent link">#</a></h3>
-<h4 id="highlights_1">✨ Highlights<a class="headerlink" href="#highlights_1" title="Permanent link">#</a></h4>
+<h4 id="highlights_2">✨ Highlights<a class="headerlink" href="#highlights_2" title="Permanent link">#</a></h4>
 <p>I want to thank @synapticarbors and @abkfenris for starting the work on <code>pixi project export</code>.
 Pixi now supports the export of a conda <code>environment.yml</code> file and a conda explicit specification file.
 This is a great addition to the project and will help users to share their projects with other non pixi users.</p>
@@ -2478,7 +2509,7 @@ This is a great addition to the project and will help users to share their proje
 <li>Adds the ability to set the index strategy by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1986">#1986</a></li>
 <li>Export conda <code>environment.yml</code> by @abkfenris in <a href="https://github.com/prefix-dev/pixi/pull/2003">#2003</a></li>
 </ul>
-<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">#</a></h4>
+<h4 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">#</a></h4>
 <ul>
 <li>Improve examples/docker by @jennydaman in <a href="https://github.com/prefix-dev/pixi/pull/1965">#1965</a></li>
 <li>Minimal pre-commit tasks by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1984">#1984</a></li>
@@ -2498,7 +2529,7 @@ This is a great addition to the project and will help users to share their proje
 <li>Run pytests in parallel by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/2027">#2027</a></li>
 <li>Testing common wheels by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/2031">#2031</a></li>
 </ul>
-<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">#</a></h4>
+<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">#</a></h4>
 <ul>
 <li>Lock file is always outdated for pypi path dependencies by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/2039">#2039</a></li>
 <li>Fix error message for export conda explicit spec by @synapticarbors in <a href="https://github.com/prefix-dev/pixi/pull/2048">#2048</a></li>
@@ -2533,7 +2564,7 @@ This is a great addition to the project and will help users to share their proje
 <li>@jennydaman made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1965">#1965</a></li>
 </ul>
 <h3 id="0290-2024-09-04">[0.29.0] - 2024-09-04<a class="headerlink" href="#0290-2024-09-04" title="Permanent link">#</a></h3>
-<h4 id="highlights_2">✨ Highlights<a class="headerlink" href="#highlights_2" title="Permanent link">#</a></h4>
+<h4 id="highlights_3">✨ Highlights<a class="headerlink" href="#highlights_3" title="Permanent link">#</a></h4>
 <ul>
 <li>Add build-isolation options, for more details check out our <a href="https://pixi.sh/v0.29.0/reference/project_configuration/#no-build-isolation">docs</a></li>
 <li>Allow to use virtual package overrides from environment variables (<a href="https://github.com/conda/rattler/pull/818">PR</a>)</li>
@@ -2546,7 +2577,7 @@ This is a great addition to the project and will help users to share their proje
 <ul>
 <li>Add release script by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1971">#1971</a></li>
 </ul>
-<h4 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">#</a></h4>
+<h4 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">#</a></h4>
 <ul>
 <li>Use rustls-tls instead of native-tls per default by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1929">#1929</a></li>
 </ul>
@@ -2565,7 +2596,7 @@ This is a great addition to the project and will help users to share their proje
 <ul>
 <li>Improve release script by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1974">#1974</a></li>
 </ul>
-<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">#</a></h4>
+<h4 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">#</a></h4>
 <ul>
 <li>Update env variables in installation docs by @lev112 in <a href="https://github.com/prefix-dev/pixi/pull/1937">#1937</a></li>
 </ul>
@@ -2600,7 +2631,7 @@ This is a great addition to the project and will help users to share their proje
 <li>@lev112 made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1937">#1937</a></li>
 </ul>
 <h3 id="0282-2024-08-28">[0.28.2] - 2024-08-28<a class="headerlink" href="#0282-2024-08-28" title="Permanent link">#</a></h3>
-<h4 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">#</a></h4>
+<h4 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">#</a></h4>
 <ul>
 <li>Use mold on linux by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1914">#1914</a></li>
 </ul>
@@ -2609,14 +2640,14 @@ This is a great addition to the project and will help users to share their proje
 <li>Fix global manifest by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1912">#1912</a></li>
 <li>Document azure keyring usage by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1913">#1913</a></li>
 </ul>
-<h4 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">#</a></h4>
+<h4 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">#</a></h4>
 <ul>
 <li>Let <code>init</code> add dependencies independent of target and don't install by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1916">#1916</a></li>
 <li>Enable use of manylinux wheeltags once again by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1925">#1925</a></li>
 <li>The bigger runner by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1902">#1902</a></li>
 </ul>
 <h3 id="0281-2024-08-26">[0.28.1] - 2024-08-26<a class="headerlink" href="#0281-2024-08-26" title="Permanent link">#</a></h3>
-<h4 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">#</a></h4>
+<h4 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">#</a></h4>
 <ul>
 <li>Uv upgrade to 0.3.2 by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1900">#1900</a></li>
 </ul>
@@ -2624,7 +2655,7 @@ This is a great addition to the project and will help users to share their proje
 <ul>
 <li>Add <code>keyrings.artifacts</code> to the list of project built with <code>pixi</code> by @jslorrma in <a href="https://github.com/prefix-dev/pixi/pull/1908">#1908</a></li>
 </ul>
-<h4 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">#</a></h4>
+<h4 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">#</a></h4>
 <ul>
 <li>Use default indexes if non where given by the lockfile by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1910">#1910</a></li>
 </ul>
@@ -2633,7 +2664,7 @@ This is a great addition to the project and will help users to share their proje
 <li>@jslorrma made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1908">#1908</a></li>
 </ul>
 <h3 id="0280-2024-08-22">[0.28.0] - 2024-08-22<a class="headerlink" href="#0280-2024-08-22" title="Permanent link">#</a></h3>
-<h4 id="highlights_3">✨ Highlights<a class="headerlink" href="#highlights_3" title="Permanent link">#</a></h4>
+<h4 id="highlights_4">✨ Highlights<a class="headerlink" href="#highlights_4" title="Permanent link">#</a></h4>
 <ul>
 <li><strong>Bug Fixes</strong>: Major fixes in general but especially for PyPI installation issues and better error messaging.</li>
 <li><strong>Compatibility</strong>: Default Linux version downgraded to 4.18 for broader support.</li>
@@ -2646,7 +2677,7 @@ This is a great addition to the project and will help users to share their proje
 <li>Add some logging for when packages are actually overridden by conda by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1874">#1874</a></li>
 <li>Add package when extra is added by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1856">#1856</a></li>
 </ul>
-<h4 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">#</a></h4>
+<h4 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">#</a></h4>
 <ul>
 <li>Use new gateway to get the repodata for global install by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1767">#1767</a></li>
 <li>Pixi global proposal by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1757">#1757</a></li>
@@ -2667,7 +2698,7 @@ This is a great addition to the project and will help users to share their proje
 <li>Make <code>channels</code> required in <code>pixi global</code> manifest by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1868">#1868</a></li>
 <li>Fix linux minimum version in project_configuration docs by @traversaro in <a href="https://github.com/prefix-dev/pixi/pull/1888">#1888</a></li>
 </ul>
-<h4 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">#</a></h4>
+<h4 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">#</a></h4>
 <ul>
 <li>Try to increase <code>rlimit</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1766">#1766</a></li>
 <li>Add test for invalid environment names by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1825">#1825</a></li>
@@ -2711,7 +2742,7 @@ This is a great addition to the project and will help users to share their proje
 <li>Update some of the cli and add osx rosetta mention by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1760">#1760</a></li>
 <li>Fix typo by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1771">#1771</a></li>
 </ul>
-<h4 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">#</a></h4>
+<h4 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">#</a></h4>
 <ul>
 <li>User agent string was wrong by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1759">#1759</a></li>
 <li>Dont accidentally wipe pyproject.toml on <code>init</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1775">#1775</a></li>
@@ -2725,7 +2756,7 @@ This is a great addition to the project and will help users to share their proje
 <li>@rgommers made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1762">#1762</a></li>
 </ul>
 <h3 id="0270-2024-08-07">[0.27.0] - 2024-08-07<a class="headerlink" href="#0270-2024-08-07" title="Permanent link">#</a></h3>
-<h4 id="highlights_4">✨ Highlights<a class="headerlink" href="#highlights_4" title="Permanent link">#</a></h4>
+<h4 id="highlights_5">✨ Highlights<a class="headerlink" href="#highlights_5" title="Permanent link">#</a></h4>
 <p>This release contains a lot of refactoring and improvements to the codebase, in preparation for future features and improvements.
 Including with that we've fixed a ton of bugs. To make sure we're not breaking anything we've added a lot of tests and CI checks.
 But let us know if you find any issues!</p>
@@ -2734,7 +2765,7 @@ But let us know if you find any issues!</p>
 <ul>
 <li>Add <code>pixi run</code> completion for <code>fish</code> shell by @dennis-wey in <a href="https://github.com/prefix-dev/pixi/pull/1680">#1680</a></li>
 </ul>
-<h4 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">#</a></h4>
+<h4 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">#</a></h4>
 <ul>
 <li>Move examples from setuptools to hatchling by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1692">#1692</a></li>
 <li>Let <code>pixi init</code> create hatchling pyproject.toml by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1693">#1693</a></li>
@@ -2758,7 +2789,7 @@ But let us know if you find any issues!</p>
 <li>Added script and tasks for testing examples by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1671">#1671</a></li>
 <li>Add simple integration tests by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1719">#1719</a></li>
 </ul>
-<h4 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">#</a></h4>
+<h4 id="fixed_8">Fixed<a class="headerlink" href="#fixed_8" title="Permanent link">#</a></h4>
 <ul>
 <li>Prepend pixi to path instead of appending by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1644">#1644</a></li>
 <li>Add manifest tests and run them in ci by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1667">#1667</a></li>
@@ -2802,12 +2833,12 @@ But let us know if you find any issues!</p>
 <li>@dennis-wey made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1680">#1680</a></li>
 </ul>
 <h3 id="0261-2024-07-22">[0.26.1] - 2024-07-22<a class="headerlink" href="#0261-2024-07-22" title="Permanent link">#</a></h3>
-<h4 id="fixed_8">Fixed<a class="headerlink" href="#fixed_8" title="Permanent link">#</a></h4>
+<h4 id="fixed_9">Fixed<a class="headerlink" href="#fixed_9" title="Permanent link">#</a></h4>
 <ul>
 <li>Make sure we also build the msi installer by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1645">#1645</a></li>
 </ul>
 <h3 id="0260-2024-07-19">[0.26.0] - 2024-07-19<a class="headerlink" href="#0260-2024-07-19" title="Permanent link">#</a></h3>
-<h4 id="highlights_5">✨ Highlights<a class="headerlink" href="#highlights_5" title="Permanent link">#</a></h4>
+<h4 id="highlights_6">✨ Highlights<a class="headerlink" href="#highlights_6" title="Permanent link">#</a></h4>
 <ul>
 <li>Specify how pixi <strong>pins your dependencies</strong> with the <code>pinning-strategy</code> in the config. e.g. <code>semver</code> -&gt; <code>&gt;=1.2.3,&lt;2</code> and <code>no-pin</code> -&gt; <code>*</code>)  <a href="https://github.com/prefix-dev/pixi/pull/1516">#1516</a></li>
 <li>Specify how pixi <strong>solves multiple channels</strong> with <code>channel-priority</code> in the manifest. <a href="https://github.com/prefix-dev/pixi/pull/1631">#1631</a></li>
@@ -2822,7 +2853,7 @@ But let us know if you find any issues!</p>
 <li>Add <code>nushell</code> completions for <code>pixi run</code> by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1627">#1627</a></li>
 <li>Add completion for <code>pixi run --environment</code> for nushell by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1636">#1636</a></li>
 </ul>
-<h4 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">#</a></h4>
+<h4 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">#</a></h4>
 <ul>
 <li>Upgrade uv 0.2.18 by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1540">#1540</a></li>
 <li>Refactor <code>pyproject.toml</code> parser by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1592">#1592</a></li>
@@ -2843,7 +2874,7 @@ But let us know if you find any issues!</p>
 <li>Add pixi-pack by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1629">#1629</a></li>
 <li>Use '-' instead of '_' for package name by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1628">#1628</a></li>
 </ul>
-<h4 id="fixed_9">Fixed<a class="headerlink" href="#fixed_9" title="Permanent link">#</a></h4>
+<h4 id="fixed_10">Fixed<a class="headerlink" href="#fixed_10" title="Permanent link">#</a></h4>
 <ul>
 <li>Flaky task test by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1581">#1581</a></li>
 <li>Pass command line arguments verbatim by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1582">#1582</a></li>
@@ -2865,12 +2896,12 @@ But let us know if you find any issues!</p>
 <li>@ytjhai made their first contribution in <a href="https://github.com/prefix-dev/pixi/pull/1545">#1545</a></li>
 </ul>
 <h3 id="0250-2024-07-05">[0.25.0] - 2024-07-05<a class="headerlink" href="#0250-2024-07-05" title="Permanent link">#</a></h3>
-<h4 id="highlights_6">✨ Highlights<a class="headerlink" href="#highlights_6" title="Permanent link">#</a></h4>
+<h4 id="highlights_7">✨ Highlights<a class="headerlink" href="#highlights_7" title="Permanent link">#</a></h4>
 <ul>
 <li><code>pixi exec</code> command, execute commands in temporary environments, useful for testing in short-lived sessions.</li>
 <li>We've bumped the default system-requirements to higher defaults: glibc (2.17 -&gt; 2.28), osx64 (10.15 -&gt; 13.0), osx-arm64 (11.0 -&gt; 13.0). Let us know if this causes any issues. To keep the previous values please use a <code>system-requirements</code> table, this is explained <a href="https://pixi.sh/latest/reference/project_configuration/#the-system-requirements-table">here</a></li>
 </ul>
-<h4 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">#</a></h4>
+<h4 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">#</a></h4>
 <ul>
 <li>Bump system requirements by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1553">#1553</a></li>
 <li>Better error when exec is missing a cmd by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1565">#1565</a></li>
@@ -2883,7 +2914,7 @@ But let us know if you find any issues!</p>
 <li>Add some other quantco repos by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1542">#1542</a></li>
 <li>Add example using <code>geos-rs</code> by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/1563">#1563</a></li>
 </ul>
-<h4 id="fixed_10">Fixed<a class="headerlink" href="#fixed_10" title="Permanent link">#</a></h4>
+<h4 id="fixed_11">Fixed<a class="headerlink" href="#fixed_11" title="Permanent link">#</a></h4>
 <ul>
 <li>Tiny error in basic_usage.md by @Sjouks in <a href="https://github.com/prefix-dev/pixi/pull/1513">#1513</a></li>
 <li>Lazy initialize client by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1511">#1511</a></li>
@@ -2908,17 +2939,17 @@ But let us know if you find any issues!</p>
 <li>Add readthedocs examples  by @bollwyvl in <a href="https://github.com/prefix-dev/pixi/pull/1423">#1423</a></li>
 <li>Fix typo in  project_configuration.md  by @RaulPL in <a href="https://github.com/prefix-dev/pixi/pull/1502">#1502</a></li>
 </ul>
-<h4 id="fixed_11">Fixed<a class="headerlink" href="#fixed_11" title="Permanent link">#</a></h4>
+<h4 id="fixed_12">Fixed<a class="headerlink" href="#fixed_12" title="Permanent link">#</a></h4>
 <ul>
 <li>Too much shell variables in activation of <code>pixi shell</code>  by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1507">#1507</a></li>
 </ul>
 <h3 id="0241-2024-06-12">[0.24.1] - 2024-06-12<a class="headerlink" href="#0241-2024-06-12" title="Permanent link">#</a></h3>
-<h4 id="fixed_12">Fixed<a class="headerlink" href="#fixed_12" title="Permanent link">#</a></h4>
+<h4 id="fixed_13">Fixed<a class="headerlink" href="#fixed_13" title="Permanent link">#</a></h4>
 <ul>
 <li>Replace http code %2b with + by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1500">#1500</a></li>
 </ul>
 <h3 id="0240-2024-06-12">[0.24.0] - 2024-06-12<a class="headerlink" href="#0240-2024-06-12" title="Permanent link">#</a></h3>
-<h4 id="highlights_7">✨ Highlights<a class="headerlink" href="#highlights_7" title="Permanent link">#</a></h4>
+<h4 id="highlights_8">✨ Highlights<a class="headerlink" href="#highlights_8" title="Permanent link">#</a></h4>
 <ul>
 <li>You can now run in a more isolated environment on <code>unix</code> machines, using <code>pixi run --clean-env TASK_NAME</code>.</li>
 <li>You can new easily clean your environment with <code>pixi clean</code> or the cache with <code>pixi clean cache</code></li>
@@ -2930,7 +2961,7 @@ But let us know if you find any issues!</p>
 <li>Add <code>description</code> field to <code>task</code> by @jjjermiah in <a href="https://github.com/prefix-dev/pixi/pull/1479">#1479</a></li>
 <li>Add pixi file to the environment to add pixi specific details by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1495">#1495</a></li>
 </ul>
-<h4 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">#</a></h4>
+<h4 id="changed_10">Changed<a class="headerlink" href="#changed_10" title="Permanent link">#</a></h4>
 <ul>
 <li>Project environment cli by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1433">#1433</a></li>
 <li>Update task list console output by @vigneshmanick in <a href="https://github.com/prefix-dev/pixi/pull/1443">#1443</a></li>
@@ -2942,7 +2973,7 @@ But let us know if you find any issues!</p>
 <ul>
 <li>Improve multi env tasks documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1494">#1494</a></li>
 </ul>
-<h4 id="fixed_13">Fixed<a class="headerlink" href="#fixed_13" title="Permanent link">#</a></h4>
+<h4 id="fixed_14">Fixed<a class="headerlink" href="#fixed_14" title="Permanent link">#</a></h4>
 <ul>
 <li>Use the activated environment when running a task by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1461">#1461</a></li>
 <li>Fix authentication pypi-deps for download from lockfile by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1460">#1460</a></li>
@@ -2961,7 +2992,7 @@ But let us know if you find any issues!</p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.23.0..HEAD">Full commit history</a></p>
 <h3 id="0230-2024-05-27">[0.23.0] - 2024-05-27<a class="headerlink" href="#0230-2024-05-27" title="Permanent link">#</a></h3>
-<h4 id="highlights_8">✨ Highlights<a class="headerlink" href="#highlights_8" title="Permanent link">#</a></h4>
+<h4 id="highlights_9">✨ Highlights<a class="headerlink" href="#highlights_9" title="Permanent link">#</a></h4>
 <ul>
 <li>This release adds two new commands <code>pixi config</code> and <code>pixi update</code><ul>
 <li><code>pixi config</code> allows you to <code>edit</code>, <code>set</code>, <code>unset</code>, <code>append</code>, <code>prepend</code> and <code>list</code> your local/global or system configuration.</li>
@@ -2978,7 +3009,7 @@ But let us know if you find any issues!</p>
 <li>Add <code>pixi update</code> command to re-solve the lockfile by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1431">#1431</a> (fixes 20 :thumbsup:)</li>
 <li>Add <code>detached-environments</code> to the config, move environments outside the project folder by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1381">#1381</a> (fixes 11 :thumbsup:)</li>
 </ul>
-<h4 id="changed_10">Changed<a class="headerlink" href="#changed_10" title="Permanent link">#</a></h4>
+<h4 id="changed_11">Changed<a class="headerlink" href="#changed_11" title="Permanent link">#</a></h4>
 <ul>
 <li>Use the gateway to fetch repodata by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1307">#1307</a></li>
 <li>Switch to compressed mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1335">#1335</a></li>
@@ -2993,7 +3024,7 @@ But let us know if you find any issues!</p>
 <li>Add example, python library using gcp upload by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1380">#1380</a></li>
 <li>Correct typos with <code>--no-lockfile-update</code>. by @tobiasraabe in <a href="https://github.com/prefix-dev/pixi/pull/1396">#1396</a></li>
 </ul>
-<h4 id="fixed_14">Fixed<a class="headerlink" href="#fixed_14" title="Permanent link">#</a></h4>
+<h4 id="fixed_15">Fixed<a class="headerlink" href="#fixed_15" title="Permanent link">#</a></h4>
 <ul>
 <li>Trim channel url when filter packages_for_prefix_mapping by @zen-xu in <a href="https://github.com/prefix-dev/pixi/pull/1391">#1391</a></li>
 <li>Use the right channels when upgrading global packages by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1326">#1326</a></li>
@@ -3014,7 +3045,7 @@ But let us know if you find any issues!</p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.22.0..v0.23.0">Full commit history</a></p>
 <h3 id="0220-2024-05-13">[0.22.0] - 2024-05-13<a class="headerlink" href="#0220-2024-05-13" title="Permanent link">#</a></h3>
-<h4 id="highlights_9">✨ Highlights<a class="headerlink" href="#highlights_9" title="Permanent link">#</a></h4>
+<h4 id="highlights_10">✨ Highlights<a class="headerlink" href="#highlights_10" title="Permanent link">#</a></h4>
 <ul>
 <li>Support for source pypi dependencies through the cli:<ul>
 <li><code>pixi add --pypi 'package @ package.whl'</code>, perfect for adding just build wheels to your environment in CI.</li>
@@ -3035,7 +3066,7 @@ But let us know if you find any issues!</p>
 <li>Add environment activation to GitHub actions docs by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1371">#1371</a></li>
 <li>Clarify in CLI that run can also take commands by @twrightsman in <a href="https://github.com/prefix-dev/pixi/pull/1368">#1368</a></li>
 </ul>
-<h4 id="fixed_15">Fixed<a class="headerlink" href="#fixed_15" title="Permanent link">#</a></h4>
+<h4 id="fixed_16">Fixed<a class="headerlink" href="#fixed_16" title="Permanent link">#</a></h4>
 <ul>
 <li>Automated update of install script in pixi.sh by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1351">#1351</a></li>
 <li>Wrong description on <code>pixi project help</code> by @notPlancha in <a href="https://github.com/prefix-dev/pixi/pull/1358">#1358</a></li>
@@ -3057,14 +3088,14 @@ But let us know if you find any issues!</p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.21.1..v0.22.0">Full commit history</a></p>
 <h3 id="0211-2024-05-07">[0.21.1] - 2024-05-07<a class="headerlink" href="#0211-2024-05-07" title="Permanent link">#</a></h3>
-<h4 id="fixed_16">Fixed<a class="headerlink" href="#fixed_16" title="Permanent link">#</a></h4>
+<h4 id="fixed_17">Fixed<a class="headerlink" href="#fixed_17" title="Permanent link">#</a></h4>
 <ul>
 <li>Use read timeout, not global timeout by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1329">#1329</a></li>
 <li>Channel priority logic by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1332">#1332</a></li>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.21.0..v0.21.1">Full commit history</a></p>
 <h3 id="0210-2024-05-06">[0.21.0] - 2024-05-06<a class="headerlink" href="#0210-2024-05-06" title="Permanent link">#</a></h3>
-<h4 id="highlights_10">✨ Highlights<a class="headerlink" href="#highlights_10" title="Permanent link">#</a></h4>
+<h4 id="highlights_11">✨ Highlights<a class="headerlink" href="#highlights_11" title="Permanent link">#</a></h4>
 <ul>
 <li>This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.</li>
 <li>We now support cross-platform running, for <code>osx-64</code> on <code>osx-arm64</code> and <code>wasm</code> environments.</li>
@@ -3075,7 +3106,7 @@ But let us know if you find any issues!</p>
 <li>Add pypi config for global local config file + keyring support by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1279">#1279</a></li>
 <li>Allow for cross-platform running, for <code>osx-64</code> on <code>osx-arm64</code> and <code>wasm</code> environments by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1020">#1020</a></li>
 </ul>
-<h4 id="changed_11">Changed<a class="headerlink" href="#changed_11" title="Permanent link">#</a></h4>
+<h4 id="changed_12">Changed<a class="headerlink" href="#changed_12" title="Permanent link">#</a></h4>
 <ul>
 <li>Add <code>no-default-feature</code> option to environments by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1092">#1092</a></li>
 <li>Add <code>/etc/pixi/config.toml</code> to global configuration search paths by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1304">#1304</a></li>
@@ -3090,7 +3121,7 @@ But let us know if you find any issues!</p>
 <li>Typo in tutorials python by @carschandler in <a href="https://github.com/prefix-dev/pixi/pull/1297">#1297</a></li>
 <li>Python Tutorial: Dependencies, PyPI, Order, Grammar by @JesperDramsch in <a href="https://github.com/prefix-dev/pixi/pull/1313">#1313</a></li>
 </ul>
-<h4 id="fixed_17">Fixed<a class="headerlink" href="#fixed_17" title="Permanent link">#</a></h4>
+<h4 id="fixed_18">Fixed<a class="headerlink" href="#fixed_18" title="Permanent link">#</a></h4>
 <ul>
 <li>Schema version and add it to tbump by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1284">#1284</a></li>
 <li>Make integration test fail in ci and fix ssh issue by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1301">#1301</a></li>
@@ -3117,11 +3148,11 @@ But let us know if you find any issues!</p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.20.1..v0.21.0">Full commit history</a></p>
 <h3 id="0201-2024-04-26">[0.20.1] - 2024-04-26<a class="headerlink" href="#0201-2024-04-26" title="Permanent link">#</a></h3>
-<h4 id="highlights_11">✨ Highlights<a class="headerlink" href="#highlights_11" title="Permanent link">#</a></h4>
+<h4 id="highlights_12">✨ Highlights<a class="headerlink" href="#highlights_12" title="Permanent link">#</a></h4>
 <ul>
 <li>Big improvements on the pypi-editable installs.</li>
 </ul>
-<h4 id="fixed_18">Fixed<a class="headerlink" href="#fixed_18" title="Permanent link">#</a></h4>
+<h4 id="fixed_19">Fixed<a class="headerlink" href="#fixed_19" title="Permanent link">#</a></h4>
 <ul>
 <li>Editable non-satisfiable by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1251">#1251</a></li>
 <li>Satisfiability with pypi extras by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1253">#1253</a></li>
@@ -3142,7 +3173,7 @@ But let us know if you find any issues!</p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.20.0..v0.20.1">Full commit history</a></p>
 <h3 id="0200-2024-04-19">[0.20.0] - 2024-04-19<a class="headerlink" href="#0200-2024-04-19" title="Permanent link">#</a></h3>
-<h4 id="highlights_12">✨ Highlights<a class="headerlink" href="#highlights_12" title="Permanent link">#</a></h4>
+<h4 id="highlights_13">✨ Highlights<a class="headerlink" href="#highlights_13" title="Permanent link">#</a></h4>
 <ul>
 <li>We now support <code>env</code> variables in the <code>task</code> definition, these can also be used as default values for parameters in your task which you can overwrite with your shell's env variables.
 e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PATH" } }</code></li>
@@ -3152,7 +3183,7 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 <ul>
 <li>Add <code>env</code> to the tasks to specify tasks specific environment variables by @wolfv in https://github.com/prefix-dev/pixi/pull/972</li>
 </ul>
-<h4 id="changed_12">Changed<a class="headerlink" href="#changed_12" title="Permanent link">#</a></h4>
+<h4 id="changed_13">Changed<a class="headerlink" href="#changed_13" title="Permanent link">#</a></h4>
 <ul>
 <li>Add <code>--pyproject</code> option to <code>pixi init</code> with a pyproject.toml by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1188">#1188</a></li>
 <li>Upgrade to new uv version 0.1.32 by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1208">#1208</a></li>
@@ -3172,7 +3203,7 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 <li>Fix order of <code>--no-deps</code> when pip installing in editable mode by @glemaitre in <a href="https://github.com/prefix-dev/pixi/pull/1220">#1220</a></li>
 <li>Fix frozen documentation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1167">#1167</a></li>
 </ul>
-<h4 id="fixed_19">Fixed<a class="headerlink" href="#fixed_19" title="Permanent link">#</a></h4>
+<h4 id="fixed_20">Fixed<a class="headerlink" href="#fixed_20" title="Permanent link">#</a></h4>
 <ul>
 <li>Small typo in list cli by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1169">#1169</a></li>
 <li>Issue with invalid solve group by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1190">#1190</a></li>
@@ -3197,15 +3228,15 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.19.1..v0.20.0">Full commit history</a></p>
 <h3 id="0191-2024-04-11">[0.19.1] - 2024-04-11<a class="headerlink" href="#0191-2024-04-11" title="Permanent link">#</a></h3>
-<h4 id="highlights_13">✨ Highlights<a class="headerlink" href="#highlights_13" title="Permanent link">#</a></h4>
+<h4 id="highlights_14">✨ Highlights<a class="headerlink" href="#highlights_14" title="Permanent link">#</a></h4>
 <p>This fixes the issue where pixi would generate broken environments/lockfiles when a mapping for a brand-new version of a package is missing.</p>
-<h4 id="changed_13">Changed<a class="headerlink" href="#changed_13" title="Permanent link">#</a></h4>
+<h4 id="changed_14">Changed<a class="headerlink" href="#changed_14" title="Permanent link">#</a></h4>
 <ul>
 <li>Add fallback mechanism for missing mapping by @nichmor in <a href="https://github.com/prefix-dev/pixi/pull/1166">#1166</a></li>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.19.0..v0.19.1">Full commit history</a></p>
 <h3 id="0190-2024-04-10">[0.19.0] - 2024-04-10<a class="headerlink" href="#0190-2024-04-10" title="Permanent link">#</a></h3>
-<h4 id="highlights_14">✨ Highlights<a class="headerlink" href="#highlights_14" title="Permanent link">#</a></h4>
+<h4 id="highlights_15">✨ Highlights<a class="headerlink" href="#highlights_15" title="Permanent link">#</a></h4>
 <ul>
 <li>This release adds a new <code>pixi tree</code> command to show the dependency tree of the project.</li>
 <li>Pixi now persists the manifest and environment when activating a shell, so you can use pixi as if you are in that folder while in the shell.</li>
@@ -3219,7 +3250,7 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 <li><code>--no-progress</code> to disable all progress bars by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1105">#1105</a></li>
 <li>Create a table if channel is specified (<code>pixi add conda-forge::rattler-build</code>) by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1079">#1079</a></li>
 </ul>
-<h4 id="changed_14">Changed<a class="headerlink" href="#changed_14" title="Permanent link">#</a></h4>
+<h4 id="changed_15">Changed<a class="headerlink" href="#changed_15" title="Permanent link">#</a></h4>
 <ul>
 <li>Add the project itself as an editable dependency by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1084">#1084</a></li>
 <li>Get <code>tool.pixi.project.name</code> from <code>project.name</code> by @olivier-lacroix in <a href="https://github.com/prefix-dev/pixi/pull/1112">#1112</a></li>
@@ -3237,7 +3268,7 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 <li>Improve install script docs by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1136">#1136</a></li>
 <li>More structured table of content by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1142">#1142</a></li>
 </ul>
-<h4 id="fixed_20">Fixed<a class="headerlink" href="#fixed_20" title="Permanent link">#</a></h4>
+<h4 id="fixed_21">Fixed<a class="headerlink" href="#fixed_21" title="Permanent link">#</a></h4>
 <ul>
 <li>Amend syntax in <code>conda-meta/history</code> to prevent <code>conda.history.History.parse()</code> error by @jaimergp in <a href="https://github.com/prefix-dev/pixi/pull/1117">#1117</a></li>
 <li>Fix docker example and include <code>pyproject.toml</code> by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1121">#1121</a></li>
@@ -3250,7 +3281,7 @@ e.g. <code>task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PA
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.18.0..v0.19.0">Full commit history</a></p>
 <h3 id="0180-2024-04-02">[0.18.0] - 2024-04-02<a class="headerlink" href="#0180-2024-04-02" title="Permanent link">#</a></h3>
-<h4 id="highlights_15">✨ Highlights<a class="headerlink" href="#highlights_15" title="Permanent link">#</a></h4>
+<h4 id="highlights_16">✨ Highlights<a class="headerlink" href="#highlights_16" title="Permanent link">#</a></h4>
 <ul>
 <li>This release adds support for <code>pyproject.toml</code>, now pixi reads from the <code>[tool.pixi]</code> table.</li>
 <li>We now support editable PyPI dependencies, and PyPI source dependencies, including <code>git</code>, <code>path</code>, and <code>url</code> dependencies.</li>
@@ -3266,7 +3297,7 @@ They are still in progress so expect more improvements on these features soon, s
 <li>Support for PyPI source dependencies by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/985">#985</a></li>
 <li>Support for editable PyPI dependencies by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/1044">#1044</a></li>
 </ul>
-<h4 id="changed_15">Changed<a class="headerlink" href="#changed_15" title="Permanent link">#</a></h4>
+<h4 id="changed_16">Changed<a class="headerlink" href="#changed_16" title="Permanent link">#</a></h4>
 <ul>
 <li><code>XDG_CONFIG_HOME</code> and <code>XDG_CACHE_HOME</code> compliance by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/1050">#1050</a></li>
 <li>Build pixi for windows arm by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1053">#1053</a></li>
@@ -3281,7 +3312,7 @@ They are still in progress so expect more improvements on these features soon, s
 <li>Fix typo in <code>pixi auth</code> documentation by @ytausch in <a href="https://github.com/prefix-dev/pixi/pull/1076">#1076</a></li>
 <li>Add <code>rstudio</code> to the IDE integration docs by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/1144">#1144</a></li>
 </ul>
-<h4 id="fixed_21">Fixed<a class="headerlink" href="#fixed_21" title="Permanent link">#</a></h4>
+<h4 id="fixed_22">Fixed<a class="headerlink" href="#fixed_22" title="Permanent link">#</a></h4>
 <ul>
 <li>Test failure on riscv64 by @hack3ric in <a href="https://github.com/prefix-dev/pixi/pull/1045">#1045</a></li>
 <li>Validation test was testing on a wrong pixi.toml by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1056">#1056</a></li>
@@ -3303,18 +3334,18 @@ They are still in progress so expect more improvements on these features soon, s
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.17.1..v0.18.0">Full commit history</a></p>
 <h3 id="0171-2024-03-21">[0.17.1] - 2024-03-21<a class="headerlink" href="#0171-2024-03-21" title="Permanent link">#</a></h3>
-<h4 id="highlights_16">✨ Highlights<a class="headerlink" href="#highlights_16" title="Permanent link">#</a></h4>
+<h4 id="highlights_17">✨ Highlights<a class="headerlink" href="#highlights_17" title="Permanent link">#</a></h4>
 <p>A quick bug-fix release for <code>pixi list</code>.</p>
 <h4 id="documentation_17">Documentation<a class="headerlink" href="#documentation_17" title="Permanent link">#</a></h4>
 <ul>
 <li>Fix typo by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1028">#1028</a></li>
 </ul>
-<h4 id="fixed_22">Fixed<a class="headerlink" href="#fixed_22" title="Permanent link">#</a></h4>
+<h4 id="fixed_23">Fixed<a class="headerlink" href="#fixed_23" title="Permanent link">#</a></h4>
 <ul>
 <li>Remove the need for a python interpreter in <code>pixi list</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/1033">#1033</a></li>
 </ul>
 <h3 id="0170-2024-03-19">[0.17.0] - 2024-03-19<a class="headerlink" href="#0170-2024-03-19" title="Permanent link">#</a></h3>
-<h4 id="highlights_17">✨ Highlights<a class="headerlink" href="#highlights_17" title="Permanent link">#</a></h4>
+<h4 id="highlights_18">✨ Highlights<a class="headerlink" href="#highlights_18" title="Permanent link">#</a></h4>
 <ul>
 <li>This release greatly improves <code>pixi global</code> commands, thanks to @chawyehsu!</li>
 <li>We now support global (or local) configuration for pixi's own behavior, including mirrors, and OCI registries.</li>
@@ -3330,7 +3361,7 @@ They are still in progress so expect more improvements on these features soon, s
 <li>Implement mirror and OCI settings by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/988">#988</a></li>
 <li>Implement <code>inputs</code> and <code>outputs</code> hash based task skipping by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/933">#933</a></li>
 </ul>
-<h4 id="changed_16">Changed<a class="headerlink" href="#changed_16" title="Permanent link">#</a></h4>
+<h4 id="changed_17">Changed<a class="headerlink" href="#changed_17" title="Permanent link">#</a></h4>
 <ul>
 <li>Refined global upgrade commands by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/948">#948</a></li>
 <li>Global upgrade supports matchspec by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/962">#962</a></li>
@@ -3351,7 +3382,7 @@ They are still in progress so expect more improvements on these features soon, s
 <li>Removed <code>linenums</code> to avoid buggy visualization by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/1002">#1002</a></li>
 <li>Fix typos by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/1016">#1016</a></li>
 </ul>
-<h4 id="fixed_23">Fixed<a class="headerlink" href="#fixed_23" title="Permanent link">#</a></h4>
+<h4 id="fixed_24">Fixed<a class="headerlink" href="#fixed_24" title="Permanent link">#</a></h4>
 <ul>
 <li>Pypi dependencies not being removed by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/952">#952</a></li>
 <li>Permissions for lint pr by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/852">#852</a></li>
@@ -3374,13 +3405,13 @@ They are still in progress so expect more improvements on these features soon, s
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.16.1..v0.17.0">Full commit history</a></p>
 <h3 id="0161-2024-03-11">[0.16.1] - 2024-03-11<a class="headerlink" href="#0161-2024-03-11" title="Permanent link">#</a></h3>
-<h4 id="fixed_24">Fixed<a class="headerlink" href="#fixed_24" title="Permanent link">#</a></h4>
+<h4 id="fixed_25">Fixed<a class="headerlink" href="#fixed_25" title="Permanent link">#</a></h4>
 <ul>
 <li>Parse lockfile matchspecs lenient, fixing bug introduced in <code>0.16.0</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/951">#951</a></li>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.16.0..v0.16.1">Full commit history</a></p>
 <h3 id="0160-2024-03-09">[0.16.0] - 2024-03-09<a class="headerlink" href="#0160-2024-03-09" title="Permanent link">#</a></h3>
-<h4 id="highlights_18">✨ Highlights<a class="headerlink" href="#highlights_18" title="Permanent link">#</a></h4>
+<h4 id="highlights_19">✨ Highlights<a class="headerlink" href="#highlights_19" title="Permanent link">#</a></h4>
 <ul>
 <li>This release removes <a href="https://github.com/prefix-dev/rip"><code>rip</code></a> and add <a href="https://github.com/astral-sh/uv"><code>uv</code></a> as the PyPI resolver and installer.</li>
 </ul>
@@ -3390,14 +3421,14 @@ They are still in progress so expect more improvements on these features soon, s
 <li>Add user agent to pixi http client by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/892">#892</a></li>
 <li>Add a schema for the pixi.toml by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/936">#936</a></li>
 </ul>
-<h4 id="changed_17">Changed<a class="headerlink" href="#changed_17" title="Permanent link">#</a></h4>
+<h4 id="changed_18">Changed<a class="headerlink" href="#changed_18" title="Permanent link">#</a></h4>
 <ul>
 <li>Switch from rip to uv by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/863">#863</a></li>
 <li>Move uv options into context by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/911">#911</a></li>
 <li>Add Deltares projects to Community.md by @Hofer-Julian in <a href="https://github.com/prefix-dev/pixi/pull/920">#920</a></li>
 <li>Upgrade to uv 0.1.16, updated for changes in the API by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/935">#935</a></li>
 </ul>
-<h4 id="fixed_25">Fixed<a class="headerlink" href="#fixed_25" title="Permanent link">#</a></h4>
+<h4 id="fixed_26">Fixed<a class="headerlink" href="#fixed_26" title="Permanent link">#</a></h4>
 <ul>
 <li>Made the uv re-install logic a bit more clear by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/894">#894</a></li>
 <li>Avoid duplicate pip dependency while importing environment.yaml by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/890">#890</a></li>
@@ -3417,11 +3448,11 @@ They are still in progress so expect more improvements on these features soon, s
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.15.2..v0.16.0">Full Commit history</a></p>
 <h3 id="0152-2024-02-29">[0.15.2] - 2024-02-29<a class="headerlink" href="#0152-2024-02-29" title="Permanent link">#</a></h3>
-<h4 id="changed_18">Changed<a class="headerlink" href="#changed_18" title="Permanent link">#</a></h4>
+<h4 id="changed_19">Changed<a class="headerlink" href="#changed_19" title="Permanent link">#</a></h4>
 <ul>
 <li>Add more info to a failure of activation by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/873">#873</a></li>
 </ul>
-<h4 id="fixed_26">Fixed<a class="headerlink" href="#fixed_26" title="Permanent link">#</a></h4>
+<h4 id="fixed_27">Fixed<a class="headerlink" href="#fixed_27" title="Permanent link">#</a></h4>
 <ul>
 <li>Improve global list UX when there is no global env dir created by @sumanth-manchala in <a href="https://github.com/prefix-dev/pixi/pull/865">#865</a></li>
 <li>Update rattler to <code>v0.19.0</code> by @AliPiccioniQC in <a href="https://github.com/prefix-dev/pixi/pull/885">#885</a></li>
@@ -3438,21 +3469,21 @@ They are still in progress so expect more improvements on these features soon, s
 <ul>
 <li>Add prefix to project info json output by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/859">#859</a></li>
 </ul>
-<h4 id="changed_19">Changed<a class="headerlink" href="#changed_19" title="Permanent link">#</a></h4>
+<h4 id="changed_20">Changed<a class="headerlink" href="#changed_20" title="Permanent link">#</a></h4>
 <ul>
 <li>New <code>pixi global list</code> display format by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/723">#723</a></li>
 <li>Add direnv usage by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/845">#845</a></li>
 <li>Add docker example by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/846">#846</a></li>
 <li>Install/remove multiple packages globally by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/854">#854</a></li>
 </ul>
-<h4 id="fixed_27">Fixed<a class="headerlink" href="#fixed_27" title="Permanent link">#</a></h4>
+<h4 id="fixed_28">Fixed<a class="headerlink" href="#fixed_28" title="Permanent link">#</a></h4>
 <ul>
 <li>Prefix file in <code>init --import</code> by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/855">#855</a></li>
 <li>Environment and feature names in pixi info --json by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/857">#857</a></li>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.15.0..v0.15.1">Full commit history</a></p>
 <h3 id="0150-2024-02-23">[0.15.0] - 2024-02-23<a class="headerlink" href="#0150-2024-02-23" title="Permanent link">#</a></h3>
-<h4 id="highlights_19">✨ Highlights<a class="headerlink" href="#highlights_19" title="Permanent link">#</a></h4>
+<h4 id="highlights_20">✨ Highlights<a class="headerlink" href="#highlights_20" title="Permanent link">#</a></h4>
 <ul>
 <li><code>[pypi-dependencies]</code> now get build in the created environment so it uses the conda installed build tools.</li>
 <li><code>pixi init --import env.yml</code> to import an existing conda environment file.</li>
@@ -3472,7 +3503,7 @@ This versions build failed, use <code>v0.15.1</code></p>
 <li>add <code>--feature</code> to <code>pixi add</code> (<a href="https://github.com/prefix-dev/pixi/pull/803">#803</a>)</li>
 <li>add windows, macos, linux and unix to targets (<a href="https://github.com/prefix-dev/pixi/pull/832">#832</a>)</li>
 </ul>
-<h4 id="fixed_28">Fixed<a class="headerlink" href="#fixed_28" title="Permanent link">#</a></h4>
+<h4 id="fixed_29">Fixed<a class="headerlink" href="#fixed_29" title="Permanent link">#</a></h4>
 <ul>
 <li>cache and retry pypi name mapping (<a href="https://github.com/prefix-dev/pixi/pull/839">#839</a>)</li>
 <li>check duplicates while adding dependencies (<a href="https://github.com/prefix-dev/pixi/pull/829">#829</a>)</li>
@@ -3487,7 +3518,7 @@ This versions build failed, use <code>v0.15.1</code></p>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.14.0..v0.15.0">Full commit history</a></p>
 <h3 id="0140-2024-02-15">[0.14.0] - 2024-02-15<a class="headerlink" href="#0140-2024-02-15" title="Permanent link">#</a></h3>
-<h4 id="highlights_20">✨ Highlights<a class="headerlink" href="#highlights_20" title="Permanent link">#</a></h4>
+<h4 id="highlights_21">✨ Highlights<a class="headerlink" href="#highlights_21" title="Permanent link">#</a></h4>
 <p>Now, <code>solve-groups</code> can be used in <code>[environments]</code> to ensure dependency alignment across different environments without simultaneous installation.
 This feature is particularly beneficial for managing identical dependencies in <code>test</code> and <code>production</code> environments.
 Example configuration:</p>
@@ -3506,7 +3537,7 @@ This setup simplifies managing dependencies that must be consistent across <code
 <li>Pypi solve groups by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/802">#802</a></li>
 <li>Enable reflinks by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/729">#729</a></li>
 </ul>
-<h4 id="changed_20">Changed<a class="headerlink" href="#changed_20" title="Permanent link">#</a></h4>
+<h4 id="changed_21">Changed<a class="headerlink" href="#changed_21" title="Permanent link">#</a></h4>
 <ul>
 <li>Add environment name to the progress by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/788">#788</a></li>
 <li>Set color scheme by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/773">#773</a></li>
@@ -3514,7 +3545,7 @@ This setup simplifies managing dependencies that must be consistent across <code
 <li>Use default env if task available in it. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/772">#772</a></li>
 <li>Color environment name in install step by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/795">#795</a></li>
 </ul>
-<h4 id="fixed_29">Fixed<a class="headerlink" href="#fixed_29" title="Permanent link">#</a></h4>
+<h4 id="fixed_30">Fixed<a class="headerlink" href="#fixed_30" title="Permanent link">#</a></h4>
 <ul>
 <li>Running cuda env and using those tasks. by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/764">#764</a></li>
 <li>Make svg a gif by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/782">#782</a></li>
@@ -3543,7 +3574,7 @@ This setup simplifies managing dependencies that must be consistent across <code
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.13.0..v0.14.0">Full commit history</a></p>
 <h3 id="0130-2024-02-01">[0.13.0] - 2024-02-01<a class="headerlink" href="#0130-2024-02-01" title="Permanent link">#</a></h3>
-<h4 id="highlights_21">✨ Highlights<a class="headerlink" href="#highlights_21" title="Permanent link">#</a></h4>
+<h4 id="highlights_22">✨ Highlights<a class="headerlink" href="#highlights_22" title="Permanent link">#</a></h4>
 <p>This release is pretty crazy in amount of features! The major ones are:
 - We added support for multiple environments. :tada: Checkout the <a href="https://pixi.sh/configuration/#the-feature-and-environments-tables">documentation</a>
 - We added support for <code>sdist</code> installation, which greatly improves the amount of packages that can be installed from PyPI. :rocket:</p>
@@ -3596,7 +3627,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Add <code>PIXI_NO_PATH_UPDATE</code> for PATH update suppression by @chawyehsu in <a href="https://github.com/prefix-dev/pixi/pull/692">#692</a></li>
 <li>Set the cache directory by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/683">#683</a></li>
 </ul>
-<h4 id="changed_21">Changed<a class="headerlink" href="#changed_21" title="Permanent link">#</a></h4>
+<h4 id="changed_22">Changed<a class="headerlink" href="#changed_22" title="Permanent link">#</a></h4>
 <ul>
 <li>Use consistent naming for tests module by @orhun in <a href="https://github.com/prefix-dev/pixi/pull/678">#678</a></li>
 <li>Install pixi and add to the path in docker example by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/743">#743</a></li>
@@ -3604,7 +3635,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Use <code>tabwriter</code> instead of <code>comfy_table</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/745">#745</a></li>
 <li>Document environment variables by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/746">#746</a></li>
 </ul>
-<h4 id="fixed_30">Fixed<a class="headerlink" href="#fixed_30" title="Permanent link">#</a></h4>
+<h4 id="fixed_31">Fixed<a class="headerlink" href="#fixed_31" title="Permanent link">#</a></h4>
 <ul>
 <li>Quote part of the task that has brackets (<code>[ or ]</code>) by @JafarAbdi in <a href="https://github.com/prefix-dev/pixi/pull/677">#677</a></li>
 <li>Package clobber and <code>__pycache__</code> removal issues by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/573">#573</a></li>
@@ -3623,7 +3654,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 </ul>
 <p><a href="https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0">Full commit history</a></p>
 <h3 id="0120-2024-01-15">[0.12.0] - 2024-01-15<a class="headerlink" href="#0120-2024-01-15" title="Permanent link">#</a></h3>
-<h4 id="highlights_22">✨ Highlights<a class="headerlink" href="#highlights_22" title="Permanent link">#</a></h4>
+<h4 id="highlights_23">✨ Highlights<a class="headerlink" href="#highlights_23" title="Permanent link">#</a></h4>
 <ul>
 <li>Some great community contributions, <code>pixi global upgrade</code>, <code>pixi project version</code> commands, a <code>PIXI_HOME</code> variable.</li>
 <li>A ton of refactor work to prepare for the <a href="https://pixi.sh/design_proposals/multi_environment_proposal/">multi-environment</a> feature.<ul>
@@ -3640,7 +3671,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>PrioritizedChannels to specify channel priority by @ruben-arts in https://github.com/prefix-dev/pixi/pull/658</li>
 <li>Add <code>project version {major,minor,patch}</code> CLIs by @hadim in https://github.com/prefix-dev/pixi/pull/633</li>
 </ul>
-<h4 id="changed_22">Changed<a class="headerlink" href="#changed_22" title="Permanent link">#</a></h4>
+<h4 id="changed_23">Changed<a class="headerlink" href="#changed_23" title="Permanent link">#</a></h4>
 <ul>
 <li>Refactored project model using targets, features and environments by @baszalmstra in https://github.com/prefix-dev/pixi/pull/616</li>
 <li>Move code from <code>Project</code> to <code>Environment</code> by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/630">#630</a></li>
@@ -3649,7 +3680,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Extract <code>pypi-dependencies</code> from Environment by @baszalmstra in https://github.com/prefix-dev/pixi/pull/656</li>
 <li>De-serialization of <code>features</code> and <code>environments</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/636</li>
 </ul>
-<h4 id="fixed_31">Fixed<a class="headerlink" href="#fixed_31" title="Permanent link">#</a></h4>
+<h4 id="fixed_32">Fixed<a class="headerlink" href="#fixed_32" title="Permanent link">#</a></h4>
 <ul>
 <li>Make install.sh also work with wget if curl is not available by @wolfv in <a href="https://github.com/prefix-dev/pixi/pull/644">#644</a></li>
 <li>Use source build for rattler by @ruben-arts</li>
@@ -3679,12 +3710,12 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.11.0...v0.12.0</p>
 <h3 id="0111-2024-01-06">[0.11.1] - 2024-01-06<a class="headerlink" href="#0111-2024-01-06" title="Permanent link">#</a></h3>
-<h4 id="fixed_32">Fixed<a class="headerlink" href="#fixed_32" title="Permanent link">#</a></h4>
+<h4 id="fixed_33">Fixed<a class="headerlink" href="#fixed_33" title="Permanent link">#</a></h4>
 <ul>
 <li>Upgrading rattler to fix <code>pixi auth</code> in <a href="https://github.com/prefix-dev/pixi/pull/642">#642</a></li>
 </ul>
 <h3 id="0110-2024-01-05">[0.11.0] - 2024-01-05<a class="headerlink" href="#0110-2024-01-05" title="Permanent link">#</a></h3>
-<h4 id="highlights_23">✨ Highlights<a class="headerlink" href="#highlights_23" title="Permanent link">#</a></h4>
+<h4 id="highlights_24">✨ Highlights<a class="headerlink" href="#highlights_24" title="Permanent link">#</a></h4>
 <ul>
 <li>Lots of important and preparations for the pypi <code>sdist</code> and multi environment feature</li>
 <li>Lots of new contributors that help <code>pixi</code> improve!</li>
@@ -3694,7 +3725,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Add new commands for <code>pixi project {version|channel|platform|description}</code> by @hadim in <a href="https://github.com/prefix-dev/pixi/pull/579">#579</a></li>
 <li>Add dependabot.yml by @pavelzw in <a href="https://github.com/prefix-dev/pixi/pull/606">#606</a></li>
 </ul>
-<h4 id="changed_23">Changed<a class="headerlink" href="#changed_23" title="Permanent link">#</a></h4>
+<h4 id="changed_24">Changed<a class="headerlink" href="#changed_24" title="Permanent link">#</a></h4>
 <ul>
 <li><code>winget-releaser</code> gets correct identifier by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/561">#561</a></li>
 <li>Task run code by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/556">#556</a></li>
@@ -3709,7 +3740,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Improve search by @Johnwillliam in <a href="https://github.com/prefix-dev/pixi/pull/578">#578</a></li>
 <li>Split pypi and conda solve steps by @tdejager in <a href="https://github.com/prefix-dev/pixi/pull/601">#601</a></li>
 </ul>
-<h4 id="fixed_33">Fixed<a class="headerlink" href="#fixed_33" title="Permanent link">#</a></h4>
+<h4 id="fixed_34">Fixed<a class="headerlink" href="#fixed_34" title="Permanent link">#</a></h4>
 <ul>
 <li>Save file after lockfile is correctly updated by @ruben-arts in <a href="https://github.com/prefix-dev/pixi/pull/555">#555</a></li>
 <li>Limit the number of concurrent solves by @baszalmstra in <a href="https://github.com/prefix-dev/pixi/pull/571">#571</a></li>
@@ -3734,7 +3765,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.10.0...v0.11.0</p>
 <h3 id="0100-2023-12-8">[0.10.0] - 2023-12-8<a class="headerlink" href="#0100-2023-12-8" title="Permanent link">#</a></h3>
-<h4 id="highlights_24">Highlights<a class="headerlink" href="#highlights_24" title="Permanent link">#</a></h4>
+<h4 id="highlights_25">Highlights<a class="headerlink" href="#highlights_25" title="Permanent link">#</a></h4>
 <ul>
 <li>Better <code>pypi-dependencies</code> support, now install even more of the pypi packages.</li>
 <li><code>pixi add --pypi</code> command to add a pypi package to your project.</li>
@@ -3750,7 +3781,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <li>Also print arguments given to a pixi task by @ruben-arts in https://github.com/prefix-dev/pixi/pull/545</li>
 <li>Add <code>pixi add --pypi</code> command by @ruben-arts in https://github.com/prefix-dev/pixi/pull/539</li>
 </ul>
-<h4 id="fixed_34">Fixed<a class="headerlink" href="#fixed_34" title="Permanent link">#</a></h4>
+<h4 id="fixed_35">Fixed<a class="headerlink" href="#fixed_35" title="Permanent link">#</a></h4>
 <ul>
 <li>space in global install path by @ruben-arts in https://github.com/prefix-dev/pixi/pull/513</li>
 <li>Glibc version/family parsing by @baszalmstra in https://github.com/prefix-dev/pixi/pull/535</li>
@@ -3774,11 +3805,11 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.9.1...v0.10.0</p>
 <h3 id="091-2023-11-29">[0.9.1] - 2023-11-29<a class="headerlink" href="#091-2023-11-29" title="Permanent link">#</a></h3>
-<h4 id="highlights_25">Highlights<a class="headerlink" href="#highlights_25" title="Permanent link">#</a></h4>
+<h4 id="highlights_26">Highlights<a class="headerlink" href="#highlights_26" title="Permanent link">#</a></h4>
 <ul>
 <li>PyPI's <code>scripts</code> are now fixed. For example: https://github.com/prefix-dev/pixi/issues/516</li>
 </ul>
-<h4 id="fixed_35">Fixed<a class="headerlink" href="#fixed_35" title="Permanent link">#</a></h4>
+<h4 id="fixed_36">Fixed<a class="headerlink" href="#fixed_36" title="Permanent link">#</a></h4>
 <ul>
 <li>Remove attr (unused) and update all dependencies by @wolfv in https://github.com/prefix-dev/pixi/pull/510</li>
 <li>Remove empty folders on python uninstall by @baszalmstra in https://github.com/prefix-dev/pixi/pull/512</li>
@@ -3786,7 +3817,7 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.9.0...v0.9.1</p>
 <h3 id="090-2023-11-28">[0.9.0] - 2023-11-28<a class="headerlink" href="#090-2023-11-28" title="Permanent link">#</a></h3>
-<h4 id="highlights_26">Highlights<a class="headerlink" href="#highlights_26" title="Permanent link">#</a></h4>
+<h4 id="highlights_27">Highlights<a class="headerlink" href="#highlights_27" title="Permanent link">#</a></h4>
 <ul>
 <li>You can now run <code>pixi remove</code>, <code>pixi rm</code> to remove a package from the environment</li>
 <li>Fix <code>pip install -e</code> issue that was created by release <code>v0.8.0</code> : https://github.com/prefix-dev/pixi/issues/507</li>
@@ -3795,14 +3826,14 @@ If you only have one environment it is now named <code>.pixi/envs/default</code>
 <ul>
 <li><code>pixi remove</code> command by @Wackyator in https://github.com/prefix-dev/pixi/pull/483</li>
 </ul>
-<h4 id="fixed_36">Fixed<a class="headerlink" href="#fixed_36" title="Permanent link">#</a></h4>
+<h4 id="fixed_37">Fixed<a class="headerlink" href="#fixed_37" title="Permanent link">#</a></h4>
 <ul>
 <li>Install entrypoints for <code>[pypi-dependencies]</code> @baszalmstra in https://github.com/prefix-dev/pixi/pull/508</li>
 <li>Only uninstall pixi installed packages by @baszalmstra in https://github.com/prefix-dev/pixi/pull/509</li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.8.0...v0.9.0</p>
 <h3 id="080-2023-11-27">[0.8.0] - 2023-11-27<a class="headerlink" href="#080-2023-11-27" title="Permanent link">#</a></h3>
-<h4 id="highlights_27">Highlights<a class="headerlink" href="#highlights_27" title="Permanent link">#</a></h4>
+<h4 id="highlights_28">Highlights<a class="headerlink" href="#highlights_28" title="Permanent link">#</a></h4>
 <ul>
 <li>🎉🐍<code>[pypi-dependencies]</code> ALPHA RELEASE🐍🎉, you can now add PyPI dependencies to your pixi project.</li>
 <li>UX of <code>pixi run</code> has been improved with better errors and showing what task is run.</li>
@@ -3821,7 +3852,7 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 <li>Add progress info to conda install by @baszalmstra in https://github.com/prefix-dev/pixi/pull/470</li>
 <li>Install pypi dependencies (alpha) by @baszalmstra in https://github.com/prefix-dev/pixi/pull/452</li>
 </ul>
-<h4 id="fixed_37">Fixed<a class="headerlink" href="#fixed_37" title="Permanent link">#</a></h4>
+<h4 id="fixed_38">Fixed<a class="headerlink" href="#fixed_38" title="Permanent link">#</a></h4>
 <ul>
 <li>Add install scripts to <code>pixi.sh</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/458 &amp;&amp; https://github.com/prefix-dev/pixi/pull/459 &amp;&amp; https://github.com/prefix-dev/pixi/pull/460</li>
 <li>Fix <code>RECORD not found</code> issue by @baszalmstra in https://github.com/prefix-dev/pixi/pull/495</li>
@@ -3847,7 +3878,7 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.7.0...v0.8.0</p>
 <h3 id="070-2023-11-14">[0.7.0] - 2023-11-14<a class="headerlink" href="#070-2023-11-14" title="Permanent link">#</a></h3>
-<h4 id="highlights_28">Highlights<a class="headerlink" href="#highlights_28" title="Permanent link">#</a></h4>
+<h4 id="highlights_29">Highlights<a class="headerlink" href="#highlights_29" title="Permanent link">#</a></h4>
 <ul>
 <li>Channel priority: <code>channels = ["conda-forge", "pytorch"]</code> All packages found in conda-forge will not be taken from pytorch.</li>
 <li>Channel specific dependencies: <code>pytorch = { version="*", channel="pytorch"}</code></li>
@@ -3867,11 +3898,11 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 <li>Add prefix location file to avoid copy error by @ruben-arts in https://github.com/prefix-dev/pixi/pull/422</li>
 <li>Channel specific dependencies <code>python = { version = "*" channel="conda-forge" }</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/439</li>
 </ul>
-<h4 id="changed_24">Changed<a class="headerlink" href="#changed_24" title="Permanent link">#</a></h4>
+<h4 id="changed_25">Changed<a class="headerlink" href="#changed_25" title="Permanent link">#</a></h4>
 <ul>
 <li><code>project.version</code> as optional field in the <code>pixi.toml</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/400</li>
 </ul>
-<h4 id="fixed_38">Fixed<a class="headerlink" href="#fixed_38" title="Permanent link">#</a></h4>
+<h4 id="fixed_39">Fixed<a class="headerlink" href="#fixed_39" title="Permanent link">#</a></h4>
 <ul>
 <li>Deny unknown fields in <code>pixi.toml</code> to help users find errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/396</li>
 <li><code>install.sh</code> to create dot file if not present by @humphd in https://github.com/prefix-dev/pixi/pull/408</li>
@@ -3903,15 +3934,15 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.6.0...v0.7.0</p>
 <h3 id="060-2023-10-17">[0.6.0] - 2023-10-17<a class="headerlink" href="#060-2023-10-17" title="Permanent link">#</a></h3>
-<h4 id="highlights_29">Highlights<a class="headerlink" href="#highlights_29" title="Permanent link">#</a></h4>
+<h4 id="highlights_30">Highlights<a class="headerlink" href="#highlights_30" title="Permanent link">#</a></h4>
 <p>This release fixes some bugs and adds the <code>--cwd</code> option to the tasks.</p>
-<h4 id="fixed_39">Fixed<a class="headerlink" href="#fixed_39" title="Permanent link">#</a></h4>
+<h4 id="fixed_40">Fixed<a class="headerlink" href="#fixed_40" title="Permanent link">#</a></h4>
 <ul>
 <li>Improve shell prompts by @ruben-arts in https://github.com/prefix-dev/pixi/pull/385 https://github.com/prefix-dev/pixi/pull/388</li>
 <li>Change <code>--frozen</code> logic to error when there is no lockfile by @ruben-arts in https://github.com/prefix-dev/pixi/pull/373</li>
 <li>Don't remove the '.11' from 'python3.11' binary file name by @ruben-arts in https://github.com/prefix-dev/pixi/pull/366</li>
 </ul>
-<h4 id="changed_25">Changed<a class="headerlink" href="#changed_25" title="Permanent link">#</a></h4>
+<h4 id="changed_26">Changed<a class="headerlink" href="#changed_26" title="Permanent link">#</a></h4>
 <ul>
 <li>Update <code>rerun</code> example to v0.9.1 by @ruben-arts in https://github.com/prefix-dev/pixi/pull/389</li>
 </ul>
@@ -3921,9 +3952,9 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.5.0...v0.6.0</p>
 <h3 id="050-2023-10-03">[0.5.0] - 2023-10-03<a class="headerlink" href="#050-2023-10-03" title="Permanent link">#</a></h3>
-<h4 id="highlights_30">Highlights<a class="headerlink" href="#highlights_30" title="Permanent link">#</a></h4>
+<h4 id="highlights_31">Highlights<a class="headerlink" href="#highlights_31" title="Permanent link">#</a></h4>
 <p>We rebuilt <code>pixi shell</code>, fixing the fact that your <code>rc</code> file would overrule the environment activation.</p>
-<h4 id="fixed_40">Fixed<a class="headerlink" href="#fixed_40" title="Permanent link">#</a></h4>
+<h4 id="fixed_41">Fixed<a class="headerlink" href="#fixed_41" title="Permanent link">#</a></h4>
 <ul>
 <li>Change how <code>shell</code> works and make activation more robust by @wolfv in https://github.com/prefix-dev/pixi/pull/316</li>
 <li>Documentation: use quotes in cli by @pavelzw in https://github.com/prefix-dev/pixi/pull/367</li>
@@ -3939,9 +3970,9 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.4.0...v0.5.0</p>
 <h3 id="040-2023-09-22">[0.4.0] - 2023-09-22<a class="headerlink" href="#040-2023-09-22" title="Permanent link">#</a></h3>
-<h4 id="highlights_31">Highlights<a class="headerlink" href="#highlights_31" title="Permanent link">#</a></h4>
+<h4 id="highlights_32">Highlights<a class="headerlink" href="#highlights_32" title="Permanent link">#</a></h4>
 <p>This release adds the start of a new cli command <code>pixi project</code> which will allow users to interact with the project configuration from the command line.</p>
-<h4 id="fixed_41">Fixed<a class="headerlink" href="#fixed_41" title="Permanent link">#</a></h4>
+<h4 id="fixed_42">Fixed<a class="headerlink" href="#fixed_42" title="Permanent link">#</a></h4>
 <ul>
 <li>Align with latest rattler version <code>0.9.0</code> by @ruben-arts in https://github.com/prefix-dev/pixi/pull/350</li>
 </ul>
@@ -3962,9 +3993,9 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/prefix-dev/pixi/compare/v0.3.0...v0.4.0</p>
 <h3 id="030-2023-09-11">[0.3.0] - 2023-09-11<a class="headerlink" href="#030-2023-09-11" title="Permanent link">#</a></h3>
-<h4 id="highlights_32">Highlights<a class="headerlink" href="#highlights_32" title="Permanent link">#</a></h4>
+<h4 id="highlights_33">Highlights<a class="headerlink" href="#highlights_33" title="Permanent link">#</a></h4>
 <p>This releases fixes a lot of issues encountered by the community as well as some awesome community contributions like the addition of <code>pixi global list</code> and <code>pixi global remove</code>.</p>
-<h4 id="fixed_42">Fixed<a class="headerlink" href="#fixed_42" title="Permanent link">#</a></h4>
+<h4 id="fixed_43">Fixed<a class="headerlink" href="#fixed_43" title="Permanent link">#</a></h4>
 <ul>
 <li>Properly detect Cuda on linux using our build binaries, by @baszalmstra (<a href="https://github.com/mamba-org/rattler/pull/290">#290</a>)</li>
 <li>Package names are now case-insensitive, by @baszalmstra (<a href="https://github.com/mamba-org/rattler/pull/285">#285</a>)</li>
@@ -3982,18 +4013,18 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 <li>Certificates from the OS certificate store are now used, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/310">#310</a>)</li>
 <li><code>pixi global list</code> and <code>pixi global remove</code> commands, by @cjfuller (<a href="https://github.com/prefix-dev/pixi/pull/318">#318</a>)</li>
 </ul>
-<h4 id="changed_26">Changed<a class="headerlink" href="#changed_26" title="Permanent link">#</a></h4>
+<h4 id="changed_27">Changed<a class="headerlink" href="#changed_27" title="Permanent link">#</a></h4>
 <ul>
 <li><code>--manifest-path</code> must point to a <code>pixi.toml</code> file, by @baszalmstra (<a href="https://github.com/prefix-dev/pixi/pull/324">#324</a>)</li>
 </ul>
 <h3 id="020-2023-08-22">[0.2.0] - 2023-08-22<a class="headerlink" href="#020-2023-08-22" title="Permanent link">#</a></h3>
-<h4 id="highlights_33">Highlights<a class="headerlink" href="#highlights_33" title="Permanent link">#</a></h4>
+<h4 id="highlights_34">Highlights<a class="headerlink" href="#highlights_34" title="Permanent link">#</a></h4>
 <ul>
 <li>Added <code>pixi search</code> command to search for packages, by @Wackyator. (<a href="https://github.com/prefix-dev/pixi/pull/244">#244</a>)</li>
 <li>Added target specific tasks, eg. <code>[target.win-64.tasks]</code>, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/269">#269</a>)</li>
 <li>Flaky install caused by the download of packages, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/281">#281</a>)</li>
 </ul>
-<h4 id="fixed_43">Fixed<a class="headerlink" href="#fixed_43" title="Permanent link">#</a></h4>
+<h4 id="fixed_44">Fixed<a class="headerlink" href="#fixed_44" title="Permanent link">#</a></h4>
 <ul>
 <li>Install instructions, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/258">#258</a>)</li>
 <li>Typo in getting started, by @RaulPL. (<a href="https://github.com/prefix-dev/pixi/pull/266">#266</a>)</li>
@@ -4012,17 +4043,17 @@ Our intent is not to have 100% feature parity with <code>pip</code>, our goal is
 <h3 id="010-2023-08-11">[0.1.0] - 2023-08-11<a class="headerlink" href="#010-2023-08-11" title="Permanent link">#</a></h3>
 <p>As this is our first <a href="https://semver.org">Semantic Versioning</a> release, we'll change from the prototype to the developing phase, as semver describes.
 A 0.x release could be anything from a new major feature to a breaking change where the 0.0.x releases will be bugfixes or small improvements.</p>
-<h4 id="highlights_34">Highlights<a class="headerlink" href="#highlights_34" title="Permanent link">#</a></h4>
+<h4 id="highlights_35">Highlights<a class="headerlink" href="#highlights_35" title="Permanent link">#</a></h4>
 <ul>
 <li>Update to the latest <a href="https://github.com/mamba-org/rattler/releases/tag/v0.7.0">rattler</a> version, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/249">#249</a>)</li>
 </ul>
-<h4 id="fixed_44">Fixed<a class="headerlink" href="#fixed_44" title="Permanent link">#</a></h4>
+<h4 id="fixed_45">Fixed<a class="headerlink" href="#fixed_45" title="Permanent link">#</a></h4>
 <ul>
 <li>Only add shebang to activation scripts on <code>unix</code> platforms, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/250">#250</a>)</li>
 <li>Use official crates.io releases for all dependencies, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/252">#252</a>)</li>
 </ul>
 <h3 id="008-2023-08-01">[0.0.8] - 2023-08-01<a class="headerlink" href="#008-2023-08-01" title="Permanent link">#</a></h3>
-<h4 id="highlights_35">Highlights<a class="headerlink" href="#highlights_35" title="Permanent link">#</a></h4>
+<h4 id="highlights_36">Highlights<a class="headerlink" href="#highlights_36" title="Permanent link">#</a></h4>
 <ul>
 <li>Much better error printing using <code>miette</code>, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/211">#211</a>)</li>
 <li>You can now use pixi on <code>aarch64-linux</code>, by @pavelzw.  (<a href="https://github.com/prefix-dev/pixi/pull/233">#233</a>)</li>
@@ -4039,19 +4070,19 @@ A 0.x release could be anything from a new major feature to a breaking change wh
 <li>Add <code>--color</code> to configure the colors in the output, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/243">#243</a>)</li>
 <li>Examples, <a href="https://github.com/prefix-dev/pixi/tree/main/examples/ros2-nav2">ROS2 Nav2</a>, <a href="https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab">JupyterLab</a> and <a href="https://github.com/prefix-dev/pixi/tree/main/examples/qgis">QGIS</a>, by @ruben-arts.</li>
 </ul>
-<h4 id="fixed_45">Fixed<a class="headerlink" href="#fixed_45" title="Permanent link">#</a></h4>
+<h4 id="fixed_46">Fixed<a class="headerlink" href="#fixed_46" title="Permanent link">#</a></h4>
 <ul>
 <li>Add trailing newline to <code>pixi.toml</code> and <code>.gitignore</code>, by @pavelzw. (<a href="https://github.com/prefix-dev/pixi/pull/216">#216</a>)</li>
 <li>Deny unknown fields and rename license-file in <code>pixi.toml</code>, by @wolfv. (<a href="https://github.com/prefix-dev/pixi/pull/220">#220</a>)</li>
 <li>Overwrite <code>PS1</code> variable when going into a <code>pixi shell</code>, by @ruben-arts. (<a href="https://github.com/prefix-dev/pixi/pull/201">#201</a>)</li>
 </ul>
-<h4 id="changed_27">Changed<a class="headerlink" href="#changed_27" title="Permanent link">#</a></h4>
+<h4 id="changed_28">Changed<a class="headerlink" href="#changed_28" title="Permanent link">#</a></h4>
 <ul>
 <li>Install environment when adding a dependency using <code>pixi add</code>, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/213">#213</a>)</li>
 <li>Improve and speedup CI, by @baszalmstra. (<a href="https://github.com/prefix-dev/pixi/pull/241">#241</a>)</li>
 </ul>
 <h3 id="007-2023-07-11">[0.0.7] - 2023-07-11<a class="headerlink" href="#007-2023-07-11" title="Permanent link">#</a></h3>
-<h4 id="highlights_36">Highlights<a class="headerlink" href="#highlights_36" title="Permanent link">#</a></h4>
+<h4 id="highlights_37">Highlights<a class="headerlink" href="#highlights_37" title="Permanent link">#</a></h4>
 <ul>
 <li>Transitioned the <code>run</code> subcommand to use the <code>deno_task_shell</code> for improved cross-platform functionality. More details in the <a href="https://deno.land/manual@v1.35.0/tools/task_runner#task-runner">Deno Task Runner documentation</a>.</li>
 <li>Added an <code>info</code> subcommand to retrieve system-specific information understood by <code>pixi</code>.</li>
@@ -4071,7 +4102,7 @@ A 0.x release could be anything from a new major feature to a breaking change wh
 <li>Use the newest rattler 0.6.0 by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/185">#185</a>)</li>
 <li>Build with pixi section to the documentation by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/196">#196</a>)</li>
 </ul>
-<h4 id="fixed_46">Fixed<a class="headerlink" href="#fixed_46" title="Permanent link">#</a></h4>
+<h4 id="fixed_47">Fixed<a class="headerlink" href="#fixed_47" title="Permanent link">#</a></h4>
 <ul>
 <li>Running tasks sequentially when using <code>depends_on</code> by @tdejager in (<a href="https://github.com/prefix-dev/pixi/pull/161">#161</a>)</li>
 <li>Don't add <code>PATH</code> variable where it is already set by @baszalmstra in (<a href="https://github.com/prefix-dev/pixi/pull/169">#169</a>)</li>
@@ -4080,14 +4111,14 @@ A 0.x release could be anything from a new major feature to a breaking change wh
 <li>Add the correct license information to the lockfiles by @wolfv in (<a href="https://github.com/prefix-dev/pixi/pull/191">#191</a>)</li>
 </ul>
 <h3 id="006-2023-06-30">[0.0.6] - 2023-06-30<a class="headerlink" href="#006-2023-06-30" title="Permanent link">#</a></h3>
-<h4 id="highlights_37">Highlights<a class="headerlink" href="#highlights_37" title="Permanent link">#</a></h4>
+<h4 id="highlights_38">Highlights<a class="headerlink" href="#highlights_38" title="Permanent link">#</a></h4>
 <p>Improving the reliability is important to us, so we added an integration testing framework, we can now test as close as possible to the CLI level using <code>cargo</code>.</p>
 <h4 id="added_32">Added<a class="headerlink" href="#added_32" title="Permanent link">#</a></h4>
 <ul>
 <li>An integration test harness, to test as close as possible to the user experience but in rust. (<a href="https://github.com/prefix-dev/pixi/pull/138">#138</a>, <a href="https://github.com/prefix-dev/pixi/pull/140">#140</a>, <a href="https://github.com/prefix-dev/pixi/pull/156">#156</a>)</li>
 <li>Add different levels of dependencies in preparation for <code>pixi build</code>, allowing <code>host-</code> and <code>build-</code> <code>dependencies</code> (<a href="https://github.com/prefix-dev/pixi/pull/149">#149</a>)</li>
 </ul>
-<h4 id="fixed_47">Fixed<a class="headerlink" href="#fixed_47" title="Permanent link">#</a></h4>
+<h4 id="fixed_48">Fixed<a class="headerlink" href="#fixed_48" title="Permanent link">#</a></h4>
 <ul>
 <li>Use correct folder name on pixi init (<a href="https://github.com/prefix-dev/pixi/pull/144">#144</a>)</li>
 <li>Fix windows cli installer (<a href="https://github.com/prefix-dev/pixi/pull/152">#152</a>)</li>
@@ -4097,7 +4128,7 @@ A 0.x release could be anything from a new major feature to a breaking change wh
 <h3 id="005-2023-06-26">[0.0.5] - 2023-06-26<a class="headerlink" href="#005-2023-06-26" title="Permanent link">#</a></h3>
 <p>Fixing Windows installer build in CI. (<a href="https://github.com/prefix-dev/pixi/pull/145">#145</a>)</p>
 <h3 id="004-2023-06-26">[0.0.4] - 2023-06-26<a class="headerlink" href="#004-2023-06-26" title="Permanent link">#</a></h3>
-<h4 id="highlights_38">Highlights<a class="headerlink" href="#highlights_38" title="Permanent link">#</a></h4>
+<h4 id="highlights_39">Highlights<a class="headerlink" href="#highlights_39" title="Permanent link">#</a></h4>
 <p>A new command, <code>auth</code> which can be used to authenticate the host of the package channels.
 A new command, <code>shell</code> which can be used to start a shell in the pixi environment of a project.
 A refactor of the <code>install</code> command which is changed to <code>global install</code> and the <code>install</code> command now installs a pixi project if you run it in the directory.
@@ -4114,11 +4145,11 @@ helped a lot.</p>
 <li>New examples: CPP sdl: <a href="https://github.com/prefix-dev/pixi/pull/121">#121</a>, Opencv camera calibration <a href="https://github.com/prefix-dev/pixi/pull/125">#125</a></li>
 <li>Apple binary signing and notarization. (<a href="https://github.com/prefix-dev/pixi/pull/137">#137</a>)</li>
 </ul>
-<h4 id="changed_28">Changed<a class="headerlink" href="#changed_28" title="Permanent link">#</a></h4>
+<h4 id="changed_29">Changed<a class="headerlink" href="#changed_29" title="Permanent link">#</a></h4>
 <ul>
 <li><code>pixi install</code> moved to <code>pixi global install</code> and <code>pixi install</code> became the installation of a project using the <code>pixi.toml</code> (<a href="https://github.com/prefix-dev/pixi/pull/124">#124</a>)</li>
 </ul>
-<h4 id="fixed_48">Fixed<a class="headerlink" href="#fixed_48" title="Permanent link">#</a></h4>
+<h4 id="fixed_49">Fixed<a class="headerlink" href="#fixed_49" title="Permanent link">#</a></h4>
 <ul>
 <li><code>pixi run</code> uses default shell (<a href="https://github.com/prefix-dev/pixi/pull/119">#119</a>)</li>
 <li><code>pixi add</code> command is fixed. (<a href="https://github.com/prefix-dev/pixi/pull/132">#132</a>)</li>
