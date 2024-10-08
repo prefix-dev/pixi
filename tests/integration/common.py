@@ -2,7 +2,7 @@ from enum import IntEnum
 from pathlib import Path
 import subprocess
 
-PIXI_VERSION = "0.31.0"
+PIXI_VERSION = "0.32.0"
 
 
 class ExitCode(IntEnum):
