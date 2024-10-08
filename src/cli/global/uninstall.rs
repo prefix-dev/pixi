@@ -2,6 +2,7 @@ use crate::cli::global::revert_environment_after_error;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
@@ -38,10 +39,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project_modified: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
-        state_changes.push_change(project_modified.manifest.remove_environment(env_name)?);
+        project_modified.manifest.remove_environment(env_name)?;
 
         // Cleanup the project after removing the environments.
         state_changes |= project_modified.prune_old_environments().await?;
+
+        project_modified.manifest.save().await?;
 
         Ok(state_changes)
     }
@@ -50,7 +53,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut state_changes = StateChanges::default();
     for env_name in &args.environment {
         let mut project = last_updated_project.clone();
-        match apply_changes(env_name, &mut project).await {
+        match apply_changes(env_name, &mut project)
+            .await
+            .wrap_err_with(|| format!("Couldn't remove {}.", env_name.fancy_display()))
+        {
             Ok(sc) => {
                 state_changes |= sc;
             }
@@ -60,15 +66,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .await
                     .wrap_err_with(|| {
                         format!(
-                            "Could not uninstall environment '{env_name}'. Reverting also failed."
+                            "Couldn't uninstall environment '{env_name}'. Reverting also failed."
                         )
                     })?;
+
                 return Err(err);
             }
         }
         last_updated_project = project;
     }
-    last_updated_project.manifest.save().await?;
     state_changes.report();
     Ok(())
 }

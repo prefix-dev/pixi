@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -76,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let multiple_envs = env_names.len() > 1;
 
     if !args.expose.is_empty() && env_names.len() != 1 {
-        miette::bail!("Cannot add exposed mappings for more than one environment");
+        miette::bail!("Can't add exposed mappings for more than one environment");
     }
 
     let mut state_changes = StateChanges::default();
@@ -93,23 +94,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             specs.clone()
         };
         let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, specs, &mut project).await {
+        match setup_environment(env_name, &args, specs, &mut project)
+            .await
+            .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
+        {
             Ok(sc) => {
                 state_changes |= sc;
             }
             Err(err) => {
                 state_changes.report();
-                if last_updated_project.environment(env_name).is_some() {
-                    revert_environment_after_error(env_name, &last_updated_project)
-                        .await
-                        .wrap_err("Could not install packages. Reverting also failed.")?;
-                }
+                revert_environment_after_error(env_name, &last_updated_project)
+                    .await
+                    .wrap_err("Couldn't install packages. Reverting also failed.")?;
                 return Err(err);
             }
         }
         last_updated_project = project;
     }
-    last_updated_project.manifest.save().await?;
     state_changes.report();
 
     Ok(())
@@ -125,7 +126,7 @@ async fn setup_environment(
 
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
-        state_changes.push_change(project.manifest.remove_environment(env_name)?);
+        project.manifest.remove_environment(env_name)?;
     }
 
     let channels = if args.channels.is_empty() {
@@ -198,6 +199,7 @@ async fn setup_environment(
         .expose_executables_from_environment(env_name)
         .await?;
 
+    project.manifest.save().await?;
     Ok(state_changes)
 }
 

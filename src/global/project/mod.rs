@@ -14,6 +14,7 @@ use crate::{
 };
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
+use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
 use indexmap::{IndexMap, IndexSet};
@@ -173,7 +174,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     }
 
     miette::bail!(
-        "Could not determine environment path: no parent of '{}' has '{}' as its direct parent",
+        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
         executable_path.display(),
         env_root.display()
     )
@@ -221,7 +222,7 @@ async fn package_from_conda_meta(
         }
     }
 
-    miette::bail!("Could not find {executable} in {}", conda_meta.display())
+    miette::bail!("Couldn't find {executable} in {}", conda_meta.display())
 }
 
 impl Project {
@@ -372,7 +373,7 @@ impl Project {
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         home_path()
             .map(|dir| dir.join(MANIFESTS_DIR))
-            .ok_or_else(|| miette::miette!("Could not get home directory"))
+            .ok_or_else(|| miette::miette!("Couldn't get home directory"))
     }
 
     /// Loads a project from manifest file.
@@ -434,7 +435,7 @@ impl Project {
     ) -> miette::Result<()> {
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
         let channels = environment
             .channels()
             .into_iter()
@@ -460,20 +461,21 @@ impl Project {
                 {
                     Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
                 } else {
-                    Err(miette!(
-                        "Could not convert {spec:?} to nameless match spec."
-                    ))
+                    Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
                 }
             })
             .collect::<miette::Result<Vec<MatchSpec>>>()?;
 
-        let repodata = await_in_progress("querying repodata ", |_| async {
-            self.repodata_gateway()
-                .query(channels, [platform, Platform::NoArch], match_specs.clone())
-                .recursive(true)
-                .await
-                .into_diagnostic()
-        })
+        let repodata = await_in_progress(
+            format!("Querying repodata for {} ", env_name.fancy_display()),
+            |_| async {
+                self.repodata_gateway()
+                    .query(channels, [platform, Platform::NoArch], match_specs.clone())
+                    .recursive(true)
+                    .await
+                    .into_diagnostic()
+            },
+        )
         .await?;
 
         // Determine virtual packages of the current platform
@@ -505,23 +507,29 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
-        await_in_progress("creating virtual environment", |pb| {
-            Installer::new()
-                .with_download_client(self.authenticated_client().clone())
-                .with_io_concurrency_limit(100)
-                .with_execute_link_scripts(false)
-                .with_package_cache(package_cache)
-                .with_target_platform(platform)
-                .with_reporter(
-                    IndicatifReporter::builder()
-                        .with_multi_progress(global_multi_progress())
-                        .with_placement(rattler::install::Placement::After(pb))
-                        .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
-                        .clear_when_done(true)
-                        .finish(),
-                )
-                .install(prefix.root(), solved_records)
-        })
+        await_in_progress(
+            format!(
+                "Creating virtual environment for {}",
+                env_name.fancy_display()
+            ),
+            |pb| {
+                Installer::new()
+                    .with_download_client(self.authenticated_client().clone())
+                    .with_io_concurrency_limit(100)
+                    .with_execute_link_scripts(false)
+                    .with_package_cache(package_cache)
+                    .with_target_platform(platform)
+                    .with_reporter(
+                        IndicatifReporter::builder()
+                            .with_multi_progress(global_multi_progress())
+                            .with_placement(rattler::install::Placement::After(pb))
+                            .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
+                            .clear_when_done(true)
+                            .finish(),
+                    )
+                    .install(prefix.root(), solved_records)
+            },
+        )
         .await
         .into_diagnostic()?;
 
@@ -533,7 +541,7 @@ impl Project {
         let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
 
         // Get all removable binaries related to the environment
@@ -560,8 +568,8 @@ impl Project {
     /// And verifies only and all required exposed binaries are in the bin dir.
     pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
         let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment '{}' not found in manifest.",
-            env_name.to_string()
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
         ))?;
 
         let specs = environment
@@ -574,7 +582,7 @@ impl Project {
                         .try_into_nameless_match_spec(&default_channel_config())
                         .into_diagnostic()?
                         .ok_or_else(|| {
-                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                            miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
                     Some(name.clone()),
                 );
@@ -596,8 +604,8 @@ impl Project {
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
         if !to_remove.is_empty() || !to_add.is_empty() {
             tracing::debug!(
-                "Environment '{}' binaries not in sync: to_remove: {:?}, to_add: {:?}",
-                env_name,
+                "Environment {} binaries not in sync: to_remove: {:?}, to_add: {:?}",
+                env_name.fancy_display(),
                 to_remove,
                 to_add
             );
@@ -613,8 +621,8 @@ impl Project {
         for (env_name, _parsed_environment) in self.environments() {
             if !self.environment_in_sync(env_name).await? {
                 tracing::debug!(
-                    "Environment '{}' not up to date with the manifest",
-                    env_name
+                    "Environment {} not up to date with the manifest",
+                    env_name.fancy_display()
                 );
                 in_sync = false;
             }
@@ -645,7 +653,7 @@ impl Project {
 
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
         // Construct the reusable activation script for the shell and generate an
         // invocation script for each executable added by the package to the
@@ -723,8 +731,8 @@ impl Project {
         let mut state_changes = StateChanges::default();
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
-                "Environment '{}' specs not up to date with manifest",
-                env_name
+                "Environment {} specs not up to date with manifest",
+                env_name.fancy_display()
             );
             self.install_environment(env_name).await?;
             state_changes.set_has_updated(true);
@@ -775,7 +783,6 @@ impl Project {
                 }
             }
         }
-
         Ok(state_changes)
     }
 

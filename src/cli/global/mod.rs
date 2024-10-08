@@ -64,7 +64,9 @@ async fn revert_environment_after_error(
     env_name: &EnvironmentName,
     project_to_revert_to: &global::Project,
 ) -> miette::Result<()> {
-    // We don't want to report on changes done by the reversion
-    let _ = project_to_revert_to.sync_environment(env_name).await?;
-    project_to_revert_to.manifest.save().await
+    if project_to_revert_to.environment(env_name).is_some() {
+        // We don't want to report on changes done by the reversion
+        let _ = project_to_revert_to.sync_environment(env_name).await?;
+    }
+    Ok(())
 }

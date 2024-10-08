@@ -55,7 +55,7 @@ def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
         [pixi, "global", "sync"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["Could not find executable", "Failed to add executables for environment"],
+        stderr_contains=["Couldn't find executable", "Failed to add executables for environment"],
     )
 
 
@@ -76,7 +76,7 @@ def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     # Exists on win-64
     verify_cli_command([pixi, "global", "sync"], env=env)
 
-    # Does not exist on osx-64
+    # Doesn't exist on osx-64
     parsed_toml["envs"]["test"]["platform"] = "osx-64"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command(
@@ -263,37 +263,11 @@ def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str)
         [pixi, "global", "expose", "add", "--environment=test", "dummy-b=dummy-b"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["Could not find executable dummy-b in", "test", "executables"],
+        stderr_contains=["Couldn't find executable dummy-b in", "test", "executables"],
     )
 
     # The TOML has been reverted to the original state
     assert manifest.read_text() == original_toml
-
-
-def test_expose_revert_failure(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    original_toml = f"""
-    [envs.test]
-    channels = ["{dummy_channel_1}"]
-    [envs.test.dependencies]
-    dummy-a = "*"
-    [envs.test.exposed]
-    dummy1 = "dummy-b"
-    """
-    manifest.write_text(original_toml)
-
-    # Attempt to add executable dummy-b that isn't in our dependencies
-    # It should fail since the original manifest contains "dummy-b",
-    # which is not in our dependencies
-    verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy2=dummyb"],
-        ExitCode.FAILURE,
-        env=env,
-        stderr_contains="Could not add exposed mappings. Reverting also failed",
-    )
 
 
 def test_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -458,7 +432,7 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Cannot add exposed mappings for more than one environment",
+        stderr_contains="Can't add exposed mappings for more than one environment",
     )
 
     # But it does work with multiple packages and a single environment
@@ -509,7 +483,7 @@ def test_install_platform(pixi: Path, tmp_path: Path) -> None:
         env=env,
     )
 
-    # Does not exist on osx-64
+    # Doesn't exist on osx-64
     verify_cli_command(
         [pixi, "global", "install", "--platform", "osx-64", "binutils=2.40"],
         ExitCode.FAILURE,
@@ -693,7 +667,7 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["not found", "dummy-a"],
+        stderr_contains="Couldn't remove dummy-a",
     )
 
 
@@ -713,7 +687,7 @@ def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channe
         [pixi, "global", "uninstall", "dummy-a", "dummy-c"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Environment 'dummy-c' not found in manifest",
+        stderr_contains="Environment dummy-c doesn't exist",
     )
 
     # dummy-a has been removed but dummy-b is still there
@@ -824,7 +798,7 @@ def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: s
 def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
-    # Cannot add package to environment that doesn't exist
+    # Can't add package to environment that doesn't exist
     verify_cli_command(
         [pixi, "global", "add", "--environment", "dummy-a", "dummy-b"],
         ExitCode.FAILURE,
@@ -842,7 +816,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "global", "add", "--environment", "dummy-a", "dummy-b"],
         env=env,
-        stderr_contains="Added package 'dummy-b",
+        stderr_contains="Added package dummy-b",
     )
     # Make sure it doesn't expose a binary from this package
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
@@ -860,7 +834,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "dummy-b",
         ],
         env=env,
-        stderr_contains=["Added exposed 'dummy-b"],
+        stderr_contains="Exposed executable dummy-b from environment dummy-a",
     )
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")

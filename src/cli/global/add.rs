@@ -81,6 +81,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Figure out added packages and their corresponding versions
         state_changes |= project.added_packages(specs, env_name).await?;
 
+        project.manifest.save().await?;
+
         Ok(state_changes)
     }
 
@@ -100,7 +102,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await
     {
         Ok(state_changes) => {
-            project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
         }
@@ -108,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             revert_environment_after_error(&args.environment, &project_original)
                 .await
                 .wrap_err(format!(
-                    "Could not add {:?}. Reverting also failed.",
+                    "Couldn't add {:?}. Reverting also failed.",
                     args.packages
                 ))?;
             Err(err)

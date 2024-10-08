@@ -2,6 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
@@ -101,24 +102,25 @@ impl Manifest {
     }
 
     /// Removes a specific environment from the manifest
-    pub fn remove_environment(
-        &mut self,
-        env_name: &EnvironmentName,
-    ) -> miette::Result<StateChange> {
+    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
         // Update self.parsed
-        self.parsed
-            .envs
-            .shift_remove(env_name)
-            .ok_or_else(|| miette::miette!("'{env_name}' does not exist."))?;
+        self.parsed.envs.shift_remove(env_name).ok_or_else(|| {
+            miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+        })?;
 
         // Update self.document
         self.document
             .get_or_insert_nested_table("envs")?
             .remove(env_name.as_str())
-            .ok_or_else(|| miette::miette!("'{env_name}' does not exist."))?;
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?;
 
-        tracing::debug!("Removed environment {env_name} from toml document");
-        Ok(StateChange::RemovedEnvironment(env_name.clone()))
+        tracing::debug!(
+            "Removed environment {} from toml document",
+            env_name.fancy_display()
+        );
+        Ok(())
     }
 
     /// Adds a dependency to the manifest
@@ -130,12 +132,12 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi does not support wildcard dependencies")
+            miette::bail!("pixi doesn't support wildcard dependencies")
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment '{env_name}' doesn't exist");
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
 
         // Update self.parsed
@@ -170,7 +172,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment '{env_name}' doesn't exist");
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
 
         // Update self.parsed
@@ -206,7 +208,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment '{env_name}' doesn't exist");
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
 
         // Update self.parsed
@@ -251,7 +253,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment '{env_name}' doesn't exist");
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
         // Update self.parsed
         self.parsed
@@ -280,7 +282,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment '{env_name}' doesn't exist");
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
         let environment = self
             .parsed
@@ -613,11 +615,7 @@ mod tests {
         );
 
         // Remove environment
-        let state_change = manifest.remove_environment(&env_name).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::RemovedEnvironment(env_name.clone())
-        );
+        manifest.remove_environment(&env_name).unwrap();
 
         // Check document
         let actual_value = manifest

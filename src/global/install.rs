@@ -48,7 +48,7 @@ pub(crate) fn script_exec_mapping<'a>(
         })
         .ok_or_else(|| {
             miette::miette!(
-                "Could not find executable {entry_point} in {}, found these executables: {:?}",
+                "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
                 env_dir.path().display(),
                 executables.map(|(name, _)| name).collect_vec()
             )
@@ -214,7 +214,7 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
         script_content
     );
 
-    // Return an error if the executable path could not be extracted
+    // Return an error if the executable path couldn't be extracted
     miette::bail!(
         "Failed to extract executable path from script {}",
         script.display()

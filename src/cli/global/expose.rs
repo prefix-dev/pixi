@@ -94,6 +94,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
         state_changes |= project.sync_environment(env_name).await?;
+        project.manifest.save().await?;
         Ok(state_changes)
     }
 
@@ -107,7 +108,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         Err(err) => {
             revert_environment_after_error(&args.environment, &project_original)
                 .await
-                .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
+                .wrap_err("Couldn't add exposed mappings. Reverting also failed.")?;
             Err(err)
         }
     }
@@ -131,6 +132,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 .remove_exposed_name(env_name, exposed_name)?;
         }
         state_changes |= project.sync_environment(env_name).await?;
+        project.manifest.save().await?;
         Ok(state_changes)
     }
 
@@ -138,14 +140,13 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
 
     match apply_changes(&args, &mut project_modified).await {
         Ok(state_changes) => {
-            project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
         }
         Err(err) => {
             revert_environment_after_error(&args.environment, &project_original)
                 .await
-                .wrap_err("Could not remove exposed name. Reverting also failed.")?;
+                .wrap_err("Couldn't remove exposed name. Reverting also failed.")?;
             Err(err)
         }
     }
