@@ -291,7 +291,7 @@ mod tests {
             prioritized_channel
         );
     }
-    
+
     #[rstest]
     #[case("python3.9.1")]
     #[case("python3.9")]
