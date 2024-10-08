@@ -11,7 +11,7 @@ Users of pixi can ignore this page.
 
 ### Building
 
-Pixi is written in rust and compiled using cargo, which are needed as compile-time dependencies.
+Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
 At runtime pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
 
 To build pixi run
@@ -41,8 +41,8 @@ the build command.
 When the self-update feature is disabled and a user tries to run `pixi self-update` an error message is displayed. This
 message can be customized by setting the `PIXI_SELF_UPDATE_DISABLED_MESSAGE` environment variable at build time to point
 the user to the package manager they should be using to update pixi.
-
-
+```shell
+PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead`" cargo build --locked --profile dist
 ### Shell completion
 
 After building pixi you can generate shell autocompletion scripts by running
@@ -50,4 +50,4 @@ After building pixi you can generate shell autocompletion scripts by running
 pixi completion --shell <SHELL>
 ```
 and saving the output to a file.
-Supported shells are currently `bash`, `elvish`, `fish`, `nushell`, `powershell` and `zsh`
+Currently supported shells are `bash`, `elvish`, `fish`, `nushell`, `powershell` and `zsh`.
