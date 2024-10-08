@@ -832,9 +832,20 @@ pub async fn update_python_distributions(
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e)) => {
-                    // If uninstall fails we assume it is because the package is not installed
-                    // and we can ignore it
-                    tracing::debug!("Uninstall failed: {} for {:?}", e, dist_info);
+                    // If the uninstallation failed, remove the directory manually and continue
+                    tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
+
+                    // Sanity check to avoid calling remove all on a bad path.
+                    if dist_info
+                        .path()
+                        .iter()
+                        .any(|segment| Path::new(segment) == Path::new("site-packages"))
+                    {
+                        tokio::fs::remove_dir_all(dist_info.path())
+                            .await
+                            .into_diagnostic()?;
+                    }
+
                     continue;
                 }
                 Err(err) => {
