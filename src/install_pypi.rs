@@ -31,7 +31,7 @@ use uv_configuration::{ConfigSettings, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
-use uv_installer::{Preparer, SitePackages};
+use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
@@ -828,9 +828,19 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
 
         for dist_info in extraneous.iter().chain(reinstalls.iter()) {
-            let summary = uv_installer::uninstall(dist_info)
-                .await
-                .expect("uninstall did not work");
+            let summary = match uv_installer::uninstall(dist_info).await {
+                Ok(sum) => sum,
+                // Get error types from uv_installer
+                Err(UninstallError::Uninstall(e)) => {
+                    // If uninstall fails we assume it is because the package is not installed
+                    // and we can ignore it
+                    tracing::debug!("Uninstall failed: {} for {:?}", e, dist_info);
+                    continue;
+                }
+                Err(err) => {
+                    return Err(miette::miette!(err));
+                }
+            };
             tracing::debug!(
                 "Uninstalled {} ({} file{}, {} director{})",
                 dist_info.name(),
