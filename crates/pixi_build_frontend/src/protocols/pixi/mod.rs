@@ -102,7 +102,7 @@ mod tests {
     pub fn discover_basic_pixi_manifest() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/basic");
         let manifest_path = super::find_pixi_manifest(&manifest_dir)
-            .expect(&format!("No manifest found at {}", manifest_dir.display()));
+            .unwrap_or_else(|| panic!("No manifest found at {}", manifest_dir.display()));
         ProtocolBuilder::discover(&manifest_path).unwrap();
     }
 }
