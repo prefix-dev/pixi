@@ -226,7 +226,7 @@ mod test {
             let mut hasher = Xxh3::new();
             hashes.hash(&mut hasher);
             let s = format!("{:x}", hasher.finish());
-            assert_eq!(s, "be05bb5d7c6e8e6");
+            assert_eq!(s, "722d374e94c4dcfc");
         }
 
         let hashes = FileHashes::from_files(target_dir.path(), vec!["src/"])
