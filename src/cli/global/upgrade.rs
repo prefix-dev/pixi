@@ -50,7 +50,7 @@ pub(super) async fn upgrade_packages(
     cli_channels: ChannelsConfig,
     platform: Platform,
 ) -> miette::Result<()> {
-    let channel_cli = cli_channels.resolve_from_config(&config);
+    let channel_cli = cli_channels.resolve_from_config(&config)?;
 
     // Get channels and version of globally installed packages in parallel
     let mut channels = HashMap::with_capacity(specs.len());
@@ -200,6 +200,7 @@ pub(super) async fn upgrade_packages(
                 records,
                 authenticated_client.clone(),
                 platform,
+                false,
             )
             .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));

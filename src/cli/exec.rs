@@ -6,6 +6,9 @@ use std::{
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -15,12 +18,8 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::prefix::Prefix;
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
-
 use super::cli_config::ChannelsConfig;
+use crate::prefix::Prefix;
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug, Default)]
@@ -55,8 +54,8 @@ pub struct EnvironmentHash {
 }
 
 impl EnvironmentHash {
-    pub(crate) fn from_args(args: &Args, config: &Config) -> Self {
-        Self {
+    pub(crate) fn from_args(args: &Args, config: &Config) -> miette::Result<Self> {
+        Ok(Self {
             command: args
                 .command
                 .first()
@@ -65,11 +64,11 @@ impl EnvironmentHash {
             specs: args.specs.clone(),
             channels: args
                 .channels
-                .resolve_from_config(config)
+                .resolve_from_config(config)?
                 .iter()
                 .map(|c| c.base_url().to_string())
                 .collect(),
-        }
+        })
     }
 
     /// Returns the name of the environment.
@@ -118,7 +117,7 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from_args(args, config).name();
+    let environment_name = EnvironmentHash::from_args(args, config)?.name();
     let prefix = Prefix::new(
         cache_dir
             .join(pixi_consts::consts::CACHED_ENVS_DIR)
@@ -168,20 +167,22 @@ pub async fn create_exec_prefix(
         args.specs.clone()
     };
 
+    let channels = args.channels.resolve_from_config(config)?;
+
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
             .query(
-                args.channels.resolve_from_config(config),
+                channels,
                 [Platform::current(), Platform::NoArch],
                 specs.clone(),
             )
             .recursive(true)
             .execute()
             .await
+            .into_diagnostic()
     })
     .await
-    .into_diagnostic()
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform

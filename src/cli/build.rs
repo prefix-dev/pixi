@@ -65,7 +65,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .channels()
                     .iter()
                     .map(|&c| c.clone().into_base_url(&channel_config))
-                    .collect(),
+                    .collect::<Result<Vec<_>, _>>()
+                    .into_diagnostic()?,
             ),
             channel_configuration: ChannelConfiguration {
                 base_url: channel_config.channel_alias,

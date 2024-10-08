@@ -27,9 +27,6 @@ miette = { workspace = true, features = ["fancy", "serde"] }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
-rattler_repodata_gateway = { workspace = true }
-rattler_solve = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

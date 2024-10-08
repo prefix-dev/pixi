@@ -12,7 +12,7 @@ use url::Url;
 use crate::common::{package_database::PackageDatabase, PixiControl};
 
 #[tokio::test]
-async fn add_channel() {
+async fn add_remove_channel() {
     // Create a local package database with no entries and write it to disk. This
     // ensures that we have a valid channel.
     let package_database = PackageDatabase::default();
@@ -47,7 +47,40 @@ async fn add_channel() {
     let local_channel =
         NamedChannelOrUrl::Url(Url::from_file_path(additional_channel_dir.as_ref()).unwrap());
     let channels = project.default_environment().channels();
+    assert!(channels.len() == 2);
+    assert!(channels.last().unwrap() == &&local_channel);
     assert!(channels.contains(&local_channel));
+
+    // now add the same channel, with priority 2
+    pixi.project_channel_add()
+        .with_local_channel(additional_channel_dir.path())
+        .with_priority(Some(2i32))
+        .await
+        .unwrap();
+
+    // Load again
+    let project = Project::from_path(&pixi.manifest_path()).unwrap();
+    let channels = project.default_environment().channels();
+    // still present
+    assert!(channels.contains(&local_channel));
+    // didn't duplicate
+    assert!(channels.len() == 2);
+    // priority applied
+    assert!(channels.first().unwrap() == &&local_channel);
+
+    // now remove it
+    pixi.project_channel_remove()
+        .with_local_channel(additional_channel_dir.path())
+        .await
+        .unwrap();
+
+    // Load again
+    let project = Project::from_path(&pixi.manifest_path()).unwrap();
+    let channels = project.default_environment().channels();
+
+    // Channel has been removed
+    assert!(channels.len() == 1);
+    assert!(!channels.contains(&local_channel));
 }
 
 #[tokio::test]

@@ -14,6 +14,7 @@ use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
 };
@@ -45,7 +46,6 @@ use crate::{
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
-use pixi_record::PixiRecord;
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 

@@ -10,11 +10,10 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::project::HasProjectRef;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
-    cli::LockFileUsageArgs,
     environment::update_prefix,
     project::Environment,
     Project,
@@ -35,7 +34,7 @@ pub struct Args {
     pub project_config: ProjectConfig,
 
     #[clap(flatten)]
-    lock_file_usage: LockFileUsageArgs,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// The environment to activate in the script
     #[arg(long, short)]
@@ -46,7 +45,7 @@ pub struct Args {
     json: bool,
 
     #[clap(flatten)]
-    config: ConfigCliPrompt,
+    prompt_config: ConfigCliPrompt,
 }
 
 #[derive(Serialize)]
@@ -103,11 +102,19 @@ async fn generate_environment_json(environment: &Environment<'_>) -> miette::Res
 
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let config = args
+        .prompt_config
+        .merge_with_config(args.prefix_update_config.config.clone().into());
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.config);
+        .with_cli_config(config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    update_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    update_prefix(
+        &environment,
+        args.prefix_update_config.lock_file_usage(),
+        false,
+    )
+    .await?;
 
     let output = match args.json {
         true => generate_environment_json(&environment).await?,

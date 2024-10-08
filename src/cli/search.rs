@@ -1,27 +1,25 @@
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::future::{Future, IntoFuture};
-use std::io::{self, Write};
-use std::str::FromStr;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    future::{Future, IntoFuture},
+    io::{self, Write},
+    str::FromStr,
+};
 
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_config::default_channel_config;
+use pixi_config::{default_channel_config, Config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
-use rattler_conda_types::MatchSpec;
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
 use url::Url;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::Project;
-use pixi_config::Config;
-
 use super::cli_config::ChannelsConfig;
+use crate::{cli::cli_config::ProjectConfig, Project};
 
 /// Search a conda package
 ///
@@ -48,7 +46,8 @@ pub struct Args {
     limit: Option<usize>,
 }
 
-/// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
+/// fetch packages from `repo_data` using `repodata_query_func` based on
+/// `filter_func`
 async fn search_package_by_filter<F, QF, FR>(
     package: &PackageName,
     all_package_names: Vec<PackageName>,
@@ -102,7 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     // Resolve channels from project / CLI args
-    let channels = args.channels.resolve_from_project(project.as_ref());
+    let channels = args.channels.resolve_from_project(project.as_ref())?;
     eprintln!(
         "Using channels: {}",
         channels.iter().map(|c| c.name()).format(", ")
@@ -128,8 +127,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await
     .into_diagnostic()?;
 
-    // Compute the repodata query function that will be used to fetch the repodata for
-    // filtered package names
+    // Compute the repodata query function that will be used to fetch the repodata
+    // for filtered package names
 
     let repodata_query_func = |some_specs: Vec<MatchSpec>| {
         gateway

@@ -768,7 +768,7 @@ Upload a package to a prefix.dev channel
 2. `<PACKAGE_FILE>`: The package file to upload.
 
 ```shell
-pixi upload repo.prefix.dev/my_channel my_package.conda
+pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
 ```
 
 ## `auth`
@@ -934,6 +934,7 @@ This command installs package(s) into its own environment and adds the binary to
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
+- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
 
 ```shell
 pixi global install ruff
@@ -952,6 +953,9 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 
 # Install for a specific platform, only useful on osx-arm64
 pixi global install --platform osx-64 ruff
+
+# Install without inserting activation code into the executable script
+pixi global install ruff --no-activation
 ```
 
 !!! tip
@@ -1176,6 +1180,29 @@ List the environments in the manifest file.
 
 ```shell
 pixi project environment list
+```
+
+### `project export conda_environment`
+
+Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
+
+```shell
+pixi project export conda-environment environment.yml
+mamba create --name <env> --file environment.yml
+```
+
+##### Arguments
+
+1. `<OUTPUT_PATH>`: Optional path to render environment.yml to. Otherwise it will be printed to standard out.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: Environment to render.
+- `--platform <PLATFORM> (-p)`: The platform to render.
+
+```sh
+pixi project export conda-environment --environment lint
+pixi project export conda-environment --platform linux-64 environment.linux-64.yml
 ```
 
 ### `project export conda_explicit_spec`

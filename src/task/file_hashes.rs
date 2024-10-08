@@ -111,6 +111,10 @@ impl FileHashes {
             .git_ignore(false)
             .git_global(false)
             .git_exclude(false)
+            // Turn this back off as it can cause issues with symlinks:
+            // https://github.com/prefix-dev/pixi/issues/2196
+            // TODO: The current idea is to completely reimplement this without the `ignore` crate.
+            // .follow_links(true)
             .build_parallel()
             .run(|| {
                 let tx = tx.clone();
@@ -217,7 +221,6 @@ mod test {
                 .map(String::as_str),
             Some("2c806b6ebece677c")
         );
-
         #[cfg(unix)]
         {
             let mut hasher = Xxh3::new();

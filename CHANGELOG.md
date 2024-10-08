@@ -5,6 +5,138 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.32.0] - 2024-10-08
+#### ✨ Highlights
+
+The biggest fix in this PR is the move to the latest rattler as it came with some major bug fixes for macOS and Rust 1.81 compatibility.
+
+#### Changed
+- Correctly implement total ordering for dependency provider by @tdejager in [rattler/#892](https://github.com/conda/rattler/pull/892)
+
+#### Fixed
+- Fixed self-clobber issue when up/down grading packages by @wolfv in [rattler/#893](https://github.com/conda/rattler/pull/893)
+- Check environment name before returning not found print by @ruben-arts in [#2198](https://github.com/prefix-dev/pixi/pull/2198)
+- Turn off symlink follow for task cache by @ruben-arts in [#2209](https://github.com/prefix-dev/pixi/pull/2209)
+
+
+### [0.31.0] - 2024-10-03
+#### ✨ Highlights
+Thanks to our maintainer @baszamstra!
+He sped up the resolver for all cases we could think of in [#2162](https://github.com/prefix-dev/pixi/pull/2162)
+Check the result of times it takes to solve the environments in our test set:
+![image](https://private-user-images.githubusercontent.com/4995967/371994129-0c89b07f-7e29-430a-b876-a8a5826bbc9d.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Mjc5NjE2MzUsIm5iZiI6MTcyNzk2MTMzNSwicGF0aCI6Ii80OTk1OTY3LzM3MTk5NDEyOS0wYzg5YjA3Zi03ZTI5LTQzMGEtYjg3Ni1hOGE1ODI2YmJjOWQucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI0MTAwMyUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNDEwMDNUMTMxNTM1WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9YjBlMTI5MmUxYWY5NmVkZmIwYmE5YTIwNTMyN2VkNDkwNjljZDE5ZjMzNzVkZTg4YWYyY2I2MjExZTAyNDY2NiZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.vh3Fs0MGdoPR0k-BmjGArXEekrlPV5N9wNM2CUq8e44)
+
+
+#### Added
+
+- Add `nodefaults` to imported conda envs by @ruben-arts in [#2097](https://github.com/prefix-dev/pixi/pull/2097)
+- Add newline to `.gitignore` by @ruben-arts in [#2095](https://github.com/prefix-dev/pixi/pull/2095)
+- Add `--no-activation` option to prevent env activation during global install/upgrade by @183amir in [#1980](https://github.com/prefix-dev/pixi/pull/1980)
+- Add `--priority` arg to `project channel add` by @minrk in [#2086](https://github.com/prefix-dev/pixi/pull/2086)
+
+#### Changed
+
+- Use pixi spec for conda environment yml by @ruben-arts in [#2096](https://github.com/prefix-dev/pixi/pull/2096)
+- Update rattler by @nichmor in [#2120](https://github.com/prefix-dev/pixi/pull/2120)
+- Update README.md by @ruben-arts in [#2129](https://github.com/prefix-dev/pixi/pull/2129)
+- Follow symlinks while walking files by @0xbe7a in [#2141](https://github.com/prefix-dev/pixi/pull/2141)
+
+#### Documentation
+
+- Adapt wording in pixi global proposal by @Hofer-Julian in [#2098](https://github.com/prefix-dev/pixi/pull/2098)
+- Community: add array-api-extra by @lucascolley in [#2107](https://github.com/prefix-dev/pixi/pull/2107)
+- `pixi global` mention `no-activation` by @Hofer-Julian in [#2109](https://github.com/prefix-dev/pixi/pull/2109)
+- Add minimal constructor example by @bollwyvl in [#2102](https://github.com/prefix-dev/pixi/pull/2102)
+- Update global manifest `install` by @Hofer-Julian in [#2128](https://github.com/prefix-dev/pixi/pull/2128)
+- Add description for `pixi update --json` by @scottamain in [#2160](https://github.com/prefix-dev/pixi/pull/2160)
+- Fixes backticks for doc strings by @rachfop in [#2174](https://github.com/prefix-dev/pixi/pull/2174)
+
+#### Fixed
+
+- Sort exported conda explicit spec topologically by @synapticarbors in [#2101](https://github.com/prefix-dev/pixi/pull/2101)
+- `--import env_file` breaks channel priority by @fecet in [#2113](https://github.com/prefix-dev/pixi/pull/2113)
+- Allow exact yanked pypi packages by @nichmor in [#2116](https://github.com/prefix-dev/pixi/pull/2116)
+- Check if files are same in `self-update` by @apoorvkh in [#2132](https://github.com/prefix-dev/pixi/pull/2132)
+- `get_or_insert_nested_table` by @Hofer-Julian in [#2167](https://github.com/prefix-dev/pixi/pull/2167)
+- Improve `install.sh` PATH handling and general robustness by @Arcitec in [#2189](https://github.com/prefix-dev/pixi/pull/2189)
+- Output tasks on `pixi run` without input by @ruben-arts in [#2193](https://github.com/prefix-dev/pixi/pull/2193)
+
+
+#### Performance
+- Significantly speed up conda resolution by @baszalmstra in [#2162](https://github.com/prefix-dev/pixi/pull/2162)
+
+
+#### New Contributors
+* @Arcitec made their first contribution in [#2189](https://github.com/prefix-dev/pixi/pull/2189)
+* @rachfop made their first contribution in [#2174](https://github.com/prefix-dev/pixi/pull/2174)
+* @scottamain made their first contribution in [#2160](https://github.com/prefix-dev/pixi/pull/2160)
+* @apoorvkh made their first contribution in [#2132](https://github.com/prefix-dev/pixi/pull/2132)
+* @0xbe7a made their first contribution in [#2141](https://github.com/prefix-dev/pixi/pull/2141)
+* @fecet made their first contribution in [#2113](https://github.com/prefix-dev/pixi/pull/2113)
+* @minrk made their first contribution in [#2086](https://github.com/prefix-dev/pixi/pull/2086)
+* @183amir made their first contribution in [#1980](https://github.com/prefix-dev/pixi/pull/1980)
+* @lucascolley made their first contribution in [#2107](https://github.com/prefix-dev/pixi/pull/2107)
+
+### [0.30.0] - 2024-09-19
+#### ✨ Highlights
+I want to thank @synapticarbors and @abkfenris for starting the work on `pixi project export`.
+Pixi now supports the export of a conda `environment.yml` file and a conda explicit specification file.
+This is a great addition to the project and will help users to share their projects with other non pixi users.
+
+#### Added
+- Export conda explicit specification file from project by @synapticarbors in [#1873](https://github.com/prefix-dev/pixi/pull/1873)
+- Add flag to `pixi search` by @Hofer-Julian in [#2018](https://github.com/prefix-dev/pixi/pull/2018)
+- Adds the ability to set the index strategy by @tdejager in [#1986](https://github.com/prefix-dev/pixi/pull/1986)
+- Export conda `environment.yml` by @abkfenris in [#2003](https://github.com/prefix-dev/pixi/pull/2003)
+
+#### Changed
+- Improve examples/docker by @jennydaman in [#1965](https://github.com/prefix-dev/pixi/pull/1965)
+- Minimal pre-commit tasks by @Hofer-Julian in [#1984](https://github.com/prefix-dev/pixi/pull/1984)
+- Improve error and feedback when target does not exist by @tdejager in [#1961](https://github.com/prefix-dev/pixi/pull/1961)
+- Move the rectangle using a mouse in SDL by @certik in [#2069](https://github.com/prefix-dev/pixi/pull/2069)
+
+#### Documentation
+- Update cli.md by @xela-95 in [#2047](https://github.com/prefix-dev/pixi/pull/2047)
+- Update `system-requirements` information by @ruben-arts in [#2079](https://github.com/prefix-dev/pixi/pull/2079)
+- Append to file syntax in task docs by @nicornk in [#2013](https://github.com/prefix-dev/pixi/pull/2013)
+- Change documentation of pixi upload to refer to correct API endpoint by @traversaro in [#2074](https://github.com/prefix-dev/pixi/pull/2074)
+
+#### Testing
+- Add downstream nerfstudio test by @tdejager in [#1996](https://github.com/prefix-dev/pixi/pull/1996)
+- Run pytests in parallel by @tdejager in [#2027](https://github.com/prefix-dev/pixi/pull/2027)
+- Testing common wheels by @tdejager in [#2031](https://github.com/prefix-dev/pixi/pull/2031)
+
+#### Fixed
+- Lock file is always outdated for pypi path dependencies by @nichmor in [#2039](https://github.com/prefix-dev/pixi/pull/2039)
+- Fix error message for export conda explicit spec by @synapticarbors in [#2048](https://github.com/prefix-dev/pixi/pull/2048)
+- Use `conda-pypi-map` for feature channels by @nichmor in [#2038](https://github.com/prefix-dev/pixi/pull/2038)
+- Constrain feature platforms in schema by @bollwyvl in [#2055](https://github.com/prefix-dev/pixi/pull/2055)
+- Split tag creation functions by @tdejager in [#2062](https://github.com/prefix-dev/pixi/pull/2062)
+- Tree print to pipe by @ruben-arts in [#2064](https://github.com/prefix-dev/pixi/pull/2064)
+- `subdirectory` in pypi url by @ruben-arts in [#2065](https://github.com/prefix-dev/pixi/pull/2065)
+- Create a GUI application on Windows, not Console by @certik in [#2067](https://github.com/prefix-dev/pixi/pull/2067)
+- Make dashes underscores in python package names by @ruben-arts in [#2073](https://github.com/prefix-dev/pixi/pull/2073)
+- Give better errors on broken `pyproject.toml` by @ruben-arts in [#2075](https://github.com/prefix-dev/pixi/pull/2075)
+
+#### Refactor
+- Stop duplicating `strip_channel_alias` from rattler by @Hofer-Julian in [#2017](https://github.com/prefix-dev/pixi/pull/2017)
+- Follow-up wheels tests by @Hofer-Julian in [#2063](https://github.com/prefix-dev/pixi/pull/2063)
+- Integration test suite by @Hofer-Julian in [#2081](https://github.com/prefix-dev/pixi/pull/2081)
+- Remove `psutils` by @Hofer-Julian in [#2083](https://github.com/prefix-dev/pixi/pull/2083)
+- Add back older caching method by @tdejager in [#2046](https://github.com/prefix-dev/pixi/pull/2046)
+- Release script by @Hofer-Julian in [#1978](https://github.com/prefix-dev/pixi/pull/1978)
+- Activation script by @Hofer-Julian in [#2014](https://github.com/prefix-dev/pixi/pull/2014)
+- Pins python version in add_pypi_functionality by @tdejager in [#2040](https://github.com/prefix-dev/pixi/pull/2040)
+- Improve the lock_file_usage flags and behavior. by @ruben-arts in [#2078](https://github.com/prefix-dev/pixi/pull/2078)
+- Move matrix to workflow that it is used in by @tdejager in [#1987](https://github.com/prefix-dev/pixi/pull/1987)
+- Refactor manifest into more generic approach by @nichmor in [#2015](https://github.com/prefix-dev/pixi/pull/2015)
+
+#### New Contributors
+* @certik made their first contribution in [#2069](https://github.com/prefix-dev/pixi/pull/2069)
+* @xela-95 made their first contribution in [#2047](https://github.com/prefix-dev/pixi/pull/2047)
+* @nicornk made their first contribution in [#2013](https://github.com/prefix-dev/pixi/pull/2013)
+* @jennydaman made their first contribution in [#1965](https://github.com/prefix-dev/pixi/pull/1965)
+
 ### [0.29.0] - 2024-09-04
 #### ✨ Highlights
 

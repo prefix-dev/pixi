@@ -20,7 +20,9 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
+use pixi_consts::consts::PROJECT_MANIFEST;
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     as_uv_req, isolated_names_to_packages, names_to_build_isolation,
     pypi_options_to_index_locations, to_index_strategy,
@@ -56,8 +58,6 @@ use crate::{
     },
     uv_reporter::{UvReporter, UvReporterOptions},
 };
-
-use pixi_record::PixiRecord;
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -251,7 +251,6 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda
     // packages.
     let python_record = locked_pixi_records
@@ -417,6 +416,8 @@ pub async fn resolve_pypi(
             .into_diagnostic()
             .context("error creating requires-python for solver")?;
 
+    let markers = ResolverMarkers::SpecificEnvironment(marker_environment.into());
+
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
@@ -426,7 +427,7 @@ pub async fn resolve_pypi(
         &flat_index,
         Some(&tags),
         Some(&requires_python),
-        AllowedYanks::default(),
+        AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
         &context.build_options,
@@ -447,7 +448,7 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        ResolverMarkers::SpecificEnvironment(marker_environment.into()),
+        markers,
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,

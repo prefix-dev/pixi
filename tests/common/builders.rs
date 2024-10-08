@@ -323,6 +323,11 @@ impl ProjectChannelAddBuilder {
         self
     }
 
+    pub fn with_priority(mut self, priority: Option<i32>) -> Self {
+        self.args.priority = priority;
+        self
+    }
+
     /// Alias to add a local channel.
     pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
         self.with_channel(Url::from_directory_path(channel).unwrap())
@@ -337,6 +342,39 @@ impl IntoFuture for ProjectChannelAddBuilder {
         project::channel::execute(project::channel::Args {
             manifest_path: self.manifest_path,
             command: project::channel::Command::Add(self.args),
+        })
+        .boxed_local()
+    }
+}
+
+pub struct ProjectChannelRemoveBuilder {
+    pub manifest_path: Option<PathBuf>,
+    pub args: project::channel::AddRemoveArgs,
+}
+
+impl ProjectChannelRemoveBuilder {
+    /// Removes the specified channel
+    pub fn with_channel(mut self, name: impl Into<String>) -> Self {
+        self.args
+            .channel
+            .push(NamedChannelOrUrl::from_str(&name.into()).unwrap());
+        self
+    }
+
+    /// Alias to Remove a local channel.
+    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
+        self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+}
+
+impl IntoFuture for ProjectChannelRemoveBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        project::channel::execute(project::channel::Args {
+            manifest_path: self.manifest_path,
+            command: project::channel::Command::Remove(self.args),
         })
         .boxed_local()
     }

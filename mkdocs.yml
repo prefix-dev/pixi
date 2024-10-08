@@ -106,6 +106,7 @@ nav:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
       - RStudio: ide_integration/r_studio.md
+      - VSCode Devcontainer: ide_integration/devcontainer.md
   - Tutorials:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
@@ -120,6 +121,7 @@ nav:
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
       - Lockfile: features/lockfile.md
+      - System Requirements: features/system_requirements.md
   - Design Proposals:
       - Pixi Global Manifest: design_proposals/pixi_global_manifest.md
   - Advanced:
@@ -128,6 +130,7 @@ nav:
       - Channel Logic: advanced/channel_priority.md
       - GitHub Actions: advanced/github_actions.md
       - Updates using GitHub Actions: advanced/updates_github_actions.md
+      - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
   - Reference:
       - Project Configuration: reference/project_configuration.md

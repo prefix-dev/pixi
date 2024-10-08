@@ -178,7 +178,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
-                EnvironmentUnsat::ChannelsMismatch => {
+                EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
                     // If the channels mismatched we also cannot trust any of the locked content.
                     disregard_locked_content.conda.insert(environment.clone());
                 }
