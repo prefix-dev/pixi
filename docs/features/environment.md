@@ -163,7 +163,7 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
 
 !!! note
-Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
 
 ## Solving environments
 
