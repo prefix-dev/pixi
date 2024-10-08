@@ -51,3 +51,22 @@ outputs:
           else:
             - echo "dummy-c on unix" > $PREFIX/bin/dummy-c
             - chmod +x $PREFIX/bin/dummy-c
+
+  - package:
+      name: dummy-d
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-x # This comes from dummy_channel_2
+
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-d on windows" > $PREFIX/bin/dummy-d.bat
+          else:
+            - echo "dummy-d on unix" > $PREFIX/bin/dummy-d
+            - chmod +x $PREFIX/bin/dummy-d

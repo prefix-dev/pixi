@@ -154,16 +154,32 @@ def test_sync_manually_remove_binary(pixi: Path, tmp_path: Path, dummy_channel_1
     assert dummy_a.is_file()
 
 
-def test_sync_migrate(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_sync_migrate(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""\
+# Test with special channel
 [envs.test]
 channels = ["{dummy_channel_1}"]
 dependencies = {{ dummy-a = "*", dummy-b = "*" }}
 exposed = {{ dummy-1 = "dummy-a", dummy-2 = "dummy-a", dummy-3 = "dummy-b", dummy-4 = "dummy-b" }}
+
+# Test with multiple channels
+[envs.test1]
+channels = ["{dummy_channel_1}", "{dummy_channel_2}"]
+dependencies = {{ dummy-d = "*" }}
+exposed = {{ dummy-d = "dummy-d" }}
+
+# Test with conda-forge channel
+[envs.test2]
+channels = ["conda-forge"]
+# Small package with binary for testing purposes
+dependencies = {{ xz = "*" }}
+exposed = {{ xz = "xz" }}
 """
     manifest.write_text(toml)
     verify_cli_command([pixi, "global", "sync"], env=env)
