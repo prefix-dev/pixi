@@ -13,7 +13,7 @@ use pixi_config::{Config, ConfigCli};
 /// # Uninstall multiple environments
 /// pixi global uninstall pixi-pack rattler-build
 #[derive(Parser, Debug, Clone)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the environments that are to be removed.
     #[arg(num_args = 1..)]

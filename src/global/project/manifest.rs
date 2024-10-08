@@ -197,6 +197,7 @@ impl Manifest {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Adds a channel to the manifest
     pub fn add_channel(
         &mut self,
