@@ -42,7 +42,6 @@ the user to the package manager they should be using to update pixi.
 PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
 ```
 
-
 ## Shell completion
 
 After building pixi you can generate shell autocompletion scripts by running
