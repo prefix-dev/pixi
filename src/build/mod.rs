@@ -7,7 +7,7 @@ use std::{
 };
 
 use miette::Diagnostic;
-use pixi_build_frontend::{BackendOverrides, SetupRequest};
+use pixi_build_frontend::SetupRequest;
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -140,10 +140,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.clone(),
-                build_tool_overrides: BackendOverrides {
-                    spec: None,
-                    path: Some("pixi-build-python".into()),
-                },
+                build_tool_overrides: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -329,10 +326,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_overrides: BackendOverrides {
-                    spec: None,
-                    path: Some("pixi-build-python".into()),
-                },
+                build_tool_overrides: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;

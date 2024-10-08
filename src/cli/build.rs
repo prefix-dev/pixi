@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverrides, SetupRequest};
+use pixi_build_frontend::SetupRequest;
 use pixi_build_types::{procedures::conda_build::CondaBuildParams, ChannelConfiguration};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
@@ -72,7 +72,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             outputs: None,
         })
         .await
-        .wrap_err("during the building of the project the following error occured")?;
+        .wrap_err("during the building of the project the following error occurred")?;
 
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;
