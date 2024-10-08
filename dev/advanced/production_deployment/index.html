@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Learn how to use GitHub Actions to automatically update your pixi lockfiles.">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/">
-      
-      
-        <link rel="prev" href="../github_actions/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/production_deployment/">
       
       
-        <link rel="next" href="../production_deployment/">
+        <link rel="prev" href="../updates_github_actions/">
+      
+      
+        <link rel="next" href="../pyproject_toml/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Update lockfiles with GitHub Actions - Pixi by prefix.dev</title>
+        <title>Production Deployment - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Production Deployment - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/production_deployment.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/production_deployment/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Production Deployment - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/production_deployment.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#how-to-use" class="md-skip">
+        <a href="#bringing-pixi-to-production" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Update lockfiles with GitHub Actions
+              Production Deployment
             
           </span>
         </div>
@@ -1159,6 +1157,27 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../updates_github_actions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Updates using GitHub Actions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1168,12 +1187,14 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
   
   <span class="md-ellipsis">
-    Updates using GitHub Actions
+    Production Deployment
   </span>
   
 
@@ -1184,7 +1205,7 @@
         
   
   <span class="md-ellipsis">
-    Updates using GitHub Actions
+    Production Deployment
   </span>
   
 
@@ -1196,6 +1217,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1204,38 +1227,77 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
+  <a href="#docker" class="md-nav__link">
     <span class="md-ellipsis">
-      How to use
+      Docker
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Docker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example usage
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
-    <span class="md-ellipsis">
-      Triggering CI in automated PRs
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#customizing-the-summary" class="md-nav__link">
+  <a href="#pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
-      Customizing the summary
+      pixi-pack
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="pixi-pack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unpacking-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unpacking an environment
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#using-reusable-workflows" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#cross-platform-packs" class="md-nav__link">
     <span class="md-ellipsis">
-      Using reusable workflows
+      Cross-platform packs
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inject-additional-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Inject additional packages
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unpacking-without-pixi-pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unpacking without pixi-pack
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1243,27 +1305,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../production_deployment/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Production Deployment
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -1534,6 +1575,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1542,38 +1585,77 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
+  <a href="#docker" class="md-nav__link">
     <span class="md-ellipsis">
-      How to use
+      Docker
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Docker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example usage
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
-    <span class="md-ellipsis">
-      Triggering CI in automated PRs
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#customizing-the-summary" class="md-nav__link">
+  <a href="#pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
-      Customizing the summary
+      pixi-pack
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="pixi-pack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unpacking-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unpacking an environment
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#using-reusable-workflows" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#cross-platform-packs" class="md-nav__link">
     <span class="md-ellipsis">
-      Using reusable workflows
+      Cross-platform packs
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inject-additional-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Inject additional packages
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unpacking-without-pixi-pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unpacking without pixi-pack
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1592,7 +1674,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/updates_github_actions.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/production_deployment.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1600,75 +1682,122 @@
   
 
 
-  <h1>Updates using GitHub Actions</h1>
-
-<p>You can leverage GitHub Actions in combination with <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pavelzw/pixi-diff-to-markdown</a>
-to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.</p>
-<p><img alt="Update lockfiles" src="../../assets/update-lockfile-light.png#only-light" />
-<img alt="Update lockfiles" src="../../assets/update-lockfile-dark.png#only-dark" /></p>
-<div class="admonition note">
-<p class="admonition-title">Dependabot/Renovate support for pixi</p>
-<p>You can track native Dependabot support for pixi in <a href="https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470">dependabot/dependabot-core #2227</a>
-and for Renovate in <a href="https://github.com/renovatebot/renovate/issues/2213">renovatebot/renovate #2213</a>.</p>
-</div>
-<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
-<p>To get started, create a new GitHub Actions workflow file in your repository.</p>
-<div class="language-yaml highlight"><span class="filename">.github/workflows/update-lockfiles.yml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">permissions</span><span class="p">:</span><span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">pull-requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nt">on</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0 5 1 * *</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nt">jobs</span><span class="p">:</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">pixi-update</span><span class="p">:</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.1</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">          </span><span class="nt">run-install</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="no">set -o pipefail</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="no">pixi update --json | pixi exec pixi-diff-to-markdown &gt;&gt; diff.md</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create pull request</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/create-pull-request@v6</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">          </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ secrets.GITHUB_TOKEN }}</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">          </span><span class="nt">commit-message</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">          </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="nt">body-path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">diff.md</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">          </span><span class="nt">branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">update-pixi</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">          </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">          </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">          </span><span class="nt">delete-branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">          </span><span class="nt">add-paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi.lock</span>
-</span></code></pre></div>
-<ol>
-<li>Needed for <code>peter-evans/create-pull-request</code></li>
-<li>Runs at 05:00, on day 1 of the month</li>
-</ol>
-<p>In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -&gt; "General").</p>
+<h1 id="bringing-pixi-to-production">Bringing pixi to production<a class="headerlink" href="#bringing-pixi-to-production" title="Permanent link">#</a></h1>
+<p>You can bring pixi projects into production by either containerizing it using tools like Docker or by using <a href="https://github.com/quantco/pixi-pack"><code>quantco/pixi-pack</code></a>.</p>
 <div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>If you don't have any <code>pypi-dependencies</code>, you can use <code>pixi update --json --no-install</code> to speed up diff generation.</p>
+<p><a href="https://github.com/pavelzw">@pavelzw</a> from <a href="https://quantco.com">QuantCo</a> wrote a blog post about bringing pixi to production. You can read it <a href="https://tech.quantco.com/blog/pixi-production">here</a>.</p>
 </div>
-<p><img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-light.png#only-light" />
-<img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-dark.png#only-dark" /></p>
-<h2 id="triggering-ci-in-automated-prs">Triggering CI in automated PRs<a class="headerlink" href="#triggering-ci-in-automated-prs" title="Permanent link">#</a></h2>
-<p>In order to prevent accidental recursive GitHub Workflow runs, GitHub decided to not trigger any workflows on automated PRs when using the default <code>GITHUB_TOKEN</code>.
-There are a couple of ways how to work around this limitation. You can find excellent documentation for this in <code>peter-evans/create-pull-request</code>, see <a href="https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs">here</a>.</p>
-<h2 id="customizing-the-summary">Customizing the summary<a class="headerlink" href="#customizing-the-summary" title="Permanent link">#</a></h2>
-<p>You can customize the summary by either using command-line-arguments of <code>pixi-diff-to-markdown</code> or by specifying the configuration in <code>pixi.toml</code> under <code>[tool.pixi-diff-to-markdown]</code>. See the <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pixi-diff-to-markdown documentation</a> or run <code>pixi-diff-to-markdown --help</code> for more information.</p>
-<h2 id="using-reusable-workflows">Using reusable workflows<a class="headerlink" href="#using-reusable-workflows" title="Permanent link">#</a></h2>
-<p>If you want to use the same workflow in multiple repositories in your GitHub organization, you can create a reusable workflow.
-You can find more information in the <a href="https://docs.github.com/en/actions/using-workflows/reusing-workflows">GitHub documentation</a>.</p>
+<h2 id="docker">Docker<a class="headerlink" href="#docker" title="Permanent link">#</a></h2>
+<!-- Keep in sync with https://github.com/prefix-dev/pixi-docker/blob/main/README.md -->
+
+<p>We provide a simple docker image at <a href="https://github.com/prefix-dev/pixi-docker"><code>pixi-docker</code></a> that contains the pixi executable on top of different base images.</p>
+<p>The images are available on <a href="https://ghcr.io/prefix-dev/pixi">ghcr.io/prefix-dev/pixi</a>.</p>
+<p>There are different tags for different base images available:</p>
+<ul>
+<li><code>latest</code> - based on <code>ubuntu:jammy</code></li>
+<li><code>focal</code> - based on <code>ubuntu:focal</code></li>
+<li><code>bullseye</code> - based on <code>debian:bullseye</code></li>
+<li><code>jammy-cuda-12.2.2</code> - based on <code>nvidia/cuda:12.2.2-jammy</code></li>
+<li>... and more</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">All tags</p>
+<p>For all tags, take a look at the <a href="https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml">build script</a>.</p>
+</div>
+<h3 id="example-usage">Example usage<a class="headerlink" href="#example-usage" title="Permanent link">#</a></h3>
+<p>The following example uses the pixi docker image as a base image for a multi-stage build.
+It also makes use of <code>pixi shell-hook</code> to not rely on pixi being installed in the production container.</p>
+<div class="admonition tip">
+<p class="admonition-title">More examples</p>
+<p>For more examples, take a look at <a href="https://github.com/pavelzw/pixi-docker-example">pavelzw/pixi-docker-example</a>.</p>
+</div>
+<div class="language-Dockerfile highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">ghcr.io/prefix-dev/pixi:0.31.0</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">build</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c"># copy source code, pixi.toml and pixi.lock to the container</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">WORKDIR</span><span class="w"> </span><span class="s">/app</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">COPY</span><span class="w"> </span>.<span class="w"> </span>.
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c"># install dependencies to `/app/.pixi/envs/prod`</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c"># use `--locked` to ensure the lockfile is up to date with pixi.toml</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">RUN</span><span class="w"> </span>pixi<span class="w"> </span>install<span class="w"> </span>--locked<span class="w"> </span>-e<span class="w"> </span>prod
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c"># create the shell-hook bash script to activate the environment</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">RUN</span><span class="w"> </span>pixi<span class="w"> </span>shell-hook<span class="w"> </span>-e<span class="w"> </span>prod<span class="w"> </span>-s<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/shell-hook
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">RUN</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;#!/bin/bash&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>/app/entrypoint.sh
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">RUN</span><span class="w"> </span>cat<span class="w"> </span>/shell-hook<span class="w"> </span>&gt;&gt;<span class="w"> </span>/app/entrypoint.sh
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c"># extend the shell-hook script to run the command passed to the container</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">RUN</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;exec &quot;$@&quot;&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/app/entrypoint.sh
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="k">FROM</span><span class="w"> </span><span class="s">ubuntu:24.04</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">production</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">WORKDIR</span><span class="w"> </span><span class="s">/app</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c"># only copy the production environment into prod container</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c"># please note that the &quot;prefix&quot; (path) needs to stay the same as in the build container</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>build<span class="w"> </span>/app/.pixi/envs/prod<span class="w"> </span>/app/.pixi/envs/prod
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>build<span class="w"> </span>--chmod<span class="o">=</span><span class="m">0755</span><span class="w"> </span>/app/entrypoint.sh<span class="w"> </span>/app/entrypoint.sh
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c"># copy your project code into the container as well</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="k">COPY</span><span class="w"> </span>./my_project<span class="w"> </span>/app/my_project
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="k">EXPOSE</span><span class="w"> </span><span class="s">8000</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="k">ENTRYPOINT</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">&quot;/app/entrypoint.sh&quot;</span><span class="w"> </span><span class="p">]</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c"># run your app inside the pixi environment</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="k">CMD</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">&quot;uvicorn&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;my_project:app&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--host&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;0.0.0.0&quot;</span><span class="w"> </span><span class="p">]</span>
+</span></code></pre></div>
+<h2 id="pixi-pack">pixi-pack<a class="headerlink" href="#pixi-pack" title="Permanent link">#</a></h2>
+<!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
+
+<p><a href="https://github.com/quantco/pixi-pack"><code>pixi-pack</code></a> is a simple tool that takes a pixi environment and packs it into a compressed archive that can be shipped to the target machine.</p>
+<p>It can be installed via</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack
+</span></code></pre></div>
+<p>Or by downloading our pre-built binaries from the <a href="https://github.com/quantco/pixi-pack/releases">releases page</a>.</p>
+<p>Instead of installing pixi-pack globally, you can also use pixi exec to run <code>pixi-pack</code> in a temporary environment:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>pixi-pack<span class="w"> </span>pack
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>pixi-pack<span class="w"> </span>unpack<span class="w"> </span>environment.tar
+</span></code></pre></div>
+<p><img alt="pixi-pack demo" src="https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light" />
+<img alt="pixi-pack demo" src="https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark" /></p>
+<p>You can pack an environment with</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--manifest-file<span class="w"> </span>pixi.toml<span class="w"> </span>--environment<span class="w"> </span>prod<span class="w"> </span>--platform<span class="w"> </span>linux-64
+</span></code></pre></div>
+<p>This will create a <code>environment.tar</code> file that contains all conda packages required to create the environment.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># environment.tar
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>| pixi-pack.json
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>| environment.yml
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>| channel
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>|    ├── noarch
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>|    |    ├── tzdata-2024a-h0c530f3_0.conda
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>|    |    ├── ...
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>|    |    └── repodata.json
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>|    └── linux-64
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>|         ├── ca-certificates-2024.2.2-hbcca054_0.conda
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>|         ├── ...
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>|         └── repodata.json
+</span></code></pre></div>
+<h3 id="unpacking-an-environment">Unpacking an environment<a class="headerlink" href="#unpacking-an-environment" title="Permanent link">#</a></h3>
+<p>With <code>pixi-pack unpack environment.tar</code>, you can unpack the environment on your target system. This will create a new conda environment in <code>./env</code> that contains all packages specified in your <code>pixi.toml</code>. It also creates an <code>activate.sh</code> (or <code>activate.bat</code> on Windows) file that lets you activate the environment without needing to have <code>conda</code> or <code>micromamba</code> installed.</p>
+<h3 id="cross-platform-packs">Cross-platform packs<a class="headerlink" href="#cross-platform-packs" title="Permanent link">#</a></h3>
+<p>Since <code>pixi-pack</code> just downloads the <code>.conda</code> and <code>.tar.bz2</code> files from the conda repositories, you can trivially create packs for different platforms.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--platform<span class="w"> </span>win-64
+</span></code></pre></div>
+<div class="admonition note">
+<p>You can only unpack a pack on a system that has the same platform as the pack was created for.</p>
+</div>
+<h3 id="inject-additional-packages">Inject additional packages<a class="headerlink" href="#inject-additional-packages" title="Permanent link">#</a></h3>
+<p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
+</span></code></pre></div>
+<p>This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the project.</p>
+<h3 id="unpacking-without-pixi-pack">Unpacking without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>
+<p>If you don't have <code>pixi-pack</code> available on your target system, you can still install the environment if you have <code>conda</code> or <code>micromamba</code> available.
+Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
+Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
+You can then install the environment using <code>conda</code> or <code>micromamba</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># or</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span></code></pre></div>
+<div class="admonition note">
+<p>The <code>environment.yml</code> and <code>repodata.json</code> files are only for this use case, <code>pixi-pack unpack</code> does not use them.</p>
+</div>
 
 
 
@@ -1740,9 +1869,9 @@ You can find more information in the <a href="https://docs.github.com/en/actions
           
             
             <a
-              href="../github_actions/"
+              href="../updates_github_actions/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: GitHub Actions"
+              aria-label="Previous: Updates using GitHub Actions"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1753,7 +1882,7 @@ You can find more information in the <a href="https://docs.github.com/en/actions
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  GitHub Actions
+                  Updates using GitHub Actions
                 </div>
               </div>
             </a>
@@ -1763,16 +1892,16 @@ You can find more information in the <a href="https://docs.github.com/en/actions
           
             
             <a
-              href="../production_deployment/"
+              href="../pyproject_toml/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Production Deployment"
+              aria-label="Next: Pyproject.toml"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Production Deployment
+                  Pyproject.toml
                 </div>
               </div>
               <div class="md-footer__button md-icon">

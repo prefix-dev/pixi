@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Learn how to use GitHub Actions to automatically update your pixi lockfiles.">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/">
-      
-      
-        <link rel="prev" href="../github_actions/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/ide_integration/devcontainer/">
       
       
-        <link rel="next" href="../production_deployment/">
+        <link rel="prev" href="../r_studio/">
+      
+      
+        <link rel="next" href="../../tutorials/python/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Update lockfiles with GitHub Actions - Pixi by prefix.dev</title>
+        <title>VSCode Devcontainer - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="VSCode Devcontainer - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/devcontainer.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/ide_integration/devcontainer/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Update lockfiles with GitHub Actions - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="VSCode Devcontainer - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Learn how to use GitHub Actions to automatically update your pixi lockfiles." >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/updates_github_actions.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/devcontainer.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#how-to-use" class="md-skip">
+        <a href="#use-pixi-inside-of-a-devcontainer" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Update lockfiles with GitHub Actions
+              VSCode Devcontainer
             
           </span>
         </div>
@@ -441,8 +439,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -452,11 +452,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -470,7 +470,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             IDE Integration
@@ -484,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/jupyterlab/" class="md-nav__link">
+      <a href="../jupyterlab/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -505,7 +505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/pycharm/" class="md-nav__link">
+      <a href="../pycharm/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -526,7 +526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/r_studio/" class="md-nav__link">
+      <a href="../r_studio/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -544,10 +544,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../ide_integration/devcontainer/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    VSCode Devcontainer
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -556,6 +576,35 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Secrets
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1033,8 +1082,6 @@
       
   
   
-    
-  
   
   
     
@@ -1046,11 +1093,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
         
           
           <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
@@ -1064,7 +1111,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1078,7 +1125,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../advanced/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1099,7 +1146,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1120,7 +1167,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../channel_priority/" class="md-nav__link">
+      <a href="../../advanced/channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1141,7 +1188,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../github_actions/" class="md-nav__link">
+      <a href="../../advanced/github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1159,28 +1206,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Updates using GitHub Actions
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1189,60 +1218,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      How to use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
-    <span class="md-ellipsis">
-      Triggering CI in automated PRs
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#customizing-the-summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Customizing the summary
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-reusable-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using reusable workflows
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1255,7 +1230,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../production_deployment/" class="md-nav__link">
+      <a href="../../advanced/production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1276,7 +1251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pyproject_toml/" class="md-nav__link">
+      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1534,6 +1509,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1542,36 +1519,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
+  <a href="#secrets" class="md-nav__link">
     <span class="md-ellipsis">
-      How to use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#triggering-ci-in-automated-prs" class="md-nav__link">
-    <span class="md-ellipsis">
-      Triggering CI in automated PRs
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#customizing-the-summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Customizing the summary
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-reusable-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using reusable workflows
+      Secrets
     </span>
   </a>
   
@@ -1592,7 +1542,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/updates_github_actions.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/ide_integration/devcontainer.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1600,75 +1550,69 @@
   
 
 
-  <h1>Updates using GitHub Actions</h1>
-
-<p>You can leverage GitHub Actions in combination with <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pavelzw/pixi-diff-to-markdown</a>
-to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.</p>
-<p><img alt="Update lockfiles" src="../../assets/update-lockfile-light.png#only-light" />
-<img alt="Update lockfiles" src="../../assets/update-lockfile-dark.png#only-dark" /></p>
-<div class="admonition note">
-<p class="admonition-title">Dependabot/Renovate support for pixi</p>
-<p>You can track native Dependabot support for pixi in <a href="https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470">dependabot/dependabot-core #2227</a>
-and for Renovate in <a href="https://github.com/renovatebot/renovate/issues/2213">renovatebot/renovate #2213</a>.</p>
-</div>
-<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
-<p>To get started, create a new GitHub Actions workflow file in your repository.</p>
-<div class="language-yaml highlight"><span class="filename">.github/workflows/update-lockfiles.yml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
+<h1 id="use-pixi-inside-of-a-devcontainer">Use pixi inside of a devcontainer<a class="headerlink" href="#use-pixi-inside-of-a-devcontainer" title="Permanent link">#</a></h1>
+<p><a href="https://code.visualstudio.com/docs/devcontainers/containers">VSCode Devcontainers</a> are a popular tool to develop on a project with a consistent environment.
+They are also used in <a href="https://github.com/features/codespaces">GitHub Codespaces</a> which makes it a great way to develop on a project without having to install anything on your local machine.</p>
+<p>To use pixi inside of a devcontainer, follow these steps:</p>
+<p>Create a new directory <code>.devcontainer</code> in the root of your project.
+Then, create the following two files in the <code>.devcontainer</code> directory:</p>
+<div class="language-dockerfile highlight"><span class="filename">.devcontainer/Dockerfile</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">mcr.microsoft.com/devcontainers/base:jammy</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">permissions</span><span class="p">:</span><span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">pull-requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nt">on</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0 5 1 * *</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nt">jobs</span><span class="p">:</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">pixi-update</span><span class="p">:</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.1</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">          </span><span class="nt">run-install</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update lockfiles</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="no">set -o pipefail</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="no">pixi update --json | pixi exec pixi-diff-to-markdown &gt;&gt; diff.md</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create pull request</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/create-pull-request@v6</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">          </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ secrets.GITHUB_TOKEN }}</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">          </span><span class="nt">commit-message</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">          </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Update pixi lockfile</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="nt">body-path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">diff.md</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">          </span><span class="nt">branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">update-pixi</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">          </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">          </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">          </span><span class="nt">delete-branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">          </span><span class="nt">add-paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi.lock</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">ARG</span><span class="w"> </span><span class="nv">PIXI_VERSION</span><span class="o">=</span>v0.31.0
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">RUN</span><span class="w"> </span>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>/usr/local/bin/pixi<span class="w"> </span>-fsSL<span class="w"> </span>--compressed<span class="w"> </span><span class="s2">&quot;https://github.com/prefix-dev/pixi/releases/download/</span><span class="si">${</span><span class="nv">PIXI_VERSION</span><span class="si">}</span><span class="s2">/pixi-</span><span class="k">$(</span>uname<span class="w"> </span>-m<span class="k">)</span><span class="s2">-unknown-linux-musl&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>chmod<span class="w"> </span>+x<span class="w"> </span>/usr/local/bin/pixi<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>pixi<span class="w"> </span>info
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c"># set some user and workdir settings to work nicely with vscode</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">USER</span><span class="w"> </span><span class="s">vscode</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">WORKDIR</span><span class="w"> </span><span class="s">/home/vscode</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">RUN</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;eval &quot;$(pixi completion -s bash)&quot;&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/home/vscode/.bashrc
 </span></code></pre></div>
-<ol>
-<li>Needed for <code>peter-evans/create-pull-request</code></li>
-<li>Runs at 05:00, on day 1 of the month</li>
-</ol>
-<p>In order for this workflow to work, you need to set "Allow GitHub Actions to create and approve pull requests" to true in your repository settings (in "Actions" -&gt; "General").</p>
+<div class="language-json highlight"><span class="filename">.devcontainer/devcontainer.json</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-project&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">&quot;build&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">&quot;dockerfile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Dockerfile&quot;</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;..&quot;</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;customizations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">&quot;vscode&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">        </span><span class="nt">&quot;settings&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{},</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">        </span><span class="nt">&quot;extensions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;ms-python.python&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;charliermarsh.ruff&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;GitHub.copilot&quot;</span><span class="p">]</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">      </span><span class="nt">&quot;ghcr.io/devcontainers/features/docker-in-docker:2&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="nt">&quot;mounts&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume&quot;</span><span class="p">],</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">&quot;postCreateCommand&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sudo chown vscode .pixi &amp;&amp; pixi install&quot;</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">}</span>
+</span></code></pre></div>
 <div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>If you don't have any <code>pypi-dependencies</code>, you can use <code>pixi update --json --no-install</code> to speed up diff generation.</p>
+<p class="admonition-title">Put <code>.pixi</code> in a mount</p>
+<p>In the above example, we mount the <code>.pixi</code> directory into a volume.
+This is needed since the <code>.pixi</code> directory shouldn't be on a case insensitive filesystem (default on macOS, Windows) but instead in its own volume.
+There are some conda packages (for example <a href="https://github.com/conda-forge/ncurses-feedstock/issues/73">ncurses-feedstock#73</a>) that contain files that only differ in case which leads to errors on case insensitive filesystems.</p>
 </div>
-<p><img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-light.png#only-light" />
-<img alt="Allow GitHub Actions PRs" src="../../assets/allow-github-actions-prs-dark.png#only-dark" /></p>
-<h2 id="triggering-ci-in-automated-prs">Triggering CI in automated PRs<a class="headerlink" href="#triggering-ci-in-automated-prs" title="Permanent link">#</a></h2>
-<p>In order to prevent accidental recursive GitHub Workflow runs, GitHub decided to not trigger any workflows on automated PRs when using the default <code>GITHUB_TOKEN</code>.
-There are a couple of ways how to work around this limitation. You can find excellent documentation for this in <code>peter-evans/create-pull-request</code>, see <a href="https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs">here</a>.</p>
-<h2 id="customizing-the-summary">Customizing the summary<a class="headerlink" href="#customizing-the-summary" title="Permanent link">#</a></h2>
-<p>You can customize the summary by either using command-line-arguments of <code>pixi-diff-to-markdown</code> or by specifying the configuration in <code>pixi.toml</code> under <code>[tool.pixi-diff-to-markdown]</code>. See the <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pixi-diff-to-markdown documentation</a> or run <code>pixi-diff-to-markdown --help</code> for more information.</p>
-<h2 id="using-reusable-workflows">Using reusable workflows<a class="headerlink" href="#using-reusable-workflows" title="Permanent link">#</a></h2>
-<p>If you want to use the same workflow in multiple repositories in your GitHub organization, you can create a reusable workflow.
-You can find more information in the <a href="https://docs.github.com/en/actions/using-workflows/reusing-workflows">GitHub documentation</a>.</p>
+<h2 id="secrets">Secrets<a class="headerlink" href="#secrets" title="Permanent link">#</a></h2>
+<p>If you want to authenticate to a private conda channel, you can add secrets to your devcontainer.</p>
+<div class="language-json highlight"><span class="filename">.devcontainer/devcontainer.json</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nt">&quot;build&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Dockerfile&quot;</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;..&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">&quot;options&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">        </span><span class="s2">&quot;--secret&quot;</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">        </span><span class="s2">&quot;id=prefix_dev_token,env=PREFIX_DEV_TOKEN&quot;</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="p">],</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="c1">// ...</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">}</span>
+</span></code></pre></div>
+<div class="language-dockerfile highlight"><span class="filename">.devcontainer/Dockerfile</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c"># ...</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">RUN</span><span class="w"> </span>--mount<span class="o">=</span><span class="nv">type</span><span class="o">=</span>secret,id<span class="o">=</span>prefix_dev_token,uid<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nb">test</span><span class="w"> </span>-s<span class="w"> </span>/run/secrets/prefix_dev_token<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span>/run/secrets/prefix_dev_token<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>https://repo.prefix.dev
+</span></code></pre></div>
+<p>These secrets need to be present either as an environment variable when starting the devcontainer locally or in your <a href="https://github.com/settings/codespaces">GitHub Codespaces settings</a> under <code>Secrets</code>.</p>
 
 
 
@@ -1740,9 +1684,9 @@ You can find more information in the <a href="https://docs.github.com/en/actions
           
             
             <a
-              href="../github_actions/"
+              href="../r_studio/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: GitHub Actions"
+              aria-label="Previous: RStudio"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1753,7 +1697,7 @@ You can find more information in the <a href="https://docs.github.com/en/actions
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  GitHub Actions
+                  RStudio
                 </div>
               </div>
             </a>
@@ -1763,16 +1707,16 @@ You can find more information in the <a href="https://docs.github.com/en/actions
           
             
             <a
-              href="../production_deployment/"
+              href="../../tutorials/python/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Production Deployment"
+              aria-label="Next: Python"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Production Deployment
+                  Python
                 </div>
               </div>
               <div class="md-footer__button md-icon">
