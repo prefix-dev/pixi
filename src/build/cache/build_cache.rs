@@ -90,6 +90,14 @@ impl BuildCache {
         }
     }
 
+    /// Returns a cache entry for the given source checkout and input from the
+    /// cache. If the cache doesn't contain an entry for this source and input,
+    /// it returns `None`.
+    ///
+    /// This function also returns a [`CacheEntry`] which can be used to update
+    /// the cache. The [`CacheEntry`] also holds an exclusive lock on the cache
+    /// which prevents other processes from accessing the cache entry. Drop
+    /// the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
         source: &SourceCheckout,
