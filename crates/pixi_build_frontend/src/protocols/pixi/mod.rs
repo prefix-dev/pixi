@@ -30,7 +30,7 @@ impl ProtocolBuilder {
     pub fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
         let backend_spec = manifest
             .build_section()
-            .map(|build_section| IsolatedToolSpec::from_build_section(build_section))
+            .map(IsolatedToolSpec::from_build_section)
             .ok_or(ProtocolBuildError::NoBuildSection)?;
 
         Ok(Self {
