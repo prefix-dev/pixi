@@ -16,6 +16,7 @@ use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
+use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
@@ -262,7 +263,7 @@ impl Project {
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
+    pub(crate) async fn discover_or_create() -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
         // Prompt user if the manifest is empty and the user wants to create one
@@ -275,21 +276,7 @@ impl Project {
                 .await
                 .into_diagnostic()?;
 
-            let prompt = format!(
-                "{} You don't have a global manifest yet.\n\
-                Do you want to create one based on your existing installation?\n\
-                Your existing installation will be removed if you decide against it.",
-                console::style(console::Emoji("⚠️ ", "")).yellow(),
-            );
-            if !env_root.directories().await?.is_empty()
-                && (assume_yes
-                    || dialoguer::Confirm::new()
-                        .with_prompt(prompt)
-                        .default(true)
-                        .show_default(true)
-                        .interact()
-                        .into_diagnostic()?)
-            {
+            if !env_root.directories().await?.is_empty() {
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
@@ -312,7 +299,7 @@ impl Project {
     ) -> miette::Result<Self> {
         let config = Config::load(env_root.path());
 
-        let futures = bin_dir
+        let exposed_binaries: Vec<ExposedData> = bin_dir
             .files()
             .await?
             .into_iter()
@@ -333,11 +320,20 @@ impl Project {
                     }
                     Err(e) => Err(e),
                 }
-            });
+            })
+            .collect::<futures::stream::FuturesOrdered<_>>()
+            .filter_map(|result| async {
+                match result {
+                    Ok(data) => Some(data),
+                    Err(e) => {
+                        tracing::warn!("{e}");
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
 
-        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await.wrap_err_with(|| {
-            "Failed to extract exposed binaries from existing installation please clean up your installation."
-        })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;

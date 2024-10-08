@@ -29,10 +29,6 @@ pub struct Args {
     #[arg(long)]
     expose: Vec<Mapping>,
 
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 }
@@ -45,7 +41,7 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = Project::discover_or_create(args.assume_yes)
+    let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 

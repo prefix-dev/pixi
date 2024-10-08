@@ -188,7 +188,7 @@ exposed = {{ xz = "xz" }}
     original_manifest = manifest.read_text()
     manifest.unlink()
     manifests.rmdir()
-    verify_cli_command([pixi, "global", "sync", "--assume-yes"], env=env)
+    verify_cli_command([pixi, "global", "sync"], env=env)
     migrated_manifest = manifest.read_text()
     assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
 
