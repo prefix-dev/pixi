@@ -15,7 +15,7 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform}
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
-use super::parsed_manifest::ParsedManifest;
+use super::parsed_manifest::{ParsedManifest, Version};
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 
 /// Handles the global project's manifest file.
@@ -295,7 +295,13 @@ impl Manifest {
 
     /// Saves the manifest to the file system
     pub async fn save(&self) -> miette::Result<()> {
-        let contents = self.document.to_string();
+        let contents = {
+            // Ensure that version is always set when saving
+            let mut document = self.document.clone();
+            document.get_or_insert("version", Version::default().into());
+            document.to_string()
+        };
+
         tokio_fs::write(&self.path, contents)
             .await
             .into_diagnostic()?;

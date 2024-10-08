@@ -19,9 +19,26 @@ use super::ExposedData;
 use crate::global::Mapping;
 use pixi_spec::PixiSpec;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Version(u32);
+
+impl Default for Version {
+    fn default() -> Self {
+        Version(1)
+    }
+}
+
+impl From<Version> for toml_edit::Item {
+    fn from(version: Version) -> Self {
+        toml_edit::value(version.0 as i64)
+    }
+}
+
 /// Describes the contents of a parsed global project manifest.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ParsedManifest {
+    /// The version of the manifest
+    version: Version,
     /// The environments the project can create.
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
@@ -52,7 +69,10 @@ where
                 .insert(Mapping::new(exposed, executable_name));
         }
 
-        Self { envs }
+        Self {
+            envs,
+            version: Version::default(),
+        }
     }
 }
 
@@ -72,6 +92,9 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         #[derive(Deserialize, Debug, Clone)]
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         pub struct TomlManifest {
+            /// The version of the manifest
+            #[serde(default)]
+            version: Version,
             /// The environments the project can create.
             #[serde(default)]
             envs: IndexMap<EnvironmentName, ParsedEnvironment>,
@@ -100,6 +123,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         }
 
         Ok(Self {
+            version: manifest.version,
             envs: manifest.envs,
         })
     }

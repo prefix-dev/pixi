@@ -22,6 +22,11 @@ impl TomlManifest {
         Self(document)
     }
 
+    /// Get or insert a top-level item
+    pub fn get_or_insert<'a>(&'a mut self, key: &str, item: Item) -> &'a Item {
+        self.0.entry(key).or_insert(item)
+    }
+
     /// Retrieve a mutable reference to a target table `table_name`
     /// in dotted form (e.g. `table1.table2`) from the root of the document.
     /// If the table is not found, it is inserted into the document.
