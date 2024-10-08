@@ -107,7 +107,7 @@ $ (default) which python
 ```
 
 !!! warning
-It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
+    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
 
 ### Using `pixi` with `direnv`
 
