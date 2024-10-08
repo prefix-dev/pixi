@@ -1,6 +1,6 @@
 # Bringing pixi to production
 
-You can bring pixi into production by either containerizing it using tools like Docker or by using [`quantco/pixi-pack`](https://github.com/quantco/pixi-pack).
+You can bring pixi projects into production by either containerizing it using tools like Docker or by using [`quantco/pixi-pack`](https://github.com/quantco/pixi-pack).
 
 !!!tip ""
     [@pavelzw](https://github.com/pavelzw) from [QuantCo](https://quantco.com) wrote a blog post about bringing pixi to production. You can read it [here](https://tech.quantco.com/blog/pixi-production).
