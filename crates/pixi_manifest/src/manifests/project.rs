@@ -455,12 +455,6 @@ mod tests {
         )
     }
 
-    fn default_channel_config() -> rattler_conda_types::ChannelConfig {
-        rattler_conda_types::ChannelConfig::default_with_root_dir(
-            std::env::current_dir().expect("Could not retrieve the current directory"),
-        )
-    }
-
     #[test]
     fn test_nameless_to_toml() {
         let examples = [

@@ -3567,7 +3567,6 @@ dependencies = [
  "async-trait",
  "barrier_cell",
  "base64 0.22.1",
- "cfg-if",
  "chrono",
  "clap",
  "clap-verbosity-flag",
@@ -3583,7 +3582,6 @@ dependencies = [
  "distribution-types",
  "dunce",
  "fancy_display",
- "file_url",
  "flate2",
  "fs_extra",
  "futures",
@@ -3634,7 +3632,6 @@ dependencies = [
  "regex",
  "reqwest 0.12.5",
  "reqwest-middleware",
- "reqwest-retry 0.5.0",
  "rlimit",
  "rstest",
  "same-file",
@@ -3687,9 +3684,6 @@ dependencies = [
  "pixi_consts",
  "pixi_manifest",
  "rattler_conda_types",
- "rattler_digest",
- "rattler_repodata_gateway",
- "rattler_solve",
  "regex",
  "rstest",
  "serde",
@@ -3711,7 +3705,6 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
- "rattler_digest",
  "serde",
  "serde_with",
  "url",
@@ -3849,7 +3842,6 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "dunce",
  "file_url",
  "insta",
  "itertools 0.13.0",

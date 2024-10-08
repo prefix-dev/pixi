@@ -17,7 +17,6 @@ async-fd-lock = "0.2.0"
 async-once-cell = "0.5.3"
 async-trait = "0.1.82"
 base64 = "0.22.1"
-cfg-if = "1.0"
 chrono = "0.4.38"
 clap = { version = "4.5.9", default-features = false }
 clap-verbosity-flag = "2.2.0"
@@ -183,7 +182,6 @@ async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
 base64 = { workspace = true }
-cfg-if = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",
@@ -230,7 +228,6 @@ minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 
-file_url = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
@@ -269,7 +266,6 @@ reqwest = { workspace = true, features = [
   "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
-reqwest-retry = { workspace = true }
 rlimit = { workspace = true }
 same-file = { workspace = true }
 self-replace = { workspace = true }
