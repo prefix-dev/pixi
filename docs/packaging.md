@@ -3,13 +3,10 @@ part: pixi
 title: Packaging pixi
 description: How to package pixi for distribution with another package manager?
 ---
-
-## Packaging
-
 This is a guide for distribution maintainers wanting to package pixi for a different package manager.
 Users of pixi can ignore this page.
 
-### Building
+## Building
 
 Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
 At runtime pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
@@ -42,8 +39,11 @@ When the self-update feature is disabled and a user tries to run `pixi self-upda
 message can be customized by setting the `PIXI_SELF_UPDATE_DISABLED_MESSAGE` environment variable at build time to point
 the user to the package manager they should be using to update pixi.
 ```shell
-PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead`" cargo build --locked --profile dist
-### Shell completion
+PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
+```
+
+
+## Shell completion
 
 After building pixi you can generate shell autocompletion scripts by running
 ```shell
