@@ -12,7 +12,7 @@ The next iteration of this feature should fulfill the following needs:
 
 - Shareable global environments.
 - Managing complex environments with multiple packages as dependencies
-- Flexible exposure of binaries
+- Flexible exposure of executables
 
 ## Design Considerations
 
@@ -59,19 +59,16 @@ python = "3.10.*"
 
 ## CLI
 
-Install one or more packages `PACKAGE` and expose their binaries.
+Install one or more packages `PACKAGE` and expose their executables.
 If `--environment` has been given, all packages will be installed in the same environment.
-If the environment already exists, the command will return with an error.
 `--expose` can be given if `--environment` is given as well or if only a single `PACKAGE` will be installed.
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
 `--platform` sets the platform of the environment to `PLATFORM`
 Multiple channels can be specified by using `--channel` multiple times.
 By default, if no channel is provided, the `default-channels` key in the pixi configuration is used, which again defaults to "conda-forge".
 
-
-
 ```
-pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--channel CHANNEL]... <PACKAGE>...
+pixi global install [--expose MAPPING] [--environment ENV] [--platform PLATFORM] [--no-activation] [--channel CHANNEL]... PACKAGE...
 ```
 
 Remove environments `ENV`.
@@ -79,19 +76,19 @@ Remove environments `ENV`.
 pixi global uninstall <ENV>...
 ```
 
-Update `PACKAGE_NAME` if `--package` is given. If not, all packages in environments `ENV` will be updated.
-If the update leads to binaries being removed, it will offer to remove the mappings.
+Update `PACKAGE` if `--package` is given. If not, all packages in environments `ENV` will be updated.
+If the update leads to executables being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
-If the update leads to binaries being added, it will offer for each binary individually to expose it.
+If the update leads to executables being added, it will offer for each binary individually to expose it.
 `--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
 ```
-pixi global update [--package PACKAGE_NAME] [--assume-yes] <ENV>...
+pixi global update [--package PACKAGE] [--assume-yes] <ENV>...
 ```
 
 Updates all packages in all environments.
-If the update leads to binaries being removed, it will offer to remove the mappings.
+If the update leads to executables being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
-If the update leads to binaries being added, it will offer for each binary individually to expose it.
+If the update leads to executables being added, it will offer for each binary individually to expose it.
 `--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
 
 ```
@@ -102,22 +99,22 @@ Add one or more packages `PACKAGE` into an existing environment `ENV`.
 If environment `ENV` does not exist, it will return with an error.
 Without `--expose` no binary will be exposed.
 If you don't mention a spec like `python=3.8.*`, the spec will be unconstrained with `*`.
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
 
 ```
 pixi global add --environment ENV [--expose MAPPING] <PACKAGE>...
 ```
 
-Remove package `PACKAGE_NAME` from environment `ENV`.
+Remove package `PACKAGE` from environment `ENV`.
 If that was the last package remove the whole environment and print that information in the console.
-If this leads to binaries being removed, it will offer to remove the mappings.
+If this leads to executables being removed, it will offer to remove the mappings.
 If the user declines the remove process will stop.
 ```
-pixi global remove --environment ENV PACKAGE_NAME
+pixi global remove --environment ENV PACKAGE
 ```
 
-Add one or more `MAPPING` for environment `ENV` which describe which binaries are exposed.
-The syntax for `MAPPING` is `exposed_name=binary_name`, so for example `python3.10=python`.
+Add one or more `MAPPING` for environment `ENV` which describe which executables are exposed.
+The syntax for `MAPPING` is `exposed_name=executable_name`, so for example `python3.10=python`.
 ```
 pixi global expose add --environment ENV  <MAPPING>...
 ```
@@ -136,7 +133,7 @@ Only if there's no manifest, will the data from existing environments be used to
 pixi global sync
 ```
 
-List all environments, their specs and exposed binaries
+List all environments, their specs and exposed executables
 ```
 pixi global list
 ```
@@ -154,7 +151,7 @@ pixi global platform set --environment ENV PLATFORM
 
 ### Simple workflow
 
-Create environment `python`, install package `python=3.10.*` and expose all binaries of that package
+Create environment `python`, install package `python=3.10.*` and expose all executables of that package
 ```
 pixi global install python=3.10.*
 ```
@@ -169,7 +166,7 @@ Remove environment `python`
 pixi global uninstall python
 ```
 
-Create environment `python` and `pip`, install corresponding packages and expose all binaries of that packages
+Create environment `python` and `pip`, install corresponding packages and expose all executables of that packages
 ```
 pixi global install python pip
 ```
@@ -179,7 +176,7 @@ Remove environments `python` and `pip`
 pixi global uninstall python pip
 ```
 
-Create environment `python-pip`, install `python` and `pip` in the same environment and expose all binaries of these packages
+Create environment `python-pip`, install `python` and `pip` in the same environment and expose all executables of these packages
 ```
 pixi global install --environment python-pip python pip
 ```
@@ -187,8 +184,8 @@ pixi global install --environment python-pip python pip
 
 ### Adding dependencies
 
-Create environment `python`, install package `python` and expose all binaries of that package.
-Then add package `hypercorn` to environment `python` but doesn't expose its binaries.
+Create environment `python`, install package `python` and expose all executables of that package.
+Then add package `hypercorn` to environment `python` but doesn't expose its executables.
 
 ```
 pixi global install python
@@ -207,7 +204,7 @@ pixi global remove --environment python hypercorn
 ```
 
 
-### Specifying which binaries to expose
+### Specifying which executables to expose
 
 Make a new environment `python3-10` with package `python=3.10` and expose the `python` executable as `python3.10`.
 ```
@@ -295,4 +292,18 @@ In order to make it easier to manage manifests in version control, we could allo
 
 ``` title="config.toml"
 global_manifests = "/path/to/your/manifests"
+```
+
+
+### No activation
+
+The current `pixi global install` features `--no-activation`.
+When this flag is set, `CONDA_PREFIX` and `PATH` will not be set when running the exposed executable.
+This is useful when installing Python package managers or shells.
+
+Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:
+
+```toml
+[envs.pip.exposed]
+pip = { executable="pip", activation=false }
 ```

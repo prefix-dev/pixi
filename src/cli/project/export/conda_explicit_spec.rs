@@ -6,14 +6,12 @@ use std::{
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, Platform};
+use rattler_conda_types::{
+    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
+};
 use rattler_lock::{CondaPackage, Environment, Package};
 
-use crate::{
-    cli::{cli_config::PrefixUpdateConfig, LockFileUsageArgs},
-    lock_file::UpdateLockFileOptions,
-    Project,
-};
+use crate::{cli::cli_config::PrefixUpdateConfig, lock_file::UpdateLockFileOptions, Project};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -38,33 +36,23 @@ pub struct Args {
     pub ignore_pypi_errors: bool,
 
     #[clap(flatten)]
-    pub lock_file_usage: LockFileUsageArgs,
-
-    #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 }
 
 fn build_explicit_spec<'a>(
     platform: &Platform,
-    conda_packages: impl IntoIterator<Item = &'a CondaPackage>,
+    conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();
 
     for cp in conda_packages {
-        let prec = cp.package_record();
-        let Some(mut url) = cp.location().as_url().cloned() else {
-            tracing::warn!(
-                "Skipping package {} since it does not have a URL",
-                cp.package_record().name.as_source()
-            );
-            continue;
-        };
-
+        let prec = &cp.package_record;
         let hash = prec.md5.ok_or(miette::miette!(
             "Package {} does not contain an md5 hash",
             prec.name.as_normalized()
         ))?;
 
+        let mut url = cp.url.clone();
         url.set_fragment(Some(&format!("{:x}", hash)));
 
         packages.push(ExplicitEnvironmentEntry {
@@ -133,7 +121,17 @@ fn render_env_platform(
         }
     }
 
-    let ees = build_explicit_spec(platform, &conda_packages_from_lockfile)?;
+    // Topologically sort packages
+    let repodata = conda_packages_from_lockfile
+        .iter()
+        .map(|p| RepoDataRecord::try_from(p.clone()))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()
+        .with_context(|| "Failed to convert conda packages to RepoDataRecords")?;
+
+    let repodata = PackageRecord::sort_topologically(repodata);
+
+    let ees = build_explicit_spec(platform, &repodata)?;
 
     tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform}");
     let target = output_dir

@@ -34,7 +34,7 @@ pub enum RequirementConversionError {
 pub enum TomlError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("Missing table `[tool.pixi]`")]
+    #[error("Missing table `[tool.pixi.project]`. Try running `pixi init`")]
     NoPixiTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),

@@ -317,7 +317,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -352,7 +352,7 @@ checksum = "a27b8a3a6e1a44fa4c8baf1f653e4172e81486d4941f2237e20dc2d0cf4ddff1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -823,7 +823,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1016,7 +1016,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1027,7 +1027,7 @@ checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1125,7 +1125,7 @@ checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1190,7 +1190,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1300,7 +1300,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1312,7 +1312,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1333,7 +1333,7 @@ checksum = "de0d48a183585823424a4ce1aa132d174a6a81bd540895822eb4c8373a8e49e8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1430,7 +1430,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.5"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -1637,7 +1637,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2580,9 +2580,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89841d4f03a14c055eb41d4f41901819573ef948e8ee0d5c86466fd286b2ce7f"
+checksum = "d80eccbd47a7b9f1e67663fd846928e941cb49c65236e297dd11c9ea3c5e3387"
 dependencies = [
  "base64 0.22.1",
  "futures-channel",
@@ -2605,9 +2605,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff79651479f69ada7bda604ef2acf3f1aa50755d97cc36d25ff04c2664f9d96f"
+checksum = "3c2709a32915d816a6e8f625bf72cf74523ebe5d8829f895d6b041b1d3137818"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2630,9 +2630,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68ed8b301b19f4dad8ddc66ed956a70fc227def5c19b3898e0a29ce8f0edee06"
+checksum = "cc54db939002b030e794fbfc9d5a925aa2854889c5a2f0352b0bffa54681707e"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2655,9 +2655,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "531e386460425e49679587871a056f2895a47dade21457324ad1262cd78ef6d9"
+checksum = "1ca331cd7b3fe95b33432825c2d4c9f5a43963e207fdc01ae67f9fd80ab0930f"
 dependencies = [
  "http 1.1.0",
  "serde",
@@ -2667,9 +2667,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-wasm-client"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a2d2206c8f04c6b79a11bd1d92d6726b6f7fd3dec57c91e07fa53e867268bbb"
+checksum = "5c603d97578071dc44d79d3cfaf0775437638fd5adc33c6b622dfe4fa2ec812d"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -2678,9 +2678,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87bc869e143d430e748988261d19b630e8f1692074e68f1a7f0eb4c521d2fc58"
+checksum = "755ca3da1c67671f1fae01cd1a47f41dfb2233a8f19a643e587ab0a663942044"
 dependencies = [
  "http 1.1.0",
  "jsonrpsee-client-transport",
@@ -2748,7 +2748,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2756,70 +2756,6 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
-name = "lexical-core"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cde5de06e8d4c2faabc400238f9ae1c74d5412d03a7bd067645ccbc47070e46"
-dependencies = [
- "lexical-parse-float",
- "lexical-parse-integer",
- "lexical-util",
- "lexical-write-float",
- "lexical-write-integer",
-]
-
-[[package]]
-name = "lexical-parse-float"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683b3a5ebd0130b8fb52ba0bdc718cc56815b6a097e28ae5a6997d0ad17dc05f"
-dependencies = [
- "lexical-parse-integer",
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-parse-integer"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0994485ed0c312f6d965766754ea177d07f9c00c9b82a5ee62ed5b47945ee9"
-dependencies = [
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-util"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5255b9ff16ff898710eb9eb63cb39248ea8a5bb036bea8085b1a767ff6c4e3fc"
-dependencies = [
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-float"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accabaa1c4581f05a3923d1b4cfd124c329352288b7b9da09e766b0668116862"
-dependencies = [
- "lexical-util",
- "lexical-write-integer",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-integer"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b6f3d1f4422866b68192d62f77bc5c700bee84f3069f2469d7bc8c77852446"
-dependencies = [
- "lexical-util",
- "static_assertions",
-]
 
 [[package]]
 name = "libc"
@@ -3011,7 +2947,7 @@ checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3022,7 +2958,7 @@ checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3299,7 +3235,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3377,7 +3313,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3563,7 +3499,7 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "unicase",
 ]
 
@@ -3594,7 +3530,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3622,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.29.0"
+version = "0.32.0"
 dependencies = [
  "ahash 0.8.11",
  "assert_matches",
@@ -3647,13 +3583,11 @@ dependencies = [
  "distribution-types",
  "dunce",
  "fancy_display",
- "fd-lock",
  "file_url",
  "flate2",
  "fs_extra",
  "futures",
  "http 1.1.0",
- "http-cache-reqwest",
  "human_bytes",
  "humantime",
  "ignore",
@@ -3663,7 +3597,6 @@ dependencies = [
  "install-wheel-rs",
  "is_executable",
  "itertools 0.13.0",
- "lazy_static",
  "libc",
  "miette 7.2.0",
  "minijinja",
@@ -3686,7 +3619,6 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "pixi_uv_conversions",
- "platform-tags",
  "pypi-types",
  "pypi_mapping",
  "pypi_modifiers",
@@ -3705,12 +3637,11 @@ dependencies = [
  "reqwest-retry 0.5.0",
  "rlimit",
  "rstest",
+ "same-file",
  "self-replace",
  "serde",
- "serde_ignored",
  "serde_json",
  "serde_with",
- "serde_yaml",
  "shlex",
  "signal-hook",
  "strsim",
@@ -3816,7 +3747,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
- "rattler_cache 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_cache 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "url",
 ]
 
@@ -3855,7 +3786,6 @@ dependencies = [
  "indexmap 2.3.0",
  "insta",
  "itertools 0.13.0",
- "lazy_static",
  "miette 7.2.0",
  "pep440_rs",
  "pep508_rs",
@@ -4109,7 +4039,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "version_check",
  "yansi",
 ]
@@ -4344,8 +4274,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.27.11"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.27.15"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "anyhow",
  "clap",
@@ -4362,7 +4292,7 @@ dependencies = [
  "memmap2 0.9.4",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.3 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "rattler_cache 0.2.6 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4384,9 +4314,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b54e6fe6f88048c6ef67cef204a82a3352d6a4310c8a99ed6006bdaeeb6606c5"
+checksum = "55d1681b88074033ade946e04db58397e9d2f317964d68ec77215c2a685a9ed6"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4412,8 +4342,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.3"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.2.6"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4439,8 +4369,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.27.6"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.28.2"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "chrono",
  "dirs",
@@ -4475,7 +4405,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "blake2",
  "digest",
@@ -4490,8 +4420,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.24"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.22.27"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "chrono",
  "file_url",
@@ -4515,16 +4445,16 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
 name = "rattler_networking"
 version = "0.21.4"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4550,8 +4480,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.7"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.22.10"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4578,7 +4508,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -4587,8 +4517,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.13"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.21.17"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4601,6 +4531,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "file_url",
+ "fs-err",
  "futures",
  "hex",
  "http 1.1.0",
@@ -4615,7 +4546,7 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.3 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "rattler_cache 0.2.6 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4640,8 +4571,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.1"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "0.22.4"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.3.0",
@@ -4657,8 +4588,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.0.7"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "1.1.0"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "chrono",
  "futures",
@@ -4675,8 +4606,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "1.1.4"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+version = "1.1.7"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "archspec",
  "libloading",
@@ -4774,7 +4705,7 @@ checksum = "bcc303e793d3734489387d205e9b186fac9c6cfacedd98cbb2e8a5943595f3e6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5023,15 +4954,16 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a472ebbac5a18c9e235e874df3aa0c8fb0b55611155dd5e5515a55a16520d76"
+checksum = "1621ce52e3ff36c8f55f0017f1e4909f59514af8f852ee943997760bf12c7c15"
 dependencies = [
  "ahash 0.8.11",
  "bitvec",
  "elsa",
  "event-listener",
  "futures",
+ "indexmap 2.3.0",
  "itertools 0.13.0",
  "petgraph",
  "tracing",
@@ -5157,7 +5089,7 @@ dependencies = [
  "regex",
  "relative-path",
  "rustc_version",
- "syn 2.0.77",
+ "syn 2.0.72",
  "unicode-ident",
 ]
 
@@ -5369,7 +5301,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5395,7 +5327,7 @@ checksum = "7f81c2fde025af7e69b1d1420531c8a8811ca898919db177141a85313b1cb932"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5518,7 +5450,7 @@ checksum = "e0cd7e117be63d3c3678776753929474f3b04a43a080c744d6b0ae2a8c28e222"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5529,7 +5461,7 @@ checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5562,7 +5494,7 @@ checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5613,7 +5545,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5716,13 +5648,12 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simd-json"
-version = "0.13.10"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570c430b3d902ea083097e853263ae782dfe40857d93db019a12356c8e8143fa"
+checksum = "05f0b376aada35f30a0012f5790e50aed62f91804a0682669aefdbe81c7fcb91"
 dependencies = [
  "getrandom",
  "halfbrown",
- "lexical-core",
  "ref-cast",
  "serde",
  "serde_json",
@@ -5766,7 +5697,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#e6c662e22cd39d8d04c84f9db424b457e787edf1"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#db89f51e72a60b9bcba21132aa4619d5d2d9d611"
 dependencies = [
  "tokio",
 ]
@@ -5906,7 +5837,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -5955,9 +5886,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.77"
+version = "2.0.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f35bcdf61fd8e7be6caf75f429fdca8beb3ed76584befb503b1569faee373ed"
+checksum = "dc4b9b9bf2add8093d3f2c0204471e951b2285580335de42f9d2534f3ae7a8af"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6119,7 +6050,7 @@ checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -6209,7 +6140,7 @@ checksum = "693d596312e88961bc67d7f1f97af8a70227d9f90c31bba5806eec004978d752"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -6377,7 +6308,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -6427,9 +6358,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "typed-path"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04645b6c01cfb2ddabffc7c67ae6bfe7c3e28a5c37d729f6bb498e784f1fd70c"
+checksum = "50c0c7479c430935701ff2532e3091e6680ec03f2f89ffcd9988b08e885b90a5"
 
 [[package]]
 name = "typeid"
@@ -6878,7 +6809,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.4.0#d9bd3bc7a536037ea8645fb7
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "textwrap",
 ]
 
@@ -7105,9 +7036,9 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "value-trait"
-version = "0.8.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad8db98c1e677797df21ba03fca7d3bf9bec3ca38db930954e4fe6e1ea27eb4"
+checksum = "bcaa56177466248ba59d693a048c0959ddb67f1151b963f904306312548cf392"
 dependencies = [
  "float-cmp",
  "halfbrown",
@@ -7173,7 +7104,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "wasm-bindgen-shared",
 ]
 
@@ -7207,7 +7138,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -7380,7 +7311,7 @@ checksum = "2bbd5b46c938e506ecbce286b6628a02171d56153ba733b6c741fc627ec9579b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -7391,7 +7322,7 @@ checksum = "053c4c462dc91d3b1504c6fe5a726dd15e216ba718e84a0e46a88fbe5ded3515"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -7709,7 +7640,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "zvariant_utils",
 ]
 
@@ -7742,7 +7673,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -7845,7 +7776,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
  "zvariant_utils",
 ]
 
@@ -7857,5 +7788,5 @@ checksum = "c51bcff7cc3dbb5055396bcf774748c3dab426b4b8659046963523cee4808340"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.77",
+ "syn 2.0.72",
 ]

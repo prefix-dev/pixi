@@ -168,7 +168,7 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
         }
         MappingSource::Disabled => {
-            for record in conda_packages.into_iter() {
+            for record in conda_packages {
                 if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
                     record
                         .package_record

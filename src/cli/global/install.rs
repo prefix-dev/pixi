@@ -49,6 +49,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// Do not insert `CONDA_PREFIX`, `PATH` modifications into the installed executable script.
+    #[clap(long)]
+    no_activation: bool,
 }
 
 impl HasSpecs for Args {
@@ -212,13 +216,23 @@ pub(super) async fn create_executable_scripts(
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
+    no_activation: bool,
 ) -> miette::Result<()> {
     for BinScriptMapping {
         original_executable: exec,
         global_binary_path: executable_script_path,
     } in mapped_executables
     {
-        let mut script = activation_script.clone();
+        let mut script = if no_activation {
+            if cfg!(unix) {
+                "#!/bin/sh\n".to_string()
+            } else {
+                String::new()
+            }
+        } else {
+            activation_script.clone()
+        };
+
         shell
             .run_command(
                 &mut script,
@@ -289,7 +303,7 @@ pub(crate) fn prompt_user_to_continue(
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = args.channels.resolve_from_config(&config);
+    let channels = args.channels.resolve_from_config(&config)?;
 
     let specs = args.specs()?;
 
@@ -342,6 +356,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             solved_records.clone(),
             auth_client.clone(),
             args.platform,
+            args.no_activation,
         )
         .await?;
         let channel_name =
@@ -410,6 +425,7 @@ pub(super) async fn globally_install_package(
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
     platform: Platform,
+    no_activation: bool,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     try_increase_rlimit_to_sensible();
 
@@ -460,7 +476,14 @@ pub(super) async fn globally_install_package(
     let bin_dir = BinDir::create().await?;
     let script_mapping =
         find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+    create_executable_scripts(
+        &script_mapping,
+        &prefix,
+        &shell,
+        activation_script,
+        no_activation,
+    )
+    .await?;
 
     let scripts: Vec<_> = script_mapping
         .into_iter()

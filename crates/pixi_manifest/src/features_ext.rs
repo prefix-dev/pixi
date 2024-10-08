@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
-use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseChannelError, Platform};
 use rattler_solve::ChannelPriority;
 use url::Url;
 
@@ -63,14 +63,12 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     ///
     /// This function is similar to [`Self::channels]` but it resolves the
     /// channel urls using the provided channel config.
-    fn channel_urls(
-        &self,
-        channel_config: &ChannelConfig,
-    ) -> impl DoubleEndedIterator<Item = Url> + ExactSizeIterator {
+    fn channel_urls(&self, channel_config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
         self.channels()
             .into_iter()
             .cloned()
             .map(|channel| channel.into_base_url(channel_config))
+            .collect()
     }
 
     /// Returns the channel priority, error on multiple values, return None if

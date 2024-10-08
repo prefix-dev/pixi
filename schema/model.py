@@ -24,7 +24,6 @@ CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
 
-
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
 Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
@@ -200,6 +199,9 @@ class _PyPiGitRequirement(_PyPIRequirement):
         None,
         description="The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
     )
+    subdirectory: NonEmptyStr | None = Field(
+        None, description="The subdirectory in the repo, a path from the root of the repo."
+    )
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
@@ -221,6 +223,9 @@ class PyPIPathRequirement(_PyPIRequirement):
     )
     editable: Optional[bool] = Field(
         None, description="If `true` the package will be installed as editable"
+    )
+    subdirectory: NonEmptyStr | None = Field(
+        None, description="The subdirectory in the repo, a path from the root of the repo."
     )
 
 

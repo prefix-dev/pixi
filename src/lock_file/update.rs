@@ -7,7 +7,34 @@ use std::{
     time::{Duration, Instant},
 };
 
+use barrier_cell::BarrierCell;
+use fancy_display::FancyDisplay;
+use futures::{
+    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
+use indexmap::IndexSet;
+use indicatif::ProgressBar;
+use itertools::Itertools;
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use pixi_config::get_cache_dir;
+use pixi_consts::consts;
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_progress::global_multi_progress;
+use pixi_record::{ParseLockFileError, PixiRecord};
+use pypi_mapping::{self};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use thiserror::Error;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use uv_normalize::ExtraName;
+
 use super::{
+    records_by_name::PixiRecordsByName,
     reporter::{GatewayProgressReporter, SolveProgressBar},
     update,
     utils::IoConcurrencyLimit,
@@ -21,7 +48,6 @@ use crate::{
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file, lock_file,
-    lock_file::records_by_name::PixiRecordsByName,
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -29,29 +55,6 @@ use crate::{
     },
     Project,
 };
-use barrier_cell::BarrierCell;
-use fancy_display::FancyDisplay;
-use futures::{
-    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
-};
-use indexmap::IndexSet;
-use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
-use pixi_config::get_cache_dir;
-use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
-use pixi_progress::global_multi_progress;
-use pixi_record::PixiRecord;
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -64,6 +67,14 @@ impl Project {
     ) -> miette::Result<LockFileDerivedData<'_>> {
         update::update_lock_file(self, options).await
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+enum UpdateError {
+    #[error("the lockfile is not up-to-date with requested environment: '{}'", .0.fancy_display())]
+    LockFileMissingEnv(EnvironmentName),
+    #[error("some information from the lockfile could not be parsed")]
+    ParseLockFileError(#[from] ParseLockFileError),
 }
 
 /// Options to pass to [`Project::update_lock_file`].
@@ -141,8 +152,14 @@ impl<'p> LockFileDerivedData<'p> {
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
-        let pixi_records = self.pixi_records(environment, platform).unwrap_or_default();
-        let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
+        let pixi_records = self
+            .pixi_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
+        let pypi_records = self
+            .pypi_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
 
         // No `uv` support for WASM right now
         if platform.arch() == Some(Arch::Wasm32) {
@@ -174,7 +191,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            self.pypi_indexes(environment).as_ref(),
+            self.pypi_indexes(environment).into_diagnostic()?.as_ref(),
             env_variables,
             self.project.root(),
             environment.best_platform(),
@@ -199,43 +216,48 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
+    ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        let packages = locked_env.pypi_packages_for_platform(platform)?;
-        Some(
-            packages
-                .map(|(data, env_data)| (data.clone(), env_data.clone()))
-                .collect(),
-        )
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+
+        let packages = locked_env.pypi_packages_for_platform(platform);
+        Ok(packages.map(|iter| {
+            iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
+                .collect()
+        }))
     }
 
-    fn pypi_indexes(&self, environment: &Environment<'p>) -> Option<PypiIndexes> {
+    fn pypi_indexes(
+        &self,
+        environment: &Environment<'p>,
+    ) -> Result<Option<PypiIndexes>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        locked_env.pypi_indexes().cloned()
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        Ok(locked_env.pypi_indexes().cloned())
     }
 
     fn pixi_records(
         &self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<Vec<PixiRecord>> {
+    ) -> Result<Option<Vec<PixiRecord>>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
-            .expect("the lock-file should be up-to-date so it should also include the environment");
-        let packages = locked_env.conda_packages_for_platform(platform)?;
-        Some(
-            packages
-            .cloned()
-            .map(PixiRecord::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .expect("since the lock-file is up to date we should be able to extract the repodata records from it"))
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+
+        Ok(locked_env
+            .conda_packages_for_platform(platform)
+            .map(|iter| {
+                iter.cloned()
+                    .map(PixiRecord::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?)
     }
 
     async fn conda_prefix(
@@ -262,10 +284,13 @@ impl<'p> LockFileDerivedData<'p> {
             })?;
 
         // Get the locked environment from the lock-file.
-        let records = self.pixi_records(environment, platform).unwrap_or_default();
+        let records = self
+            .pixi_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
         let channel_urls = environment
             .channel_urls(&self.project.channel_config())
-            .collect_vec();
+            .into_diagnostic()?;
 
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
@@ -1384,14 +1409,19 @@ impl<'p> UpdateContext<'p> {
             let grouped_env = GroupedEnvironment::from(environment.clone());
 
             let channel_config = project.channel_config();
-            builder.set_channels(
-                &environment_name,
-                grouped_env
-                    .channels()
-                    .into_iter()
-                    .cloned()
-                    .map(|channel| channel.into_base_url(&channel_config).to_string()),
-            );
+            let channels: Vec<String> = grouped_env
+                .channels()
+                .into_iter()
+                .cloned()
+                .map(|channel| {
+                    channel
+                        .into_base_url(&channel_config)
+                        .map(|ch| ch.to_string())
+                })
+                .try_collect()
+                .into_diagnostic()?;
+
+            builder.set_channels(&environment_name, channels);
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
@@ -1592,7 +1622,9 @@ async fn spawn_solve_conda_environment_task(
             let channel_urls = channels
                 .iter()
                 .map(|c| c.clone().into_base_url(&channel_config))
-                .collect_vec();
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (name, source_spec) in source_specs.iter() {
@@ -1635,7 +1667,9 @@ async fn spawn_solve_conda_environment_task(
                 .query(
                     channels
                         .into_iter()
-                        .map(|c| c.into_channel(&channel_config)),
+                        .map(|c| c.into_channel(&channel_config))
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?,
                     [platform, Platform::NoArch],
                     query_match_specs,
                 )
@@ -2002,7 +2036,7 @@ async fn spawn_create_prefix_task(
     let client = group.project().authenticated_client().clone();
     let channels = group
         .channel_urls(&group.project().channel_config())
-        .collect_vec();
+        .into_diagnostic()?;
 
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({

@@ -169,3 +169,13 @@ fn amend_pypi_purls_for_record(
 
     Ok(())
 }
+
+pub fn _amend_only_custom_pypi_purls(
+    conda_packages: &mut [RepoDataRecord],
+    custom_mapping: &HashMap<String, CompressedMapping>,
+) -> miette::Result<()> {
+    for record in conda_packages.iter_mut() {
+        amend_pypi_purls_for_record(record, custom_mapping)?;
+    }
+    Ok(())
+}

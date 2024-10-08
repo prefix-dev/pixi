@@ -185,6 +185,10 @@ warmup = "python warmup.py"
 [feature.cuda2.target.osx-arm64.dependencies]
 mlx = "x.y.z"
 
+[feature.dev.pypi-dependencies]
+ribasim = { git = "https://github.com/Deltares/Ribasim.git", subdirectory = "python/ribasim" }
+ribasim2 = { path = "test/riba", subdirectory = "python/ribasim" }
+
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda2]
 channels = ["nvidia"]
