@@ -107,7 +107,7 @@ $ (default) which python
 ```
 
 !!! warning
-    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
+It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
 
 ### Using `pixi` with `direnv`
 
@@ -163,7 +163,7 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
 
 !!! note
-    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
 
 ## Solving environments
 
@@ -174,14 +174,14 @@ Solving is a mathematical problem and can take some time, but we take pride in t
 If you want to learn more about the solving process, you can read these:
 
 - [Rattler(conda) resolver blog](https://prefix.dev/blog/the_new_rattler_resolver)
-- [Rip(PyPI) resolver blog](https://prefix.dev/blog/introducing_rip)
+- [UV(PyPI) resolver blog](https://astral.sh/blog/uv-unified-python-packaging)
 
 Pixi solves both the `conda` and `PyPI` dependencies, where the `PyPI` dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
-These solvers are split between the [`rattler`](https://github.com/mamba-org/rattler) and [`rip`](https://github.com/prefix-dev/rip) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
+These solvers are split between the [`rattler`](https://github.com/mamba-org/rattler) and [`uv`](https://github.com/astral-sh/uv) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
 `resolve` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
 It also supports the `conda` way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.
 
-For the `[pypi-dependencies]`, `rip` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.
+For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.
 For this building step, `pixi` requires to first install `python` in the (conda)`[dependencies]` section of the `pixi.toml` file.
 This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
 
