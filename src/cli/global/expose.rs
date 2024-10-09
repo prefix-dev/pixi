@@ -4,7 +4,7 @@ use pixi_config::{Config, ConfigCli};
 
 use crate::{
     cli::global::revert_environment_after_error,
-    global::{self, EnvironmentName, ExposedName, Mapping},
+    global::{self, EnvironmentName, ExposedName, Mapping, StateChanges},
 };
 
 /// Add exposed binaries from an environment to your global environment
@@ -78,27 +78,32 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 
     async fn apply_changes(
         args: &AddArgs,
-        project_original: global::Project,
-    ) -> Result<(), miette::Error> {
-        let mut project_modified = project_original;
+        project: &mut global::Project,
+    ) -> Result<StateChanges, miette::Error> {
+        let mut state_changes = StateChanges::default();
         let env_name = &args.environment;
         for mapping in &args.mappings {
-            project_modified
-                .manifest
-                .add_exposed_mapping(env_name, mapping)?;
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        project_modified.sync_environment(env_name).await?;
-        project_modified.manifest.save().await?;
-        Ok(())
+        state_changes |= project.sync_environment(env_name).await?;
+        project.manifest.save().await?;
+        Ok(state_changes)
     }
 
-    if let Err(err) = apply_changes(&args, project_original.clone()).await {
-        revert_environment_after_error(&args.environment, &project_original)
-            .await
-            .wrap_err("Could not add exposed mappings. Reverting also failed.")?;
-        return Err(err);
+    let mut project_modified = project_original.clone();
+    match apply_changes(&args, &mut project_modified).await {
+        Ok(state_changes) => {
+            project_modified.manifest.save().await?;
+            state_changes.report();
+            Ok(())
+        }
+        Err(err) => {
+            revert_environment_after_error(&args.environment, &project_original)
+                .await
+                .wrap_err("Couldn't add exposed mappings. Reverting also failed.")?;
+            Err(err)
+        }
     }
-    Ok(())
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
@@ -109,25 +114,32 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
 
     async fn apply_changes(
         args: &RemoveArgs,
-        project_original: global::Project,
-    ) -> Result<(), miette::Error> {
-        let mut project_modified = project_original;
+        project: &mut global::Project,
+    ) -> Result<StateChanges, miette::Error> {
+        let mut state_changes = StateChanges::default();
         let env_name = &args.environment;
         for exposed_name in &args.exposed_names {
-            project_modified
+            project
                 .manifest
                 .remove_exposed_name(env_name, exposed_name)?;
         }
-        project_modified.sync_environment(env_name).await?;
-        project_modified.manifest.save().await?;
-        Ok(())
+        state_changes |= project.sync_environment(env_name).await?;
+        project.manifest.save().await?;
+        Ok(state_changes)
     }
 
-    if let Err(err) = apply_changes(&args, project_original.clone()).await {
-        revert_environment_after_error(&args.environment, &project_original)
-            .await
-            .wrap_err("Could not remove exposed name. Reverting also failed.")?;
-        return Err(err);
+    let mut project_modified = project_original.clone();
+
+    match apply_changes(&args, &mut project_modified).await {
+        Ok(state_changes) => {
+            state_changes.report();
+            Ok(())
+        }
+        Err(err) => {
+            revert_environment_after_error(&args.environment, &project_original)
+                .await
+                .wrap_err("Couldn't remove exposed name. Reverting also failed.")?;
+            Err(err)
+        }
     }
-    Ok(())
 }

@@ -1,10 +1,11 @@
 use super::{EnvironmentName, ExposedName};
+use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PrefixRecord};
+use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::{
@@ -31,7 +32,7 @@ impl BinDir {
         let bin_dir = home_path()
             .map(|path| path.join("bin"))
             .ok_or(miette::miette!(
-                "could not determine global binary executable directory"
+                "Couldn't determine global binary executable directory"
             ))?;
         tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
         Ok(Self(bin_dir))
@@ -41,7 +42,7 @@ impl BinDir {
     ///
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of file paths or an error if the directory cannot be read.
+    /// vector of file paths or an error if the directory can't be read.
     pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
@@ -95,7 +96,7 @@ impl EnvRoot {
     pub(crate) async fn from_env() -> miette::Result<Self> {
         let path = home_path()
             .map(|path| path.join("envs"))
-            .ok_or_else(|| miette::miette!("Could not get home path"))?;
+            .ok_or_else(|| miette::miette!("Couldn't get home path"))?;
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
@@ -175,7 +176,7 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
             let prefix_record = PrefixRecord::from_path(&path)
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+                .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
 
             records.push(prefix_record);
         }
@@ -186,6 +187,183 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     }
 
     Ok(records)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub(crate) enum StateChange {
+    AddedExposed(String, EnvironmentName),
+    RemovedExposed(String, EnvironmentName),
+    UpdatedExposed(String, EnvironmentName),
+    AddedPackage(PackageRecord, EnvironmentName),
+    AddedEnvironment(EnvironmentName),
+    RemovedEnvironment(EnvironmentName),
+}
+
+impl StateChange {
+    fn env(&self) -> &EnvironmentName {
+        match self {
+            StateChange::AddedExposed(_, env)
+            | StateChange::RemovedExposed(_, env)
+            | StateChange::UpdatedExposed(_, env)
+            | StateChange::AddedPackage(_, env)
+            | StateChange::AddedEnvironment(env)
+            | StateChange::RemovedEnvironment(env) => env,
+        }
+    }
+}
+
+#[must_use]
+#[derive(Debug, Default)]
+pub(crate) struct StateChanges {
+    changes: Vec<StateChange>,
+    has_updated: bool,
+}
+
+impl StateChanges {
+    pub(crate) fn has_changed(&self) -> bool {
+        self.has_updated || !self.changes.is_empty()
+    }
+
+    pub(crate) fn set_has_updated(&mut self, has_updated: bool) {
+        self.has_updated = has_updated;
+    }
+
+    pub(crate) fn push_change(&mut self, change: StateChange) {
+        self.changes.push(change);
+    }
+
+    pub(crate) fn push_changes(&mut self, changes: impl IntoIterator<Item = StateChange>) {
+        self.changes.extend(changes);
+    }
+
+    #[cfg(test)]
+    pub fn changes(self) -> Vec<StateChange> {
+        self.changes
+    }
+
+    /// Remove changes that cancel each other out
+    fn prune(&mut self) {
+        // Remove changes if the environment is removed afterwards
+        let mut pruned_changes: Vec<StateChange> = Vec::new();
+        for change in &self.changes {
+            if let StateChange::RemovedEnvironment(env) = change {
+                pruned_changes.retain(|change| match change {
+                    StateChange::RemovedEnvironment(_) => true,
+                    c => c.env() != env,
+                });
+            }
+            pruned_changes.push(change.clone());
+        }
+        self.changes = pruned_changes;
+    }
+
+    pub(crate) fn report(mut self) {
+        self.prune();
+
+        let mut iter = self.changes.iter().peekable();
+
+        while let Some(change) = iter.next() {
+            match change {
+                StateChange::AddedEnvironment(env_name) => {
+                    eprintln!(
+                        "{}Added environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::AddedPackage(pkg, env_name) => {
+                    eprintln!(
+                        "{}Added package {}={} to environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        pkg.name.as_normalized(),
+                        pkg.version,
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::AddedExposed(exposed, env_name) => {
+                    let mut executables = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            executables.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if executables.len() == 1 {
+                        eprintln!(
+                            "{}Exposed executable {} from environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            executables[0],
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Exposed executables from environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for executable in executables {
+                            eprintln!("   - {executable}");
+                        }
+                    }
+                }
+                StateChange::UpdatedExposed(exposed, env_name) => {
+                    let mut executables = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            executables.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if executables.len() == 1 {
+                        eprintln!(
+                            "{}Updated executable {} of environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            executables[0],
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Updated executables of environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for executable in executables {
+                            eprintln!("   - {executable}");
+                        }
+                    }
+                }
+                StateChange::RemovedEnvironment(env_name) => {
+                    eprintln!(
+                        "{}Removed environment {}.",
+                        console::style(console::Emoji("✔ ", "")).red(),
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::RemovedExposed(exposed, env_name) => {
+                    eprintln!(
+                        "{}Removed exposed executable {} from environment {}.",
+                        console::style(console::Emoji("✔ ", "")).red(),
+                        exposed,
+                        env_name.fancy_display()
+                    );
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::BitOrAssign for StateChanges {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.changes.extend(rhs.changes);
+        self.has_updated |= rhs.has_updated;
+    }
 }
 
 /// converts a channel url string to a PrioritizedChannel

@@ -1,11 +1,11 @@
 use crate::cli::global::revert_environment_after_error;
 use crate::cli::has_specs::HasSpecs;
-use crate::global::{EnvironmentName, Mapping, Project};
+use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use rattler_conda_types::{MatchSpec, Matches};
+use rattler_conda_types::MatchSpec;
 
 /// Adds dependencies to an environment
 ///
@@ -54,7 +54,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         specs: &[MatchSpec],
         expose: &[Mapping],
         project: &mut Project,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
         // Add specs to the manifest
         for spec in specs {
             project.manifest.add_dependency(
@@ -70,54 +72,43 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        project.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name).await?;
 
-        // Figure out version of the added packages
-        let added_package_records = project
-            .environment_prefix(env_name)
-            .await?
-            .find_installed_packages(None)
-            .await?
-            .into_iter()
-            .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
-            .map(|r| r.repodata_record.package_record)
-            .collect_vec();
-
-        for record in added_package_records {
-            eprintln!(
-                "{}Added package '{}'",
-                console::style(console::Emoji("✔ ", "")).green(),
-                record
-            );
-        }
+        // Figure out added packages and their corresponding versions
+        state_changes |= project.added_packages(specs, env_name).await?;
 
         project.manifest.save().await?;
-        Ok(())
+
+        Ok(state_changes)
     }
 
-    let mut project = project_original.clone();
+    let mut project_modified = project_original.clone();
     let specs = args
         .specs()?
         .into_iter()
         .map(|(_, specs)| specs)
         .collect_vec();
 
-    if let Err(err) = apply_changes(
+    match apply_changes(
         &args.environment,
         specs.as_slice(),
         args.expose.as_slice(),
-        &mut project,
+        &mut project_modified,
     )
     .await
     {
-        revert_environment_after_error(&args.environment, &project_original)
-            .await
-            .wrap_err(format!(
-                "Could not add {:?}. Reverting also failed.",
-                args.packages
-            ))?;
-        return Err(err);
+        Ok(state_changes) => {
+            state_changes.report();
+            Ok(())
+        }
+        Err(err) => {
+            revert_environment_after_error(&args.environment, &project_original)
+                .await
+                .wrap_err(format!(
+                    "Couldn't add {:?}. Reverting also failed.",
+                    args.packages
+                ))?;
+            Err(err)
+        }
     }
-
-    Ok(())
 }

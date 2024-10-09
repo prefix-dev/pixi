@@ -102,7 +102,7 @@ async fn list_environment(
     let env = project
         .environments()
         .get(environment_name)
-        .ok_or_else(|| miette!("Environment '{}' not found", environment_name))?;
+        .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
 
     let records = find_package_records(
         &project
