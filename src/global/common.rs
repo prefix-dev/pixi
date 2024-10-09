@@ -1,14 +1,18 @@
 use super::{EnvironmentName, ExposedName};
+use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
-use rattler_conda_types::PrefixRecord;
+use pixi_manifest::PrioritizedChannel;
+use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
 use std::ffi::OsStr;
+use std::str::FromStr;
 use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use url::Url;
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
@@ -28,7 +32,7 @@ impl BinDir {
         let bin_dir = home_path()
             .map(|path| path.join("bin"))
             .ok_or(miette::miette!(
-                "could not determine global binary executable directory"
+                "Couldn't determine global binary executable directory"
             ))?;
         tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
         Ok(Self(bin_dir))
@@ -38,7 +42,7 @@ impl BinDir {
     ///
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of file paths or an error if the directory cannot be read.
+    /// vector of file paths or an error if the directory can't be read.
     pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
@@ -64,11 +68,14 @@ impl BinDir {
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.bat`.
     pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
-        let mut executable_script_path = self.path().join(exposed_name.to_string());
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        }
-        executable_script_path
+        // Add .bat to the windows executable
+        let exposed_name = if cfg!(windows) {
+            // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
+            format!("{}.bat", exposed_name)
+        } else {
+            exposed_name.to_string()
+        };
+        self.path().join(exposed_name)
     }
 }
 
@@ -89,7 +96,7 @@ impl EnvRoot {
     pub(crate) async fn from_env() -> miette::Result<Self> {
         let path = home_path()
             .map(|path| path.join("envs"))
-            .ok_or_else(|| miette::miette!("Could not get home path"))?;
+            .ok_or_else(|| miette::miette!("Couldn't get home path"))?;
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
         Ok(Self(path))
     }
@@ -128,7 +135,7 @@ impl EnvDir {
     /// Create a global environment directory based on passed global environment root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
-        environment_name: EnvironmentName,
+        environment_name: &EnvironmentName,
     ) -> miette::Result<Self> {
         let path = env_root.path().join(environment_name.as_str());
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
@@ -169,7 +176,7 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
             let prefix_record = PrefixRecord::from_path(&path)
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Could not parse json from {}", path.display()))?;
+                .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
 
             records.push(prefix_record);
         }
@@ -182,9 +189,209 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
     Ok(records)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub(crate) enum StateChange {
+    AddedExposed(ExposedName, EnvironmentName),
+    RemovedExposed(ExposedName, EnvironmentName),
+    UpdatedExposed(ExposedName, EnvironmentName),
+    AddedPackage(PackageRecord, EnvironmentName),
+    AddedEnvironment(EnvironmentName),
+    RemovedEnvironment(EnvironmentName),
+}
+
+impl StateChange {
+    fn env(&self) -> &EnvironmentName {
+        match self {
+            StateChange::AddedExposed(_, env)
+            | StateChange::RemovedExposed(_, env)
+            | StateChange::UpdatedExposed(_, env)
+            | StateChange::AddedPackage(_, env)
+            | StateChange::AddedEnvironment(env)
+            | StateChange::RemovedEnvironment(env) => env,
+        }
+    }
+}
+
+#[must_use]
+#[derive(Debug, Default)]
+pub(crate) struct StateChanges {
+    changes: Vec<StateChange>,
+    has_updated: bool,
+}
+
+impl StateChanges {
+    pub(crate) fn has_changed(&self) -> bool {
+        self.has_updated || !self.changes.is_empty()
+    }
+
+    pub(crate) fn set_has_updated(&mut self, has_updated: bool) {
+        self.has_updated = has_updated;
+    }
+
+    pub(crate) fn push_change(&mut self, change: StateChange) {
+        self.changes.push(change);
+    }
+
+    pub(crate) fn push_changes(&mut self, changes: impl IntoIterator<Item = StateChange>) {
+        self.changes.extend(changes);
+    }
+
+    #[cfg(test)]
+    pub fn changes(self) -> Vec<StateChange> {
+        self.changes
+    }
+
+    /// Remove changes that cancel each other out
+    fn prune(&mut self) {
+        // Remove changes if the environment is removed afterwards
+        let mut pruned_changes: Vec<StateChange> = Vec::new();
+        for change in &self.changes {
+            if let StateChange::RemovedEnvironment(env) = change {
+                pruned_changes.retain(|change| match change {
+                    StateChange::RemovedEnvironment(_) => true,
+                    c => c.env() != env,
+                });
+            }
+            pruned_changes.push(change.clone());
+        }
+        self.changes = pruned_changes;
+    }
+
+    pub(crate) fn report(mut self) {
+        self.prune();
+
+        let mut iter = self.changes.iter().peekable();
+
+        while let Some(change) = iter.next() {
+            match change {
+                StateChange::AddedExposed(exposed, env_name) => {
+                    let mut exposed_names = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            exposed_names.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if exposed_names.len() == 1 {
+                        eprintln!(
+                            "{}Exposed executable {} from environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            exposed_names[0].fancy_display(),
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Exposed executables from environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for exposed_name in exposed_names {
+                            eprintln!("   - {}", exposed_name.fancy_display());
+                        }
+                    }
+                }
+                StateChange::RemovedExposed(exposed, env_name) => {
+                    eprintln!(
+                        "{}Removed exposed executable {} from environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        exposed.fancy_display(),
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::UpdatedExposed(exposed, env_name) => {
+                    let mut exposed_names = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            exposed_names.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if exposed_names.len() == 1 {
+                        eprintln!(
+                            "{}Updated executable {} of environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            exposed_names[0].fancy_display(),
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Updated executables of environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for exposed_name in exposed_names {
+                            eprintln!("   - {}", exposed_name.fancy_display());
+                        }
+                    }
+                }
+                StateChange::AddedPackage(pkg, env_name) => {
+                    eprintln!(
+                        "{}Added package {}={} to environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        pkg.name.as_normalized(),
+                        pkg.version,
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::AddedEnvironment(env_name) => {
+                    eprintln!(
+                        "{}Added environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        env_name.fancy_display()
+                    );
+                }
+                StateChange::RemovedEnvironment(env_name) => {
+                    eprintln!(
+                        "{}Removed environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        env_name.fancy_display()
+                    );
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::BitOrAssign for StateChanges {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.changes.extend(rhs.changes);
+        self.has_updated |= rhs.has_updated;
+    }
+}
+
+/// converts a channel url string to a PrioritizedChannel
+pub(crate) fn channel_url_to_prioritized_channel(
+    channel: &str,
+    channel_config: &ChannelConfig,
+) -> miette::Result<PrioritizedChannel> {
+    // If channel url contains channel config alias as a substring, don't use it as a URL
+    if channel.contains(channel_config.channel_alias.as_str()) {
+        // Create channel from URL for parsing
+        let channel = Channel::from_url(Url::from_str(channel).expect("channel should be url"));
+        // If it has a name return as named channel
+        if let Some(name) = channel.name {
+            // If the channel has a name, use it as the channel
+            return Ok(NamedChannelOrUrl::from_str(&name).into_diagnostic()?.into());
+        }
+    }
+    // If channel doesn't contain the alias or has no name, use it as a URL
+    Ok(NamedChannelOrUrl::from_str(channel)
+        .into_diagnostic()?
+        .into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
+    use std::str::FromStr;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -196,7 +403,7 @@ mod tests {
         let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
 
         // Define a test environment name
-        let environment_name = "test-env".parse().unwrap();
+        let environment_name = &EnvironmentName::from_str("test-env").unwrap();
 
         // Create a new binary env dir
         let bin_env_dir = EnvDir::from_env_root(env_root, environment_name)
@@ -223,5 +430,62 @@ mod tests {
         assert!(records
             .iter()
             .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
+    }
+
+    #[test]
+    fn test_channel_url_to_prioritized_channel() {
+        let channel_config = ChannelConfig {
+            channel_alias: Url::from_str("https://conda.anaconda.org").unwrap(),
+            root_dir: PathBuf::from("/tmp"),
+        };
+        // Same host as alias
+        let channel = "https://conda.anaconda.org/conda-forge";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(NamedChannelOrUrl::from_str("conda-forge").unwrap()),
+            prioritized_channel
+        );
+
+        // Different host
+        let channel = "https://prefix.dev/conda-forge";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(
+                NamedChannelOrUrl::from_str("https://prefix.dev/conda-forge").unwrap()
+            ),
+            prioritized_channel
+        );
+
+        // File URL
+        let channel = "file:///C:/Users/user/channel/output";
+        let prioritized_channel =
+            channel_url_to_prioritized_channel(channel, &channel_config).unwrap();
+        assert_eq!(
+            PrioritizedChannel::from(
+                NamedChannelOrUrl::from_str("file:///C:/Users/user/channel/output").unwrap()
+            ),
+            prioritized_channel
+        );
+    }
+
+    #[rstest]
+    #[case("python3.9.1")]
+    #[case("python3.9")]
+    #[case("python3")]
+    #[case("python")]
+    fn test_executable_script_path(#[case] exposed_name: &str) {
+        let path = PathBuf::from("/home/user/.pixi/bin");
+        let bin_dir = BinDir(path.clone());
+        let exposed_name = ExposedName::from_str(exposed_name).unwrap();
+        let executable_script_path = bin_dir.executable_script_path(&exposed_name);
+
+        if cfg!(windows) {
+            let expected = format!("{}.bat", exposed_name);
+            assert_eq!(executable_script_path, path.join(expected));
+        } else {
+            assert_eq!(executable_script_path, path.join(exposed_name.to_string()));
+        }
     }
 }

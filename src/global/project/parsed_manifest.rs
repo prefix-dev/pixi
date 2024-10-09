@@ -1,26 +1,142 @@
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 
+use super::environment::EnvironmentName;
+use console::StyledObject;
+use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::Diagnostic;
-use pixi_manifest::{PrioritizedChannel, TomlError};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use pixi_consts::consts;
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::Serialize;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use thiserror::Error;
-
-use super::environment::EnvironmentName;
+use toml_edit::TomlError;
 
 use super::ExposedData;
+use crate::global::Mapping;
 use pixi_spec::PixiSpec;
+
+pub const GLOBAL_MANIFEST_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ManifestVersion(u32);
+
+impl Default for ManifestVersion {
+    fn default() -> Self {
+        ManifestVersion(GLOBAL_MANIFEST_VERSION)
+    }
+}
+
+impl From<ManifestVersion> for toml_edit::Item {
+    fn from(version: ManifestVersion) -> Self {
+        toml_edit::value(version.0 as i64)
+    }
+}
+
+#[derive(Error, Debug, Clone, Diagnostic)]
+pub enum ManifestParsingError {
+    #[error(transparent)]
+    Error(#[from] toml_edit::TomlError),
+    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest")]
+    VersionTooLow(u32, #[source] toml_edit::TomlError),
+    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version")]
+    VersionTooHigh(u32, #[source] toml_edit::TomlError),
+}
+
+impl ManifestParsingError {
+    pub fn to_fancy<T>(
+        &self,
+        file_name: &str,
+        contents: impl Into<String>,
+        path: &Path,
+    ) -> Result<T, Report> {
+        if let Some(span) = self.span() {
+            Err(miette::miette!(
+                labels = vec![LabeledSpan::at(span, self.message())],
+                "Failed to parse global manifest: {}",
+                console::style(path.display()).bold()
+            )
+            .with_source_code(NamedSource::new(file_name, contents.into())))
+        } else {
+            Err(self.clone()).into_diagnostic().with_context(|| {
+                format!(
+                    "Failed to parse global manifest: '{}'",
+                    console::style(path.display()).bold()
+                )
+            })
+        }
+    }
+
+    fn span(&self) -> Option<std::ops::Range<usize>> {
+        match self {
+            ManifestParsingError::Error(e) => e.span(),
+            _ => None,
+        }
+    }
+    fn message(&self) -> String {
+        match self {
+            ManifestParsingError::Error(e) => e.message().to_owned(),
+            _ => self.to_string(),
+        }
+    }
+}
 
 /// Describes the contents of a parsed global project manifest.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ParsedManifest {
+    /// The version of the manifest
+    version: ManifestVersion,
     /// The environments the project can create.
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+impl ParsedManifest {
+    /// Parses a toml string into a project manifest.
+    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestParsingError> {
+        // If it fails only try to get version from the file to see if we can create a better error based on that.
+        match toml_edit::de::from_str::<Self>(source) {
+            Ok(toml) => Ok(toml),
+            Err(e) => {
+                // Define a struct that only includes the `version` field.
+                #[derive(Deserialize)]
+                struct VersionOnly {
+                    version: ManifestVersion,
+                }
+
+                // Attempt to deserialize the TOML string into `VersionOnly`.
+                match toml_edit::de::from_str::<VersionOnly>(source) {
+                    Ok(version_only) => {
+                        let version = version_only.version.0;
+                        // Check if the version is supported.
+                        match version.cmp(&GLOBAL_MANIFEST_VERSION) {
+                            Ordering::Greater => Err(ManifestParsingError::VersionTooHigh(
+                                version,
+                                TomlError::from(e),
+                            )),
+                            Ordering::Less => Err(ManifestParsingError::VersionTooLow(
+                                version,
+                                TomlError::from(e),
+                            )),
+                            // Version is supported, but there was another parsing error.
+                            Ordering::Equal => Err(ManifestParsingError::Error(TomlError::from(e))),
+                        }
+                    }
+                    Err(_) => {
+                        // Could not extract the version; return the original error.
+                        Err(ManifestParsingError::Error(TomlError::from(e)))
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<I> From<I> for ParsedManifest
@@ -33,28 +149,26 @@ where
             let ExposedData {
                 env_name,
                 platform,
-                channel,
+                channels,
                 package,
                 executable_name,
                 exposed,
             } = data;
             let parsed_environment = envs.entry(env_name).or_default();
-            parsed_environment.channels.insert(channel);
+            parsed_environment.channels.extend(channels);
             parsed_environment.platform = platform;
             parsed_environment
                 .dependencies
                 .insert(package, PixiSpec::default());
-            parsed_environment.exposed.insert(exposed, executable_name);
+            parsed_environment
+                .exposed
+                .insert(Mapping::new(exposed, executable_name));
         }
 
-        Self { envs }
-    }
-}
-
-impl ParsedManifest {
-    /// Parses a toml string into a project manifest.
-    pub(crate) fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
+        Self {
+            envs,
+            version: ManifestVersion::default(),
+        }
     }
 }
 
@@ -67,6 +181,9 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         #[derive(Deserialize, Debug, Clone)]
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         pub struct TomlManifest {
+            /// The version of the manifest
+            #[serde(default)]
+            version: ManifestVersion,
             /// The environments the project can create.
             #[serde(default)]
             envs: IndexMap<EnvironmentName, ParsedEnvironment>,
@@ -77,23 +194,57 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         // Check for duplicate keys in the exposed fields
         let mut exposed_names = IndexSet::new();
         let mut duplicates = IndexMap::new();
-        for key in manifest.envs.values().flat_map(|env| env.exposed.keys()) {
+        for key in manifest
+            .envs
+            .values()
+            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+        {
             if !exposed_names.insert(key) {
                 duplicates.entry(key).or_insert_with(Vec::new).push(key);
             }
         }
         if !duplicates.is_empty() {
-            let duplicate_keys = duplicates.keys().map(|k| k.to_string()).collect_vec();
             return Err(serde::de::Error::custom(format!(
-                "Duplicate exposed names found: '{}'",
-                duplicate_keys.join(", ")
+                "Duplicated exposed names found: '{}'",
+                duplicates
+                    .keys()
+                    .map(|exposed_name| exposed_name.fancy_display())
+                    .join(", ")
             )));
         }
 
         Ok(Self {
+            version: manifest.version,
             envs: manifest.envs,
         })
     }
+}
+
+/// Deserialize a map of exposed names to executable names.
+fn deserialize_expose_mappings<'de, D>(deserializer: D) -> Result<IndexSet<Mapping>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map: HashMap<ExposedName, String> = HashMap::deserialize(deserializer)?;
+    Ok(map
+        .into_iter()
+        .map(|(exposed_name, executable_name)| Mapping::new(exposed_name, executable_name))
+        .collect())
+}
+
+/// Custom serializer for a map of exposed names to executable names.
+fn serialize_expose_mappings<S>(
+    mappings: &IndexSet<Mapping>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(mappings.len()))?;
+    for mapping in mappings {
+        map.serialize_entry(&mapping.exposed_name(), &mapping.executable_name())?;
+    }
+    map.end()
 }
 
 #[serde_as]
@@ -106,8 +257,12 @@ pub(crate) struct ParsedEnvironment {
     pub platform: Option<Platform>,
     #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
-    #[serde(default)]
-    pub(crate) exposed: IndexMap<ExposedName, String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_expose_mappings",
+        serialize_with = "serialize_expose_mappings"
+    )]
+    pub(crate) exposed: IndexSet<Mapping>,
 }
 
 impl ParsedEnvironment {
@@ -133,8 +288,8 @@ impl ParsedEnvironment {
         &self.dependencies
     }
 
-    /// Returns the exposed names associated with this environment.
-    pub(crate) fn exposed(&self) -> &IndexMap<ExposedName, String> {
+    /// Returns the exposed name mappings associated with this environment.
+    pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
         &self.exposed
     }
 }
@@ -145,6 +300,12 @@ pub(crate) struct ExposedName(String);
 impl fmt::Display for ExposedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl FancyDisplay for ExposedName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::EXPOSED_NAME_STYLE.apply_to(&self.0)
     }
 }
 

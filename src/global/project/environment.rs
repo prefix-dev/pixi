@@ -1,9 +1,9 @@
 use crate::global::install::local_environment_matches_spec;
-use crate::global::{extract_executable_from_script, BinDir, EnvDir, ExposedName};
+use crate::global::{extract_executable_from_script, BinDir, EnvDir, ExposedName, Mapping};
 use crate::prefix::Prefix;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
@@ -48,7 +48,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
     }
 }
 
-impl FancyDisplay for &EnvironmentName {
+impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {
         consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
     }
@@ -62,7 +62,7 @@ impl FromStr for EnvironmentName {
             .get_or_init(|| Regex::new(r"^[a-z0-9-]+$").expect("Regex should be able to compile"));
 
         if !regex.is_match(s) {
-            // Return an error if the string does not match the regex
+            // Return an error if the string doesn't match the regex
             return Err(ParseEnvironmentNameError {
                 attempted_parse: s.to_string(),
             });
@@ -87,7 +87,7 @@ pub struct ParseEnvironmentNameError {
 pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
-    exposed: &IndexMap<ExposedName, String>,
+    exposed: &IndexSet<Mapping>,
 ) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from the scripts in the bin directory.
     let locally_exposed = bin_dir.files().await?;
@@ -118,7 +118,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .filter(|path| {
             !exposed
                 .iter()
-                .any(|(exposed_name, _)| executable_from_path(path) == exposed_name.to_string())
+                .any(|mapping| executable_from_path(path) == mapping.exposed_name().to_string())
         })
         .cloned()
         .collect::<IndexSet<PathBuf>>();
@@ -126,15 +126,15 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Get all required exposed binaries that are not yet exposed
     let to_add = exposed
         .iter()
-        .filter_map(|(exposed_name, _)| {
+        .filter_map(|mapping| {
             if related_exposed
                 .iter()
                 .map(|path| executable_from_path(path))
-                .any(|exec| exec == exposed_name.to_string())
+                .any(|exec| exec == mapping.exposed_name().to_string())
             {
                 None
             } else {
-                Some(exposed_name.clone())
+                Some(mapping.exposed_name().clone())
             }
         })
         .collect::<IndexSet<ExposedName>>();
@@ -176,7 +176,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let env_root = EnvRoot::new(home.into_path()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
-        let env_dir = EnvDir::from_env_root(env_root, env_name).await.unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
 
         // Test empty
         let specs = IndexSet::new();
@@ -212,11 +212,11 @@ mod tests {
         let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
         let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
-        let env_dir = EnvDir::from_env_root(env_root, env_name).await.unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
         let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
 
         // Test empty
-        let exposed = IndexMap::new();
+        let exposed = IndexSet::new();
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
@@ -224,8 +224,11 @@ mod tests {
         assert!(to_add.is_empty());
 
         // Test with exposed
-        let mut exposed = IndexMap::new();
-        exposed.insert(ExposedName::from_str("test").unwrap(), "test".to_string());
+        let mut exposed = IndexSet::new();
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("test").unwrap(),
+            "test".to_string(),
+        ));
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
@@ -268,7 +271,7 @@ mod tests {
 
         // Test to_remove
         let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexMap::new())
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
         assert_eq!(to_remove.len(), 1);

@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import os
 
-PIXI_VERSION = "0.31.0"
+PIXI_VERSION = "0.32.1"
 
 
 class ExitCode(IntEnum):
@@ -14,7 +14,7 @@ class ExitCode(IntEnum):
 
 def verify_cli_command(
     command: list[Path | str],
-    expected_exit_code: ExitCode,
+    expected_exit_code: ExitCode = ExitCode.SUCCESS,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,

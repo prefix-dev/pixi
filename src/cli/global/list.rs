@@ -1,10 +1,10 @@
 use crate::global::common::find_package_records;
 use crate::global::project::ParsedEnvironment;
-use crate::global::{EnvironmentName, ExposedName, Project};
+use crate::global::{EnvironmentName, Mapping, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
@@ -29,10 +29,6 @@ use thiserror::__private::AsDisplay;
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 
@@ -47,17 +43,17 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project = Project::discover_or_create(args.assume_yes)
+    let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
     if let Some(environment) = args.environment {
-        let name = EnvironmentName::from_str(environment.as_str())?;
+        let env_name = EnvironmentName::from_str(environment.as_str())?;
         // Verify that the environment is in sync with the manifest and report to the user otherwise
-        if !project.environment_in_sync(&name).await? {
-            tracing::warn!("The environment '{}' is not in sync with the manifest, to sync run\n\tpixi global sync", name);
+        if !project.environment_in_sync(&env_name).await? {
+            tracing::warn!("The environment {} is not in sync with the manifest, to sync run\n\tpixi global sync", env_name.fancy_display());
         }
-        list_environment(project, &name, args.sort_by).await?;
+        list_environment(project, &env_name, args.sort_by).await?;
     } else {
         // Verify that the environments are in sync with the manifest and report to the user otherwise
         if !project.environments_in_sync().await? {
@@ -106,7 +102,7 @@ async fn list_environment(
     let env = project
         .environments()
         .get(environment_name)
-        .ok_or_else(|| miette!("Environment '{}' not found", environment_name))?;
+        .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
 
     let records = find_package_records(
         &project
@@ -139,7 +135,7 @@ async fn list_environment(
         }
     }
     println!(
-        "The '{}' environment has {} packages:",
+        "The {} environment has {} packages:",
         environment_name.fancy_display(),
         console::style(packages_to_output.len()).bold()
     );
@@ -155,12 +151,12 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     let formatted_exposed = environment
         .exposed
         .iter()
-        .map(|(exp, path)| {
-            let exp = exp.to_string();
-            if &exp == path {
+        .map(|mapping| {
+            let exp = mapping.exposed_name().to_string();
+            if exp == mapping.executable_name() {
                 exp
             } else {
-                format!("{} -> {}", exp, path)
+                format!("{} -> {}", exp, mapping.executable_name())
             }
         })
         .join(", ");
@@ -367,11 +363,7 @@ fn format_dependencies(
     }
 }
 
-fn format_exposed(
-    env_name: &str,
-    exposed: &IndexMap<ExposedName, String>,
-    last: bool,
-) -> Option<String> {
+fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
@@ -379,10 +371,13 @@ fn format_exposed(
             last,
             false,
         ))
-    } else if exposed.iter().any(|(exp, _)| exp.to_string() != env_name) {
+    } else if exposed
+        .iter()
+        .any(|mapping| mapping.exposed_name().to_string() != env_name)
+    {
         let content = exposed
             .iter()
-            .map(|(exp, _)| console::style(exp).yellow().to_string())
+            .map(|mapping| mapping.exposed_name().fancy_display())
             .join(", ");
         Some(format_asciiart_section("exposes", content, last, false))
     } else {
