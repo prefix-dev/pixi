@@ -42,9 +42,9 @@ impl From<ManifestVersion> for toml_edit::Item {
 pub enum ManifestParsingError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest.")]
+    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest")]
     VersionTooLow(u32, #[source] toml_edit::TomlError),
-    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version.")]
+    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version")]
     VersionTooHigh(u32, #[source] toml_edit::TomlError),
 }
 
