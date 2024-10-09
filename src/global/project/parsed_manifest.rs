@@ -1,36 +1,88 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 
+use super::environment::EnvironmentName;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::Diagnostic;
-use pixi_manifest::{PrioritizedChannel, TomlError};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use thiserror::Error;
-
-use super::environment::EnvironmentName;
+use toml_edit::TomlError;
 
 use super::ExposedData;
 use crate::global::Mapping;
 use pixi_spec::PixiSpec;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Version(u32);
+pub const GLOBAL_MANIFEST_VERSION: u32 = 1;
 
-impl Default for Version {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ManifestVersion(u32);
+
+impl Default for ManifestVersion {
     fn default() -> Self {
-        Version(1)
+        ManifestVersion(GLOBAL_MANIFEST_VERSION)
     }
 }
 
-impl From<Version> for toml_edit::Item {
-    fn from(version: Version) -> Self {
+impl From<ManifestVersion> for toml_edit::Item {
+    fn from(version: ManifestVersion) -> Self {
         toml_edit::value(version.0 as i64)
+    }
+}
+
+#[derive(Error, Debug, Clone, Diagnostic)]
+pub enum ManifestParsingError {
+    #[error(transparent)]
+    Error(#[from] toml_edit::TomlError),
+    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest.")]
+    VersionTooLow(u32, #[source] toml_edit::TomlError),
+    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version.")]
+    VersionTooHigh(u32, #[source] toml_edit::TomlError),
+}
+
+impl ManifestParsingError {
+    pub fn to_fancy<T>(
+        &self,
+        file_name: &str,
+        contents: impl Into<String>,
+        path: &Path,
+    ) -> Result<T, Report> {
+        if let Some(span) = self.span() {
+            Err(miette::miette!(
+                labels = vec![LabeledSpan::at(span, self.message())],
+                "Failed to parse global manifest: {}",
+                console::style(path.display()).bold()
+            )
+            .with_source_code(NamedSource::new(file_name, contents.into())))
+        } else {
+            Err(self.clone()).into_diagnostic().with_context(|| {
+                format!(
+                    "Failed to parse global manifest: '{}'",
+                    console::style(path.display()).bold()
+                )
+            })
+        }
+    }
+
+    fn span(&self) -> Option<std::ops::Range<usize>> {
+        match self {
+            ManifestParsingError::Error(e) => e.span(),
+            _ => None,
+        }
+    }
+    fn message(&self) -> String {
+        match self {
+            ManifestParsingError::Error(e) => e.message().to_owned(),
+            _ => self.to_string(),
+        }
     }
 }
 
@@ -38,9 +90,50 @@ impl From<Version> for toml_edit::Item {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ParsedManifest {
     /// The version of the manifest
-    version: Version,
+    version: ManifestVersion,
     /// The environments the project can create.
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+impl ParsedManifest {
+    /// Parses a toml string into a project manifest.
+    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestParsingError> {
+        // If it fails only try to get version from the file to see if we can create a better error based on that.
+        match toml_edit::de::from_str::<Self>(source) {
+            Ok(toml) => Ok(toml),
+            Err(e) => {
+                // Define a struct that only includes the `version` field.
+                #[derive(Deserialize)]
+                struct VersionOnly {
+                    version: ManifestVersion,
+                }
+
+                // Attempt to deserialize the TOML string into `VersionOnly`.
+                match toml_edit::de::from_str::<VersionOnly>(source) {
+                    Ok(version_only) => {
+                        let version = version_only.version.0;
+                        // Check if the version is supported.
+                        match version.cmp(&GLOBAL_MANIFEST_VERSION) {
+                            Ordering::Greater => Err(ManifestParsingError::VersionTooHigh(
+                                version,
+                                TomlError::from(e),
+                            )),
+                            Ordering::Less => Err(ManifestParsingError::VersionTooLow(
+                                version,
+                                TomlError::from(e),
+                            )),
+                            // Version is supported, but there was another parsing error.
+                            Ordering::Equal => Err(ManifestParsingError::Error(TomlError::from(e))),
+                        }
+                    }
+                    Err(_) => {
+                        // Could not extract the version; return the original error.
+                        Err(ManifestParsingError::Error(TomlError::from(e)))
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<I> From<I> for ParsedManifest
@@ -71,15 +164,8 @@ where
 
         Self {
             envs,
-            version: Version::default(),
+            version: ManifestVersion::default(),
         }
-    }
-}
-
-impl ParsedManifest {
-    /// Parses a toml string into a project manifest.
-    pub(crate) fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
     }
 }
 
@@ -94,7 +180,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         pub struct TomlManifest {
             /// The version of the manifest
             #[serde(default)]
-            version: Version,
+            version: ManifestVersion,
             /// The environments the project can create.
             #[serde(default)]
             envs: IndexMap<EnvironmentName, ParsedEnvironment>,

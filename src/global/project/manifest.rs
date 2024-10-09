@@ -9,13 +9,13 @@ use miette::IntoDiagnostic;
 
 use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
-use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
+use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
-use super::parsed_manifest::{ParsedManifest, Version};
+use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 
 /// Handles the global project's manifest file.
@@ -52,10 +52,10 @@ impl Manifest {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
-                .map_err(TomlError::from)
+                .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,
+            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
         };
 
         let manifest = Self {
@@ -299,7 +299,7 @@ impl Manifest {
         let contents = {
             // Ensure that version is always set when saving
             let mut document = self.document.clone();
-            document.get_or_insert("version", Version::default().into());
+            document.get_or_insert("version", ManifestVersion::default().into());
             document.to_string()
         };
 
