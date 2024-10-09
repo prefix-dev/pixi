@@ -690,7 +690,10 @@ impl Project {
                 env_name
             ))?;
 
-        tracing::debug!("Exposing executables for environment '{}'", env_name);
+        tracing::debug!(
+            "Exposing executables for environment {}",
+            env_name.fancy_display()
+        );
         state_changes |= create_executable_scripts(
             &script_mapping,
             &prefix,
