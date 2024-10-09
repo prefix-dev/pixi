@@ -23,10 +23,6 @@ pub struct AddArgs {
     #[clap(short, long)]
     environment: EnvironmentName,
 
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 }
@@ -44,10 +40,6 @@ pub struct RemoveArgs {
     /// The environment from which the exposed names should be removed
     #[clap(short, long)]
     environment: EnvironmentName,
-
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -80,7 +72,7 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create(args.assume_yes)
+    let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -111,7 +103,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create(args.assume_yes)
+    let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 

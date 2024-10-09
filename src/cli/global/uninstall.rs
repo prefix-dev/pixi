@@ -19,17 +19,13 @@ pub struct Args {
     #[arg(num_args = 1..)]
     environment: Vec<EnvironmentName>,
 
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create(args.assume_yes)
+    let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 

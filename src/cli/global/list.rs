@@ -29,10 +29,6 @@ use thiserror::__private::AsDisplay;
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 
@@ -47,7 +43,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project = Project::discover_or_create(args.assume_yes)
+    let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
