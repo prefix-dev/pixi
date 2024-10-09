@@ -171,16 +171,15 @@ pub(crate) async fn create_executable_scripts(
         }
 
         let executable_name = executable_from_path(global_script_path);
+        let exposed_name = ExposedName::from_str(&executable_name)?;
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
                 state_changes
-                    .push_change(StateChange::AddedExposed(executable_name, env_name.clone()));
+                    .push_change(StateChange::AddedExposed(exposed_name, env_name.clone()));
             }
-            AddedOrChanged::Changed => state_changes.push_change(StateChange::UpdatedExposed(
-                executable_name,
-                env_name.clone(),
-            )),
+            AddedOrChanged::Changed => state_changes
+                .push_change(StateChange::UpdatedExposed(exposed_name, env_name.clone())),
         }
     }
     Ok(state_changes)

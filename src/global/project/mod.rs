@@ -547,7 +547,7 @@ impl Project {
         // Remove all removable binaries
         for exposed_path in to_remove {
             state_changes.push_change(StateChange::RemovedExposed(
-                executable_from_path(&exposed_path),
+                ExposedName::from_str(&executable_from_path(&exposed_path))?,
                 env_name.clone(),
             ));
             tokio_fs::remove_file(&exposed_path)
@@ -950,10 +950,7 @@ mod tests {
         let state_changes = project.prune_exposed(&env_name).await.unwrap();
         assert_eq!(
             state_changes.changes(),
-            vec![StateChange::RemovedExposed(
-                not_python.to_string(),
-                env_name.clone()
-            )]
+            vec![StateChange::RemovedExposed(not_python, env_name.clone())]
         );
 
         // Check if the non-exposed file was removed
