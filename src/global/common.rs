@@ -297,7 +297,7 @@ impl StateChanges {
                 StateChange::RemovedExposed(exposed, env_name) => {
                     eprintln!(
                         "{}Removed exposed executable {} from environment {}.",
-                        console::style(console::Emoji("✔ ", "")).red(),
+                        console::style(console::Emoji("✔ ", "")).green(),
                         exposed.fancy_display(),
                         env_name.fancy_display()
                     );
@@ -350,7 +350,7 @@ impl StateChanges {
                 StateChange::RemovedEnvironment(env_name) => {
                     eprintln!(
                         "{}Removed environment {}.",
-                        console::style(console::Emoji("✔ ", "")).red(),
+                        console::style(console::Emoji("✔ ", "")).green(),
                         env_name.fancy_display()
                     );
                 }
