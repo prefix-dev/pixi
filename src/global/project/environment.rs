@@ -48,7 +48,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
     }
 }
 
-impl FancyDisplay for &EnvironmentName {
+impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {
         consts::ENVIRONMENT_STYLE.apply_to(self.as_str())
     }

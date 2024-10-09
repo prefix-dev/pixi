@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
+use console::StyledObject;
+use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, TomlError};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
@@ -92,10 +95,12 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
             }
         }
         if !duplicates.is_empty() {
-            let duplicate_keys = duplicates.keys().map(|k| k.to_string()).collect_vec();
             return Err(serde::de::Error::custom(format!(
-                "Duplicate exposed names found: '{}'",
-                duplicate_keys.into_iter().sorted().join(", ")
+                "Duplicated exposed names found: '{}'",
+                duplicates
+                    .keys()
+                    .map(|exposed_name| exposed_name.fancy_display())
+                    .join(", ")
             )));
         }
 
@@ -185,6 +190,12 @@ pub(crate) struct ExposedName(String);
 impl fmt::Display for ExposedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl FancyDisplay for ExposedName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::EXPOSED_NAME_STYLE.apply_to(&self.0)
     }
 }
 

@@ -192,6 +192,31 @@ exposed = {{ xz = "xz" }}
     assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
 
 
+def test_sync_duplicated_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+[envs.one]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-1 = "dummy-a" }}
+
+[envs.two]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-1 = "dummy-b" }}
+    """
+    manifest.write_text(toml)
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Duplicated exposed names found: 'dummy-1'",
+    )
+
+
 def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -225,26 +250,20 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
 
     # Remove dummy-a
     verify_cli_command(
-        [pixi, "global", "expose", "remove", "--environment=test", "dummy-a"],
+        [pixi, "global", "expose", "remove", "dummy-a"],
         env=env,
     )
     assert not dummy_a.is_file()
 
-    # Remove dummy1 and dummy3
+    # Remove dummy1 and dummy3 and attempt to remove dummy2
     verify_cli_command(
-        [pixi, "global", "expose", "remove", "--environment=test", "dummy1", "dummy3"],
+        [pixi, "global", "expose", "remove", "dummy1", "dummy3", "dummy2"],
+        ExitCode.FAILURE,
         env=env,
+        stderr_contains="Exposed name dummy2 not found in any environment",
     )
     assert not dummy1.is_file()
     assert not dummy3.is_file()
-
-    # Attempt to remove dummy2
-    verify_cli_command(
-        [pixi, "global", "expose", "remove", "--environment=test", "dummy2"],
-        ExitCode.FAILURE,
-        env=env,
-        stderr_contains="The exposed name dummy2 doesn't exist",
-    )
 
 
 def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

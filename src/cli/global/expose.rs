@@ -1,4 +1,5 @@
 use clap::Parser;
+use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
@@ -36,10 +37,6 @@ pub struct RemoveArgs {
     /// The exposed names that should be removed
     #[arg(num_args = 1..)]
     exposed_names: Vec<ExposedName>,
-
-    /// The environment from which the exposed names should be removed
-    #[clap(short, long)]
-    environment: EnvironmentName,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -113,33 +110,57 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     async fn apply_changes(
-        args: &RemoveArgs,
+        exposed_name: &ExposedName,
+        env_name: &EnvironmentName,
         project: &mut global::Project,
     ) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::default();
-        let env_name = &args.environment;
-        for exposed_name in &args.exposed_names {
-            project
-                .manifest
-                .remove_exposed_name(env_name, exposed_name)?;
-        }
+        project
+            .manifest
+            .remove_exposed_name(env_name, exposed_name)?;
         state_changes |= project.sync_environment(env_name).await?;
         project.manifest.save().await?;
         Ok(state_changes)
     }
 
-    let mut project_modified = project_original.clone();
+    let exposed_mappings = args
+        .exposed_names
+        .iter()
+        .map(|exposed_name| {
+            project_original
+                .manifest
+                .match_exposed_name_to_environment(exposed_name)
+                .map(|env_name| (exposed_name.clone(), env_name))
+        })
+        .collect_vec();
 
-    match apply_changes(&args, &mut project_modified).await {
-        Ok(state_changes) => {
-            state_changes.report();
-            Ok(())
+    let mut last_updated_project = project_original;
+    let mut state_changes = StateChanges::default();
+    for mapping in exposed_mappings {
+        let (exposed_name, env_name) = mapping?;
+        let mut project = last_updated_project.clone();
+        match apply_changes(&exposed_name, &env_name, &mut project)
+            .await
+            .wrap_err_with(|| format!("Couldn't remove exposed name {exposed_name}"))
+        {
+            Ok(sc) => {
+                state_changes |= sc;
+            }
+            Err(err) => {
+                state_changes.report();
+                revert_environment_after_error(&env_name, &last_updated_project)
+                    .await
+                    .wrap_err_with(|| {
+                        format!(
+                            "Couldn't remove exposed name {exposed_name}. Reverting also failed."
+                        )
+                    })?;
+
+                return Err(err);
+            }
         }
-        Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
-                .await
-                .wrap_err("Couldn't remove exposed name. Reverting also failed.")?;
-            Err(err)
-        }
+        last_updated_project = project;
     }
+    state_changes.report();
+    Ok(())
 }
