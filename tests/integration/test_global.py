@@ -403,7 +403,7 @@ def test_install_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: 
     assert not dummy_c.is_file()
 
 
-def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_install_expose_single_package(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
@@ -468,6 +468,13 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
     assert dummy_aa.is_file()
     assert dummy_c.is_file()
 
+
+def test_install_expose_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
     # Expose doesn't work with multiple environments
     verify_cli_command(
         [
@@ -503,6 +510,9 @@ def test_install_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> Non
         ],
         env=env,
     )
+
+    assert dummy_a.is_file()
+    assert not dummy_b.is_file()
 
 
 def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
