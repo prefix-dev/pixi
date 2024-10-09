@@ -241,8 +241,25 @@ impl Manifest {
         // Reinsert unique channels
         *channels_array = existing_channels.iter().collect();
 
-        tracing::debug!("Added channel {channel} for environment {env_name} in toml document",);
+        tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
         Ok(())
+    }
+
+    pub fn match_exposed_name_to_environment(
+        &self,
+        exposed_name: &ExposedName,
+    ) -> miette::Result<EnvironmentName> {
+        for (env_name, env) in &self.parsed.envs {
+            for mapping in &env.exposed {
+                if mapping.exposed_name == *exposed_name {
+                    return Ok(env_name.clone());
+                }
+            }
+        }
+        Err(miette::miette!(
+            "Exposed name {} not found in any environment",
+            exposed_name.fancy_display()
+        ))
     }
 
     /// Adds exposed mapping to the manifest

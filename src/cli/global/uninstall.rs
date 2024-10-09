@@ -51,7 +51,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = last_updated_project.clone();
         match apply_changes(env_name, &mut project)
             .await
-            .wrap_err_with(|| format!("Couldn't remove {}.", env_name.fancy_display()))
+            .wrap_err_with(|| format!("Couldn't remove {}", env_name.fancy_display()))
         {
             Ok(sc) => {
                 state_changes |= sc;
@@ -62,7 +62,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .await
                     .wrap_err_with(|| {
                         format!(
-                            "Couldn't uninstall environment '{env_name}'. Reverting also failed."
+                            "Couldn't uninstall environment {}. Reverting also failed.",
+                            env_name.fancy_display()
                         )
                     })?;
 

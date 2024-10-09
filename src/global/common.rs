@@ -192,9 +192,9 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
-    AddedExposed(String, EnvironmentName),
-    RemovedExposed(String, EnvironmentName),
-    UpdatedExposed(String, EnvironmentName),
+    AddedExposed(ExposedName, EnvironmentName),
+    RemovedExposed(ExposedName, EnvironmentName),
+    UpdatedExposed(ExposedName, EnvironmentName),
     AddedPackage(PackageRecord, EnvironmentName),
     AddedEnvironment(EnvironmentName),
     RemovedEnvironment(EnvironmentName),
@@ -265,12 +265,71 @@ impl StateChanges {
 
         while let Some(change) = iter.next() {
             match change {
-                StateChange::AddedEnvironment(env_name) => {
+                StateChange::AddedExposed(exposed, env_name) => {
+                    let mut exposed_names = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            exposed_names.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if exposed_names.len() == 1 {
+                        eprintln!(
+                            "{}Exposed executable {} from environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            exposed_names[0].fancy_display(),
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Exposed executables from environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for exposed_name in exposed_names {
+                            eprintln!("   - {}", exposed_name.fancy_display());
+                        }
+                    }
+                }
+                StateChange::RemovedExposed(exposed, env_name) => {
                     eprintln!(
-                        "{}Added environment {}.",
+                        "{}Removed exposed executable {} from environment {}.",
                         console::style(console::Emoji("✔ ", "")).green(),
+                        exposed.fancy_display(),
                         env_name.fancy_display()
                     );
+                }
+                StateChange::UpdatedExposed(exposed, env_name) => {
+                    let mut exposed_names = vec![exposed.clone()];
+                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
+                    {
+                        if next_env == env_name {
+                            exposed_names.push(next_exposed.clone());
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if exposed_names.len() == 1 {
+                        eprintln!(
+                            "{}Updated executable {} of environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            exposed_names[0].fancy_display(),
+                            env_name.fancy_display()
+                        );
+                    } else {
+                        eprintln!(
+                            "{}Updated executables of environment {}:",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                        for exposed_name in exposed_names {
+                            eprintln!("   - {}", exposed_name.fancy_display());
+                        }
+                    }
                 }
                 StateChange::AddedPackage(pkg, env_name) => {
                     eprintln!(
@@ -281,76 +340,17 @@ impl StateChanges {
                         env_name.fancy_display()
                     );
                 }
-                StateChange::AddedExposed(exposed, env_name) => {
-                    let mut executables = vec![exposed.clone()];
-                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
-                    {
-                        if next_env == env_name {
-                            executables.push(next_exposed.clone());
-                            iter.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    if executables.len() == 1 {
-                        eprintln!(
-                            "{}Exposed executable {} from environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            executables[0],
-                            env_name.fancy_display()
-                        );
-                    } else {
-                        eprintln!(
-                            "{}Exposed executables from environment {}:",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                        for executable in executables {
-                            eprintln!("   - {executable}");
-                        }
-                    }
-                }
-                StateChange::UpdatedExposed(exposed, env_name) => {
-                    let mut executables = vec![exposed.clone()];
-                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
-                    {
-                        if next_env == env_name {
-                            executables.push(next_exposed.clone());
-                            iter.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    if executables.len() == 1 {
-                        eprintln!(
-                            "{}Updated executable {} of environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            executables[0],
-                            env_name.fancy_display()
-                        );
-                    } else {
-                        eprintln!(
-                            "{}Updated executables of environment {}:",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                        for executable in executables {
-                            eprintln!("   - {executable}");
-                        }
-                    }
+                StateChange::AddedEnvironment(env_name) => {
+                    eprintln!(
+                        "{}Added environment {}.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        env_name.fancy_display()
+                    );
                 }
                 StateChange::RemovedEnvironment(env_name) => {
                     eprintln!(
                         "{}Removed environment {}.",
-                        console::style(console::Emoji("✔ ", "")).red(),
-                        env_name.fancy_display()
-                    );
-                }
-                StateChange::RemovedExposed(exposed, env_name) => {
-                    eprintln!(
-                        "{}Removed exposed executable {} from environment {}.",
-                        console::style(console::Emoji("✔ ", "")).red(),
-                        exposed,
+                        console::style(console::Emoji("✔ ", "")).green(),
                         env_name.fancy_display()
                     );
                 }
