@@ -1,5 +1,8 @@
-use super::{EnvDir, ExposedName};
-use crate::{global::BinDir, prefix::Prefix};
+use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
+use crate::{
+    global::{BinDir, StateChange},
+    prefix::Prefix,
+};
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -45,7 +48,7 @@ pub(crate) fn script_exec_mapping<'a>(
         })
         .ok_or_else(|| {
             miette::miette!(
-                "Could not find executable {entry_point} in {}, found these executables: {:?}",
+                "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
                 env_dir.path().display(),
                 executables.map(|(name, _)| name).collect_vec()
             )
@@ -101,13 +104,15 @@ pub(crate) async fn create_executable_scripts(
     prefix: &Prefix,
     shell: &ShellEnum,
     activation_script: String,
-) -> miette::Result<bool> {
-    let mut changed = false;
+    env_name: &EnvironmentName,
+) -> miette::Result<StateChanges> {
     enum AddedOrChanged {
         Unchanged,
         Added,
         Changed,
     }
+
+    let mut state_changes = StateChanges::default();
 
     for ScriptExecMapping {
         global_script_path,
@@ -156,7 +161,6 @@ pub(crate) async fn create_executable_scripts(
             tokio_fs::write(&global_script_path, script)
                 .await
                 .into_diagnostic()?;
-            changed = true;
         }
 
         #[cfg(unix)]
@@ -169,19 +173,17 @@ pub(crate) async fn create_executable_scripts(
         let executable_name = executable_from_path(global_script_path);
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
-            AddedOrChanged::Added => eprintln!(
-                "{}Added executable '{}'.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                executable_name
-            ),
-            AddedOrChanged::Changed => eprintln!(
-                "{}Updated executable '{}'.",
-                console::style(console::Emoji("~ ", "")).yellow(),
-                executable_name
-            ),
+            AddedOrChanged::Added => {
+                state_changes
+                    .push_change(StateChange::AddedExposed(executable_name, env_name.clone()));
+            }
+            AddedOrChanged::Changed => state_changes.push_change(StateChange::UpdatedExposed(
+                executable_name,
+                env_name.clone(),
+            )),
         }
     }
-    Ok(changed)
+    Ok(state_changes)
 }
 
 /// Extracts the executable path from a script file.
@@ -212,7 +214,7 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
         script_content
     );
 
-    // Return an error if the executable path could not be extracted
+    // Return an error if the executable path couldn't be extracted
     miette::bail!(
         "Failed to extract executable path from script {}",
         script.display()

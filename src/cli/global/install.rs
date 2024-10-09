@@ -1,13 +1,15 @@
 use std::str::FromStr;
 
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChanges},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -43,10 +45,6 @@ pub struct Args {
     #[arg(long)]
     expose: Vec<Mapping>,
 
-    /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
-    assume_yes: bool,
-
     #[clap(flatten)]
     config: ConfigCli,
 }
@@ -59,7 +57,7 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create(args.assume_yes)
+    let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -75,10 +73,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let multiple_envs = env_names.len() > 1;
 
     if !args.expose.is_empty() && env_names.len() != 1 {
-        miette::bail!("Cannot add exposed mappings for more than one environment");
+        miette::bail!("Can't add exposed mappings for more than one environment");
     }
 
-    let mut project = project_original.clone();
+    let mut state_changes = StateChanges::default();
+    let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
         let specs = if multiple_envs {
@@ -90,18 +89,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             specs.clone()
         };
-
-        if let Err(err) = setup_environment(env_name, &args, &mut project, specs).await {
-            if project_original.environment(env_name).is_some() {
-                revert_environment_after_error(env_name, &project_original)
-                    .await
-                    .wrap_err("Could not install packages. Reverting also failed.")?;
+        let mut project = last_updated_project.clone();
+        match setup_environment(env_name, &args, specs, &mut project)
+            .await
+            .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
+        {
+            Ok(sc) => {
+                state_changes |= sc;
             }
-            return Err(err);
+            Err(err) => {
+                state_changes.report();
+                revert_environment_after_error(env_name, &last_updated_project)
+                    .await
+                    .wrap_err("Couldn't install packages. Reverting also failed.")?;
+                return Err(err);
+            }
         }
+        last_updated_project = project;
     }
-
-    project.manifest.save().await?;
+    state_changes.report();
 
     Ok(())
 }
@@ -109,9 +115,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    project: &mut Project,
     specs: IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<()> {
+    project: &mut Project,
+) -> miette::Result<StateChanges> {
+    let mut state_changes = StateChanges::default();
+
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
         project.manifest.remove_environment(env_name)?;
@@ -122,7 +130,7 @@ async fn setup_environment(
     } else {
         args.channels.clone()
     };
-    project.manifest.add_environment(env_name, Some(channels))?;
+    state_changes.push_change(project.manifest.add_environment(env_name, Some(channels))?);
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
@@ -178,11 +186,17 @@ async fn setup_environment(
         }
     }
 
+    // Figure out added packages and their corresponding versions
+    let specs = specs.values().cloned().collect_vec();
+    state_changes |= project.added_packages(specs.as_slice(), env_name).await?;
+
     // Expose executables of the new environment
-    project
+    state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
-    Ok(())
+
+    project.manifest.save().await?;
+    Ok(state_changes)
 }
 
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.

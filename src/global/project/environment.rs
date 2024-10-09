@@ -62,7 +62,7 @@ impl FromStr for EnvironmentName {
             .get_or_init(|| Regex::new(r"^[a-z0-9-]+$").expect("Regex should be able to compile"));
 
         if !regex.is_match(s) {
-            // Return an error if the string does not match the regex
+            // Return an error if the string doesn't match the regex
             return Err(ParseEnvironmentNameError {
                 attempted_parse: s.to_string(),
             });
