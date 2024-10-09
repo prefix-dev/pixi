@@ -244,6 +244,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Matches an exposed name to its corresponding environment name.
     pub fn match_exposed_name_to_environment(
         &self,
         exposed_name: &ExposedName,
@@ -261,6 +262,18 @@ impl Manifest {
         ))
     }
 
+    /// Checks if an exposed name already exists
+    pub fn exposed_name_already_exists(&self, exposed_name: &ExposedName) -> bool {
+        for env in self.parsed.envs.values() {
+            for mapping in &env.exposed {
+                if mapping.exposed_name == *exposed_name {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Adds exposed mapping to the manifest
     pub fn add_exposed_mapping(
         &mut self,
@@ -271,6 +284,15 @@ impl Manifest {
         if !self.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
+
+        // Ensure exposed name is unique
+        if !self.exposed_name_already_exists(&mapping.exposed_name) {
+            miette::bail!(
+                "Exposed name {} already exists",
+                mapping.exposed_name.fancy_display()
+            );
+        }
+
         // Update self.parsed
         self.parsed
             .envs
@@ -318,6 +340,31 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
+        Ok(())
+    }
+
+    /// Removes all exposed mappings for a specific environment
+    pub fn remove_all_exposed_mappings(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
+            miette::miette!("Environment {} doesn't exist", env_name.fancy_display())
+        })?;
+
+        // Clear the exposed mappings
+        env.exposed.clear();
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .remove("exposed");
+
+        tracing::debug!(
+            "Removed all exposed mappings for environment {} in toml document",
+            env_name.fancy_display()
+        );
         Ok(())
     }
 

@@ -120,19 +120,17 @@ async fn setup_environment(
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-    // Modify the project to include the new environment
-    if project.manifest.parsed.envs.contains_key(env_name) {
-        project.manifest.remove_environment(env_name)?;
-    }
-
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
         args.channels.clone()
     };
 
-    project.manifest.add_environment(env_name, Some(channels))?;
-    state_changes.insert_change(env_name, StateChange::AddedEnvironment)?;
+    // Modify the project to include the new environment
+    if !project.manifest.parsed.envs.contains_key(env_name) {
+        project.manifest.add_environment(env_name, Some(channels))?;
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment)?;
+    }
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
@@ -145,6 +143,18 @@ async fn setup_environment(
             spec,
             project.clone().config().global_channel_config(),
         )?;
+    }
+
+    if !args.expose.is_empty() {
+        project.manifest.remove_all_exposed_mappings(env_name)?;
+        // Only add the exposed mappings that were requested
+        for mapping in &args.expose {
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
+        }
+    }
+
+    if project.environment_in_sync(env_name).await? {
+        return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
     // Installing the environment to be able to find the bin paths later
@@ -180,11 +190,6 @@ async fn setup_environment(
                     );
                 }
             }
-        }
-    } else {
-        // Only add the exposed mappings that were requested
-        for mapping in &args.expose {
-            project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
     }
 

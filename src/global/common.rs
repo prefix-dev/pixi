@@ -2,7 +2,7 @@ use super::{EnvironmentName, ExposedName};
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
@@ -226,13 +226,8 @@ impl StateChanges {
         change: StateChange,
     ) -> miette::Result<()> {
         self.changes
-            .get_mut(env_name)
-            .ok_or_else(|| {
-                miette!(
-                    "Environment {} needs to exist already",
-                    env_name.fancy_display()
-                )
-            })?
+            .entry(env_name.clone())
+            .or_default()
             .push(change);
         Ok(())
     }
@@ -273,6 +268,14 @@ impl StateChanges {
         self.prune();
 
         for (env_name, changes_for_env) in self.changes {
+            if changes_for_env.is_empty() {
+                eprintln!(
+                    "{}Nothing do do. The environment {} is already up-to-date",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    env_name.fancy_display()
+                );
+            }
+
             let mut iter = changes_for_env.iter().peekable();
 
             while let Some(change) = iter.next() {
@@ -371,7 +374,12 @@ impl StateChanges {
 
 impl std::ops::BitOrAssign for StateChanges {
     fn bitor_assign(&mut self, rhs: Self) {
-        self.changes.extend(rhs.changes);
+        for (env_name, changes_for_env) in rhs.changes {
+            self.changes
+                .entry(env_name)
+                .or_default()
+                .extend(changes_for_env);
+        }
     }
 }
 
