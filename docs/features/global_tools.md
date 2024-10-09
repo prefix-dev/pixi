@@ -1,4 +1,4 @@
-# Pixi Global Tool Installation
+# Pixi Global Tool Environment Installation
 
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
@@ -8,7 +8,7 @@ This means that the pixi environment will be placed in a global location, and th
     The proposal for the global tools feature can be found [here](../design_proposals/pixi_global_manifest.md).
 
 ## The Global Manifest
-Since `v0.31.0` pixi has a new manifest file that will be created in the global directory (default: `$HOME/.pixi/manifests/pixi-global.toml`).
+Since `v0.33.0` pixi has a new manifest file that will be created in the global directory (default: `$HOME/.pixi/manifests/pixi-global.toml`).
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.
 
@@ -37,25 +37,51 @@ exposed = { python310 = "python" } # (3)!
 ### Channels
 The channels are the conda channels that will be used to search for the packages.
 There is a priority to these, so the first one will have the highest priority, if a package is not found in that channel the next one will be used.
+For example, running:
+```
+pixi global install --channel conda-forge --channel bioconda snakemake
+```
+Results in the following entry in the manifest:
+```toml
+[envs.snakemake]
+channels = ["conda-forge", "bioconda"]
+dependencies = { snakemake = "*" }
+exposed = { snakemake = "snakemake" }
+```
+
 More information on channels can be found [here](../advanced/channel_priority.md).
 
 ### Exposed
 The exposed binaries are the ones that will be available in the system `PATH`.
 This is useful when the package has multiple binaries, but you want to get a select few, or you want to expose it with a different name.
 For example, the `python` package has multiple binaries, but you only want to expose the interpreter.
-You can do this with the following entry:
+Running:
+```
+pixi global expose add --environment python py3=python3
+```
+will create the following entry in the manifest:
 ```toml
 [envs.python]
 channels = ["conda-forge"]
 dependencies = { python = ">=3.10,<3.11" }
-exposed = { python310 = "python" }
+exposed = { py3 = "python3" }
 ```
-This also helps when you want to access binaries of dependencies of the package.
-For example, the `ansible` package doesn't contain the `ansible` binary, but its dependency `ansible-core`does.
-So you can still expose it with:
+There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
+Even if the binary name is only exposed through dependencies of the package
+For example, running:
 ```
-pixi global expose add --environment ansible ansible=ansible
+pixi global install ansible
 ```
+will create the following entry in the manifest:
+```toml
+
+[envs.ansible]
+channels = ["conda-forge"]
+dependencies = { ansible = "*" }
+exposed = { ansible = "ansible" } # (1)!
+```
+
+1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
 
 ### Dependencies
 Dependencies are the **Conda** packages that will be installed into your environment. For example, running:
