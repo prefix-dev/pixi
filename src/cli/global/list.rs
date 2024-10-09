@@ -14,7 +14,6 @@ use rattler_conda_types::{PackageName, PackageRecord, PrefixRecord, Version};
 use serde::Serialize;
 use std::io::{stdout, Write};
 use std::str::FromStr;
-use thiserror::__private::AsDisplay;
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 ///
@@ -299,13 +298,8 @@ async fn list_global_environments(project: Project) -> miette::Result<()> {
         println!("No global environments found.");
     } else {
         println!(
-            "Global environments at {}:\n{}",
-            project
-                .env_root
-                .path()
-                .parent()
-                .unwrap_or(project.env_root.path())
-                .as_display(),
+            "Global environments as specified in '{}'\n{}",
+            console::style(project.manifest.path.display()).bold(),
             message
         );
     }

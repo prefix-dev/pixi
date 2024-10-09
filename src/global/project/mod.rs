@@ -294,6 +294,23 @@ impl Project {
         Self::from_path(&manifest_path, env_root, bin_dir)
     }
 
+    /// Discovers the project manifest file in path at
+    /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
+    /// yet, it will return an error.
+    pub(crate) async fn discover() -> miette::Result<Self> {
+        let manifest_dir = Self::manifest_dir()?;
+        let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+
+        let bin_dir = BinDir::from_env().await?;
+        let env_root = EnvRoot::from_env().await?;
+
+        if !manifest_path.exists() {
+            miette::bail!("Global manifest not found at {}", manifest_path.display());
+        }
+
+        Self::from_path(&manifest_path, env_root, bin_dir)
+    }
+
     async fn try_from_existing_installation(
         manifest_path: &Path,
         env_root: EnvRoot,
