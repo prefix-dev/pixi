@@ -831,7 +831,10 @@ pub async fn update_python_distributions(
             let summary = match uv_installer::uninstall(dist_info).await {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
-                Err(UninstallError::Uninstall(e)) => {
+                Err(UninstallError::Uninstall(e))
+                    if matches!(e, install_wheel_rs::Error::MissingRecord(_))
+                        || matches!(e, install_wheel_rs::Error::MissingTopLevel(_)) =>
+                {
                     // If the uninstallation failed, remove the directory manually and continue
                     tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
 
