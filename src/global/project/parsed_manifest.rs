@@ -5,14 +5,13 @@ use std::path::Path;
 use std::str::FromStr;
 
 use super::environment::EnvironmentName;
+use console::StyledObject;
+use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
-use pixi_manifest::PrioritizedChannel;
-use console::StyledObject;
-use fancy_display::FancyDisplay;
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, TomlError};
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::SerializeMap;
