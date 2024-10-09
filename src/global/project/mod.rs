@@ -546,10 +546,12 @@ impl Project {
 
         // Remove all removable binaries
         for exposed_path in to_remove {
-            state_changes.push_change(StateChange::RemovedExposed(
-                ExposedName::from_str(&executable_from_path(&exposed_path))?,
-                env_name.clone(),
-            ));
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
+                    &exposed_path,
+                ))?),
+            )?;
             tokio_fs::remove_file(&exposed_path)
                 .await
                 .into_diagnostic()?;
@@ -727,14 +729,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
                 "Environment {} specs not up to date with manifest",
                 env_name.fancy_display()
             );
             self.install_environment(env_name).await?;
-            state_changes.set_has_updated(true);
+            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment)?;
         }
 
         // Expose executables
@@ -778,7 +780,7 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    state_changes.push_change(StateChange::RemovedEnvironment(env_name));
+                    state_changes.insert_change(&env_name, StateChange::RemovedEnvironment)?;
                 }
             }
         }
@@ -793,6 +795,7 @@ impl Project {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         state_changes.push_changes(
+            env_name.clone(),
             self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages(None)
@@ -800,7 +803,7 @@ impl Project {
                 .into_iter()
                 .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
                 .map(|r| r.repodata_record.package_record)
-                .map(|record| StateChange::AddedPackage(record, env_name.clone())),
+                .map(StateChange::AddedPackage),
         );
         Ok(state_changes)
     }
@@ -820,7 +823,7 @@ impl Repodata for Project {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use std::{collections::HashMap, io::Write};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -950,7 +953,10 @@ mod tests {
         let state_changes = project.prune_exposed(&env_name).await.unwrap();
         assert_eq!(
             state_changes.changes(),
-            vec![StateChange::RemovedExposed(not_python, env_name.clone())]
+            std::collections::HashMap::from([(
+                env_name.clone(),
+                vec![StateChange::RemovedExposed(not_python)]
+            )])
         );
 
         // Check if the non-exposed file was removed
@@ -1010,7 +1016,10 @@ mod tests {
         let state_changes = project.prune_old_environments().await.unwrap();
         assert_eq!(
             state_changes.changes(),
-            vec![StateChange::RemovedEnvironment("env2".parse().unwrap())]
+            HashMap::from([(
+                "env2".parse().unwrap(),
+                vec![StateChange::RemovedEnvironment]
+            )])
         );
 
         // Verify that only the specified directories remain

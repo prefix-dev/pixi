@@ -9,7 +9,7 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChanges},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -118,7 +118,7 @@ async fn setup_environment(
     specs: IndexMap<PackageName, MatchSpec>,
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
-    let mut state_changes = StateChanges::default();
+    let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
     // Modify the project to include the new environment
     if project.manifest.parsed.envs.contains_key(env_name) {
@@ -130,7 +130,9 @@ async fn setup_environment(
     } else {
         args.channels.clone()
     };
-    state_changes.push_change(project.manifest.add_environment(env_name, Some(channels))?);
+
+    project.manifest.add_environment(env_name, Some(channels))?;
+    state_changes.insert_change(env_name, StateChange::AddedEnvironment)?;
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
