@@ -11,13 +11,13 @@ use miette::IntoDiagnostic;
 use crate::global::project::ParsedEnvironment;
 use crate::global::StateChange;
 use pixi_config::Config;
-use pixi_manifest::{PrioritizedChannel, TomlError, TomlManifest};
+use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
-use super::parsed_manifest::ParsedManifest;
+use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 
 /// Handles the global project's manifest file.
@@ -54,10 +54,10 @@ impl Manifest {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
-                .map_err(TomlError::from)
+                .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents)?,
+            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
         };
 
         let manifest = Self {
@@ -324,7 +324,13 @@ impl Manifest {
 
     /// Saves the manifest to the file system
     pub async fn save(&self) -> miette::Result<()> {
-        let contents = self.document.to_string();
+        let contents = {
+            // Ensure that version is always set when saving
+            let mut document = self.document.clone();
+            document.get_or_insert("version", ManifestVersion::default().into());
+            document.to_string()
+        };
+
         tokio_fs::write(&self.path, contents)
             .await
             .into_diagnostic()?;
