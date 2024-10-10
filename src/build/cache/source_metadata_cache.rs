@@ -1,5 +1,4 @@
 use std::{
-    ffi::OsStr,
     hash::{DefaultHasher, Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
@@ -16,7 +15,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;
 
-use crate::build::SourceCheckout;
+use crate::build::{cache::source_checkout_cache_key, SourceCheckout};
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -75,18 +74,6 @@ impl SourceMetadataCache {
         }
     }
 
-    /// Determine the path to the cache directory for a given request.
-    fn source_cache_path(&self, source: &SourceCheckout) -> PathBuf {
-        let mut hasher = DefaultHasher::new();
-        source.pinned.to_string().hash(&mut hasher);
-        let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-        let path = match source.path.file_name().and_then(OsStr::to_str) {
-            Some(name) => format!("{}-{}", name, unique_key),
-            None => unique_key,
-        };
-        self.root.join(path)
-    }
-
     /// Returns the cache entry for the given source checkout and input.
     ///
     /// Returns the cached metadata if it exists and is still valid and a
@@ -98,7 +85,7 @@ impl SourceMetadataCache {
         input: &SourceMetadataInput,
     ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataError> {
         // Locate the cache file and lock it.
-        let cache_dir = self.source_cache_path(source);
+        let cache_dir = self.root.join(source_checkout_cache_key(source));
         tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
             SourceMetadataError::IoError(
                 "creating cache directory".to_string(),

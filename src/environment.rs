@@ -9,6 +9,7 @@ use std::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use futures::{stream, StreamExt, TryStreamExt};
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
@@ -512,19 +513,22 @@ pub async fn update_prefix_conda(
         });
 
     // Build conda packages out of the source records
-    for source_record in source_records {
-        let built_source_record = build_context
-            .build_source_record(&source_record, &channels, platform)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to build a conda package for {} {}",
-                    &source_record.package_record.name.as_source(),
-                    &source_record.package_record.version
-                )
-            })?;
-        repodata_records.push(built_source_record.repodata_record);
-    }
+    let mut processed_source_packages = stream::iter(source_records)
+        .map(Ok)
+        .and_then(|record| {
+            let build_context = &build_context;
+            let channels = &channels;
+            async move {
+                build_context
+                    .build_source_record(&record, channels, platform)
+                    .await
+            }
+        })
+        .try_collect::<Vec<RepoDataRecord>>()
+        .await?;
+
+    // Extend the repodata records with the built packages
+    repodata_records.append(&mut processed_source_packages);
 
     // Execute the operations that are returned by the solver.
     let result = await_in_progress(
