@@ -61,7 +61,7 @@ impl PypiPackageIdentifier {
             && !has_pypi_purl
             && pypi_mapping::is_conda_forge_record(record)
         {
-            tracing::debug!(
+            tracing::trace!(
                 "Using backwards compatibility purl logic for conda package: {}",
                 record.package_record.name.as_source()
             );

@@ -1,11 +1,14 @@
-mod source_metadata_cache;
+mod cache;
 
 use std::{
     ffi::OsStr,
+    ops::Not,
     path::{Component, Path, PathBuf},
-    sync::Arc,
+    str::FromStr,
 };
 
+use chrono::Utc;
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_frontend::{BackendOverrides, SetupRequest};
 use pixi_build_types::{
@@ -15,26 +18,29 @@ use pixi_build_types::{
     },
     ChannelConfiguration, CondaPackageMetadata,
 };
-use pixi_glob::GlobHashKey;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
+use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
 use rattler_digest::Sha256;
 use thiserror::Error;
+use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 
-use crate::build::source_metadata_cache::{
-    CachedCondaMetadata, SourceMetadataCache, SourceMetadataInput,
+use crate::build::cache::{
+    BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
+    SourceMetadataInput,
 };
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
-    _glob_hash_cache: GlobHashCache,
-    source_metadata_cache: Arc<SourceMetadataCache>,
+    glob_hash_cache: GlobHashCache,
+    source_metadata_cache: SourceMetadataCache,
+    build_cache: BuildCache,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -58,7 +64,13 @@ pub enum BuildError {
     InputHash(#[from] GlobHashError),
 
     #[error(transparent)]
-    SourceMetadataError(#[from] source_metadata_cache::SourceMetadataError),
+    GlobModificationError(#[from] GlobModificationTimeError),
+
+    #[error(transparent)]
+    SourceMetadataError(#[from] cache::SourceMetadataError),
+
+    #[error(transparent)]
+    BuildCacheError(#[from] cache::BuildCacheError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -83,28 +95,20 @@ pub struct SourceMetadata {
     pub records: Vec<SourceRecord>,
 }
 
-/// The result of a conda-build operation.
-pub struct CondaBuildOutput {
-    /// The repodata record that was created.
-    pub repodata_record: RepoDataRecord,
-
-    /// The input file globs that were used to build the package.
-    pub input_globs: Vec<String>,
-}
-
 impl BuildContext {
     pub fn new(cache_dir: PathBuf, channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
-            _glob_hash_cache: GlobHashCache::default(),
-            source_metadata_cache: Arc::new(SourceMetadataCache::new(cache_dir)),
+            glob_hash_cache: GlobHashCache::default(),
+            source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
+            build_cache: BuildCache::new(cache_dir),
         }
     }
 
     /// Sets the input hash cache to use for caching input hashes.
     pub fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
-            _glob_hash_cache: glob_hash_cache,
+            glob_hash_cache,
             ..self
         }
     }
@@ -125,21 +129,84 @@ impl BuildContext {
     }
 
     /// Build a package from the given source specification.
+    #[instrument(skip_all, fields(source = %source_spec.source))]
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
         channels: &[Url],
         target_platform: Platform,
-    ) -> Result<CondaBuildOutput, BuildError> {
-        let source = self.fetch_pinned_source(&source_spec.source).await?;
+    ) -> Result<RepoDataRecord, BuildError> {
+        let source_checkout = SourceCheckout {
+            path: self.fetch_pinned_source(&source_spec.source).await?,
+            pinned: source_spec.source.clone(),
+        };
 
-        // TODO: Add caching of this information based on the source.
+        let (cached_build, entry) = self
+            .build_cache
+            .entry(
+                &source_checkout,
+                &BuildInput {
+                    channel_urls: channels.to_vec(),
+                    target_platform: Platform::from_str(&source_spec.package_record.subdir)
+                        .ok()
+                        .unwrap_or(target_platform),
+                    name: source_spec.package_record.name.as_normalized().to_string(),
+                    version: source_spec.package_record.version.to_string(),
+                    build: source_spec.package_record.build.clone(),
+                },
+            )
+            .await?;
+
+        if let Some(build) = cached_build {
+            // Check to see if the cached build is up-to-date.
+            if let Some(source_input) = build.source {
+                let glob_time = GlobModificationTime::from_patterns(
+                    &source_checkout.path,
+                    source_input.globs.iter().map(String::as_str),
+                )
+                .map_err(BuildError::GlobModificationError)?;
+                match glob_time {
+                    GlobModificationTime::MatchesFound {
+                        modified_at,
+                        designated_file,
+                    } => {
+                        if build
+                            .record
+                            .package_record
+                            .timestamp
+                            .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
+                            .unwrap_or(false)
+                        {
+                            tracing::debug!("found an up-to-date cached build.");
+                            return Ok(build.record);
+                        } else {
+                            tracing::debug!(
+                                "found an stale cached build, {} is newer than {}",
+                                designated_file.display(),
+                                build.record.package_record.timestamp.unwrap_or_default()
+                            );
+                        }
+                    }
+                    GlobModificationTime::NoMatches => {
+                        // No matches, so we should rebuild.
+                        tracing::debug!(
+                            "found a stale cached build, no files match the source glob"
+                        );
+                    }
+                }
+            } else {
+                tracing::debug!("found a cached build");
+
+                // If there is no source info in the cache we assume its still valid.
+                return Ok(build.record);
+            }
+        }
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
-                source_dir: source.clone(),
+                source_dir: source_checkout.path,
                 build_tool_overrides: BackendOverrides {
                     spec: None,
                     path: Some("pixi-build-python".into()),
@@ -166,15 +233,25 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
-        let build_result = build_result.packages.into_iter().next().ok_or_else(|| {
-            BuildError::FrontendError(miette::miette!("no packages were built").into())
-        })?;
+        let build_result = build_result
+            .packages
+            .into_iter()
+            .exactly_one()
+            .map_err(|e| {
+                BuildError::FrontendError(
+                    miette::miette!("expected the build backend to return a single built package but it returned {}", e.len())
+                        .into(),
+                )
+            })?;
 
         // Add the sha256 to the package record.
         let sha = rattler_digest::compute_file_digest::<Sha256>(&build_result.output_file)
-            .map_err(|e| BuildError::CalculateSha(source, e))?;
+            .map_err(|e| BuildError::CalculateSha(build_result.output_file.clone(), e))?;
+
+        // Update the package_record sha256 field and timestamp.
         let mut package_record = source_spec.package_record.clone();
         package_record.sha256 = Some(sha);
+        package_record.timestamp.get_or_insert_with(Utc::now);
 
         // Construct a repodata record that represents the package
         let record = RepoDataRecord {
@@ -197,10 +274,21 @@ impl BuildContext {
                 .unwrap_or_default(),
         };
 
-        Ok(CondaBuildOutput {
-            repodata_record: record,
-            input_globs: build_result.input_globs,
-        })
+        // Store the build in the cache
+        let updated_record = entry
+            .insert(CachedBuild {
+                source: source_checkout
+                    .pinned
+                    .is_immutable()
+                    .not()
+                    .then_some(SourceInfo {
+                        globs: build_result.input_globs,
+                    }),
+                record: record.clone(),
+            })
+            .await?;
+
+        Ok(updated_record)
     }
 
     /// Acquires the source from the given source specification. A source
@@ -281,6 +369,7 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
+    #[instrument(skip_all, fields(source = %source.pinned, platform = %target_platform))]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
@@ -301,20 +390,25 @@ impl BuildContext {
             // Check if the input hash is still valid.
             if let Some(input_globs) = &metadata.input_hash {
                 let new_hash = self
-                    ._glob_hash_cache
+                    .glob_hash_cache
                     .compute_hash(GlobHashKey {
                         root: source.path.clone(),
                         globs: input_globs.globs.clone(),
                     })
                     .await?;
                 if new_hash.hash == input_globs.hash {
+                    tracing::debug!("found up-to-date cached metadata.");
                     return Ok(source_metadata_to_records(
                         source,
                         metadata.packages,
                         metadata.input_hash,
                     ));
+                } else {
+                    tracing::debug!("found stale cached metadata.");
                 }
             } else {
+                tracing::debug!("found cached metadata.");
+
                 // No input hash so just assume it is still valid.
                 return Ok(source_metadata_to_records(
                     source,
@@ -355,7 +449,7 @@ impl BuildContext {
         } else {
             let input_globs = metadata.input_globs.clone().unwrap_or(protocol.manifests());
             let input_hash = self
-                ._glob_hash_cache
+                .glob_hash_cache
                 .compute_hash(GlobHashKey {
                     root: source.path.clone(),
                     globs: input_globs.clone(),
