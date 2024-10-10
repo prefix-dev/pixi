@@ -1,4 +1,4 @@
-use toml_edit::{self, Array, Item, Table, Value};
+use toml_edit::{self, Array, Item, Table, TableLike, Value};
 
 pub mod project;
 
@@ -26,19 +26,21 @@ impl TomlManifest {
     fn get_or_insert_nested_table<'a>(
         &'a mut self,
         table_name: &str,
-    ) -> Result<&'a mut Table, TomlError> {
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
         let parts: Vec<&str> = table_name.split('.').collect();
 
-        let mut current_table = self.0.as_table_mut();
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
 
         for part in parts {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
+            if let Some(table) = item.as_table_mut() {
+                // Avoid creating empty tables
+                table.set_implicit(true);
+            }
             current_table = item
-                .as_table_mut()
+                .as_table_like_mut()
                 .ok_or_else(|| TomlError::table_error(part, table_name))?;
-            // Avoid creating empty tables
-            current_table.set_implicit(true);
         }
         Ok(current_table)
     }
@@ -73,5 +75,81 @@ impl TomlManifest {
             .get_mut(array_name)
             .and_then(|a| a.as_array_mut());
         Ok(array)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use toml_edit::DocumentMut;
+
+    use super::*;
+
+    #[test]
+    fn test_get_or_insert_nested_table() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+[envs.python.dependencies]
+dummy = "3.11.*"
+"#;
+        let dep_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
+
+        let dep = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get(dep_name);
+
+        assert!(dep.is_some());
+    }
+
+    #[test]
+    fn test_get_or_insert_inline_table() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+dependencies = { dummy = "3.11.*" }
+"#;
+        let dep_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
+
+        let dep = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get(dep_name);
+
+        assert!(dep.is_some());
+
+        // Existing entries are also still there
+        let dummy = manifest
+            .get_or_insert_nested_table("envs.python.dependencies")
+            .unwrap()
+            .get("dummy");
+
+        assert!(dummy.is_some())
+    }
+
+    #[test]
+    fn test_get_or_insert_nested_table_no_empty_tables() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+"#;
+        let table_name = "test";
+        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        manifest.get_or_insert_nested_table(table_name).unwrap();
+
+        // No empty table is being created
+        assert!(!manifest.0.to_string().contains("[test]"));
     }
 }

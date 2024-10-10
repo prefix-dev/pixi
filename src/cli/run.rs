@@ -1,81 +1,90 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashSet;
-use std::convert::identity;
-use std::{collections::HashMap, string::String};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    convert::identity,
+    string::String,
+};
 
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::ConfigCli;
-
-use crate::cli::cli_config::ProjectConfig;
-use crate::environment::verify_prefix_location_unchanged;
-use crate::lock_file::UpdateLockFileOptions;
-use crate::project::errors::UnsupportedPlatformError;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
-use crate::task::{
-    get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-    InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
-};
-use crate::Project;
-use fancy_display::FancyDisplay;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
 
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    environment::verify_prefix_location_unchanged,
+    lock_file::UpdateLockFileOptions,
+    project::{
+        errors::UnsupportedPlatformError,
+        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
+    },
+    task::{
+        get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
+        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+    },
+    Project,
+};
+
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true, arg_required_else_help = true)]
+#[clap(trailing_var_arg = true)]
 pub struct Args {
-    /// The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.
-    #[arg(required = true)]
+    /// The pixi task or a task shell command you want to run in the project's
+    /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
     #[clap(flatten)]
     pub project_config: ProjectConfig,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// The environment to run the task in.
     #[arg(long, short)]
     pub environment: Option<String>,
 
-    #[clap(flatten)]
-    pub config: ConfigCli,
-
     /// Use a clean environment to run the task
     ///
-    /// Using this flag will ignore your current shell environment and use bare minimum environment to activate the pixi environment in.
+    /// Using this flag will ignore your current shell environment and use bare
+    /// minimum environment to activate the pixi environment in.
     #[arg(long)]
     pub clean_env: bool,
 }
 
 /// CLI entry point for `pixi run`
-/// When running the sigints are ignored and child can react to them. As it pleases.
+/// When running the sigints are ignored and child can react to them. As it
+/// pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.config);
-
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+        .with_cli_config(args.prefix_update_config.config.clone());
 
     // Extract the passed in environment name.
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
-
-    let best_platform = environment.best_platform();
 
     // Find the environment to run the task in, if any were specified.
     let explicit_environment = if environment.is_default() {
         None
     } else {
-        Some(environment)
+        Some(environment.clone())
     };
 
-    // Verify that the current platform has the required virtual packages for the environment.
+    // Print all available tasks if no task is provided
+    if args.task.is_empty() {
+        command_not_found(&project, explicit_environment);
+        return Ok(());
+    }
+
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+
+    let best_platform = environment.best_platform();
+
+    // Verify that the current platform has the required virtual packages for the
+    // environment.
     if let Some(ref explicit_environment) = explicit_environment {
         verify_current_platform_has_required_virtual_packages(explicit_environment)
             .into_diagnostic()?;
@@ -84,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -101,14 +110,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     tracing::info!("Task graph: {}", task_graph);
 
-    // Traverse the task graph in topological order and execute each individual task.
+    // Traverse the task graph in topological order and execute each individual
+    // task.
     let mut task_idx = 0;
     let mut task_envs = HashMap::new();
     for task_id in task_graph.topological_order() {
         let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
-        // If the task is not executable (e.g. an alias), we skip it. This ensures we don't
-        // instantiate a prefix for an alias.
+        // If the task is not executable (e.g. an alias), we skip it. This ensures we
+        // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
         }
@@ -162,8 +172,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-        // If we don't have a command environment yet, we need to compute it. We lazily compute the
-        // task environment because we only need the environment if a task is actually executed.
+        // If we don't have a command environment yet, we need to compute it. We lazily
+        // compute the task environment because we only need the environment if
+        // a task is actually executed.
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
@@ -179,8 +190,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-        // Execute the task itself within the command environment. If one of the tasks failed with
-        // a non-zero exit code, we exit this parent process with the same code.
+        // Execute the task itself within the command environment. If one of the tasks
+        // failed with a non-zero exit code, we exit this parent process with
+        // the same code.
         match execute_task(&executable_task, task_env).await {
             Ok(_) => {
                 task_idx += 1;
@@ -261,9 +273,10 @@ async fn execute_task<'p>(
 
     // Ignore CTRL+C
     // Specifically so that the child is responsible for its own signal handling
-    // NOTE: one CTRL+C is registered it will always stay registered for the rest of the runtime of the program
-    // which is fine when using run in isolation, however if we start to use run in conjunction with
-    // some other command we might want to revaluate this.
+    // NOTE: one CTRL+C is registered it will always stay registered for the rest of
+    // the runtime of the program which is fine when using run in isolation,
+    // however if we start to use run in conjunction with some other command we
+    // might want to revaluate this.
     let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
     let execute_future =

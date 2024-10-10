@@ -3,11 +3,11 @@ use std::{
     hash::Hash,
 };
 
+use pixi_record::PixiRecord;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
 
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
-use pixi_record::PixiRecord;
 
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
@@ -90,14 +90,12 @@ impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
 }
 
 impl<D: HasNameVersion> DependencyRecordsByName<D> {
-    /// Returns the record with the given name or `None` if no such record
-    /// exists.
+    /// Returns the record with the given name or `None` if no such record exists.
     pub(crate) fn by_name(&self, key: &D::N) -> Option<&D> {
         self.by_name.get(key).map(|idx| &self.records[*idx])
     }
 
-    /// Returns the index of the record with the given name or `None` if no such
-    /// record exists.
+    /// Returns the index of the record with the given name or `None` if no such record exists.
     pub(crate) fn index_by_name(&self, key: &D::N) -> Option<usize> {
         self.by_name.get(key).copied()
     }
@@ -116,15 +114,14 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
         self.records
     }
 
-    /// Returns an iterator over the names of the records stored in this
-    /// instance.
+    /// Returns an iterator over the names of the records stored in this instance.
     pub(crate) fn names(&self) -> impl Iterator<Item = &D::N> {
         // Iterate over the records to retain the index of the original record.
         self.records.iter().map(|r| r.name())
     }
 
-    /// Constructs a new instance from an iterator of pypi records. If multiple
-    /// records exist for the same package name an error is returned.
+    /// Constructs a new instance from an iterator of pypi records. If multiple records exist
+    /// for the same package name an error is returned.
     pub(crate) fn from_unique_iter<I: IntoIterator<Item = D>>(iter: I) -> Result<Self, Box<D>> {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
@@ -145,9 +142,8 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
         Ok(Self { records, by_name })
     }
 
-    /// Constructs a new instance from an iterator of repodata records. The
-    /// records are deduplicated where the record with the highest version
-    /// wins.
+    /// Constructs a new instance from an iterator of repodata records. The records are
+    /// deduplicated where the record with the highest version wins.
     pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;

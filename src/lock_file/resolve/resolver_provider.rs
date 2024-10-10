@@ -47,9 +47,9 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 package_name,
                 version
             );
-            // If we encounter a package that was installed by conda we simply return a
-            // single available version in the form of a source distribution
-            // with the URL of the conda package.
+            // If we encounter a package that was installed by conda we simply return a single
+            // available version in the form of a source distribution with the URL of the
+            // conda package.
             //
             // Obviously this is not a valid source distribution but it eases debugging.
 
@@ -91,8 +91,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
-            // Record that we got a request for this package so we can track the number of
-            // requests
+            // Record that we got a request for this package so we can track the number of requests
             self.package_requests
                 .borrow_mut()
                 .entry(package_name.clone())

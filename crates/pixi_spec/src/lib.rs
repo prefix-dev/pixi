@@ -21,7 +21,8 @@ pub use git::{GitReference, GitSpec};
 use itertools::Either;
 pub use path::{PathSourceSpec, PathSpec};
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName, VersionSpec,
+    ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName, ParseChannelError,
+    VersionSpec,
 };
 use thiserror::Error;
 pub use url::{UrlSourceSpec, UrlSpec};
@@ -41,6 +42,10 @@ pub enum SpecConversionError {
     /// Encountered an invalid path
     #[error("invalid path '{0}'")]
     InvalidPath(String),
+
+    /// Encountered an invalid channel url or path
+    #[error("invalid channel '{0}'")]
+    InvalidChannel(#[from] ParseChannelError),
 }
 
 /// A package specification for pixi.
@@ -239,7 +244,9 @@ impl PixiSpec {
                 version: Some(version),
                 ..NamelessMatchSpec::default()
             }),
-            PixiSpec::DetailedVersion(spec) => Some(spec.into_nameless_match_spec(channel_config)),
+            PixiSpec::DetailedVersion(spec) => {
+                Some(spec.try_into_nameless_match_spec(channel_config)?)
+            }
             PixiSpec::Url(url) => url.try_into_nameless_match_spec().ok(),
             PixiSpec::Git(_) => None,
             PixiSpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir)?,
@@ -259,7 +266,7 @@ impl PixiSpec {
                 ..NamelessMatchSpec::default()
             })),
             PixiSpec::DetailedVersion(detailed) => Ok(Either::Right(
-                detailed.into_nameless_match_spec(channel_config),
+                detailed.try_into_nameless_match_spec(channel_config)?,
             )),
             PixiSpec::Url(url) => Ok(url.into_source_or_binary().map_left(SourceSpec::Url)),
             PixiSpec::Git(git) => Ok(Either::Left(SourceSpec::Git(git))),

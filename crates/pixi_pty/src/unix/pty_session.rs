@@ -63,7 +63,7 @@ impl PtySession {
     /// Returns number of written bytes.
     pub fn send_line(&mut self, line: &str) -> io::Result<usize> {
         let mut len = self.send(line)?;
-        len += self.process_stdin.write(&[b'\n'])?;
+        len += self.process_stdin.write(b"\n")?;
         Ok(len)
     }
 

@@ -21,7 +21,7 @@ pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Resul
     project.save()?;
 
     // Report back to the user
-    args.report("Removed", &project.channel_config());
+    args.report("Removed", &project.channel_config())?;
 
     Ok(())
 }

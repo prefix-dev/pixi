@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, StringMatcher,
-    VersionSpec,
+    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError,
+    StringMatcher, VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
@@ -48,8 +48,11 @@ pub struct DetailedSpec {
 
 impl DetailedSpec {
     /// Converts this instance into a [`NamelessMatchSpec`].
-    pub fn into_nameless_match_spec(self, channel_config: &ChannelConfig) -> NamelessMatchSpec {
-        NamelessMatchSpec {
+    pub fn try_into_nameless_match_spec(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<NamelessMatchSpec, ParseChannelError> {
+        Ok(NamelessMatchSpec {
             version: self.version,
             build: self.build,
             build_number: self.build_number,
@@ -57,12 +60,13 @@ impl DetailedSpec {
             channel: self
                 .channel
                 .map(|c| c.into_channel(channel_config))
+                .transpose()?
                 .map(Arc::new),
             subdir: self.subdir,
             namespace: None,
             md5: self.md5,
             sha256: self.sha256,
             url: None,
-        }
+        })
     }
 }

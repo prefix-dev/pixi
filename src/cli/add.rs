@@ -17,6 +17,7 @@ use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
+use crate::environment::LockFileUsage;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
     environment::verify_prefix_location_unchanged,
@@ -28,7 +29,7 @@ use crate::{
 /// Adds dependencies to the project
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
-/// requirement for the --pypi dependencies. If no specific version is provided,
+/// requirement for the `--pypi` dependencies. If no specific version is provided,
 /// the latest version compatible with your project will be chosen automatically
 /// or a * will be used.
 ///
@@ -150,7 +151,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // If the lock-file should not be updated we only need to save the project.
-    if prefix_update_config.no_lockfile_update {
+    if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
         project.save()?;
 
         // Notify the user we succeeded.

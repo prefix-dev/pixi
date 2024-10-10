@@ -2,14 +2,6 @@ exclude: (^.pixi/|.snap)
 repos:
   - repo: local
     hooks:
-      - id: pixi-install
-        name: pixi-install
-        entry: pixi install -e lint
-        language: system
-        always_run: true
-        require_serial: true
-        pass_filenames: false
-      # pre-commit-hooks
       - id: check-yaml
         name: check-yaml
         entry: pixi run -e lint check-yaml
@@ -58,21 +50,14 @@ repos:
       - id: fmt
         name: fmt
         language: system
-        stages: [push, manual]
+        stages: [pre-commit, pre-push, manual]
         types: [file, rust]
         entry: cargo fmt
         pass_filenames: false
       - id: clippy
         name: clippy
         language: system
-        stages: [push, manual]
+        stages: [pre-push, manual]
         types: [file, rust]
         entry: cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
-        pass_filenames: false
-      - id: test
-        name: test
-        language: system
-        stages: [push, manual]
-        types: [file, rust]
-        entry: cargo test
         pass_filenames: false

@@ -442,22 +442,12 @@ impl ManifestSource {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
 
     use insta::assert_snapshot;
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
     use rstest::rstest;
 
     use super::*;
-    use crate::manifests::manifest::Manifest;
-
-    const PROJECT_BOILERPLATE: &str = r#"
-        [project]
-        name = "foo"
-        version = "0.1.0"
-        channels = []
-        platforms = ["linux-64", "win-64", "osx-64"]
-        "#;
 
     fn default_channel_config() -> rattler_conda_types::ChannelConfig {
         rattler_conda_types::ChannelConfig::default_with_root_dir(
@@ -486,55 +476,6 @@ mod tests {
             table.insert(example, Item::Value(spec.to_toml_value()));
         }
         assert_snapshot!(table);
-    }
-
-    #[test]
-    fn test_get_or_insert_toml_table() {
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
-        let task_table = TableName::new()
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(task_table.to_string().as_str())
-            .map(|t| t.set_implicit(false));
-
-        let linux_task_table = TableName::new()
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_platform(Some(&Platform::Linux64))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(linux_task_table.to_string().as_str())
-            .map(|t| t.set_implicit(false));
-
-        let feature_name = FeatureName::Named("test".to_string());
-
-        let named_feature_task = TableName::new()
-            .with_feature_name(Some(&feature_name))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(named_feature_task.to_string().as_str())
-            .map(|t| t.set_implicit(false));
-
-        let named_feature_linux_task = TableName::new()
-            .with_feature_name(Some(&feature_name))
-            .with_platform(Some(&Platform::Linux64))
-            .with_table(Some("tasks"));
-
-        let _ = manifest
-            .document
-            .manifest()
-            .get_or_insert_nested_table(named_feature_linux_task.to_string().as_str())
-            .map(|t| t.set_implicit(false));
-        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]

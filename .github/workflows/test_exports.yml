@@ -1,0 +1,74 @@
+name: "Test exports"
+
+on:
+  workflow_call:
+
+
+jobs:
+    test-export:
+        name: ${{ matrix.arch.name }} - Export Tests
+        runs-on: ${{ matrix.arch.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                arch:
+                # Linux
+                - {
+                    target: x86_64-unknown-linux-musl,
+                    os: ubuntu-20.04,
+                    name: "Linux",
+                    }
+                # MacOS
+                - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
+                - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-arm" } # macOS-14 is the ARM chipset
+                # # Windows
+                # - {
+                #     target: x86_64-pc-windows-msvc,
+                #     os: windows-latest,
+                #     extension: .exe,
+                #     name: "Windows",
+                #   }
+        steps:
+        - name: checkout repo
+          uses: actions/checkout@v4
+        - name: setup micromamba
+          uses: mamba-org/setup-micromamba@v2.0.0
+        - name: Download binary from build
+          uses: actions/download-artifact@v4
+          with:
+            name: pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}
+            path: pixi_bin
+        - name: Debug
+          run: |
+            pwd
+        - name: Setup unix binary, add to github path
+          if: matrix.arch.name != 'Windows'
+          run: |
+            mv pixi_bin/pixi-${{ matrix.arch.target }} pixi_bin/pixi
+            chmod a+x pixi_bin/pixi
+            echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+        - name: Create Directory and Move Executable
+          if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
+          run: |
+            New-Item -ItemType Directory -Force -Path "D:\.pixi"
+            Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "D:\.pixi\pixi.exe"
+            shell: pwsh
+        - name: Add to PATH
+          if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
+          run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+          shell: pwsh
+        - name: Verify and Use Executable
+          if: matrix.arch.name == 'Windows' && matrix.arch.target == 'x86_64-pc-windows-msvc'
+          run: |
+            echo "Current PATH: $env:PATH"
+            pixi --version
+            shell: pwsh
+        - name: Help
+          run: pixi --help
+        - name: Info
+          run: pixi info
+        - name: Install pixi
+          run: pixi install -v
+        - name: Test export
+          shell: bash
+          run: bash tests/test_export.sh
