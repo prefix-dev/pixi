@@ -16,15 +16,13 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let manifest_path = Project::default_manifest_path()?;
 
-    let editor = args
-        .editor
-        .unwrap_or_else(|| {
-            if cfg!(windows) {
-                "notepad".to_string()
-            } else {
-                "nano".to_string()
-            }
-        });
+    let editor = args.editor.unwrap_or_else(|| {
+        if cfg!(windows) {
+            "notepad".to_string()
+        } else {
+            "nano".to_string()
+        }
+    });
 
     let mut child = std::process::Command::new(editor.as_str())
         .arg(&manifest_path)
