@@ -5,6 +5,8 @@ import tomli_w
 from .common import verify_cli_command, ExitCode
 import platform
 
+MANIFEST_VERSION = 1
+
 
 def exec_extension(exe_name: str) -> str:
     if platform.system() == "Windows":
@@ -21,11 +23,8 @@ def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     toml = """
     [envs.test]
     channels = ["conda-forge"]
-    [envs.test.dependencies]
-    python = "3.12"
-
-    [envs.test.exposed]
-    "python-injected" = "python"
+    dependencies = { python = "3.12" }
+    exposed = { "python-injected" = "python" }
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
@@ -68,8 +67,7 @@ def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     [envs.test]
     channels = ["conda-forge"]
     platform = "win-64"
-    [envs.test.dependencies]
-    binutils = "2.40"
+    dependencies = { binutils = "2.40" }\
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
@@ -161,6 +159,7 @@ def test_sync_migrate(
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""\
+version = {MANIFEST_VERSION}
 # Test with special channel
 [envs.test]
 channels = ["{dummy_channel_1}"]
@@ -189,7 +188,7 @@ exposed = {{ xz = "xz" }}
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync"], env=env)
     migrated_manifest = manifest.read_text()
-    assert tomllib.loads(original_manifest) == tomllib.loads(migrated_manifest)
+    assert tomllib.loads(migrated_manifest) == tomllib.loads(original_manifest)
 
 
 def test_sync_duplicated_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -296,6 +295,8 @@ def test_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     original_toml = f"""
+version = {MANIFEST_VERSION}
+
 [envs.test]
 channels = ["{dummy_channel_1}"]
 [envs.test.dependencies]
@@ -310,12 +311,40 @@ dummy-a = "dummy-a"
         ExitCode.SUCCESS,
         env=env,
     )
-
+    print(manifest.read_text())
     # The tables in the manifest have been preserved
-    assert original_toml + 'dummy-aa = "dummy-a"\n' == manifest.read_text()
+    assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
 
 def test_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    dependencies= {{ dummy-b = "*" }}
+    exposed = {{ dummy-b = "dummy-b" }}
+    """
+    manifest.write_text(original_toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+        ],
+        env=env,
+    )
+
+    assert f"version = {MANIFEST_VERSION}" in manifest.read_text()
+
+
+def test_existing_manifest_gets_version(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
@@ -333,6 +362,8 @@ def test_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: st
     )
 
     expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
 [envs.dummy-a]
 channels = ["{dummy_channel_1}"]
 dependencies = {{ dummy-a = "*" }}
@@ -618,27 +649,39 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
 
 
+# Test that we correctly uninstall the required packages
+# - Checking that the binaries are removed
+# - Checking that the non-requested to remove binaries are still there
 def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
-    # Verify empty list
-    verify_cli_command(
-        [pixi, "global", "list"],
-        env=env,
-        stdout_contains="No global environments found.",
-    )
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+version = {MANIFEST_VERSION}
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
 
-    # Install dummy-b from dummy-channel-1
+[envs.dummy-b]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+
+[envs.dummy-c]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-c = "*" }}
+exposed = {{ dummy-c = "dummy-c" }}
+"""
+    manifest.write_text(original_toml)
+
     verify_cli_command(
         [
             pixi,
             "global",
-            "install",
-            "--channel",
-            dummy_channel_1,
-            "dummy-a",
-            "dummy-b",
-            "dummy-c",
+            "sync",
         ],
         env=env,
     )
@@ -651,7 +694,7 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     assert dummy_b.is_file()
     assert dummy_c.is_file()
 
-    # Uninstall dummy-b
+    # Uninstall dummy-a
     verify_cli_command(
         [pixi, "global", "uninstall", "dummy-a"],
         env=env,
@@ -665,15 +708,27 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     assert tmp_path.joinpath("envs", "dummy-c").is_dir()
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
 
-    # Uninstall dummy-b and dummy-c
+    # Remove dummy-b manually from manifest
+    modified_toml = f"""
+version = {MANIFEST_VERSION}
+
+[envs.dummy-c]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-c = "*" }}
+exposed = {{ dummy-c = "dummy-c" }}
+"""
+    manifest.write_text(modified_toml)
+
+    # Uninstall dummy-c
     verify_cli_command(
-        [pixi, "global", "uninstall", "dummy-b", "dummy-c"],
+        [pixi, "global", "uninstall", "dummy-c"],
         env=env,
     )
     assert not dummy_a.is_file()
     assert not dummy_aa.is_file()
-    assert not dummy_b.is_file()
     assert not dummy_c.is_file()
+    # Verify only the dummy-c environment is removed, dummy-b is still there as no sync is run.
+    assert dummy_b.is_file()
 
     # Verify empty list
     verify_cli_command(
@@ -689,6 +744,31 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stderr_contains="Couldn't remove dummy-a",
     )
+
+    # Uninstall multiple packages
+    manifest.write_text(original_toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "sync",
+        ],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a", "dummy-b"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert not dummy_b.is_file()
+    assert dummy_c.is_file()
 
 
 def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

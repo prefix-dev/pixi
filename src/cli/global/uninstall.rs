@@ -34,11 +34,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project_modified: &mut Project,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
-        project_modified.manifest.remove_environment(env_name)?;
-
-        // Cleanup the project after removing the environments.
-        state_changes |= project_modified.prune_old_environments().await?;
+        let state_changes = project_modified.remove_environment(env_name).await?;
 
         project_modified.manifest.save().await?;
 
