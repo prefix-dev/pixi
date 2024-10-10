@@ -129,7 +129,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Compute the repodata query function that will be used to fetch the repodata
     // for filtered package names
-
     let repodata_query_func = |some_specs: Vec<MatchSpec>| {
         gateway
             .query(

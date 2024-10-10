@@ -105,7 +105,7 @@ fn normalize_line_endings<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> 
                 Some(pos) if buffer[pos] == b'\r' => {
                     if last_cr_pos.is_some() {
                         // We previously detected a `\r` character but did not encounter a newline
-                        writer.write_all(&[b'\r'])?;
+                        writer.write_all(b"\r")?;
                     }
 
                     // Process everything up to the '\r' character. Effectively ignoring it.
@@ -120,7 +120,7 @@ fn normalize_line_endings<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> 
                     // `\r` character.
                     match last_cr_pos {
                         Some(last_cr_pos) if last_cr_pos + 1 == pos + offset => {
-                            writer.write_all(&[b'\r'])?;
+                            writer.write_all(b"\r")?;
                             offset += pos + 1;
                         }
                         _ => last_cr_pos = None,
@@ -134,7 +134,7 @@ fn normalize_line_endings<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> 
                 None => {
                     if last_cr_pos.is_some() {
                         // We previously detected a `\r` character but did not encounter a newline
-                        writer.write_all(&[b'\r'])?;
+                        writer.write_all(b"\r")?;
                         last_cr_pos = None;
                     }
 
@@ -151,7 +151,7 @@ fn normalize_line_endings<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> 
 
         if last_cr_pos.is_some() {
             // We detected a `\r` at the end of the input.
-            writer.write_all(&[b'\r'])?;
+            writer.write_all(b"\r")?;
         }
     }
 

@@ -20,7 +20,6 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{VerbatimUrl, VersionOrUrl};
-use pixi_consts::consts::PROJECT_MANIFEST;
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
@@ -251,6 +250,7 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda
     // packages.
     let python_record = locked_pixi_records

@@ -13,6 +13,7 @@ use distribution_types::{
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
 use pixi_consts::consts;
+use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_resolver::{
     DefaultResolverProvider, MetadataResponse, ResolverProvider, VersionMap, VersionsResponse,
@@ -21,8 +22,6 @@ use uv_resolver::{
 use uv_types::BuildContext;
 
 use crate::lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier};
-
-use pixi_record::PixiRecord;
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
@@ -47,9 +46,9 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 package_name,
                 version
             );
-            // If we encounter a package that was installed by conda we simply return a single
-            // available version in the form of a source distribution with the URL of the
-            // conda package.
+            // If we encounter a package that was installed by conda we simply return a
+            // single available version in the form of a source distribution
+            // with the URL of the conda package.
             //
             // Obviously this is not a valid source distribution but it eases debugging.
 
@@ -91,7 +90,8 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
-            // Record that we got a request for this package so we can track the number of requests
+            // Record that we got a request for this package so we can track the number of
+            // requests
             self.package_requests
                 .borrow_mut()
                 .entry(package_name.clone())
