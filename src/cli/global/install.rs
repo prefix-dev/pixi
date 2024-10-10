@@ -9,7 +9,7 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChanges},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -118,19 +118,19 @@ async fn setup_environment(
     specs: IndexMap<PackageName, MatchSpec>,
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
-    let mut state_changes = StateChanges::default();
-
-    // Modify the project to include the new environment
-    if project.manifest.parsed.envs.contains_key(env_name) {
-        project.manifest.remove_environment(env_name)?;
-    }
+    let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
         args.channels.clone()
     };
-    state_changes.push_change(project.manifest.add_environment(env_name, Some(channels))?);
+
+    // Modify the project to include the new environment
+    if !project.manifest.parsed.envs.contains_key(env_name) {
+        project.manifest.add_environment(env_name, Some(channels))?;
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+    }
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
@@ -143,6 +143,18 @@ async fn setup_environment(
             spec,
             project.clone().config().global_channel_config(),
         )?;
+    }
+
+    if !args.expose.is_empty() {
+        project.manifest.remove_all_exposed_mappings(env_name)?;
+        // Only add the exposed mappings that were requested
+        for mapping in &args.expose {
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
+        }
+    }
+
+    if project.environment_in_sync(env_name).await? {
+        return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
     // Installing the environment to be able to find the bin paths later
@@ -173,16 +185,11 @@ async fn setup_environment(
                     project.manifest.add_exposed_mapping(env_name, &mapping)?;
                     tracing::warn!(
                         "Automatically exposed `{}` from `{}`",
-                        mapping.exposed_name(),
-                        source_package_name.as_normalized()
+                        console::style(mapping.exposed_name()).yellow(),
+                        console::style(source_package_name.as_normalized()).green()
                     );
                 }
             }
-        }
-    } else {
-        // Only add the exposed mappings that were requested
-        for mapping in &args.expose {
-            project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
     }
 

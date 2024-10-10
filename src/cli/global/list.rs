@@ -148,21 +148,10 @@ async fn list_environment(
 
 fn print_meta_info(environment: &ParsedEnvironment) {
     // Print exposed binaries, if binary similar to path only print once.
-    let formatted_exposed = environment
-        .exposed
-        .iter()
-        .map(|mapping| {
-            let exp = mapping.exposed_name().to_string();
-            if exp == mapping.executable_name() {
-                exp
-            } else {
-                format!("{} -> {}", exp, mapping.executable_name())
-            }
-        })
-        .join(", ");
+    let formatted_exposed = environment.exposed.iter().map(format_mapping).join(", ");
     println!(
         "{}\n{}",
-        console::style("Exposes:").bold().yellow(),
+        console::style("Exposes:").bold().cyan(),
         if !formatted_exposed.is_empty() {
             formatted_exposed
         } else {
@@ -174,18 +163,14 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     if !environment.channels().is_empty() {
         println!(
             "{}\n{}",
-            console::style("Channels:").bold().yellow(),
+            console::style("Channels:").bold().cyan(),
             environment.channels().iter().join(", ")
         );
     }
 
     // Print platform
     if let Some(platform) = environment.platform() {
-        println!(
-            "{} {}",
-            console::style("Platform:").bold().yellow(),
-            platform
-        );
+        println!("{} {}", console::style("Platform:").bold().cyan(), platform);
     }
 }
 
@@ -193,7 +178,7 @@ fn print_meta_info(environment: &ParsedEnvironment) {
 /// Using a tabwriter to align the columns.
 fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
     let mut writer = tabwriter::TabWriter::new(stdout());
-    let header_style = console::Style::new().bold().yellow();
+    let header_style = console::Style::new().bold().cyan();
     let header = format!(
         "{}\t{}\t{}\t{}",
         header_style.apply_to("Package"),
@@ -375,12 +360,27 @@ fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -> Op
         .iter()
         .any(|mapping| mapping.exposed_name().to_string() != env_name)
     {
-        let content = exposed
-            .iter()
-            .map(|mapping| mapping.exposed_name().fancy_display())
-            .join(", ");
-        Some(format_asciiart_section("exposes", content, last, false))
+        let formatted_exposed = exposed.iter().map(format_mapping).join(", ");
+        Some(format_asciiart_section(
+            "exposes",
+            formatted_exposed,
+            last,
+            false,
+        ))
     } else {
         None
+    }
+}
+
+fn format_mapping(mapping: &Mapping) -> String {
+    let exp = mapping.exposed_name().to_string();
+    if exp == mapping.executable_name() {
+        console::style(exp).yellow().to_string()
+    } else {
+        format!(
+            "{} -> {}",
+            console::style(exp).yellow(),
+            console::style(mapping.executable_name()).yellow()
+        )
     }
 }
