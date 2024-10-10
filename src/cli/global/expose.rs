@@ -77,8 +77,8 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         args: &AddArgs,
         project: &mut global::Project,
     ) -> Result<StateChanges, miette::Error> {
-        let mut state_changes = StateChanges::default();
         let env_name = &args.environment;
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
         for mapping in &args.mappings {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
@@ -114,7 +114,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut global::Project,
     ) -> Result<StateChanges, miette::Error> {
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
         project
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
