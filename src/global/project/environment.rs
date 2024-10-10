@@ -243,7 +243,8 @@ mod tests {
             bin_dir.path().join("test")
         };
 
-        if cfg!(windows) {
+        #[cfg(windows)]
+        {
             let script = format!(
                 r#"
             @"{}" %*
@@ -255,7 +256,9 @@ mod tests {
                     .to_string_lossy()
             );
             tokio_fs::write(&script_path, script).await.unwrap();
-        } else {
+        }
+        #[cfg(unix)]
+        {
             use std::os::unix::fs::PermissionsExt;
 
             let script = format!(
