@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "cef393b4acef2b29cc04efb53e37bd7d",
+      "md5": "ff08d9397f3985269da8efe79ecdd596",
       "name": "dummy-a",
       "platform": "osx",
-      "sha256": "bafd606969cbc0610e4cb30fb1b17d011e8cd592371a1279aff6401b3d8ebba5",
-      "size": 37980,
+      "sha256": "8a42eee7f3a88da0b0de3cba0f99f29868570906549c2ee90646483864d50ce7",
+      "size": 61688,
       "subdir": "osx-arm64",
-      "timestamp": 1727337510080,
+      "timestamp": 1728313938476,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h60d57d3_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "661b71d90d7deb9e2c6d55ec06c6bbd4",
+      "md5": "efafbd112dc7cebc9e4939be26cc5537",
       "name": "dummy-b",
       "platform": "osx",
-      "sha256": "3914eb3922bd8b6b86b0fe76664aba220c51589d7f2d3ff96ec21e463b372bc8",
-      "size": 26600,
+      "sha256": "c7bf30b3aa679374ab40d4a9728f5ff19aecf0ab7e2d72af6e9c48fb7b98a10e",
+      "size": 45221,
       "subdir": "osx-arm64",
-      "timestamp": 1727337510079,
+      "timestamp": 1728313938476,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h60d57d3_0.conda": {
@@ -39,13 +39,29 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "d32b1ad4319ac03c573c3ceccf056151",
+      "md5": "8fc26da17c00dc40b099084c0cef6545",
       "name": "dummy-c",
       "platform": "osx",
-      "sha256": "f38af71e16389e7aa3ca0cec3bbb3366f570fcd7fa53453ae80976525e370bb0",
-      "size": 32317,
+      "sha256": "b40dac5ca6da1a1d00e8e3bcedbdd252bfbc8a142b533e82684eb43c6a3ab6ae",
+      "size": 52672,
       "subdir": "osx-arm64",
-      "timestamp": 1727337510080,
+      "timestamp": 1728313938476,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "da8494721b92dd446585ebdb2211ddf7",
+      "name": "dummy-d",
+      "platform": "osx",
+      "sha256": "818f40e80b563a5e90a9d767bb430d0c260e952faf8894e502505613186e8007",
+      "size": 38251,
+      "subdir": "osx-arm64",
+      "timestamp": 1728313938476,
       "version": "0.1.0"
     }
   },
