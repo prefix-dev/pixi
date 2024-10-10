@@ -186,12 +186,18 @@ class MatchspecTable(StrictBaseModel):
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
+
 #####################
 # The Build section #
 #####################
 class BuildSection(StrictBaseModel):
-    dependencies: list[MatchSpec] = Field(None, description="The dependencies for the build backend")
-    build_backend: NonEmptyStr = Field(None, alias = "build-backend", description="The build executable to call")
+    dependencies: list[MatchSpec] = Field(
+        None, description="The dependencies for the build backend"
+    )
+    build_backend: NonEmptyStr = Field(
+        None, alias="build-backend", description="The build executable to call"
+    )
+
 
 class _PyPIRequirement(StrictBaseModel):
     extras: list[NonEmptyStr] | None = Field(
@@ -592,8 +598,7 @@ class BaseManifest(StrictBaseModel):
         alias="pypi-options",
         description="Options related to PyPI indexes, on the default feature",
     )
-    build: BuildSection | None = Field(
-        None, description="The build section of the project")
+    build: BuildSection | None = Field(None, description="The build section of the project")
 
 
 #########################
