@@ -986,6 +986,13 @@ mod tests {
             let path = project.env_root.path().join("test/bin/not-python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&non_exposed_bin).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&non_exposed_bin, permissions)
+                .await
+                .unwrap();
         }
         #[cfg(windows)]
         {
@@ -1005,10 +1012,10 @@ mod tests {
                 .unwrap();
 
             // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&path).await.unwrap();
+            let metadata = tokio_fs::metadata(&bin).await.unwrap();
             let mut permissions = metadata.permissions();
             permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&path, permissions).await.unwrap();
+            tokio_fs::set_permissions(&bin, permissions).await.unwrap();
         }
         #[cfg(windows)]
         {

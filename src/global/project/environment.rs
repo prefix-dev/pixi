@@ -256,14 +256,6 @@ mod tests {
                     .to_string_lossy()
             );
             tokio_fs::write(&script_path, script).await.unwrap();
-
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&script_path, permissions)
-                .await
-                .unwrap();
         } else {
             let script = format!(
                 r#"#!/bin/sh
@@ -271,7 +263,14 @@ mod tests {
             "#,
                 env_dir.path().join("bin").join("test").to_string_lossy()
             );
-            tokio_fs::write(script_path, script).await.unwrap();
+            tokio_fs::write(&script_path, script).await.unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&script_path, permissions)
+                .await
+                .unwrap();
         };
 
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
