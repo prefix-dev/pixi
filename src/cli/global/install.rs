@@ -129,7 +129,7 @@ async fn setup_environment(
     // Modify the project to include the new environment
     if !project.manifest.parsed.envs.contains_key(env_name) {
         project.manifest.add_environment(env_name, Some(channels))?;
-        state_changes.insert_change(env_name, StateChange::AddedEnvironment)?;
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }
 
     if let Some(platform) = args.platform {

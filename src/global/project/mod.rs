@@ -557,13 +557,15 @@ impl Project {
             tokio_fs::remove_file(&binary_path)
                 .await
                 .into_diagnostic()?;
-            state_changes.push_change(StateChange::RemovedExposed(
-                ExposedName::from_str(&executable_from_path(&binary_path))?,
-                env_name.clone(),
-            ));
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
+                    &binary_path,
+                ))?),
+            );
         }
 
-        state_changes.push_change(StateChange::RemovedEnvironment(env_name.clone()));
+        state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
         Ok(StateChanges::default())
     }
@@ -587,7 +589,7 @@ impl Project {
                 StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
                     &exposed_path,
                 ))?),
-            )?;
+            );
             tokio_fs::remove_file(&exposed_path)
                 .await
                 .into_diagnostic()?;
@@ -772,7 +774,7 @@ impl Project {
                 env_name.fancy_display()
             );
             self.install_environment(env_name).await?;
-            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment)?;
+            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment);
         }
 
         // Expose executables
@@ -816,7 +818,7 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    state_changes.insert_change(&env_name, StateChange::RemovedEnvironment)?;
+                    state_changes.insert_change(&env_name, StateChange::RemovedEnvironment);
                 }
             }
         }
@@ -831,7 +833,7 @@ impl Project {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         state_changes.push_changes(
-            env_name.clone(),
+            env_name,
             self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages(None)

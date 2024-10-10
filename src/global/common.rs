@@ -220,24 +220,25 @@ impl StateChanges {
         !self.changes.values().all(Vec::is_empty)
     }
 
-    pub(crate) fn insert_change(
-        &mut self,
-        env_name: &EnvironmentName,
-        change: StateChange,
-    ) -> miette::Result<()> {
-        self.changes
-            .entry(env_name.clone())
-            .or_default()
-            .push(change);
-        Ok(())
+    pub(crate) fn insert_change(&mut self, env_name: &EnvironmentName, change: StateChange) {
+        if let Some(entry) = self.changes.get_mut(env_name) {
+            entry.push(change);
+        } else {
+            self.changes.insert(env_name.clone(), Vec::new());
+        }
     }
 
     pub(crate) fn push_changes(
         &mut self,
-        env_name: EnvironmentName,
+        env_name: &EnvironmentName,
         changes: impl IntoIterator<Item = StateChange>,
     ) {
-        self.changes.entry(env_name).or_default().extend(changes);
+        if let Some(entry) = self.changes.get_mut(env_name) {
+            entry.extend(changes);
+        } else {
+            self.changes
+                .insert(env_name.clone(), changes.into_iter().collect());
+        }
     }
 
     #[cfg(test)]

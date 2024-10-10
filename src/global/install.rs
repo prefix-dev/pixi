@@ -175,10 +175,10 @@ pub(crate) async fn create_executable_scripts(
         match added_or_changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
-                state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name))?;
+                state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
             }
             AddedOrChanged::Changed => {
-                state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name))?;
+                state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
     }
