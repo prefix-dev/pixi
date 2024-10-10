@@ -226,7 +226,7 @@ def test_sync_clean_up_broken_exec(pixi: Path, tmp_path: Path, dummy_channel_1: 
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
-version = 1
+version = {MANIFEST_VERSION}
 
 [envs.one]
 channels = ["{dummy_channel_1}"]
