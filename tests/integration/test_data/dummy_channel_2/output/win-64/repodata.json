@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-x-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "0a82fb2f6e9da49968cba40b9187833d",
+      "name": "dummy-x",
+      "platform": "win",
+      "sha256": "39b394c995a29f180f6543771e7a70abcad9feadba7d9663eed80c7296babb19",
+      "size": 2824,
+      "subdir": "win-64",
+      "timestamp": 1727337510326,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

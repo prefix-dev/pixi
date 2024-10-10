@@ -914,27 +914,61 @@ pixi config unset repodata-config.disable-zstd --system
 
 ## `global`
 
-Global is the main entry point for the part of pixi that executes on the
-global(system) level.
+Global is the main entry point for the part of pixi that executes on the global(system) level.
+All commands in this section are used to manage global installations of packages and environments through the global manifest.
+More info on the global manifest can be found [here](../features/global_tools.md).
 
 !!! tip
     Binaries and environments installed globally are stored in `~/.pixi`
     by default, this can be changed by setting the `PIXI_HOME` environment
     variable.
+### `global add`
+
+Adds dependencies to a global environment.
+Without exposing the binaries of that package to the system by default.
+
+##### Arguments
+1. `[PACKAGE]`: The packages to add, this excepts the matchspec format. (e.g. `python=3.9.*`, `python [version='3.11.0', build_number=1]`)
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into.
+- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system.
+
+```shell
+pixi global add python=3.9.* --environment my-env
+pixi global add python=3.9.* --expose py39=python3.9 --environment my-env
+pixi global add numpy matplotlib --environment my-env
+pixi global add numpy matplotlib --expose np=python3.9 --environment my-env
+```
+
+### `global edit`
+Edit the global manifest file in the default editor.
+
+Will try to use the `EDITOR` environment variable, if not set it will use `nano` on Unix systems and `notepad` on Windows.
+
+##### Arguments
+1. `<EDITOR>`: The editor to use. (optional)
+```shell
+pixi global edit
+pixi global edit code
+pixi global edit vim
+```
 
 ### `global install`
 
-This command installs package(s) into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
+This command installs package(s) into its own environment and adds the binary to `PATH`.
+Allowing you to access it anywhere on your system without activating the environment.
 
 ##### Arguments
 
-1.`<PACKAGE>`: The package(s) to install, this can also be a version constraint.
+1.`[PACKAGE]`: The package(s) to install, this can also be a version constraint.
 
 ##### Options
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
-- `--no-activation`: Do not insert conda_prefix, path modifications, and activation script into the installed executable script.
+- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
+- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
 
 ```shell
 pixi global install ruff
@@ -954,8 +988,11 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 # Install for a specific platform, only useful on osx-arm64
 pixi global install --platform osx-64 ruff
 
-# Install without inserting activation code into the executable script
-pixi global install ruff --no-activation
+# Install into a specific environment name
+pixi global install --environment data-science python numpy matplotlib ipython
+
+# Expose the binary under a different name
+pixi global install --expose "py39=python3.9" "python=3.9.*"
 ```
 
 !!! tip
@@ -966,87 +1003,141 @@ pixi global install ruff --no-activation
 
 After using global install, you can use the package you installed anywhere on your system.
 
-### `global list`
-
-This command shows the current installed global environments including what binaries come with it.
-A global installed package/environment can possibly contain multiple binaries and
-they will be listed out in the command output. Here is an example of a few installed packages:
-
-```
-> pixi global list
-Global install location: /home/hanabi/.pixi
-├── bat 0.24.0
-|   └─ exec: bat
-├── conda-smithy 3.31.1
-|   └─ exec: feedstocks, conda-smithy
-├── rattler-build 0.13.0
-|   └─ exec: rattler-build
-├── ripgrep 14.1.0
-|   └─ exec: rg
-└── uv 0.1.17
-    └─ exec: uv
-```
-
-### `global upgrade`
-
-This command upgrades a globally installed package (to the latest version by default).
+### `global uninstall`
+Uninstalls environments from the global environment.
+This will remove the environment and all its dependencies from the global environment.
+It will also remove the related binaries from the system.
 
 ##### Arguments
-
-1. `<PACKAGE>`: The package to upgrade.
-
-##### Options
-
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
-  Defaults to `conda-forge`. Note the channel the package was installed from
-  will be always used for upgrade. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: specify a platform that you want to upgrade the package for. (default: current platform)
+1. `[ENVIRONMENT]`: The environments to uninstall.
 
 ```shell
-pixi global upgrade ruff
-pixi global upgrade --channel conda-forge --channel bioconda trackplot
-# Or in a more concise form
-pixi global upgrade -c conda-forge -c bioconda trackplot
-
-# Conda matchspec is supported
-# You can specify the version to upgrade to when you don't want the latest version
-# or you can even use it to downgrade a globally installed package
-pixi global upgrade python=3.10
-```
-
-### `global upgrade-all`
-
-This command upgrades all globally installed packages to their latest version.
-
-##### Options
-
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
-  Defaults to `conda-forge`. Note the channel the package was installed from
-  will be always used for upgrade. (Allowed to be used more than once)
-
-```shell
-pixi global upgrade-all
-pixi global upgrade-all --channel conda-forge --channel bioconda
-# Or in a more concise form
-pixi global upgrade-all -c conda-forge -c bioconda trackplot
+pixi global uninstall my-env
+pixi global uninstall pixi-pack rattler-build
 ```
 
 ### `global remove`
 
-Removes a package previously installed into a globally accessible location via
-`pixi global install`
-
-Use `pixi global info` to find out what the package name is that belongs to the tool you want to remove.
+Removes a package from a global environment.
 
 ##### Arguments
 
-1. `<PACKAGE>`: The package(s) to remove.
+1. `[PACKAGE]`: The packages to remove.
+
+##### Options
+
+- `--environment <ENVIRONMENT> (-e)`: The environment to remove the package from.
 
 ```shell
-pixi global remove pre-commit
+pixi global remove -e my-env package1 package2
+```
 
-# multiple packages can be removed at once
-pixi global remove pre-commit starship
+
+### `global list`
+
+This command shows the current installed global environments including what binaries come with it.
+A global installed package/environment can possibly contain multiple exposed binaries and they will be listed out in the command output.
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
+
+We'll only show the dependencies and exposed binaries of the environment if they differ from the environment name.
+Here is an example of a few installed packages:
+
+```
+pixi global list
+```
+Results in:
+```
+Global environments at /home/user/.pixi:
+├── gh: 2.57.0
+├── pixi-pack: 0.1.8
+├── python: 3.11.0
+│   └─ exposes: 2to3, 2to3-3.11, idle3, idle3.11, pydoc, pydoc3, pydoc3.11, python, python3, python3-config, python3.1, python3.11, python3.11-config
+├── rattler-build: 0.22.0
+├── ripgrep: 14.1.0
+│   └─ exposes: rg
+├── vim: 9.1.0611
+│   └─ exposes: ex, rview, rvim, view, vim, vimdiff, vimtutor, xxd
+└── zoxide: 0.9.6
+```
+
+Here is an example of list of a single environment:
+```
+pixi g list -e pixi-pack
+```
+Results in:
+```
+The 'pixi-pack' environment has 8 packages:
+Package          Version    Build        Size
+_libgcc_mutex    0.1        conda_forge  2.5 KiB
+_openmp_mutex    4.5        2_gnu        23.1 KiB
+ca-certificates  2024.8.30  hbcca054_0   155.3 KiB
+libgcc           14.1.0     h77fa898_1   826.5 KiB
+libgcc-ng        14.1.0     h69a702a_1   50.9 KiB
+libgomp          14.1.0     h77fa898_1   449.4 KiB
+openssl          3.3.2      hb9d3cd8_0   2.8 MiB
+pixi-pack        0.1.8      hc762bcd_0   4.3 MiB
+Package          Version    Build        Size
+
+Exposes:
+pixi-pack
+Channels:
+conda-forge
+Platform: linux-64
+```
+
+
+### `global sync`
+As the global manifest can be manually edited, this command will sync the global manifest with the current state of the global environment.
+You can modify the manifest in `$HOME/manifests/pixi_global.toml`.
+
+```shell
+pixi global sync
+```
+
+### `global expose`
+Modify the exposed binaries of a global environment.
+
+#### `global expose add`
+Add exposed binaries from an environment to your global environment.
+
+##### Arguments
+1. `[MAPPING]`: The binaries to expose (`python`), or give a map to expose a binary under a different name. (e.g. `py310=python3.10`)
+The mapping is mapped as `exposed_name=binary_name`.
+Where the exposed name is the one you will be able to use in the terminal, and the binary name is the name of the binary in the environment.
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to expose the binaries from.
+
+```shell
+pixi global expose add python --environment my-env
+pixi global expose add py310=python3.10 --environment python
+```
+
+#### `global expose remove`
+Remove exposed binaries from the global environment.
+
+##### Arguments
+1. `[EXPOSED_NAME]`: The binaries to remove from the main global environment.
+
+```shell
+pixi global expose remove python
+pixi global expose remove py310 python3
+```
+
+### `global update`
+
+Update all environments or specify an environment to update to the version.
+
+##### Arguments
+
+1. `[ENVIRONMENT]`: The environment(s) to update.
+
+```shell
+pixi global update
+pixi global update pixi-pack
+pixi global update bat rattler-build
 ```
 
 ## `project`

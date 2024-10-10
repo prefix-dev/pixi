@@ -80,9 +80,8 @@ Update `PACKAGE` if `--package` is given. If not, all packages in environments `
 If the update leads to executables being removed, it will offer to remove the mappings.
 If the user declines the update process will stop.
 If the update leads to executables being added, it will offer for each binary individually to expose it.
-`--assume-yes` will assume yes as answer for every question that would otherwise be asked interactively.
 ```
-pixi global update [--package PACKAGE] [--assume-yes] <ENV>...
+pixi global update [--package PACKAGE] <ENV>...
 ```
 
 Updates all packages in all environments.

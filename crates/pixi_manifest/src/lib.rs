@@ -24,13 +24,15 @@ mod validation;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 
 pub use manifests::manifest::{Manifest, ManifestKind};
+pub use manifests::TomlManifest;
 
 pub use crate::environments::Environments;
-pub use crate::parsed_manifest::ParsedManifest;
+pub use crate::parsed_manifest::{deserialize_package_map, ParsedManifest};
 pub use crate::solve_group::{SolveGroup, SolveGroups};
 pub use activation::Activation;
-pub use channel::PrioritizedChannel;
+pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 pub use environment::{Environment, EnvironmentName};
+pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
