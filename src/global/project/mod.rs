@@ -267,7 +267,7 @@ impl Project {
     /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover_or_create() -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
-        let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+        let manifest_path = Self::default_manifest_path()?;
         // Prompt user if the manifest is empty and the user wants to create one
 
         let bin_dir = BinDir::from_env().await?;
@@ -370,6 +370,11 @@ impl Project {
         home_path()
             .map(|dir| dir.join(MANIFESTS_DIR))
             .ok_or_else(|| miette::miette!("Couldn't get home directory"))
+    }
+
+    /// Get the default path to the global manifest file
+    pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
+        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
     }
 
     /// Loads a project from manifest file.
