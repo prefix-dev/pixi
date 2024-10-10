@@ -1,4 +1,5 @@
 mod activation;
+mod build;
 pub(crate) mod channel;
 mod dependencies;
 mod environment;
@@ -43,6 +44,7 @@ pub use target::{Target, TargetSelector, Targets};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 
+pub use build::BuildSection;
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;

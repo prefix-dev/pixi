@@ -9,10 +9,13 @@ use std::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use futures::{stream, StreamExt, TryStreamExt};
+use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_record::PixiRecord;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -22,8 +25,10 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
+use url::Url;
 
 use crate::{
+    build::BuildContext,
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
@@ -293,7 +298,7 @@ pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
     _platform: Platform,
-    conda_records: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
@@ -359,7 +364,7 @@ pub async fn update_prefix_pypi(
             install_pypi::update_python_distributions(
                 lock_file_dir,
                 prefix,
-                conda_records,
+                pixi_records,
                 pypi_records,
                 &python_info.path,
                 system_requirements,
@@ -489,14 +494,41 @@ pub async fn update_prefix_conda(
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
-    repodata_records: Vec<RepoDataRecord>,
+    pixi_records: Vec<PixiRecord>,
+    channels: Vec<Url>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
+    build_context: BuildContext,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
+
+    let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
+        .into_iter()
+        .partition_map(|record| match record {
+            PixiRecord::Binary(record) => Either::Left(record),
+            PixiRecord::Source(record) => Either::Right(record),
+        });
+
+    // Build conda packages out of the source records
+    let mut processed_source_packages = stream::iter(source_records)
+        .map(Ok)
+        .and_then(|record| {
+            let build_context = &build_context;
+            let channels = &channels;
+            async move {
+                build_context
+                    .build_source_record(&record, channels, platform)
+                    .await
+            }
+        })
+        .try_collect::<Vec<RepoDataRecord>>()
+        .await?;
+
+    // Extend the repodata records with the built packages
+    repodata_records.append(&mut processed_source_packages);
 
     // Execute the operations that are returned by the solver.
     let result = await_in_progress(

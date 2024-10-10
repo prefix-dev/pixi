@@ -21,9 +21,9 @@ use crate::{
     manifests::{ManifestSource, TomlManifest},
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
-    to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target, TargetSelector, Task,
-    TaskName,
+    to_options, BuildSection, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
+    FeatureName, GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target,
+    TargetSelector, Task, TaskName,
 };
 
 #[derive(Debug, Clone)]
@@ -706,12 +706,18 @@ impl Manifest {
     {
         self.parsed.environments.find(name)
     }
+
+    /// Return the build section from the parsed manifest
+    pub fn build_section(&self) -> Option<&BuildSection> {
+        self.parsed.build.as_ref()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use glob::glob;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
@@ -726,7 +732,6 @@ mod tests {
 
     use super::*;
     use crate::channel::PrioritizedChannel;
-    use glob::glob;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

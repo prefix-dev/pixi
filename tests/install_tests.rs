@@ -1,26 +1,34 @@
 mod common;
 
-use crate::common::{
-    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
-    package_database::{Package, PackageDatabase},
-};
-use common::{LockFileExt, PixiControl};
-use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use pixi::cli::{run, run::Args, LockFileUsageArgs};
-use pixi::environment::LockFileUsage;
-use pixi::Project;
-use pixi_config::{Config, DetachedEnvironments};
-use pixi_consts::consts;
-use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::Platform;
 use std::{
     fs::{create_dir_all, File},
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
+
+use common::{LockFileExt, PixiControl};
+use pixi::{
+    cli::{
+        cli_config::{PrefixUpdateConfig, ProjectConfig},
+        run,
+        run::Args,
+        LockFileUsageArgs,
+    },
+    environment::LockFileUsage,
+    Project,
+};
+use pixi_config::{Config, DetachedEnvironments};
+use pixi_consts::consts;
+use pixi_manifest::{FeatureName, FeaturesExt};
+use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use uv_python::PythonEnvironment;
+
+use crate::common::{
+    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
+    package_database::{Package, PackageDatabase},
+};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -563,7 +571,8 @@ async fn test_installer_name() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// Test full prefix install for an old lock file to see if it still works.
-/// Makes sure the lockfile isn't touched and the environment is still installed.
+/// Makes sure the lockfile isn't touched and the environment is still
+/// installed.
 async fn test_old_lock_install() {
     let lock_str = std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap();
     let project = Project::from_path(Path::new(
@@ -666,7 +675,6 @@ async fn test_setuptools_override_failure() {
 
         [dependencies]
         pip = ">=24.0,<25"
-        python = "<3.13"
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]

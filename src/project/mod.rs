@@ -718,17 +718,16 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Write;
-    use std::str::FromStr;
+    use std::{fs::File, io::Write, str::FromStr};
 
-    use super::*;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use tempfile::tempdir;
+
+    use super::*;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

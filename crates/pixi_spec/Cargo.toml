@@ -12,6 +12,7 @@ version = "0.1.0"
 [dependencies]
 dirs = { workspace = true }
 file_url = { workspace = true }
+itertools = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 serde = { workspace = true }

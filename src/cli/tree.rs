@@ -500,16 +500,14 @@ fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> 
     } else if let Some(pypi_package) = package.as_pypi() {
         // Extract name
         let name = pypi_package
-            .data()
-            .package
+            .package_data()
             .name
             .as_dist_info_name()
             .into_owned();
 
         // Extract dependencies
         let dependencies = pypi_package
-            .data()
-            .package
+            .package_data()
             .requires_dist
             .iter()
             .filter_map(|p| {

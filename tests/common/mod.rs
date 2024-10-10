@@ -125,7 +125,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(Package::into_pypi)
-            .any(|pkg| pkg.data().package.name.as_ref() == name);
+            .any(|pkg| pkg.package_data().name.as_ref() == name);
         package_found
     }
 
