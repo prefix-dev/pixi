@@ -224,7 +224,7 @@ impl StateChanges {
         if let Some(entry) = self.changes.get_mut(env_name) {
             entry.push(change);
         } else {
-            self.changes.insert(env_name.clone(), Vec::new());
+            self.changes.insert(env_name.clone(), Vec::from([change]));
         }
     }
 
