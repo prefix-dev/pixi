@@ -138,6 +138,7 @@ nav:
       - CLI: reference/cli.md
   - Misc:
       - Pixi vision: vision.md
+      - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
 
