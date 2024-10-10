@@ -1057,7 +1057,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         stderr_contains=["Dependency", "dummy-a", "not", "my-env"],
     )
 
-    # Remove non-existing environment
+    # Remove package from non-existing environment
     verify_cli_command(
         [pixi, "global", "remove", "--environment", "dummy-a", "dummy-a"],
         ExitCode.FAILURE,
