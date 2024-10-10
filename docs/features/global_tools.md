@@ -66,6 +66,11 @@ channels = ["conda-forge"]
 dependencies = { python = ">=3.10,<3.11" }
 exposed = { py3 = "python3" }
 ```
+Now you can run `py3` to start the python interpreter.
+```shell
+py3 -c "print('Hello World')"
+```
+
 There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
 Even if the binary name is only exposed through dependencies of the package
 For example, running:
@@ -119,27 +124,6 @@ You can `remove` dependencies by running:
 pixi global remove --environment my-env package-a package-b
 ```
 
-
-### Example: Creating a Data Science Sandbox Environment
-You can create an environment with multiple tools using the following command:
-```shell
-pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
-```
-This command generates the following entry in the manifest:
-```toml
-[envs.data-science]
-channels = ["conda-forge"]
-dependencies = { jupyter = "*", numpy = "*", pandas = "*", matplotlib = "*", ipython = "*" }
-exposed = { jupyter = "jupyter", ipython = "ipython" }
-```
-In this setup, both `jupyter` and `ipython` are exposed from the `data-science` environment, allowing you to run:
-```shell
-> ipython
-# Or
-> jupyter lab
-```
-These commands will be available globally, making it easy to access your preferred tools without switching environments.
-
 ### Example: Adding a series of tools at once
 Without specifying an environment, you can add multiple tools at once:
 ```shell
@@ -158,6 +142,26 @@ dependencies = { rattler-build = "*" }
 exposed = { rattler-build = "rattler-build" }
 ```
 Creating two separate non-interfering environments, while exposing only the minimum required binaries.
+
+### Example: Creating a Data Science Sandbox Environment
+You can create an environment with multiple tools using the following command:
+```shell
+pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
+```
+This command generates the following entry in the manifest:
+```toml
+[envs.data-science]
+channels = ["conda-forge"]
+dependencies = { jupyter = "*", ipython = "*" }
+exposed = { jupyter = "jupyter", ipython = "ipython" }
+```
+In this setup, both `jupyter` and `ipython` are exposed from the `data-science` environment, allowing you to run:
+```shell
+> ipython
+# Or
+> jupyter lab
+```
+These commands will be available globally, making it easy to access your preferred tools without switching environments.
 
 ### Example: Install packages for a different platform
 You can install packages for a different platform using the `--platform` flag.
