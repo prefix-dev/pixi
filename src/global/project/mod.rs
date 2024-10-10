@@ -9,7 +9,7 @@ use crate::global::project::environment::{
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
-    global::{common::is_text, find_executables, EnvDir},
+    global::{find_executables, EnvDir},
     prefix::Prefix,
 };
 use ahash::HashSet;
@@ -305,22 +305,12 @@ impl Project {
             .files()
             .await?
             .into_iter()
-            .filter_map(|path| match is_text(&path) {
-                Ok(true) => Some(Ok(path)), // Success and is text, continue with path
-                Ok(false) => None,          // Success and isn't text, filter out
-                Err(e) => Some(Err(e)),     // Failure, continue with error
-            })
-            .map(|result| async {
-                match result {
-                    Ok(path) => {
-                        ExposedData::from_exposed_path(
-                            &path,
-                            &env_root,
-                            config.global_channel_config(),
-                        )
+            .map(|path| {
+                let env_root = env_root.clone();
+                let config = config.clone();
+                async move {
+                    ExposedData::from_exposed_path(&path, &env_root, config.global_channel_config())
                         .await
-                    }
-                    Err(e) => Err(e),
                 }
             })
             .collect::<futures::stream::FuturesOrdered<_>>()
@@ -766,6 +756,9 @@ impl Project {
         // Prune environments that are not listed
         state_changes |= self.prune_old_environments().await?;
 
+        // Remove broken scripts
+        self.remove_broken_scripts().await?;
+
         for (env_name, _parsed_environment) in self.environments() {
             state_changes |= self.sync_environment(env_name).await?;
         }
@@ -793,6 +786,19 @@ impl Project {
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
         Ok(state_changes)
+    }
+
+    /// Delete scripts in the bin folder that are broken
+    pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
+        for exposed_path in self.bin_dir.files().await? {
+            if extract_executable_from_script(&exposed_path).await.is_err() {
+                tokio_fs::remove_file(exposed_path)
+                    .await
+                    .into_diagnostic()?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Delete all non required environments
