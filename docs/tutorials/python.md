@@ -70,7 +70,7 @@ We now have the following directory structure:
 ```shell
 .
 ├── pixi_py
-│   ├── __init__.py
+│   └── __init__.py
 └── pyproject.toml
 ```
 
@@ -78,7 +78,7 @@ We've used a flat-layout here but pixi supports both [flat- and src-layouts](htt
 
 ### What's in the `pyproject.toml`?
 
-Okay, so let's have a look at what's sections have been added and how we can modify the `pyproject.toml`.
+Okay, so let's have a look at what sections have been added and how we can modify the `pyproject.toml`.
 
 These first entries were added to the `pyproject.toml` file:
 
@@ -304,7 +304,7 @@ Giving us the following project structure:
 .
 ├── pixi.lock
 ├── pixi_py
-│   ├── __init__.py
+│   └── __init__.py
 ├── pyproject.toml
 └── tests/test_me.py
 ```
@@ -349,15 +349,15 @@ Neat! It seems to be working!
 
 ### Test vs Default environment
 
-The interesting thing is if we compare the output of the two environments.
+Let's compare the output of the test and default environments...
 
 ```shell
 pixi list -e test
-# v.s. default environment
+# vs. default environment
 pixi list
 ```
 
-Is that the test environment has:
+We see that the test environment has:
 
 ```shell
 package          version       build               size       kind   source
@@ -366,7 +366,7 @@ pytest           8.1.1                             1.1 mib    pypi   pytest-8.1.
 ...
 ```
 
-But the default environment is missing this package.
+However, the default environment is missing this package.
 This way, you can finetune your environments to only have the packages that are needed for that environment.
 E.g. you could also have a `dev` environment that has `pytest` and `ruff` installed, but you could omit these from the `prod` environment.
 There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker) example that shows how to set up a minimal `prod` environment and copy from there.
