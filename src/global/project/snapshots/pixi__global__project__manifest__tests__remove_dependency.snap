@@ -1,0 +1,7 @@
+---
+source: src/global/project/manifest.rs
+expression: manifest.document.to_string()
+---
+[envs.test-env]
+channels = ["test-channel"]
+dependencies = { "python" = "*"}

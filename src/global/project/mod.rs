@@ -1,11 +1,11 @@
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
-use crate::global::common::{channel_url_to_prioritized_channel, find_package_records};
+use crate::global::common::{
+    channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
+};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
-use crate::global::project::environment::{
-    environment_specs_in_sync, get_expose_scripts_sync_status,
-};
+use crate::global::project::environment::environment_specs_in_sync;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
@@ -396,13 +396,17 @@ impl Project {
         self.manifest.parsed.envs.get(name)
     }
 
+    /// Returns the EnvDir with the environment name.
+    pub(crate) async fn environment_dir(&self, name: &EnvironmentName) -> miette::Result<EnvDir> {
+        EnvDir::from_env_root(self.env_root.clone(), name).await
+    }
+
     /// Returns the prefix of the environment with the given name.
     pub(crate) async fn environment_prefix(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<Prefix> {
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
-        Ok(Prefix::new(env_dir.path()))
+        Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
     }
 
     /// Create an authenticated reqwest client for this project
