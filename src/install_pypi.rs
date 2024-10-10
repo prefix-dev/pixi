@@ -31,7 +31,7 @@ use uv_configuration::{ConfigSettings, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
-use uv_installer::{Preparer, SitePackages};
+use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
@@ -828,9 +828,33 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
 
         for dist_info in extraneous.iter().chain(reinstalls.iter()) {
-            let summary = uv_installer::uninstall(dist_info)
-                .await
-                .expect("uninstall did not work");
+            let summary = match uv_installer::uninstall(dist_info).await {
+                Ok(sum) => sum,
+                // Get error types from uv_installer
+                Err(UninstallError::Uninstall(e))
+                    if matches!(e, install_wheel_rs::Error::MissingRecord(_))
+                        || matches!(e, install_wheel_rs::Error::MissingTopLevel(_)) =>
+                {
+                    // If the uninstallation failed, remove the directory manually and continue
+                    tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
+
+                    // Sanity check to avoid calling remove all on a bad path.
+                    if dist_info
+                        .path()
+                        .iter()
+                        .any(|segment| Path::new(segment) == Path::new("site-packages"))
+                    {
+                        tokio::fs::remove_dir_all(dist_info.path())
+                            .await
+                            .into_diagnostic()?;
+                    }
+
+                    continue;
+                }
+                Err(err) => {
+                    return Err(miette::miette!(err));
+                }
+            };
             tracing::debug!(
                 "Uninstalled {} ({} file{}, {} director{})",
                 dist_info.name(),
