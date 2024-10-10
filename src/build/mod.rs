@@ -227,7 +227,7 @@ impl BuildContext {
             .with_cache_dir(self.cache_dir.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path,
-                build_tool_overrides: Default::default(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -450,7 +450,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_overrides: Default::default(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;

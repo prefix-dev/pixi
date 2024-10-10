@@ -3,14 +3,15 @@ use std::path::PathBuf;
 use pixi_manifest::BuildSection;
 use rattler_conda_types::MatchSpec;
 
-use crate::BackendOverrides;
+use crate::{BackendOverride, InProcessBackend};
 
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum ToolSpec {
     Isolated(IsolatedToolSpec),
     System(SystemToolSpec),
+    Io(InProcessBackend),
 }
 
 /// A build tool that can be installed through a conda package.
@@ -68,16 +69,14 @@ impl From<SystemToolSpec> for ToolSpec {
     }
 }
 
-impl BackendOverrides {
-    pub fn into_spec(self) -> Option<ToolSpec> {
-        if let Some(spec) = self.spec {
-            return Some(ToolSpec::Isolated(IsolatedToolSpec::from_specs(vec![spec])));
+impl BackendOverride {
+    pub fn into_spec(self) -> ToolSpec {
+        match self {
+            BackendOverride::Spec(spec) => {
+                ToolSpec::Isolated(IsolatedToolSpec::from_specs(vec![spec]))
+            }
+            BackendOverride::Path(path) => ToolSpec::System(SystemToolSpec { command: path }),
+            BackendOverride::Io(process) => ToolSpec::Io(process),
         }
-
-        if let Some(path) = self.path {
-            return Some(ToolSpec::System(SystemToolSpec { command: path }));
-        }
-
-        None
     }
 }

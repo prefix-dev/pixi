@@ -47,7 +47,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_channel_config(channel_config.clone())
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_overrides: Default::default(),
+            build_tool_override: Default::default(),
         })
         .await
         .into_diagnostic()

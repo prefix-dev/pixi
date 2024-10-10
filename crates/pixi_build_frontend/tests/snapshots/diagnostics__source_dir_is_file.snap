@@ -1,0 +1,5 @@
+---
+source: crates/pixi_build_frontend/tests/diagnostics.rs
+expression: snapshot
+---
+  × failed to discover a valid project manifest, the source does not refer to a directory

@@ -13,6 +13,7 @@ use sha1::{Digest, Sha1};
 
 use crate::tool::Tool;
 
+#[derive(Debug)]
 pub struct Protocol {
     pub(super) _channel_config: ChannelConfig,
     pub(super) tool: Tool,
@@ -38,15 +39,19 @@ impl Protocol {
         &self,
         request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadataResult> {
+        let Some(tool) = self.tool.as_executable() else {
+            miette::bail!("Cannot use a non-executable tool to render conda metadata");
+        };
+
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
-        let conda_render_executable = self.tool.executable().with_file_name("conda-render");
-        let conda_render_executable = if let Some(ext) = self.tool.executable().extension() {
+        let conda_render_executable = tool.executable().with_file_name("conda-render");
+        let conda_render_executable = if let Some(ext) = tool.executable().extension() {
             conda_render_executable.with_extension(ext)
         } else {
             conda_render_executable
         };
-        let conda_render_tool = self.tool.with_executable(conda_render_executable);
+        let conda_render_tool = tool.with_executable(conda_render_executable);
 
         // TODO: Properly pass channels
         // TODO: Setup --exclusive-config-files

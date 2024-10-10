@@ -5,13 +5,24 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use miette::Diagnostic;
 pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+use thiserror::Error;
 
-use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
+use crate::{
+    tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
+    BackendOverride,
+};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum FinishError {
+    #[error(transparent)]
+    Tool(#[from] ToolCacheError),
+}
 
 /// A builder for constructing a [`protocol::Protocol`] instance.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ProtocolBuilder {
     /// The directory that contains the source files.
     source_dir: PathBuf,
@@ -59,6 +70,16 @@ impl ProtocolBuilder {
         }
     }
 
+    /// Sets an optional backend override.
+    pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
+        Self {
+            backend_spec: backend_override
+                .map(BackendOverride::into_spec)
+                .unwrap_or(self.backend_spec),
+            ..self
+        }
+    }
+
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
@@ -75,17 +96,13 @@ impl ProtocolBuilder {
         }
     }
 
-    /// Information about the backend tool to install.
-    pub fn backend_tool(&self) -> ToolSpec {
-        self.backend_spec.clone()
-    }
-
-    pub fn finish(self, tool: Tool) -> Protocol {
-        Protocol {
+    pub fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
+        let tool = tool.instantiate(self.backend_spec)?;
+        Ok(Protocol {
             _channel_config: self.channel_config,
             tool,
             source_dir: self.source_dir,
             recipe_dir: self.recipe_dir,
-        }
+        })
     }
 }
