@@ -532,6 +532,42 @@ impl Project {
         Ok(())
     }
 
+    /// Remove an environment from the manifest and the global installation.
+    pub(crate) async fn remove_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let mut state_changes = StateChanges::default();
+
+        // Remove the environment from the manifest, if it exists, otherwise ignore error.
+        self.manifest.remove_environment(env_name)?;
+
+        // Remove the environment
+        tokio_fs::remove_dir_all(env_dir.path())
+            .await
+            .into_diagnostic()?;
+
+        // Get all removable binaries related to the environment
+        let (to_remove, _to_add) =
+            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
+
+        // Remove all removable binaries
+        for binary_path in to_remove {
+            tokio_fs::remove_file(&binary_path)
+                .await
+                .into_diagnostic()?;
+            state_changes.push_change(StateChange::RemovedExposed(
+                ExposedName::from_str(&executable_from_path(&binary_path))?,
+                env_name.clone(),
+            ));
+        }
+
+        state_changes.push_change(StateChange::RemovedEnvironment(env_name.clone()));
+
+        Ok(StateChanges::default())
+    }
+
     /// Find all binaries related to the environment and remove those that are not listed as exposed.
     pub async fn prune_exposed(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
