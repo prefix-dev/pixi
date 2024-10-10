@@ -998,7 +998,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
             "--channel",
             dummy_channel_1,
             "--environment",
-            "my_env",
+            "my-env",
             "dummy-a",
             "dummy-b",
         ],
@@ -1011,17 +1011,17 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
 
     # Remove dummy-a
     verify_cli_command(
-        [pixi, "global", "remove", "--environment", "my_env", "dummy-a"],
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         env=env,
     )
     assert not dummy_a.is_file()
 
     # Remove non-existing package
     verify_cli_command(
-        [pixi, "global", "remove", "--environment", "dummy-a", "dummy-a"],
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="The package dummy-a is not in the environment dummy-a",
+        stderr_contains=["Dependency", "dummy-a", "not", "my-env"],
     )
 
     # Remove non-existing environment
@@ -1029,5 +1029,5 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "dummy-a", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="The package dummy-a is not in the environment dummy-a",
+        stderr_contains="Environment dummy-a doesn't exist",
     )

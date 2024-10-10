@@ -81,7 +81,7 @@ impl Manifest {
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
-            miette::bail!("Environment {env_name} already exists.");
+            miette::bail!("Environment {} already exists.", env_name.fancy_display());
         }
         self.parsed.envs.insert(
             env_name.clone(),
@@ -96,7 +96,10 @@ impl Manifest {
             channels_array.push(channel.as_str());
         }
 
-        tracing::debug!("Added environment {} to toml document", env_name);
+        tracing::debug!(
+            "Added environment {} to toml document",
+            env_name.fancy_display()
+        );
         Ok(())
     }
 
@@ -135,15 +138,13 @@ impl Manifest {
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
             .dependencies
             .insert(name.clone(), spec.clone());
 
@@ -158,7 +159,7 @@ impl Manifest {
             "Added dependency {}={} to toml document for environment {}",
             name.as_normalized(),
             spec.to_toml_value().to_string(),
-            env_name
+            env_name.fancy_display()
         );
         Ok(())
     }
@@ -174,17 +175,20 @@ impl Manifest {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        if !self.parsed.envs.contains_key(env_name) {
-            self.add_environment(env_name, None)?;
-        }
-
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
             .dependencies
-            .retain(|package_name, _| package_name != &name);
+            .swap_remove(&name)
+            .ok_or(miette::miette!(
+                "Dependency {} not found in {}",
+                console::style(name.as_normalized()).green(),
+                env_name.fancy_display()
+            ))?;
 
         // Update self.document
         self.document
@@ -193,8 +197,8 @@ impl Manifest {
 
         tracing::debug!(
             "Removed dependency {} to toml document for environment {}",
-            name.as_normalized(),
-            env_name
+            console::style(name.as_normalized()).green(),
+            env_name.fancy_display()
         );
         Ok(())
     }
@@ -214,7 +218,9 @@ impl Manifest {
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("Can't find {} yet", env_name))?
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
             .platform
             .replace(platform);
 
