@@ -54,7 +54,7 @@ More information on channels can be found [here](../advanced/channel_priority.md
 ### Exposed
 The exposed binaries are the ones that will be available in the system `PATH`.
 This is useful when the package has multiple binaries, but you want to get a select few, or you want to expose it with a different name.
-For example, the `python` package has multiple binaries, but you only want to expose the interpreter.
+For example, the `python` package has multiple binaries, but you only want to expose the interpreter as `py3`.
 Running:
 ```
 pixi global expose add --environment python py3=python3
