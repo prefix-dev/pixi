@@ -199,7 +199,7 @@ def test_sync_duplicated_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
-version = 1
+version = {MANIFEST_VERSION}
 
 [envs.one]
 channels = ["{dummy_channel_1}"]
