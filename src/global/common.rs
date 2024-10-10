@@ -3,6 +3,7 @@ use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
+use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
@@ -53,7 +54,7 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() {
+            if path.is_file() && path.is_executable() && is_text(&path)? {
                 files.push(path);
             }
         }
@@ -607,8 +608,9 @@ mod tests {
             bin_dir.path().join("test")
         };
 
-        let script = if cfg!(windows) {
-            format!(
+        #[cfg(windows)]
+        {
+            let script = format!(
                 r#"
             @"{}" %*
             "#,
@@ -617,16 +619,28 @@ mod tests {
                     .join("bin")
                     .join("test.exe")
                     .to_string_lossy()
-            )
-        } else {
-            format!(
+            );
+            tokio_fs::write(&script_path, script).await.unwrap();
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let script = format!(
                 r#"#!/bin/sh
             "{}" "$@"
             "#,
                 env_dir.path().join("bin").join("test").to_string_lossy()
-            )
+            );
+            tokio_fs::write(&script_path, script).await.unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&script_path, permissions)
+                .await
+                .unwrap();
         };
-        tokio_fs::write(script_path, script).await.unwrap();
 
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await

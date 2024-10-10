@@ -9,7 +9,7 @@ use crate::global::project::environment::environment_specs_in_sync;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
-    global::{common::is_text, find_executables, EnvDir},
+    global::{find_executables, EnvDir},
     prefix::Prefix,
 };
 use ahash::HashSet;
@@ -305,22 +305,12 @@ impl Project {
             .files()
             .await?
             .into_iter()
-            .filter_map(|path| match is_text(&path) {
-                Ok(true) => Some(Ok(path)), // Success and is text, continue with path
-                Ok(false) => None,          // Success and isn't text, filter out
-                Err(e) => Some(Err(e)),     // Failure, continue with error
-            })
-            .map(|result| async {
-                match result {
-                    Ok(path) => {
-                        ExposedData::from_exposed_path(
-                            &path,
-                            &env_root,
-                            config.global_channel_config(),
-                        )
+            .map(|path| {
+                let env_root = env_root.clone();
+                let config = config.clone();
+                async move {
+                    ExposedData::from_exposed_path(&path, &env_root, config.global_channel_config())
                         .await
-                    }
-                    Err(e) => Err(e),
                 }
             })
             .collect::<futures::stream::FuturesOrdered<_>>()
@@ -770,6 +760,11 @@ impl Project {
         // Prune environments that are not listed
         state_changes |= self.prune_old_environments().await?;
 
+        // Remove broken scripts
+        if let Err(err) = self.remove_broken_scripts().await {
+            tracing::warn!("Couldn't remove broken exposed executables: {err}")
+        }
+
         for (env_name, _parsed_environment) in self.environments() {
             state_changes |= self.sync_environment(env_name).await?;
         }
@@ -797,6 +792,29 @@ impl Project {
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
         Ok(state_changes)
+    }
+
+    /// Delete scripts in the bin folder that are broken
+    pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
+        for exposed_path in self.bin_dir.files().await? {
+            if extract_executable_from_script(&exposed_path)
+                .await
+                .and_then(|path| {
+                    if path.is_file() {
+                        Ok(path)
+                    } else {
+                        miette::bail!("Path is not a file")
+                    }
+                })
+                .is_err()
+            {
+                tokio_fs::remove_file(exposed_path)
+                    .await
+                    .into_diagnostic()?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Delete all non required environments
@@ -971,8 +989,16 @@ mod tests {
         let mut file = fs::File::create(&non_exposed_bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/not-python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&non_exposed_bin).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&non_exposed_bin, permissions)
+                .await
                 .unwrap();
         }
         #[cfg(windows)]
@@ -988,9 +1014,16 @@ mod tests {
         let mut file = fs::File::create(&bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
+
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&bin).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&bin, permissions).await.unwrap();
         }
         #[cfg(windows)]
         {
