@@ -538,7 +538,7 @@ impl Project {
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Remove the environment from the manifest, if it exists, otherwise ignore error.
         self.manifest.remove_environment(env_name)?;
@@ -567,7 +567,7 @@ impl Project {
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
-        Ok(StateChanges::default())
+        Ok(state_changes)
     }
 
     /// Find all binaries related to the environment and remove those that are not listed as exposed.

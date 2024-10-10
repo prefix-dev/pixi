@@ -708,6 +708,7 @@ exposed = {{ dummy-c = "dummy-c" }}
     verify_cli_command(
         [pixi, "global", "uninstall", "dummy-a"],
         env=env,
+        stderr_contains="Removed environment dummy-a",
     )
     assert not dummy_a.is_file()
     assert not dummy_aa.is_file()
