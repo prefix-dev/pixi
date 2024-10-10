@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.32.1] - 2024-10-08
+#### Fixes
+- Bump Rust version to `1.81` by @wolfv in [#2227](https://github.com/prefix-dev/pixi/pull/2227)
+
+#### Documentation
+- Pixi-pack, docker, devcontainer by @pavelzw in [#2220](https://github.com/prefix-dev/pixi/pull/2220)
+
+### [0.32.0] - 2024-10-08
+#### ✨ Highlights
+
+The biggest fix in this PR is the move to the latest rattler as it came with some major bug fixes for macOS and Rust 1.81 compatibility.
+
+#### Changed
+- Correctly implement total ordering for dependency provider by @tdejager in [rattler/#892](https://github.com/conda/rattler/pull/892)
+
+#### Fixed
+- Fixed self-clobber issue when up/down grading packages by @wolfv in [rattler/#893](https://github.com/conda/rattler/pull/893)
+- Check environment name before returning not found print by @ruben-arts in [#2198](https://github.com/prefix-dev/pixi/pull/2198)
+- Turn off symlink follow for task cache by @ruben-arts in [#2209](https://github.com/prefix-dev/pixi/pull/2209)
+
+
 ### [0.31.0] - 2024-10-03
 #### ✨ Highlights
 Thanks to our maintainer @baszamstra!

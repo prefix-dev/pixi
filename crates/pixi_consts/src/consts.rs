@@ -12,7 +12,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_DIR: &str = ".pixi";
-pub const PIXI_VERSION: &str = "0.31.0";
+pub const PIXI_VERSION: &str = "0.32.1";
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
@@ -41,6 +41,7 @@ lazy_static! {
     pub static ref TASK_STYLE: Style = Style::new().blue();
     pub static ref PLATFORM_STYLE: Style = Style::new().yellow();
     pub static ref ENVIRONMENT_STYLE: Style = Style::new().magenta();
+    pub static ref EXPOSED_NAME_STYLE: Style = Style::new().yellow();
     pub static ref FEATURE_STYLE: Style = Style::new().cyan();
     pub static ref SOLVE_GROUP_STYLE: Style = Style::new().cyan();
     pub static ref DEFAULT_PYPI_INDEX_URL: Url = Url::parse("https://pypi.org/simple").unwrap();

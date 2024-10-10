@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "3bff0b388c572fc82180404bfb734150",
+      "md5": "08130fcacffd97904cd39a43ccf475c6",
       "name": "dummy-a",
       "platform": "osx",
-      "sha256": "242d6c39377040101bd4e5518315fbfe05b3881b02a1ca653dec1763d23414b5",
-      "size": 60175,
+      "sha256": "adc2bd5bfcb4e630d86069e34550c59eb35fc2cc5e111a7d3b6bece846da64eb",
+      "size": 92688,
       "subdir": "osx-64",
-      "timestamp": 1727337510194,
+      "timestamp": 1728313938608,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h0dc7051_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "04439143bf2031c0cac3b15b4814e178",
+      "md5": "c9c07487f867193283b9405eb578b264",
       "name": "dummy-b",
       "platform": "osx",
-      "sha256": "2e3ff679b35087ef6693ecc7df00f0809d268fec00d183f3f802b451100e97d9",
-      "size": 44069,
+      "sha256": "25600dcfaad97e5c986ffc5c52aff878e679621ae01be7c44e8e0db9e37b33e2",
+      "size": 68940,
       "subdir": "osx-64",
-      "timestamp": 1727337510193,
+      "timestamp": 1728313938608,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h0dc7051_0.conda": {
@@ -39,13 +39,29 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "4c5b7b59636ffdf3eb683567152c85f0",
+      "md5": "c0ce0dbd2383a84b09c43eb795d48475",
       "name": "dummy-c",
       "platform": "osx",
-      "sha256": "44180c99f553483dac5744924fc082f274c1141edb15ba4cf00459ae74fe995f",
-      "size": 50969,
+      "sha256": "d3f3c19802c8ede9b6fe626e6f1218175e635988b78b9f9b0963149062ae0760",
+      "size": 84499,
       "subdir": "osx-64",
-      "timestamp": 1727337510193,
+      "timestamp": 1728313938608,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "faebffa1d541881d26118f10b5197653",
+      "name": "dummy-d",
+      "platform": "osx",
+      "sha256": "ff2b3d1cf06b1e815a5c276b6b53a5e012e6fccf0176ecf0369a12756d388fcd",
+      "size": 76565,
+      "subdir": "osx-64",
+      "timestamp": 1728313938608,
       "version": "0.1.0"
     }
   },

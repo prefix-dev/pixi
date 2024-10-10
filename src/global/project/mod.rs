@@ -1,4 +1,5 @@
-use super::{extract_executable_from_script, BinDir, EnvRoot};
+use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
+use crate::global::common::{channel_url_to_prioritized_channel, find_package_records};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
@@ -13,8 +14,10 @@ use crate::{
 };
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
+use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
+use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
@@ -30,8 +33,9 @@ use pixi_utils::reqwest::build_reqwest_clients;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform, PrefixRecord,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
 };
+use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::shell::ShellEnum;
 use rattler_solve::resolvo::Solver;
@@ -92,7 +96,7 @@ impl Debug for Project {
 struct ExposedData {
     env_name: EnvironmentName,
     platform: Option<Platform>,
-    channel: PrioritizedChannel,
+    channels: Vec<PrioritizedChannel>,
     package: PackageName,
     exposed: ExposedName,
     executable_name: String,
@@ -104,7 +108,11 @@ impl ExposedData {
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
-    pub async fn from_exposed_path(path: &Path, env_root: &EnvRoot) -> miette::Result<Self> {
+    pub async fn from_exposed_path(
+        path: &Path,
+        env_root: &EnvRoot,
+        channel_config: &ChannelConfig,
+    ) -> miette::Result<Self> {
         let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
         let executable_path = extract_executable_from_script(path).await?;
 
@@ -126,12 +134,29 @@ impl ExposedData {
         let prefix = Prefix::new(env_dir.path());
 
         let (platform, channel, package) =
-            package_from_conda_meta(&conda_meta, &executable, &prefix).await?;
+            package_from_conda_meta(&conda_meta, &executable, &prefix, channel_config).await?;
+
+        let mut channels = vec![channel];
+
+        // Find all channels used to create the environment
+        let all_channels = prefix
+            .find_installed_packages(None)
+            .await?
+            .iter()
+            .map(|prefix_record| prefix_record.repodata_record.channel.clone())
+            .collect::<HashSet<_>>();
+        for channel in all_channels {
+            tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
+            channels.push(channel_url_to_prioritized_channel(
+                &channel,
+                channel_config,
+            )?);
+        }
 
         Ok(ExposedData {
             env_name,
             platform,
-            channel,
+            channels,
             package,
             executable_name: executable,
             exposed,
@@ -150,7 +175,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     }
 
     miette::bail!(
-        "Could not determine environment path: no parent of '{}' has '{}' as its direct parent",
+        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
         executable_path.display(),
         env_root.display()
     )
@@ -159,6 +184,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 /// Converts a `PrefixRecord` into package metadata, including platform, channel, and package name.
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
+    channel_config: &ChannelConfig,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
     let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
         Ok(Platform::NoArch) => None,
@@ -167,14 +193,12 @@ fn convert_record_to_metadata(
         Ok(p) => Some(p),
     };
 
-    let channel: PrioritizedChannel =
-        NamedChannelOrUrl::from_str(&prefix_record.repodata_record.channel)
-            .into_diagnostic()?
-            .into();
+    let package_name = prefix_record.repodata_record.package_record.name.clone();
 
-    let name = prefix_record.repodata_record.package_record.name.clone();
+    let channel =
+        channel_url_to_prioritized_channel(&prefix_record.repodata_record.channel, channel_config)?;
 
-    Ok((platform, channel, name))
+    Ok((platform, channel, package_name))
 }
 
 /// Extracts package metadata from the `conda-meta` directory for a given executable.
@@ -186,19 +210,20 @@ async fn package_from_conda_meta(
     conda_meta: &Path,
     executable: &str,
     prefix: &Prefix,
+    channel_config: &ChannelConfig,
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let records = crate::global::common::find_package_records(conda_meta).await?;
+    let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
         if find_executables(prefix, &prefix_record)
             .iter()
             .any(|exe_path| executable_from_path(exe_path) == executable)
         {
-            return convert_record_to_metadata(&prefix_record);
+            return convert_record_to_metadata(&prefix_record, channel_config);
         }
     }
 
-    miette::bail!("Could not find {executable} in {}", conda_meta.display())
+    miette::bail!("Couldn't find {executable} in {}", conda_meta.display())
 }
 
 impl Project {
@@ -240,7 +265,7 @@ impl Project {
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub(crate) async fn discover_or_create(assume_yes: bool) -> miette::Result<Self> {
+    pub(crate) async fn discover_or_create() -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
         let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
         // Prompt user if the manifest is empty and the user wants to create one
@@ -253,21 +278,7 @@ impl Project {
                 .await
                 .into_diagnostic()?;
 
-            let prompt = format!(
-                "{} You don't have a global manifest yet.\n\
-                Do you want to create one based on your existing installation?\n\
-                Your existing installation will be removed if you decide against it.",
-                console::style(console::Emoji("⚠️ ", "")).yellow(),
-            );
-            if !env_root.directories().await?.is_empty()
-                && (assume_yes
-                    || dialoguer::Confirm::new()
-                        .with_prompt(prompt)
-                        .default(true)
-                        .show_default(true)
-                        .interact()
-                        .into_diagnostic()?)
-            {
+            if !env_root.directories().await?.is_empty() {
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
@@ -288,7 +299,9 @@ impl Project {
         env_root: EnvRoot,
         bin_dir: BinDir,
     ) -> miette::Result<Self> {
-        let futures = bin_dir
+        let config = Config::load(env_root.path());
+
+        let exposed_binaries: Vec<ExposedData> = bin_dir
             .files()
             .await?
             .into_iter()
@@ -299,14 +312,30 @@ impl Project {
             })
             .map(|result| async {
                 match result {
-                    Ok(path) => ExposedData::from_exposed_path(&path, &env_root).await,
+                    Ok(path) => {
+                        ExposedData::from_exposed_path(
+                            &path,
+                            &env_root,
+                            config.global_channel_config(),
+                        )
+                        .await
+                    }
                     Err(e) => Err(e),
                 }
-            });
+            })
+            .collect::<futures::stream::FuturesOrdered<_>>()
+            .filter_map(|result| async {
+                match result {
+                    Ok(data) => Some(data),
+                    Err(e) => {
+                        tracing::warn!("{e}");
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
 
-        let exposed_binaries: Vec<ExposedData> = futures::future::try_join_all(futures).await.wrap_err_with(|| {
-            "Failed to extract exposed binaries from existing installation please clean up your installation."
-        })?;
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
         let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
@@ -340,7 +369,7 @@ impl Project {
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         home_path()
             .map(|dir| dir.join(MANIFESTS_DIR))
-            .ok_or_else(|| miette::miette!("Could not get home directory"))
+            .ok_or_else(|| miette::miette!("Couldn't get home directory"))
     }
 
     /// Loads a project from manifest file.
@@ -402,7 +431,7 @@ impl Project {
     ) -> miette::Result<()> {
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
         let channels = environment
             .channels()
             .into_iter()
@@ -428,20 +457,21 @@ impl Project {
                 {
                     Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
                 } else {
-                    Err(miette!(
-                        "Could not convert {spec:?} to nameless match spec."
-                    ))
+                    Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
                 }
             })
             .collect::<miette::Result<Vec<MatchSpec>>>()?;
 
-        let repodata = await_in_progress("querying repodata ", |_| async {
-            self.repodata_gateway()
-                .query(channels, [platform, Platform::NoArch], match_specs.clone())
-                .recursive(true)
-                .await
-                .into_diagnostic()
-        })
+        let repodata = await_in_progress(
+            format!("Querying repodata for {} ", env_name.fancy_display()),
+            |_| async {
+                self.repodata_gateway()
+                    .query(channels, [platform, Platform::NoArch], match_specs.clone())
+                    .recursive(true)
+                    .await
+                    .into_diagnostic()
+            },
+        )
         .await?;
 
         // Determine virtual packages of the current platform
@@ -473,37 +503,77 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
-        await_in_progress("creating virtual environment", |pb| {
-            Installer::new()
-                .with_download_client(self.authenticated_client().clone())
-                .with_io_concurrency_limit(100)
-                .with_execute_link_scripts(false)
-                .with_package_cache(package_cache)
-                .with_target_platform(platform)
-                .with_reporter(
-                    IndicatifReporter::builder()
-                        .with_multi_progress(global_multi_progress())
-                        .with_placement(rattler::install::Placement::After(pb))
-                        .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
-                        .clear_when_done(true)
-                        .finish(),
-                )
-                .install(prefix.root(), solved_records)
-        })
+        await_in_progress(
+            format!(
+                "Creating virtual environment for {}",
+                env_name.fancy_display()
+            ),
+            |pb| {
+                Installer::new()
+                    .with_download_client(self.authenticated_client().clone())
+                    .with_io_concurrency_limit(100)
+                    .with_execute_link_scripts(false)
+                    .with_package_cache(package_cache)
+                    .with_target_platform(platform)
+                    .with_reporter(
+                        IndicatifReporter::builder()
+                            .with_multi_progress(global_multi_progress())
+                            .with_placement(rattler::install::Placement::After(pb))
+                            .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
+                            .clear_when_done(true)
+                            .finish(),
+                    )
+                    .install(prefix.root(), solved_records)
+            },
+        )
         .await
         .into_diagnostic()?;
 
         Ok(())
     }
 
-    /// Find all binaries related to the environment and remove those that are not listed as exposed.
-    pub async fn clean_environment_binaries(
-        &self,
+    /// Remove an environment from the manifest and the global installation.
+    pub(crate) async fn remove_environment(
+        &mut self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<IndexSet<PathBuf>> {
+    ) -> miette::Result<StateChanges> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let mut state_changes = StateChanges::default();
+
+        // Remove the environment from the manifest, if it exists, otherwise ignore error.
+        self.manifest.remove_environment(env_name)?;
+
+        // Remove the environment
+        tokio_fs::remove_dir_all(env_dir.path())
+            .await
+            .into_diagnostic()?;
+
+        // Get all removable binaries related to the environment
+        let (to_remove, _to_add) =
+            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
+
+        // Remove all removable binaries
+        for binary_path in to_remove {
+            tokio_fs::remove_file(&binary_path)
+                .await
+                .into_diagnostic()?;
+            state_changes.push_change(StateChange::RemovedExposed(
+                ExposedName::from_str(&executable_from_path(&binary_path))?,
+                env_name.clone(),
+            ));
+        }
+
+        state_changes.push_change(StateChange::RemovedEnvironment(env_name.clone()));
+
+        Ok(StateChanges::default())
+    }
+
+    /// Find all binaries related to the environment and remove those that are not listed as exposed.
+    pub async fn prune_exposed(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
 
         // Get all removable binaries related to the environment
@@ -511,11 +581,17 @@ impl Project {
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
-        for binary_path in &to_remove {
-            tokio_fs::remove_file(binary_path).await.into_diagnostic()?;
+        for exposed_path in to_remove {
+            state_changes.push_change(StateChange::RemovedExposed(
+                ExposedName::from_str(&executable_from_path(&exposed_path))?,
+                env_name.clone(),
+            ));
+            tokio_fs::remove_file(&exposed_path)
+                .await
+                .into_diagnostic()?;
         }
 
-        Ok(to_remove)
+        Ok(state_changes)
     }
 
     /// Check if the environment is in sync with the manifest
@@ -524,8 +600,8 @@ impl Project {
     /// And verifies only and all required exposed binaries are in the bin dir.
     pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
         let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment {} not found.",
-            env_name.to_string()
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
         ))?;
 
         let specs = environment
@@ -538,7 +614,7 @@ impl Project {
                         .try_into_nameless_match_spec(&default_channel_config())
                         .into_diagnostic()?
                         .ok_or_else(|| {
-                            miette::miette!("Could not convert {spec:?} to nameless match spec.")
+                            miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
                     Some(name.clone()),
                 );
@@ -560,8 +636,8 @@ impl Project {
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
         if !to_remove.is_empty() || !to_add.is_empty() {
             tracing::debug!(
-                "Environment '{}' binaries not in sync: to_remove: {:?}, to_add: {:?}",
-                env_name,
+                "Environment {} binaries not in sync: to_remove: {:?}, to_add: {:?}",
+                env_name.fancy_display(),
                 to_remove,
                 to_add
             );
@@ -577,8 +653,8 @@ impl Project {
         for (env_name, _parsed_environment) in self.environments() {
             if !self.environment_in_sync(env_name).await? {
                 tracing::debug!(
-                    "Environment '{}' not up to date with the manifest",
-                    env_name
+                    "Environment {} not up to date with the manifest",
+                    env_name.fancy_display()
                 );
                 in_sync = false;
             }
@@ -592,9 +668,11 @@ impl Project {
     pub async fn expose_executables_from_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<bool> {
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
         // First clean up binaries that are not listed as exposed
-        self.clean_environment_binaries(env_name).await?;
+        state_changes |= self.prune_exposed(env_name).await?;
 
         // Determine the shell to use for the invocation script
         let shell: ShellEnum = if cfg!(windows) {
@@ -607,7 +685,7 @@ impl Project {
 
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment '{}' not found", env_name))?;
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
         // Construct the reusable activation script for the shell and generate an
         // invocation script for each executable added by the package to the
@@ -648,23 +726,35 @@ impl Project {
                 env_name
             ))?;
 
-        tracing::debug!("Exposing executables for environment '{}'", env_name);
-        create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await
+        tracing::debug!(
+            "Exposing executables for environment {}",
+            env_name.fancy_display()
+        );
+        state_changes |= create_executable_scripts(
+            &script_mapping,
+            &prefix,
+            &shell,
+            activation_script,
+            env_name,
+        )
+        .await?;
+
+        Ok(state_changes)
     }
 
     // Syncs the manifest with the local environments
     // Returns true if the global installation had to be updated
-    pub(crate) async fn sync(&self) -> Result<bool, miette::Error> {
-        let mut updated_env = false;
+    pub(crate) async fn sync(&self) -> Result<StateChanges, miette::Error> {
+        let mut state_changes = StateChanges::default();
 
         // Prune environments that are not listed
-        updated_env |= !self.prune_old_environments().await?.is_empty();
+        state_changes |= self.prune_old_environments().await?;
 
         for (env_name, _parsed_environment) in self.environments() {
-            self.sync_environment(env_name).await?;
+            state_changes |= self.sync_environment(env_name).await?;
         }
 
-        Ok(updated_env)
+        Ok(state_changes)
     }
 
     /// Syncs the parsed environment with the installation.
@@ -672,28 +762,28 @@ impl Project {
     pub(crate) async fn sync_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<bool> {
-        let mut updated_env = false;
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
-                "Environment '{}' specs not up to date with manifest",
-                env_name
+                "Environment {} specs not up to date with manifest",
+                env_name.fancy_display()
             );
             self.install_environment(env_name).await?;
-            updated_env = true;
+            state_changes.set_has_updated(true);
         }
 
         // Expose executables
-        updated_env |= self.expose_executables_from_environment(env_name).await?;
+        state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        Ok(updated_env)
+        Ok(state_changes)
     }
 
     /// Delete all non required environments
-    pub(crate) async fn prune_old_environments(&self) -> miette::Result<Vec<PathBuf>> {
+    pub(crate) async fn prune_old_environments(&self) -> miette::Result<StateChanges> {
         let env_set: HashSet<&EnvironmentName> = self.environments().keys().collect();
 
-        let mut pruned = Vec::new();
+        let mut state_changes = StateChanges::default();
         for env_path in self.env_root.directories().await? {
             let Some(Ok(env_name)) = env_path
                 .file_name()
@@ -724,17 +814,31 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    pruned.push(env_path);
-
-                    eprintln!(
-                        "{} Removed environment '{env_name}' as it was not part of the manifest.",
-                        console::style(console::Emoji("✔", " ")).green()
-                    );
+                    state_changes.push_change(StateChange::RemovedEnvironment(env_name));
                 }
             }
         }
+        Ok(state_changes)
+    }
 
-        Ok(pruned)
+    // Figure which packages have been added
+    pub async fn added_packages(
+        &self,
+        specs: &[MatchSpec],
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        state_changes.push_changes(
+            self.environment_prefix(env_name)
+                .await?
+                .find_installed_packages(None)
+                .await?
+                .into_iter()
+                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .map(|r| r.repodata_record.package_record)
+                .map(|record| StateChange::AddedPackage(record, env_name.clone())),
+        );
+        Ok(state_changes)
     }
 }
 
@@ -757,7 +861,11 @@ mod tests {
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
     use itertools::Itertools;
+    use rattler_conda_types::{
+        NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+    };
     use tempfile::tempdir;
+    use url::Url;
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]
@@ -817,7 +925,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_binaries() {
+    async fn test_prune_exposed() {
         let tempdir = tempfile::tempdir().unwrap();
         let project = Project::from_str(
             &PathBuf::from("dummy"),
@@ -837,8 +945,8 @@ mod tests {
         let env_name = "test".parse().unwrap();
 
         // Create non-exposed but related binary
-        let expose_name = ExposedName::from_str("not-python").unwrap();
-        let non_exposed_bin = project.bin_dir.executable_script_path(&expose_name);
+        let not_python = ExposedName::from_str("not-python").unwrap();
+        let non_exposed_bin = project.bin_dir.executable_script_path(&not_python);
         let mut file = fs::File::create(&non_exposed_bin).unwrap();
         #[cfg(unix)]
         {
@@ -854,8 +962,8 @@ mod tests {
         }
 
         // Create a file that should be exposed
-        let expose_name = ExposedName::from_str("python").unwrap();
-        let bin = project.bin_dir.executable_script_path(&expose_name);
+        let python = ExposedName::from_str("python").unwrap();
+        let bin = project.bin_dir.executable_script_path(&python);
         let mut file = fs::File::create(&bin).unwrap();
         #[cfg(unix)]
         {
@@ -874,8 +982,12 @@ mod tests {
         let unrelated = project.bin_dir.path().join("unrelated");
         fs::File::create(&unrelated).unwrap();
 
-        // Remove the binary
-        project.clean_environment_binaries(&env_name).await.unwrap();
+        // Remove exposed
+        let state_changes = project.prune_exposed(&env_name).await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            vec![StateChange::RemovedExposed(not_python, env_name.clone())]
+        );
 
         // Check if the non-exposed file was removed
         assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 2);
@@ -931,7 +1043,11 @@ mod tests {
         );
 
         // Call the prune method with a list of environments to keep (env1 and env3) but not env4
-        project.prune_old_environments().await.unwrap();
+        let state_changes = project.prune_old_environments().await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            vec![StateChange::RemovedEnvironment("env2".parse().unwrap())]
+        );
 
         // Verify that only the specified directories remain
         let remaining_dirs = fs::read_dir(env_root.path())
@@ -943,5 +1059,70 @@ mod tests {
             .collect_vec();
 
         assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
+    }
+
+    #[test]
+    fn test_convert_repodata_to_exposed_data() {
+        let temp_dir = tempdir().unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(temp_dir.path().to_owned());
+        let mut package_record = PackageRecord::new(
+            "python".parse().unwrap(),
+            VersionWithSource::from_str("3.9.7").unwrap(),
+            "build_string".to_string(),
+        );
+
+        // Set platform to something different than current
+        package_record.subdir = Platform::LinuxRiscv32.to_string();
+
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            file_name: "doesnt_matter.conda".to_string(),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: format!("{}{}", channel_config.channel_alias.clone(), "test-channel"),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(
+            repodata_record,
+            None,
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+
+        // Test with default channel alias
+        let (platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("test-channel").unwrap().into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
+        assert_eq!(platform, Some(Platform::LinuxRiscv32));
+
+        // Test with different from default channel alias
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            file_name: "doesnt_matter.conda".to_string(),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: "https://test-channel.com/idk".to_string(),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(
+            repodata_record,
+            None,
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+
+        let (_platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("https://test-channel.com/idk")
+                .unwrap()
+                .into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
     }
 }
