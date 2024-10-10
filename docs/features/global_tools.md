@@ -109,6 +109,17 @@ dependencies = { git = "*", vim = "*", python = "*" }
 # ...
 ```
 
+You can `add` a dependency to an existing environment by running:
+```shell
+pixi global install --environment my-env package-a package-b
+```
+This will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
+
+You can `remove` dependencies by running:
+```shell
+pixi global remove --environment my-env package-a package-b
+```
+
 
 ### Example: Creating a Data Science Sandbox Environment
 You can create an environment with multiple tools using the following command:
