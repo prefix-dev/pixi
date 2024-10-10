@@ -659,27 +659,39 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
 
 
+# Test that we correctly uninstall the required packages
+# - Checking that the binaries are removed
+# - Checking that the non-requested to remove binaries are still there
 def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
-    # Verify empty list
-    verify_cli_command(
-        [pixi, "global", "list"],
-        env=env,
-        stdout_contains="No global environments found.",
-    )
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+version = {MANIFEST_VERSION}
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
 
-    # Install dummy-b from dummy-channel-1
+[envs.dummy-b]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+
+[envs.dummy-c]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-c = "*" }}
+exposed = {{ dummy-c = "dummy-c" }}
+"""
+    manifest.write_text(original_toml)
+
     verify_cli_command(
         [
             pixi,
             "global",
-            "install",
-            "--channel",
-            dummy_channel_1,
-            "dummy-a",
-            "dummy-b",
-            "dummy-c",
+            "sync",
         ],
         env=env,
     )
@@ -692,7 +704,7 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     assert dummy_b.is_file()
     assert dummy_c.is_file()
 
-    # Uninstall dummy-b
+    # Uninstall dummy-a
     verify_cli_command(
         [pixi, "global", "uninstall", "dummy-a"],
         env=env,
@@ -706,15 +718,27 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     assert tmp_path.joinpath("envs", "dummy-c").is_dir()
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
 
-    # Uninstall dummy-b and dummy-c
+    # Remove dummy-b manually from manifest
+    modified_toml = f"""
+version = {MANIFEST_VERSION}
+
+[envs.dummy-c]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-c = "*" }}
+exposed = {{ dummy-c = "dummy-c" }}
+"""
+    manifest.write_text(modified_toml)
+
+    # Uninstall dummy-c
     verify_cli_command(
-        [pixi, "global", "uninstall", "dummy-b", "dummy-c"],
+        [pixi, "global", "uninstall", "dummy-c"],
         env=env,
     )
     assert not dummy_a.is_file()
     assert not dummy_aa.is_file()
-    assert not dummy_b.is_file()
     assert not dummy_c.is_file()
+    # Verify only the dummy-c environment is removed, dummy-b is still there as no sync is run.
+    assert dummy_b.is_file()
 
     # Verify empty list
     verify_cli_command(
@@ -730,6 +754,31 @@ def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stderr_contains="Couldn't remove dummy-a",
     )
+
+    # Uninstall multiple packages
+    manifest.write_text(original_toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "sync",
+        ],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a", "dummy-b"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert not dummy_b.is_file()
+    assert dummy_c.is_file()
 
 
 def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
