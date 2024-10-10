@@ -1008,6 +1008,7 @@ mod tests {
         let mut file = fs::File::create(&bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
