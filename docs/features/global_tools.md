@@ -31,7 +31,7 @@ exposed = { python310 = "python" } # (3)!
 ```
 
 1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
-2. The exposed binaries are the ones that will be available in the system path. `vim` has multiple so they will all be exposed.
+2. The exposed binaries are the ones that will be available in the system path. `vim` has multiple and all of them are exposed.
 3. Here python is exposed as `python310` to avoid conflicts with other python installations. You can give it any name you want.
 
 ### Channels
