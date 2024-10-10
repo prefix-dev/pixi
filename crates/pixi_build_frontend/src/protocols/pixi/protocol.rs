@@ -78,6 +78,7 @@ impl Protocol {
     pub(crate) async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
@@ -97,12 +98,14 @@ impl Protocol {
         // Construct a JSON-RPC client to communicate with the backend process.
         let (tx, rx) = stdio_transport(stdin, stdout);
 
-        Self::setup_with_transport(source_dir, manifest_path, channel_config, tx, rx).await
+        Self::setup_with_transport(source_dir, manifest_path, cache_dir, channel_config, tx, rx)
+            .await
     }
 
     pub async fn setup_with_transport(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
@@ -124,6 +127,7 @@ impl Protocol {
                 RpcParams::from(InitializeParams {
                     manifest_path,
                     capabilities: FrontendCapabilities {},
+                    cache_directory: cache_dir,
                 }),
             )
             .await

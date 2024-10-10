@@ -1,13 +1,14 @@
 mod protocol;
 
-use std::convert::Infallible;
-use std::path::{Path, PathBuf};
+use std::{
+    convert::Infallible,
+    path::{Path, PathBuf},
+};
 
+pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
-
-pub use protocol::Protocol;
 
 /// A builder for constructing a [`protocol::Protocol`] instance.
 #[derive(Debug, Clone)]
@@ -23,6 +24,9 @@ pub struct ProtocolBuilder {
 
     /// The channel configuration used by this instance.
     channel_config: ChannelConfig,
+
+    /// The cache directory the backend should use. (not used atm)
+    _cache_dir: Option<PathBuf>,
 }
 
 impl ProtocolBuilder {
@@ -51,6 +55,7 @@ impl ProtocolBuilder {
             recipe_dir: recipe_dir.to_path_buf(),
             backend_spec,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            _cache_dir: None,
         }
     }
 
@@ -58,6 +63,14 @@ impl ProtocolBuilder {
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
+            ..self
+        }
+    }
+
+    /// Sets the cache directory the backend should use.
+    pub fn with_opt_cache_dir(self, cache_dir: Option<PathBuf>) -> Self {
+        Self {
+            _cache_dir: cache_dir,
             ..self
         }
     }

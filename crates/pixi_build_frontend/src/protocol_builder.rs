@@ -1,8 +1,13 @@
-use crate::protocol::{DiscoveryError, FinishError};
-use crate::tool::Tool;
-use crate::{conda_build_protocol, pixi_protocol, Protocol, ToolSpec};
+use std::path::{Path, PathBuf};
+
 use rattler_conda_types::ChannelConfig;
-use std::path::Path;
+
+use crate::{
+    conda_build_protocol, pixi_protocol,
+    protocol::{DiscoveryError, FinishError},
+    tool::Tool,
+    Protocol, ToolSpec,
+};
 
 #[derive(Debug)]
 pub(crate) enum ProtocolBuilder {
@@ -59,6 +64,16 @@ impl ProtocolBuilder {
             Self::Pixi(protocol) => Self::Pixi(protocol.with_channel_config(channel_config)),
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_channel_config(channel_config))
+            }
+        }
+    }
+
+    /// Sets the cache directory to use for any caching.
+    pub fn with_opt_cache_dir(self, cache_directory: Option<PathBuf>) -> Self {
+        match self {
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_opt_cache_dir(cache_directory)),
+            Self::CondaBuild(protocol) => {
+                Self::CondaBuild(protocol.with_opt_cache_dir(cache_directory))
             }
         }
     }

@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::SetupRequest;
-use pixi_build_types::{procedures::conda_build::CondaBuildParams, ChannelConfiguration};
+use pixi_build_types::{
+    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
@@ -54,7 +56,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Build the individual packages.
     let result = protocol
         .conda_build(&CondaBuildParams {
-            target_platform: Some(args.target_platform),
+            build_platform_virtual_packages: None,
+            host_platform: Some(PlatformAndVirtualPackages {
+                platform: args.target_platform,
+                virtual_packages: None,
+            }),
             channel_base_urls: Some(
                 project
                     .default_environment()

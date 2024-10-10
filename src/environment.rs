@@ -20,7 +20,7 @@ use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
@@ -495,6 +495,7 @@ pub async fn update_prefix_conda(
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
+    virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<Url>,
     platform: Platform,
     progress_bar_message: &str,
@@ -518,9 +519,16 @@ pub async fn update_prefix_conda(
         .and_then(|record| {
             let build_context = &build_context;
             let channels = &channels;
+            let virtual_packages = &virtual_packages;
             async move {
                 build_context
-                    .build_source_record(&record, channels, platform)
+                    .build_source_record(
+                        &record,
+                        channels,
+                        platform,
+                        virtual_packages.clone(),
+                        virtual_packages.clone(),
+                    )
                     .await
             }
         })

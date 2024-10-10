@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use rattler_conda_types::Platform;
+use rattler_conda_types::GenericVirtualPackage;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::ChannelConfiguration;
+use crate::{ChannelConfiguration, PlatformAndVirtualPackages};
 
 pub const METHOD_NAME: &str = "conda/build";
 
@@ -12,8 +12,15 @@ pub const METHOD_NAME: &str = "conda/build";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildParams {
+    /// The build platform is always the current platform, but the virtual
+    /// packages used can be override.
+    ///
+    /// If this is not present, the virtual packages from the current platform
+    /// are used.
+    pub build_platform_virtual_packages: Option<Vec<GenericVirtualPackage>>,
+
     /// The target platform that the metadata should be fetched for.
-    pub target_platform: Option<Platform>,
+    pub host_platform: Option<PlatformAndVirtualPackages>,
 
     /// The channel base URLs that the metadata should be fetched from.
     pub channel_base_urls: Option<Vec<Url>>,

@@ -16,13 +16,15 @@ use pixi_build_types::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
         conda_metadata::CondaMetadataParams,
     },
-    ChannelConfiguration, CondaPackageMetadata,
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
 };
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
-use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    ChannelConfig, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+};
 use rattler_digest::Sha256;
 use thiserror::Error;
 use tracing::instrument;
@@ -41,6 +43,7 @@ pub struct BuildContext {
     glob_hash_cache: GlobHashCache,
     source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
+    cache_dir: PathBuf,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -101,7 +104,8 @@ impl BuildContext {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
-            build_cache: BuildCache::new(cache_dir),
+            build_cache: BuildCache::new(cache_dir.clone()),
+            cache_dir,
         }
     }
 
@@ -118,11 +122,21 @@ impl BuildContext {
         &self,
         source_spec: &SourceSpec,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_platform: Platform,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
-            .extract_records(&source, channels, target_platform)
+            .extract_records(
+                &source,
+                channels,
+                host_platform,
+                host_virtual_packages,
+                build_platform,
+                build_virtual_packages,
+            )
             .await?;
 
         Ok(SourceMetadata { source, records })
@@ -134,7 +148,9 @@ impl BuildContext {
         &self,
         source_spec: &SourceRecord,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -149,10 +165,13 @@ impl BuildContext {
                     channel_urls: channels.to_vec(),
                     target_platform: Platform::from_str(&source_spec.package_record.subdir)
                         .ok()
-                        .unwrap_or(target_platform),
+                        .unwrap_or(host_platform),
                     name: source_spec.package_record.name.as_normalized().to_string(),
                     version: source_spec.package_record.version.to_string(),
                     build: source_spec.package_record.build.clone(),
+                    host_platform,
+                    host_virtual_packages: host_virtual_packages.clone(),
+                    build_virtual_packages: build_virtual_packages.clone(),
                 },
             )
             .await?;
@@ -205,6 +224,7 @@ impl BuildContext {
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
+            .with_cache_dir(self.cache_dir.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path,
                 build_tool_overrides: Default::default(),
@@ -215,7 +235,11 @@ impl BuildContext {
         // Extract the conda metadata for the package.
         let build_result = protocol
             .conda_build(&CondaBuildParams {
-                target_platform: Some(target_platform),
+                host_platform: Some(PlatformAndVirtualPackages {
+                    platform: host_platform,
+                    virtual_packages: Some(host_virtual_packages.clone()),
+                }),
+                build_platform_virtual_packages: Some(build_virtual_packages.clone()),
                 channel_base_urls: Some(channels.to_owned()),
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),
@@ -366,12 +390,15 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
-    #[instrument(skip_all, fields(source = %source.pinned, platform = %target_platform))]
+    #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_platform: Platform,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -379,7 +406,10 @@ impl BuildContext {
                 source,
                 &SourceMetadataInput {
                     channel_urls: channels.to_vec(),
-                    target_platform,
+                    build_platform,
+                    build_virtual_packages: build_virtual_packages.clone(),
+                    host_platform,
+                    host_virtual_packages: host_virtual_packages.clone(),
                 },
             )
             .await?;
@@ -428,7 +458,14 @@ impl BuildContext {
         // Extract the conda metadata for the package.
         let metadata = protocol
             .get_conda_metadata(&CondaMetadataParams {
-                target_platform: Some(target_platform),
+                build_platform: Some(PlatformAndVirtualPackages {
+                    platform: build_platform,
+                    virtual_packages: Some(build_virtual_packages),
+                }),
+                host_platform: Some(PlatformAndVirtualPackages {
+                    platform: host_platform,
+                    virtual_packages: Some(host_virtual_packages),
+                }),
                 channel_base_urls: Some(channels.to_owned()),
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),

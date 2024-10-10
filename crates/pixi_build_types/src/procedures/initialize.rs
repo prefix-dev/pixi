@@ -26,6 +26,9 @@ pub struct InitializeParams {
     pub manifest_path: PathBuf,
     /// The capabilities that the frontend provides.
     pub capabilities: FrontendCapabilities,
+
+    /// Optionally the cache directory to use for any caching activity.
+    pub cache_directory: Option<PathBuf>,
 }
 
 /// The result of the initialize request.

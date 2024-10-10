@@ -1,10 +1,9 @@
 //! This module is the main entry
-use crate::protocol_builder::ProtocolBuilder;
-use crate::tool::ToolCache;
-use crate::{protocol, Protocol, SetupRequest};
+use std::{path::PathBuf, sync::Arc};
+
 use rattler_conda_types::ChannelConfig;
-use std::path::PathBuf;
-use std::sync::Arc;
+
+use crate::{protocol, protocol_builder::ProtocolBuilder, tool::ToolCache, Protocol, SetupRequest};
 
 /// The frontend for building packages.
 pub struct BuildFrontend {
@@ -13,6 +12,9 @@ pub struct BuildFrontend {
 
     /// The channel configuration used by the frontend
     channel_config: ChannelConfig,
+
+    /// The cache directory to use or `None` to use the default cache directory.
+    cache_dir: Option<PathBuf>,
 }
 
 impl Default for BuildFrontend {
@@ -20,6 +22,7 @@ impl Default for BuildFrontend {
         Self {
             tool_cache: Arc::new(ToolCache::new()),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            cache_dir: None,
         }
     }
 }
@@ -51,6 +54,19 @@ impl BuildFrontend {
         &self.channel_config
     }
 
+    /// Optionally sets the cache directory the backend should use.
+    pub fn with_opt_cache_dir(self, cache_dir: Option<PathBuf>) -> Self {
+        Self { cache_dir, ..self }
+    }
+
+    /// Sets the cache directory the backend should use.
+    pub fn with_cache_dir(self, cache_dir: PathBuf) -> Self {
+        Self {
+            cache_dir: Some(cache_dir),
+            ..self
+        }
+    }
+
     /// Constructs a new [`Protocol`] for the given request. This object can be
     /// used to build the package.
     pub async fn setup_protocol(
@@ -59,7 +75,8 @@ impl BuildFrontend {
     ) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
         let protocol = ProtocolBuilder::discover(&request.source_dir)?
-            .with_channel_config(self.channel_config.clone());
+            .with_channel_config(self.channel_config.clone())
+            .with_opt_cache_dir(self.cache_dir.clone());
 
         tracing::info!(
             "discovered a {} source package at {}",

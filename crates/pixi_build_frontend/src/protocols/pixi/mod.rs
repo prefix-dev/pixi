@@ -17,6 +17,7 @@ pub(crate) struct ProtocolBuilder {
     _manifest: Manifest,
     backend_spec: ToolSpec,
     channel_config: ChannelConfig,
+    cache_dir: Option<PathBuf>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -38,6 +39,7 @@ impl ProtocolBuilder {
             _manifest: manifest,
             backend_spec: backend_spec.into(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            cache_dir: None,
         })
     }
 
@@ -47,6 +49,11 @@ impl ProtocolBuilder {
             channel_config,
             ..self
         }
+    }
+
+    /// Sets the cache directory the backend should use.
+    pub fn with_opt_cache_dir(self, cache_dir: Option<PathBuf>) -> Self {
+        Self { cache_dir, ..self }
     }
 
     /// Discovers a pixi project in the given source directory.
@@ -69,6 +76,7 @@ impl ProtocolBuilder {
         Protocol::setup(
             self.source_dir,
             self._manifest.path,
+            self.cache_dir,
             self.channel_config,
             tool,
         )
