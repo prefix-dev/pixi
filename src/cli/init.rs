@@ -1,4 +1,11 @@
-use crate::Project;
+use std::{
+    cmp::PartialEq,
+    fs,
+    io::{Error, ErrorKind, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
@@ -9,17 +16,11 @@ use pixi_manifest::{
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
-use std::str::FromStr;
-use std::{
-    cmp::PartialEq,
-    fs,
-    io::{Error, ErrorKind, Write},
-    path::{Path, PathBuf},
-};
-
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
+
+use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -241,7 +242,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Created {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            // Canonicalize the path to make it more readable, but if it fails just use the path as
+            // is.
             project.manifest_path().display()
         );
     } else {

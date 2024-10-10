@@ -19,8 +19,6 @@ pub struct Args {
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,
 
-    /// Environment to render. Can be repeated for multiple envs. Defaults to
-    /// all environments
     #[arg(short, long)]
     pub environment: Option<Vec<String>>,
 
@@ -30,8 +28,6 @@ pub struct Args {
     pub platform: Option<Vec<Platform>>,
 
     /// PyPI dependencies are not supported in the conda explicit spec file.
-    /// This flag allows creating the spec file even if PyPI dependencies are
-    /// present.
     #[arg(long, default_value = "false")]
     pub ignore_pypi_errors: bool,
 

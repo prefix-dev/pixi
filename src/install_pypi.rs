@@ -34,7 +34,7 @@ use uv_configuration::{ConfigSettings, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_git::GitResolver;
-use uv_installer::{Preparer, SitePackages};
+use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
@@ -598,12 +598,12 @@ pub async fn update_python_distributions(
     non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
-    use pixi_consts::consts::PROJECT_MANIFEST;
+
     // Determine the current environment markers.
     let python_record = pixi_records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::PROJECT_MANIFEST))?;
     let tags = get_pypi_tags(
         platform,
         system_requirements,
@@ -834,9 +834,33 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
 
         for dist_info in extraneous.iter().chain(reinstalls.iter()) {
-            let summary = uv_installer::uninstall(dist_info)
-                .await
-                .expect("uninstall did not work");
+            let summary = match uv_installer::uninstall(dist_info).await {
+                Ok(sum) => sum,
+                // Get error types from uv_installer
+                Err(UninstallError::Uninstall(e))
+                    if matches!(e, install_wheel_rs::Error::MissingRecord(_))
+                        || matches!(e, install_wheel_rs::Error::MissingTopLevel(_)) =>
+                {
+                    // If the uninstallation failed, remove the directory manually and continue
+                    tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
+
+                    // Sanity check to avoid calling remove all on a bad path.
+                    if dist_info
+                        .path()
+                        .iter()
+                        .any(|segment| Path::new(segment) == Path::new("site-packages"))
+                    {
+                        tokio::fs::remove_dir_all(dist_info.path())
+                            .await
+                            .into_diagnostic()?;
+                    }
+
+                    continue;
+                }
+                Err(err) => {
+                    return Err(miette::miette!(err));
+                }
+            };
             tracing::debug!(
                 "Uninstalled {} ({} file{}, {} director{})",
                 dist_info.name(),

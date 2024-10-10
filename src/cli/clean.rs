@@ -60,7 +60,7 @@ pub struct CacheArgs {
     pub repodata: bool,
 
     /// Answer yes to all questions.
-    #[clap(short = 'y', long = "yes", long = "assume-yes")]
+    #[clap(short = 'y', long = "yes", alias = "assume-yes")]
     assume_yes: bool,
     // TODO: Would be amazing to have a --unused flag to clean only the unused cache.
     //       By searching the inode count of the packages and removing based on that.
