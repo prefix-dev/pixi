@@ -22,7 +22,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         state_changes.report();
     } else {
         eprintln!(
-            "{} Nothing to do. The pixi global installation is already up-to-date",
+            "{}Nothing to do. The pixi global installation is already up-to-date.",
             console::style(console::Emoji("✔ ", "")).green()
         );
     }

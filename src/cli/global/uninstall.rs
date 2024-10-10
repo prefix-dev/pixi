@@ -34,10 +34,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project_modified: &mut Project,
     ) -> miette::Result<StateChanges> {
-        let state_changes = project_modified.remove_environment(env_name).await?;
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
+        state_changes |= project_modified.remove_environment(env_name).await?;
 
         project_modified.manifest.save().await?;
-
         Ok(state_changes)
     }
 

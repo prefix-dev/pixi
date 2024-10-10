@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Add specs to the manifest
         for spec in specs {
