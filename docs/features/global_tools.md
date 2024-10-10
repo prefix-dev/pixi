@@ -74,7 +74,6 @@ pixi global install ansible
 ```
 will create the following entry in the manifest:
 ```toml
-
 [envs.ansible]
 channels = ["conda-forge"]
 dependencies = { ansible = "*" }
