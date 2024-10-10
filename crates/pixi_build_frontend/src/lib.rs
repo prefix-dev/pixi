@@ -3,19 +3,19 @@ mod jsonrpc;
 pub mod protocol;
 mod protocols;
 
-pub(crate) use protocols::conda_build as conda_build_protocol;
-pub(crate) use protocols::pixi as pixi_protocol;
+pub(crate) use protocols::{conda_build as conda_build_protocol, pixi as pixi_protocol};
 
 mod protocol_builder;
 mod tool;
 
 use std::path::PathBuf;
 
-pub use crate::protocol::Protocol;
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
 use rattler_conda_types::MatchSpec;
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
+
+pub use crate::protocol::Protocol;
 
 #[derive(Debug, Clone, Default)]
 pub struct BackendOverrides {

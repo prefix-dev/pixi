@@ -8,7 +8,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use pixi_build_types::CondaPackageMetadata;
 use pixi_record::InputHash;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use serde::Deserialize;
 use serde_with::serde_derive::Serialize;
 use thiserror::Error;
@@ -45,8 +45,13 @@ pub struct SourceMetadataInput {
     /// The URL of the source.
     pub channel_urls: Vec<Url>,
 
-    /// The platform for which the metadata was computed.
-    pub target_platform: Platform,
+    /// The platform on which the package will be built
+    pub build_platform: Platform,
+    pub build_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The platform on which the package will run
+    pub host_platform: Platform,
+    pub host_virtual_packages: Vec<GenericVirtualPackage>,
 }
 
 impl SourceMetadataInput {
@@ -54,9 +59,12 @@ impl SourceMetadataInput {
     pub fn hash_key(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
+        self.build_platform.hash(&mut hasher);
+        self.build_virtual_packages.hash(&mut hasher);
+        self.host_virtual_packages.hash(&mut hasher);
         format!(
             "{}-{}",
-            self.target_platform,
+            self.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
         )
     }

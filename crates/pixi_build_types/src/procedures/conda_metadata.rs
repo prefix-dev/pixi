@@ -1,8 +1,7 @@
-use rattler_conda_types::Platform;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{ChannelConfiguration, CondaPackageMetadata};
+use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages};
 
 pub const METHOD_NAME: &str = "conda/getMetadata";
 
@@ -10,8 +9,16 @@ pub const METHOD_NAME: &str = "conda/getMetadata";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaMetadataParams {
-    /// The target platform that the metadata should be fetched for.
-    pub target_platform: Option<Platform>,
+    /// The platform that will run the build.
+    ///
+    /// If this field is not present, the current platform should be used.
+    pub build_platform: Option<PlatformAndVirtualPackages>,
+
+    /// The platform where the package will run. In the conda world this might
+    /// be different from the "target" platform when targeting noarch.
+    ///
+    /// If this field is not present, the current platform should be used.
+    pub host_platform: Option<PlatformAndVirtualPackages>,
 
     /// The channel base URLs that the metadata should be fetched from.
     pub channel_base_urls: Option<Vec<Url>>,
