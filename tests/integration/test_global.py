@@ -375,6 +375,41 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
     assert actual_manifest == expected_manifest
 
 
+def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+
+    # Install dummy-b again, there should be nothing to do
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+        ],
+        env=env,
+        stderr_contains="The environment dummy-b was already up-to-date",
+    )
+    assert dummy_b.is_file()
+
+
 def test_install_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
