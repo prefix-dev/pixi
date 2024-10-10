@@ -1,7 +1,10 @@
+use std::path::PathBuf;
+
 use dashmap::{DashMap, Entry};
-use itertools::Itertools;
 
 use crate::tool::{SystemTool, Tool, ToolSpec};
+
+use super::IsolatedTool;
 
 /// A [`ToolCache`] maintains a cache of environments for build tools.
 ///
@@ -30,10 +33,10 @@ impl ToolCache {
 
         let tool: Tool = match spec {
             ToolSpec::Isolated(spec) => {
-                todo!(
-                    "requested to instantiate {} but isolated tools are not implemented yet",
-                    spec.specs.iter().map(|s| s.to_string()).format(", ")
-                )
+                // Don't isolate yet we are just pretending
+                // TODO: add isolation
+                let found = which::which(&spec.command)?;
+                IsolatedTool::new(found, PathBuf::new()).into()
             }
             ToolSpec::System(spec) => {
                 let exec = if spec.command.is_absolute() {

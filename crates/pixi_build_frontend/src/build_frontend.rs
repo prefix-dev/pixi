@@ -27,10 +27,10 @@ impl Default for BuildFrontend {
 #[derive(thiserror::Error, Debug)]
 pub enum BuildFrontendError {
     /// Error while discovering the pixi.toml
-    #[error(transparent)]
+    #[error("error during manifest discovery")]
     DiscoveringManifest(#[from] protocol::DiscoveryError),
     /// Error from the build protocol.
-    #[error(transparent)]
+    #[error("error during build-backend initialization, this an error from the remote backend")]
     Protocol(#[from] protocol::FinishError),
     /// Error discovering system-tool
     #[error("error discovering system-tool")]
@@ -72,6 +72,7 @@ impl BuildFrontend {
             .build_tool_overrides
             .into_spec()
             .unwrap_or(protocol.backend_tool());
+
         let tool = self.tool_cache.instantiate(&tool_spec)?;
 
         Ok(protocol.finish(tool).await?)

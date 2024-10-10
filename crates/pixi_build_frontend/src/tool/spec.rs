@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use pixi_manifest::BuildSection;
 use rattler_conda_types::MatchSpec;
 
 use crate::BackendOverrides;
@@ -19,7 +20,7 @@ pub struct IsolatedToolSpec {
     pub specs: Vec<MatchSpec>,
 
     /// The command to invoke in the isolated environment.
-    pub command: Option<String>,
+    pub command: String,
 }
 
 impl IsolatedToolSpec {
@@ -27,14 +28,22 @@ impl IsolatedToolSpec {
     pub fn from_specs(specs: impl IntoIterator<Item = MatchSpec>) -> Self {
         Self {
             specs: specs.into_iter().collect(),
-            command: None,
+            command: String::new(),
+        }
+    }
+
+    /// Construct a new instance from a build section
+    pub fn from_build_section(build_section: &BuildSection) -> Self {
+        Self {
+            specs: build_section.dependencies.clone(),
+            command: build_section.build_backend.clone(),
         }
     }
 
     /// Explicitly set the command to invoke.
     pub fn with_command(self, command: impl Into<String>) -> Self {
         Self {
-            command: Some(command.into()),
+            command: command.into(),
             ..self
         }
     }

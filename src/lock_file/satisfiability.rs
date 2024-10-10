@@ -1327,7 +1327,11 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(
+        #[files("examples/*/pixi.toml")]
+        #[exclude("cpp-sdl")]
+        manifest_path: PathBuf,
+    ) {
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)

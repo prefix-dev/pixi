@@ -2,10 +2,11 @@ mod protocol;
 
 use std::path::{Path, PathBuf};
 
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
 pub use protocol::{InitializeError, Protocol};
-use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+use rattler_conda_types::ChannelConfig;
 
 use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 
@@ -18,22 +19,26 @@ pub(crate) struct ProtocolBuilder {
     channel_config: ChannelConfig,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ProtocolBuildError {
+    #[error("No build section found")]
+    NoBuildSection,
+}
+
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: PathBuf, manifest: Manifest) -> Self {
-        // TODO: Replace this with something that we read from the manifest.
-        let backend_spec =
-            IsolatedToolSpec::from_specs(vec![
-                MatchSpec::from_str("pixi-build-python", Strict).unwrap()
-            ])
-            .into();
+    pub fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
+        let backend_spec = manifest
+            .build_section()
+            .map(IsolatedToolSpec::from_build_section)
+            .ok_or(ProtocolBuildError::NoBuildSection)?;
 
-        Self {
+        Ok(Self {
             source_dir,
             _manifest: manifest,
-            backend_spec,
+            backend_spec: backend_spec.into(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
-        }
+        })
     }
 
     /// Sets the channel configuration used by this instance.
@@ -48,7 +53,9 @@ impl ProtocolBuilder {
     pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
             let manifest = Manifest::from_path(manifest_path)?;
-            return Ok(Some(Self::new(source_dir.to_path_buf(), manifest)));
+            return Ok(Some(
+                Self::new(source_dir.to_path_buf(), manifest).into_diagnostic()?,
+            ));
         }
         Ok(None)
     }
@@ -83,4 +90,19 @@ fn find_pixi_manifest(source_dir: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::ProtocolBuilder;
+
+    #[test]
+    pub fn discover_basic_pixi_manifest() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/basic");
+        let manifest_path = super::find_pixi_manifest(&manifest_dir)
+            .unwrap_or_else(|| panic!("No manifest found at {}", manifest_dir.display()));
+        ProtocolBuilder::discover(&manifest_path).unwrap();
+    }
 }

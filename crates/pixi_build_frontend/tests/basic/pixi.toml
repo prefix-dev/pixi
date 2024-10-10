@@ -8,6 +8,10 @@ version = "0.1.0"
 
 [tasks]
 
+[build]
+build-backend = "pixi-build-python"
+dependencies = []
+
 [host-dependencies]
 pip = "24.*"
 python = "3.12.*"

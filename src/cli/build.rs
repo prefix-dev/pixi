@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverrides, SetupRequest};
+use pixi_build_frontend::SetupRequest;
 use pixi_build_types::{procedures::conda_build::CondaBuildParams, ChannelConfiguration};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
@@ -45,13 +45,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_channel_config(channel_config.clone())
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_overrides: BackendOverrides {
-                spec: None,
-                path: Some("pixi-build-python".into()),
-            },
+            build_tool_overrides: Default::default(),
         })
         .await
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("unable to setup the build-backend to build the project")?;
 
     // Build the individual packages.
     let result = protocol
@@ -71,7 +69,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             },
             outputs: None,
         })
-        .await?;
+        .await
+        .wrap_err("during the building of the project the following error occurred")?;
 
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;

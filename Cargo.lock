@@ -3673,7 +3673,6 @@ dependencies = [
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
- "clap",
  "dashmap",
  "futures",
  "insta",
@@ -3695,7 +3694,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "url",
  "which",
 ]

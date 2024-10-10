@@ -9,16 +9,7 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
-[features]
-cli = ["clap", "tracing-subscriber", "tokio/rt-multi-thread", "tokio/macros"]
-
 [dependencies]
-clap = { workspace = true, features = [
-  "derive",
-  "std",
-  "usage",
-  "wrap_help",
-], optional = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -37,9 +28,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process", "io-std"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, optional = true, features = [
-  "env-filter",
-] }
 url = "2.5.0"
 which = { workspace = true }
 
@@ -48,8 +36,3 @@ pixi_build_types = { path = "../pixi_build_types" }
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
-
-[[bin]]
-name = "pixi_build_frontend"
-path = "src/main.rs"
-required-features = ["cli"]

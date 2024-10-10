@@ -17,7 +17,7 @@ use rattler_conda_types::MatchSpec;
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BackendOverrides {
     /// The specs to use for the build tool.
     pub spec: Option<MatchSpec>,
