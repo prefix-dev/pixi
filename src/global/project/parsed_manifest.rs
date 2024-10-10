@@ -208,6 +208,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
                 "Duplicated exposed names found: '{}'",
                 duplicates
                     .keys()
+                    .sorted()
                     .map(|exposed_name| exposed_name.fancy_display())
                     .join(", ")
             )));
@@ -294,7 +295,7 @@ impl ParsedEnvironment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub(crate) struct ExposedName(String);
 
 impl fmt::Display for ExposedName {

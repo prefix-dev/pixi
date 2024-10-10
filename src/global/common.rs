@@ -2,6 +2,7 @@ use super::{EnvironmentName, ExposedName};
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
+use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
@@ -50,7 +51,7 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() {
+            if path.is_file() && path.is_executable() && is_text(&path)? {
                 files.push(path);
             }
         }
