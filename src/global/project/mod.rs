@@ -463,7 +463,10 @@ impl Project {
             .collect::<miette::Result<Vec<MatchSpec>>>()?;
 
         let repodata = await_in_progress(
-            format!("Querying repodata for {} ", env_name.fancy_display()),
+            format!(
+                "Querying repodata for environment: {} ",
+                env_name.fancy_display()
+            ),
             |_| async {
                 self.repodata_gateway()
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
@@ -484,14 +487,18 @@ impl Project {
             .collect();
 
         // Solve the environment
+        let cloned_env_name = env_name.clone();
         let solved_records = tokio::task::spawn_blocking(move || {
-            wrap_in_progress("solving environment", move || {
-                Solver.solve(SolverTask {
-                    specs: match_specs,
-                    virtual_packages,
-                    ..SolverTask::from_iter(&repodata)
-                })
-            })
+            wrap_in_progress(
+                format!("Solving environment: {}", cloned_env_name.fancy_display()),
+                move || {
+                    Solver.solve(SolverTask {
+                        specs: match_specs,
+                        virtual_packages,
+                        ..SolverTask::from_iter(&repodata)
+                    })
+                },
+            )
             .into_diagnostic()
             .context("failed to solve environment")
         })

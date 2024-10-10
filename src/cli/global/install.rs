@@ -185,8 +185,8 @@ async fn setup_environment(
                     project.manifest.add_exposed_mapping(env_name, &mapping)?;
                     tracing::warn!(
                         "Automatically exposed `{}` from `{}`",
-                        mapping.exposed_name(),
-                        source_package_name.as_normalized()
+                        console::style(mapping.exposed_name()).yellow(),
+                        console::style(source_package_name.as_normalized()).green()
                     );
                 }
             }

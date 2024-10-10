@@ -341,8 +341,8 @@ impl StateChanges {
                         eprintln!(
                             "{}Added package {}={} to environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
-                            pkg.name.as_normalized(),
-                            pkg.version,
+                            console::style(pkg.name.as_normalized()).green(),
+                            console::style(&pkg.version).blue(),
                             env_name.fancy_display()
                         );
                     }
