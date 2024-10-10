@@ -791,7 +791,17 @@ impl Project {
     /// Delete scripts in the bin folder that are broken
     pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
         for exposed_path in self.bin_dir.files().await? {
-            if extract_executable_from_script(&exposed_path).await.is_err() {
+            if extract_executable_from_script(&exposed_path)
+                .await
+                .and_then(|path| {
+                    if path.is_file() {
+                        Ok(path)
+                    } else {
+                        miette::bail!("Path is not a file")
+                    }
+                })
+                .is_err()
+            {
                 tokio_fs::remove_file(exposed_path)
                     .await
                     .into_diagnostic()?;
@@ -879,7 +889,7 @@ impl Repodata for Project {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, io::Write};
+    use std::{collections::HashMap, io::Write, os::unix::fs::PermissionsExt};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -993,6 +1003,12 @@ mod tests {
             let path = project.env_root.path().join("test/bin/python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
+
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&path).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&path, permissions).await.unwrap();
         }
         #[cfg(windows)]
         {
