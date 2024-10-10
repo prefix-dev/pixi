@@ -166,7 +166,6 @@ pub(crate) async fn environment_specs_in_sync(
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
 
     use super::*;
     use crate::global::EnvRoot;
@@ -257,6 +256,8 @@ mod tests {
             );
             tokio_fs::write(&script_path, script).await.unwrap();
         } else {
+            use std::os::unix::fs::PermissionsExt;
+
             let script = format!(
                 r#"#!/bin/sh
             "{}" "$@"

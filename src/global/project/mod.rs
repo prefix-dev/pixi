@@ -889,7 +889,7 @@ impl Repodata for Project {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, io::Write, os::unix::fs::PermissionsExt};
+    use std::{collections::HashMap, io::Write};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -983,6 +983,7 @@ mod tests {
         let mut file = fs::File::create(&non_exposed_bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/not-python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
