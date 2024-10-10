@@ -18,7 +18,12 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 
-use crate::{global, task::TaskName, Project};
+use crate::{
+    global,
+    global::{BinDir, EnvRoot},
+    task::TaskName,
+    Project,
+};
 use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 18;
@@ -405,15 +410,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unwrap_or_default();
 
-    let global_info = if let Ok(global_project) = global::Project::discover().await {
-        Some(GlobalInfo {
-            bin_dir: global_project.bin_dir.path().to_path_buf(),
-            env_dir: global_project.env_root.path().to_path_buf(),
-            manifest: global_project.manifest.path,
-        })
-    } else {
-        None
-    };
+    let global_info = Some(GlobalInfo {
+        bin_dir: BinDir::from_env().await?.path().to_path_buf(),
+        env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
+        manifest: global::Project::manifest_dir()?.join(global::project::MANIFEST_DEFAULT_NAME),
+    });
 
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
