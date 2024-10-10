@@ -18,7 +18,12 @@ use tokio::task::spawn_blocking;
 
 use crate::cli::cli_config::ProjectConfig;
 
-use crate::{task::TaskName, Project};
+use crate::{
+    global,
+    global::{BinDir, EnvRoot},
+    task::TaskName,
+    Project,
+};
 use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 18;
@@ -158,6 +163,38 @@ impl Display for EnvironmentInfo {
     }
 }
 
+/// Information about `pixi global`
+#[derive(Serialize)]
+struct GlobalInfo {
+    bin_dir: PathBuf,
+    env_dir: PathBuf,
+    manifest: PathBuf,
+}
+impl Display for GlobalInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bold = console::Style::new().bold();
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Bin dir"),
+            self.bin_dir.to_string_lossy()
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Environment dir"),
+            self.env_dir.to_string_lossy()
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Manifest dir"),
+            self.manifest.to_string_lossy()
+        )?;
+        Ok(())
+    }
+}
+
 #[serde_as]
 #[derive(Serialize)]
 pub struct Info {
@@ -168,6 +205,7 @@ pub struct Info {
     cache_dir: Option<PathBuf>,
     cache_size: Option<String>,
     auth_dir: PathBuf,
+    global_info: Option<GlobalInfo>,
     project_info: Option<ProjectInfo>,
     environments_info: Vec<EnvironmentInfo>,
     config_locations: Vec<PathBuf>,
@@ -180,6 +218,7 @@ impl Display for Info {
             None => "None".to_string(),
         };
 
+        writeln!(f, "{}", bold.apply_to("System\n------------").cyan())?;
         writeln!(
             f,
             "{:>WIDTH$}: {}",
@@ -230,8 +269,15 @@ impl Display for Info {
             }
         )?;
 
+        // Pixi global information
+        if let Some(gi) = self.global_info.as_ref() {
+            writeln!(f, "\n{}", bold.apply_to("Global\n------------").cyan())?;
+            write!(f, "{}", gi)?;
+        }
+
+        // Project information
         if let Some(pi) = self.project_info.as_ref() {
-            writeln!(f, "\n{}", bold.apply_to("Project\n------------"))?;
+            writeln!(f, "\n{}", bold.apply_to("Project\n------------").cyan())?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
             if let Some(version) = pi.version.clone() {
                 writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Version"), version)?;
@@ -254,7 +300,11 @@ impl Display for Info {
         }
 
         if !self.environments_info.is_empty() {
-            writeln!(f, "\n{}", bold.apply_to("Environments\n------------"))?;
+            writeln!(
+                f,
+                "\n{}",
+                bold.apply_to("Environments\n------------").cyan()
+            )?;
             for e in &self.environments_info {
                 writeln!(f, "{}", e)?;
             }
@@ -360,6 +410,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .unwrap_or_default();
 
+    let global_info = Some(GlobalInfo {
+        bin_dir: BinDir::from_env().await?.path().to_path_buf(),
+        env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
+        manifest: global::Project::manifest_dir()?.join(global::project::MANIFEST_DEFAULT_NAME),
+    });
+
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .iter()
@@ -389,6 +445,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         auth_dir: auth_file,
         project_info,
         environments_info,
+        global_info,
         config_locations: config.loaded_from.clone(),
     };
 
