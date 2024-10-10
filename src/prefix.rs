@@ -5,6 +5,7 @@ use std::{
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::strip_executable_extension;
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
@@ -126,12 +127,12 @@ impl Prefix {
             })
             .collect();
         tracing::debug!(
-            "Found executables: {:?} in {:?}",
-            executables,
+            "In packages: {}, found executables: {:?} ",
             prefix_packages
                 .iter()
-                .map(|p| p.repodata_record.package_record.name.as_source())
-                .collect::<Vec<_>>()
+                .map(|rec| rec.repodata_record.package_record.name.as_normalized())
+                .join(", "),
+            executables
         );
         executables
     }
