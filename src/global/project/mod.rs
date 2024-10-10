@@ -757,7 +757,9 @@ impl Project {
         state_changes |= self.prune_old_environments().await?;
 
         // Remove broken scripts
-        self.remove_broken_scripts().await?;
+        if let Err(err) = self.remove_broken_scripts().await {
+            tracing::warn!("Couldn't remove broken exposed executables: {err}")
+        }
 
         for (env_name, _parsed_environment) in self.environments() {
             state_changes |= self.sync_environment(env_name).await?;
