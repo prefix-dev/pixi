@@ -7,64 +7,64 @@ expression: snapshot
 - input:
     version: "==1.2.3"
   result:
-    extras: []
     version: "==1.2.3"
+    extras: []
 - input: "*"
   result: "*"
 - input:
     path: foobar
   result:
-    editable: ~
-    extras: []
     path: foobar
-- input:
-    path: ~/.cache
-  result:
     editable: ~
     extras: []
+- input:
     path: ~/.cache
+  result:
+    path: ~/.cache
+    editable: ~
+    extras: []
 - input:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
-    extras: []
-    subdirectory: ~
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    subdirectory: ~
+    extras: []
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: ~
-    extras: []
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    tag: ~
     rev: ~
     subdirectory: ~
-    tag: ~
+    extras: []
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
   result:
-    branch: main
-    extras: []
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: ~
     rev: ~
     subdirectory: ~
-    tag: ~
+    extras: []
 - input:
     git: "ssh://github.com/conda-forge/21cmfast-feedstock"
     tag: v1.2.3
   result:
-    branch: ~
-    extras: []
     git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+    branch: ~
+    tag: v1.2.3
     rev: ~
     subdirectory: ~
-    tag: v1.2.3
+    extras: []
 - input:
     git: "https://github.com/prefix-dev/rattler-build"
     rev: "123456"
   result:
-    branch: ~
-    extras: []
     git: "https://github.com/prefix-dev/rattler-build"
+    branch: ~
+    tag: ~
     rev: "123456"
     subdirectory: ~
-    tag: ~
+    extras: []

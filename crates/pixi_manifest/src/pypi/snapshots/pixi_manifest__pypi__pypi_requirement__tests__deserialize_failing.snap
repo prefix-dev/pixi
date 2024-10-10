@@ -16,28 +16,28 @@ expression: snapshot
   result:
     error: "ERROR: Failed to parse version: Unexpected end of version specifier, expected operator:\n//\n^^\n"
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
     tag: v1
   result:
     error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: v1
     rev: "123456"
-    tag: v1
   result:
     error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
 - input:
-    branch: main
     git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
     rev: v1
   result:
     error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
-    rev: "123456"
     tag: v1
+    rev: "123456"
   result:
     error: "ERROR: Only one of `branch` or `tag` or `rev` can be specified"
 - input:
@@ -46,8 +46,8 @@ expression: snapshot
     error: "ERROR: invalid value: string \"ssh://github.com:conda-forge/21cmfast-feedstock\", expected invalid port number"
 - input:
     branch: main
-    rev: "123456"
     tag: v1
+    rev: "123456"
   result:
     error: "ERROR: `branch`, `rev`, and `tag` are only valid when `git` is specified"
 - input: /path/style
