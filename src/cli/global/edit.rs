@@ -18,7 +18,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let editor = args
         .editor
-        .or_else(|| std::env::var("EDITOR").ok())
         .unwrap_or_else(|| {
             if cfg!(windows) {
                 "notepad".to_string()
