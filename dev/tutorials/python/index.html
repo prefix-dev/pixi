@@ -1830,12 +1830,12 @@ In this tutorial, we will use the <code>pyproject.toml</code> format because it 
 <p>We now have the following directory structure:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>.
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├──<span class="w"> </span>pixi_py
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│<span class="w">   </span>└──<span class="w"> </span>__init__.py
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>└──<span class="w"> </span>pyproject.toml
 </span></code></pre></div>
 <p>We've used a flat-layout here but pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</p>
 <h3 id="whats-in-the-pyprojecttoml">What's in the <code>pyproject.toml</code>?<a class="headerlink" href="#whats-in-the-pyprojecttoml" title="Permanent link">#</a></h3>
-<p>Okay, so let's have a look at what's sections have been added and how we can modify the <code>pyproject.toml</code>.</p>
+<p>Okay, so let's have a look at what sections have been added and how we can modify the <code>pyproject.toml</code>.</p>
 <p>These first entries were added to the <code>pyproject.toml</code> file:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Main pixi entry</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">[tool.pixi.project]</span>
@@ -1995,7 +1995,7 @@ Let's add a <code>tests/test_me.py</code> file in the root of the project.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>.
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>├──<span class="w"> </span>pixi.lock
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>├──<span class="w"> </span>pixi_py
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│<span class="w">   </span>└──<span class="w"> </span>__init__.py
 </span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>├──<span class="w"> </span>pyproject.toml
 </span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>└──<span class="w"> </span>tests/test_me.py
 </span></code></pre></div>
@@ -2030,18 +2030,18 @@ Read more about tasks in the <a href="../../features/advanced_tasks/">tasks</a> 
 </span></code></pre></div>
 <p>Neat! It seems to be working!</p>
 <h3 id="test-vs-default-environment">Test vs Default environment<a class="headerlink" href="#test-vs-default-environment" title="Permanent link">#</a></h3>
-<p>The interesting thing is if we compare the output of the two environments.</p>
+<p>Let's compare the output of the test and default environments...</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># v.s. default environment</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># vs. default environment</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pixi<span class="w"> </span>list
 </span></code></pre></div>
-<p>Is that the test environment has:</p>
+<p>We see that the test environment has:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>package<span class="w">          </span>version<span class="w">       </span>build<span class="w">               </span>size<span class="w">       </span>kind<span class="w">   </span><span class="nb">source</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>...
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>pytest<span class="w">           </span><span class="m">8</span>.1.1<span class="w">                             </span><span class="m">1</span>.1<span class="w"> </span>mib<span class="w">    </span>pypi<span class="w">   </span>pytest-8.1.1-py3-none-any.whl
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>...
 </span></code></pre></div>
-<p>But the default environment is missing this package.
+<p>However, the default environment is missing this package.
 This way, you can finetune your environments to only have the packages that are needed for that environment.
 E.g. you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but you could omit these from the <code>prod</code> environment.
 There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a> example that shows how to set up a minimal <code>prod</code> environment and copy from there.</p>
