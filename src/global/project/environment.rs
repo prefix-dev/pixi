@@ -59,13 +59,15 @@ impl FromStr for EnvironmentName {
         let regex = REGEX
             .get_or_init(|| Regex::new(r"^[a-z0-9-]+$").expect("Regex should be able to compile"));
 
-        if !regex.is_match(s) {
+        let normalized_input = s.replace("_", "-").to_lowercase();
+
+        if !regex.is_match(&normalized_input) {
             // Return an error if the string doesn't match the regex
             return Err(ParseEnvironmentNameError {
-                attempted_parse: s.to_string(),
+                attempted_parse: normalized_input,
             });
         }
-        Ok(EnvironmentName(s.to_string()))
+        Ok(EnvironmentName(normalized_input))
     }
 }
 

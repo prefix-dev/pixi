@@ -443,6 +443,40 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
     assert dummy_b.is_file()
 
 
+def test_install_underscore(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_e = tmp_path / "bin" / exec_extension("dummy_e")
+
+    # Install package `dummy_e`
+    # It should be installed in environment `dummy-e`
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy_e",
+        ],
+        env=env,
+    )
+    assert dummy_e.is_file()
+
+    # Uninstall `dummy_e`
+    # The `_` will again automatically be converted into an `-`
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "uninstall",
+            "dummy_e",
+        ],
+        env=env,
+    )
+    assert not dummy_e.is_file()
+
+
 def test_install_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
