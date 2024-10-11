@@ -205,7 +205,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         }
         if !duplicates.is_empty() {
             return Err(serde::de::Error::custom(format!(
-                "Duplicated exposed names found: '{}'",
+                "Duplicated exposed names found: {}",
                 duplicates
                     .keys()
                     .sorted()
