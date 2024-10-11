@@ -24,7 +24,7 @@ use pixi_record::{ParseLockFileError, PixiRecord};
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
+use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
@@ -301,6 +301,11 @@ impl<'p> LockFileDerivedData<'p> {
             environment.project().authenticated_client().clone(),
             installed_packages,
             records,
+            environment
+                .virtual_packages(platform)
+                .into_iter()
+                .map(GenericVirtualPackage::from)
+                .collect(),
             channel_urls,
             platform,
             &format!(
@@ -1630,7 +1635,14 @@ async fn spawn_solve_conda_environment_task(
             for (name, source_spec) in source_specs.iter() {
                 source_futures.push(
                     build_context
-                        .extract_source_metadata(source_spec, &channel_urls, platform)
+                        .extract_source_metadata(
+                            source_spec,
+                            &channel_urls,
+                            platform,
+                            virtual_packages.clone(),
+                            platform,
+                            virtual_packages.clone(),
+                        )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(
                                 "failed to extract metadata for '{}'",
@@ -2053,6 +2065,8 @@ async fn spawn_create_prefix_task(
     let (pixi_records, installed_packages) =
         tokio::try_join!(pixi_records.map(Ok), installed_packages_future)?;
 
+    let build_virtual_packages = group.virtual_packages(Platform::current());
+
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
@@ -2066,6 +2080,7 @@ async fn spawn_create_prefix_task(
                 client,
                 installed_packages,
                 pixi_records.records.clone(),
+                build_virtual_packages,
                 channels,
                 Platform::current(),
                 &format!(
