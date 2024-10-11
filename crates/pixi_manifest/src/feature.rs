@@ -485,7 +485,7 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Host), None)
+                .dependencies(SpecType::Host, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[host-dependencies] should be borrowed"
@@ -494,14 +494,17 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Run), None)
+                .dependencies(SpecType::Run, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[dependencies] should be borrowed"
         );
 
         assert_matches!(
-            manifest.default_feature().dependencies(None, None).unwrap(),
+            manifest
+                .default_feature()
+                .combined_dependencies(None)
+                .unwrap(),
             Cow::Owned(_),
             "combined dependencies should be owned"
         );
@@ -512,13 +515,13 @@ mod tests {
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
         assert_matches!(
-            bla_feature.dependencies(Some(SpecType::Run), None).unwrap(),
+            bla_feature.dependencies(SpecType::Run, None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla.dependencies] should be borrowed"
         );
 
         assert_matches!(
-            bla_feature.dependencies(None, None).unwrap(),
+            bla_feature.combined_dependencies(None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla] combined dependencies should also be borrowed"
         );

@@ -572,7 +572,7 @@ mod tests {
             .default_feature()
             .targets
             .default()
-            .dependencies(None)
+            .combined_dependencies()
             .unwrap_or_default()
             .iter()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
