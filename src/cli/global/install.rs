@@ -99,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => {
                 state_changes.report();
-                revert_environment_after_error(env_name, &last_updated_project)
+                revert_environment_after_error(env_name, &mut last_updated_project)
                     .await
                     .wrap_err("Couldn't install packages. Reverting also failed.")?;
                 return Err(err);
@@ -159,6 +159,9 @@ async fn setup_environment(
 
     // Installing the environment to be able to find the bin paths later
     project.install_environment(env_name).await?;
+
+    // Cleanup removed executables
+    state_changes |= project.remove_broken_expose_names(env_name).await?;
 
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest

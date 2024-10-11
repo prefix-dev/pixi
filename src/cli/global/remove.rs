@@ -32,7 +32,7 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = Project::discover_or_create()
+    let mut project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -95,7 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             state_changes.report();
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
+            revert_environment_after_error(&args.environment, &mut project_original)
                 .await
                 .wrap_err(format!(
                     "Could not remove {:?}. Reverting also failed.",

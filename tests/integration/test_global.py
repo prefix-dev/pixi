@@ -693,6 +693,31 @@ def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
+def test_pixi_install_same_package_different_expose(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Install the same package but with a different version
+    # The old version should be removed and the new version should be installed without error.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.2.0"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert package0_2_0.is_file()
+
+
 def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")

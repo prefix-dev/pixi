@@ -19,6 +19,7 @@ use fs::tokio as tokio_fs;
 use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 pub(crate) use manifest::{Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
@@ -604,6 +605,51 @@ impl Project {
         Ok(state_changes)
     }
 
+    /// Find the exposed names that are no longer installed in the environment
+    /// and remove them.
+    /// This needs to happen after a different version of a package was installed
+    /// which doesn't have the same executables anymore.
+    pub async fn remove_broken_expose_names(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        // Figure out which package the exposed binaries belong to
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = &prefix.find_installed_packages(None).await?;
+        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+
+        // Get the parsed environment
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        // Find the exposed names that are no longer and remove them
+        let to_remove = environment
+            .exposed
+            .iter()
+            .filter_map(|mapping| {
+                // If the executable is still requested, do not remove the mapping
+                if all_executables
+                    .iter()
+                    .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
+                {
+                    tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
+                    return None;
+                }
+                // Else do remove the mapping
+                Some(mapping.exposed_name().clone())
+            })
+            .collect_vec();
+
+        // Removed the removable exposed names from the manifest
+        for exposed_name in &to_remove {
+            self.manifest.remove_exposed_name(env_name, exposed_name)?;
+        }
+
+        // Remove outdated binaries
+        self.prune_exposed(env_name).await
+    }
+
     /// Check if the environment is in sync with the manifest
     ///
     /// Validated the specs in the installed environment.
@@ -754,7 +800,7 @@ impl Project {
 
     // Syncs the manifest with the local environments
     // Returns true if the global installation had to be updated
-    pub(crate) async fn sync(&self) -> Result<StateChanges, miette::Error> {
+    pub(crate) async fn sync(&mut self) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::default();
 
         // Prune environments that are not listed
@@ -765,7 +811,7 @@ impl Project {
             tracing::warn!("Couldn't remove broken exposed executables: {err}")
         }
 
-        for (env_name, _parsed_environment) in self.environments() {
+        for env_name in self.environments().clone().keys() {
             state_changes |= self.sync_environment(env_name).await?;
         }
 
@@ -775,7 +821,7 @@ impl Project {
     /// Syncs the parsed environment with the installation.
     /// Returns true if the environment had to be updated.
     pub(crate) async fn sync_environment(
-        &self,
+        &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -787,6 +833,8 @@ impl Project {
             self.install_environment(env_name).await?;
             state_changes.insert_change(env_name, StateChange::UpdatedEnvironment);
         }
+
+        state_changes |= self.remove_broken_expose_names(env_name).await?;
 
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
