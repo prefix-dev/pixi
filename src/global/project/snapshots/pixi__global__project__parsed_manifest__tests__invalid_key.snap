@@ -16,12 +16,6 @@ unknown field `invalid`, expected one of `channels`, `platform`, `dependencies`,
 
 TOML parse error at line 1, column 7
   |
-1 | [envs.INVALID.dependencies]
-  |       ^^^^^^^
-Failed to parse environment name 'INVALID', please use only lowercase letters, numbers and dashes
-
-TOML parse error at line 1, column 7
-  |
-1 | [envs.python_3.dependencies]
-  |       ^^^^^^^^
-Failed to parse environment name 'python_3', please use only lowercase letters, numbers and dashes
+1 | [envs."python;3".dependencies]
+  |       ^^^^^^^^^^
+Failed to parse environment name 'python;3', please use only lowercase letters, numbers and dashes
