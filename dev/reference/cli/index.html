@@ -1979,6 +1979,27 @@
   
   
     <li class="md-nav__item">
+      <a href="../../packaging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Packaging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../Community/" class="md-nav__link">
         
   
@@ -3217,17 +3238,14 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>robostack<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span><span class="s2">&quot;plotjuggler*&quot;</span>
 </span></code></pre></div>
 <h2 id="self-update"><code>self-update</code><a class="headerlink" href="#self-update" title="Permanent link">#</a></h2>
-<p>Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
-<code>~/.pixi/bin/pixi</code>), pixi won't update to prevent breaking the current installation (Homebrew, etc.). The behaviour can be
-overridden with the <code>--force</code> flag</p>
+<p>Update pixi to the latest version or a specific version. If pixi was installed using another package manager this feature might not
+be available and pixi should be updated using the package manager used to install it.</p>
 <h5 id="options_17">Options<a class="headerlink" href="#options_17" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--version &lt;VERSION&gt;</code>: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.</li>
-<li><code>--force</code>: Force the update even if the pixi binary is not found in the default location.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>self-update
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--version<span class="w"> </span><span class="m">0</span>.13.0
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--force
 </span></code></pre></div>
 <h2 id="info"><code>info</code><a class="headerlink" href="#info" title="Permanent link">#</a></h2>
 <p>Shows helpful information about the pixi installation, cache directories, disk usage, and more.

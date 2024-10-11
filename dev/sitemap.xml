@@ -21,6 +21,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/packaging/</loc>
+         <lastmod>2024-10-11</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/vision/</loc>
          <lastmod>2024-10-11</lastmod>
          <changefreq>daily</changefreq>

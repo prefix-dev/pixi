@@ -6,32 +6,32 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Learn how to set up for different platforms/OS's">
+        <meta name="description" content="How to package pixi for distribution with another package manager?">
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/packaging/">
       
       
-        <link rel="prev" href="../advanced_tasks/">
+        <link rel="prev" href="../vision/">
       
       
-        <link rel="next" href="../multi_environment/">
+        <link rel="next" href="../Community/">
       
       
-      <link rel="icon" href="../../assets/pixi.png">
+      <link rel="icon" href="../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.20">
     
     
       
-        <title>Multi platform config - Pixi by prefix.dev</title>
+        <title>Packaging pixi - Pixi by prefix.dev</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.66ac8b77.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.66ac8b77.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,9 +50,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -61,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Multi platform config - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Packaging pixi - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Learn how to set up for different platforms/OS's" >
+        <meta  property="og:description"  content="How to package pixi for distribution with another package manager?" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/multi_platform_configuration.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/packaging.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/packaging/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Multi platform config - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Packaging pixi - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Learn how to set up for different platforms/OS's" >
+        <meta  name="twitter:description"  content="How to package pixi for distribution with another package manager?" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/multi_platform_configuration.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/packaging.png" >
       
     
     
@@ -104,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#platform-definition" class="md-skip">
+        <a href="#building" class="md-skip">
           Skip to content
         </a>
       
@@ -126,7 +126,7 @@
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-header__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../../assets/pixi.png" alt="logo">
+  <img src="../assets/pixi.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi platform config
+              Packaging pixi
             
           </span>
         </div>
@@ -268,7 +268,7 @@
   <label class="md-nav__title" for="__drawer">
     <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-nav__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../../assets/pixi.png" alt="logo">
+  <img src="../assets/pixi.png" alt="logo">
 
     </a>
     Pixi by prefix.dev
@@ -295,7 +295,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -315,7 +315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../basic_usage/" class="md-nav__link">
+      <a href="../basic_usage/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -375,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../switching_from/poetry/" class="md-nav__link">
+      <a href="../switching_from/poetry/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -396,7 +396,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../switching_from/conda/" class="md-nav__link">
+      <a href="../switching_from/conda/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -424,7 +424,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../CHANGELOG/" class="md-nav__link">
+      <a href="../CHANGELOG/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -484,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/jupyterlab/" class="md-nav__link">
+      <a href="../ide_integration/jupyterlab/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -505,7 +505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/pycharm/" class="md-nav__link">
+      <a href="../ide_integration/pycharm/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -526,7 +526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/r_studio/" class="md-nav__link">
+      <a href="../ide_integration/r_studio/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -547,7 +547,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/devcontainer/" class="md-nav__link">
+      <a href="../ide_integration/devcontainer/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -615,7 +615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/python/" class="md-nav__link">
+      <a href="../tutorials/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -636,7 +636,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/ros2/" class="md-nav__link">
+      <a href="../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -657,7 +657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/rust/" class="md-nav__link">
+      <a href="../tutorials/rust/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -725,7 +725,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/cpp-sdl/" class="md-nav__link">
+      <a href="../examples/cpp-sdl/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -746,7 +746,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/opencv/" class="md-nav__link">
+      <a href="../examples/opencv/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -767,7 +767,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/ros2-nav2/" class="md-nav__link">
+      <a href="../examples/ros2-nav2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -792,8 +792,6 @@
       
   
   
-    
-  
   
   
     
@@ -805,11 +803,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -823,7 +821,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -837,7 +835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../environment/" class="md-nav__link">
+      <a href="../features/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -858,7 +856,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_tasks/" class="md-nav__link">
+      <a href="../features/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -876,28 +874,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Multi Platform
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../features/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -906,66 +886,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#platform-definition" class="md-nav__link">
-    <span class="md-ellipsis">
-      Platform definition
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#target-specifier" class="md-nav__link">
-    <span class="md-ellipsis">
-      Target specifier
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Target specifier">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Dependencies
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Activation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -978,7 +898,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
+      <a href="../features/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -999,7 +919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lockfile/" class="md-nav__link">
+      <a href="../features/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1020,7 +940,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../system_requirements/" class="md-nav__link">
+      <a href="../features/system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1088,7 +1008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design_proposals/pixi_global_manifest/" class="md-nav__link">
+      <a href="../design_proposals/pixi_global_manifest/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1156,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../advanced/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1177,7 +1097,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../advanced/explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1198,7 +1118,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../advanced/channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1219,7 +1139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../advanced/github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1240,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../advanced/updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1261,7 +1181,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/production_deployment/" class="md-nav__link">
+      <a href="../advanced/production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1282,7 +1202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../advanced/pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1350,7 +1270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/project_configuration/" class="md-nav__link">
+      <a href="../reference/project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1371,7 +1291,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+      <a href="../reference/pixi_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1392,7 +1312,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/cli/" class="md-nav__link">
+      <a href="../reference/cli/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1417,8 +1337,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1428,11 +1350,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
         
           
           <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
@@ -1446,7 +1368,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_12">
             <span class="md-nav__icon md-icon"></span>
             Misc
@@ -1460,7 +1382,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../vision/" class="md-nav__link">
+      <a href="../vision/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1478,10 +1400,28 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../packaging/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Packaging
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1490,6 +1430,57 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#building" class="md-nav__link">
+    <span class="md-ellipsis">
+      Building
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Building">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#build-time-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Build-time Options
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shell-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shell completion
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1502,7 +1493,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../Community/" class="md-nav__link">
+      <a href="../Community/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1523,7 +1514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../FAQ/" class="md-nav__link">
+      <a href="../FAQ/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1569,37 +1560,19 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#platform-definition" class="md-nav__link">
+  <a href="#building" class="md-nav__link">
     <span class="md-ellipsis">
-      Platform definition
+      Building
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#target-specifier" class="md-nav__link">
-    <span class="md-ellipsis">
-      Target specifier
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Target specifier">
+    <nav class="md-nav" aria-label="Building">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#dependencies" class="md-nav__link">
+  <a href="#build-time-options" class="md-nav__link">
     <span class="md-ellipsis">
-      Dependencies
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Activation
+      Build-time Options
     </span>
   </a>
   
@@ -1607,6 +1580,15 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shell-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shell completion
+    </span>
+  </a>
   
 </li>
       
@@ -1625,7 +1607,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/multi_platform_configuration.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/packaging.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1633,116 +1615,40 @@
   
 
 
-  <h1>Multi Platform</h1>
+  <h1>Packaging</h1>
 
-<p><a href="../../vision/">Pixi's vision</a> includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
-On this page, you will learn what you can configure to align better with the platform you are making your application for.</p>
-<p>Here is an example manifest file that highlights some of the features:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><code>pixi.toml</code></label><label for="__tabbed_1_2"><code>pyproject.toml</code></label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[project]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Default project info....</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">[dependencies]</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[target.win-64.dependencies]</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Overwrite the needed python version only on win-64</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.7&quot;</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[activation]</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Overwrite activation scripts only for windows</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">]</span>
+<p>This is a guide for distribution maintainers wanting to package pixi for a different package manager.
+Users of pixi can ignore this page.</p>
+<h2 id="building">Building<a class="headerlink" href="#building" title="Permanent link">#</a></h2>
+<p>Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
+At runtime pixi needs no dependencies in other than the runtime it was compiled against (<code>libc</code>, ...).</p>
+<p>To build pixi run
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
 </span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.pixi.project]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Default project info....</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[tool.pixi.dependencies]</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">[tool.pixi.target.win-64.dependencies]</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Overwrite the needed python version only on win-64</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~=3.7.0&quot;</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[tool.pixi.activation]</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="k">[tool.pixi.target.win-64.activation]</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Overwrite activation scripts only for windows</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">]</span>
+Instead of using the predefined <code>dist</code> profile, which is optimized for binary size, you can also pass other options to
+let cargo optimize the binary for other metrics.</p>
+<h3 id="build-time-options">Build-time Options<a class="headerlink" href="#build-time-options" title="Permanent link">#</a></h3>
+<p>Pixi provides some compile-time options, which can influence the build</p>
+<h4 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">#</a></h4>
+<p>By default, pixi is built with Rustls TLS implementation. You can compile pixi using the platform native TLS implementation
+using by adding <code>--no-default-features --feature native-tls</code> to the build command. Note that this might add additional
+runtime dependencies, such as OpenSSL on Linux.</p>
+<h4 id="self-update">Self-Update<a class="headerlink" href="#self-update" title="Permanent link">#</a></h4>
+<p>Pixi has a self-update functionality. When pixi is installed using another package manager one usually doesn't want pixi
+to try to update itself and instead let it be updated by the package manager.
+For this reason the self-update feature is disabled by default. It can be enabled by adding <code>--feature self_update</code> to
+the build command.</p>
+<p>When the self-update feature is disabled and a user tries to run <code>pixi self-update</code> an error message is displayed. This
+message can be customized by setting the <code>PIXI_SELF_UPDATE_DISABLED_MESSAGE</code> environment variable at build time to point
+the user to the package manager they should be using to update pixi.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">PIXI_SELF_UPDATE_DISABLED_MESSAGE</span><span class="o">=</span><span class="s2">&quot;`self-update` has been disabled for this build. Run `brew upgrade pixi` instead&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
+</span></code></pre></div></p>
+<h2 id="shell-completion">Shell completion<a class="headerlink" href="#shell-completion" title="Permanent link">#</a></h2>
+<p>After building pixi you can generate shell autocompletion scripts by running
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>&lt;SHELL&gt;
 </span></code></pre></div>
-</div>
-</div>
-</div>
-<h2 id="platform-definition">Platform definition<a class="headerlink" href="#platform-definition" title="Permanent link">#</a></h2>
-<p>The <code>project.platforms</code> defines which platforms your project supports.
-When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
-All of this is stored in a lock file.</p>
-<p>Running <code>pixi install</code> on a platform that is not configured will warn the user that it is not setup for that platform:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>❯<span class="w"> </span>pixi<span class="w"> </span>install
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>×<span class="w"> </span>the<span class="w"> </span>project<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>configured<span class="w"> </span><span class="k">for</span><span class="w"> </span>your<span class="w"> </span>current<span class="w"> </span>platform
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">   </span>╭─<span class="o">[</span>pixi.toml:6:1<span class="o">]</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w"> </span><span class="m">6</span><span class="w"> </span>│<span class="w"> </span><span class="nv">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="o">]</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w"> </span><span class="m">7</span><span class="w"> </span>│<span class="w"> </span><span class="nv">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;osx-64&quot;</span>,<span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span>,<span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="o">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">   </span>·<span class="w">             </span>────────────────┬────────────────
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">   </span>·<span class="w">                             </span>╰──<span class="w"> </span>add<span class="w"> </span><span class="s1">&#39;linux-64&#39;</span><span class="w"> </span>here
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w"> </span><span class="m">8</span><span class="w"> </span>│
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">   </span>╰────
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>help:<span class="w"> </span>The<span class="w"> </span>project<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>configured<span class="w"> </span>to<span class="w"> </span>support<span class="w"> </span>your<span class="w"> </span>platform<span class="w"> </span><span class="o">(</span>linux-64<span class="o">)</span>.
-</span></code></pre></div>
-<h2 id="target-specifier">Target specifier<a class="headerlink" href="#target-specifier" title="Permanent link">#</a></h2>
-<p>With the target specifier, you can overwrite the original configuration specifically for a single platform.
-If you are targeting a specific platform in your target specifier that was not specified in your <code>project.platforms</code> then pixi will throw an error.</p>
-<h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
-<p>It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">[target.win-64.dependencies]</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">msmpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.8&quot;</span>
-</span></code></pre></div>
-<p>In the above example, we specify that we depend on <code>msmpi</code> only on Windows.
-We also specifically want <code>python</code> on <code>3.8</code> when installing on Windows.
-This will overwrite the dependencies from the generic set of dependencies.
-This will not touch any of the other platforms.</p>
-<p>You can use pixi's cli to add these dependencies to the manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
-</span></code></pre></div>
-<p>This also works for the <code>host</code> and <code>build</code> dependencies.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--host<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--build<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>clang
-</span></code></pre></div>
-<p>Which results in this.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[target.win-64.host-dependencies]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">posix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0.*&quot;</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[target.osx-64.build-dependencies]</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">clang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;16.0.6.*&quot;</span>
-</span></code></pre></div>
-<h3 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h3>
-<p>Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects.
-Generated activation scripts are often in this category, default scripts in unix are <code>bash</code> and for windows they are <code>bat</code></p>
-<p>To deal with this, you can define your activation scripts using the target definition.</p>
-<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[activation]</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bash&quot;</span><span class="p">]</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-When this project is run on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
+and saving the output to a file.
+Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fish</code>, <code>nushell</code>, <code>powershell</code> and <code>zsh</code>.</p>
 
 
 
@@ -1814,9 +1720,9 @@ When this project is run on <code>win-64</code> it will only execute the target 
           
             
             <a
-              href="../advanced_tasks/"
+              href="../vision/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Tasks"
+              aria-label="Previous: Pixi vision"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1827,7 +1733,7 @@ When this project is run on <code>win-64</code> it will only execute the target 
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Tasks
+                  Pixi vision
                 </div>
               </div>
             </a>
@@ -1837,16 +1743,16 @@ When this project is run on <code>win-64</code> it will only execute the target 
           
             
             <a
-              href="../multi_environment/"
+              href="../Community/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Multi Environment"
+              aria-label="Next: Community"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Multi Environment
+                  Community
                 </div>
               </div>
               <div class="md-footer__button md-icon">
@@ -1875,7 +1781,7 @@ When this project is run on <code>win-64</code> it will only execute the target 
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
             <a href="https://prefix.dev" target="_blank">
-                <img src="../../assets/logo_dark.svg" alt="">
+                <img src="../assets/logo_dark.svg" alt="">
             </a>
         </div>
 
@@ -1930,10 +1836,10 @@ When this project is run on <code>win-64</code> it will only execute the target 
       <div class="md-progress" data-md-component="progress" role="progressbar"></div>
     
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.dd8806f2.min.js"></script>
+      <script src="../assets/javascripts/bundle.dd8806f2.min.js"></script>
       
     
   </body>
