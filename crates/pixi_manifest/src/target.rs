@@ -50,26 +50,9 @@ impl Target {
         self.dependencies.get(&SpecType::Build)
     }
 
-    /// Returns the dependencies to use for the given `spec_type`. If `None` is
-    /// specified, the combined dependencies are returned.
-    ///
-    /// The `build` dependencies overwrite the `host` dependencies which
-    /// overwrite the `run` dependencies.
-    ///
-    /// This function returns `None` if no dependencies are specified for the
-    /// given `spec_type`.
-    ///
-    /// This function returns a `Cow` to avoid cloning the dependencies if they
-    /// can be returned directly from the underlying map.
-    pub fn dependencies(
-        &self,
-        spec_type: Option<SpecType>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
-        if let Some(spec_type) = spec_type {
-            self.dependencies.get(&spec_type).map(Cow::Borrowed)
-        } else {
-            self.combined_dependencies()
-        }
+    /// Returns the dependencies of a certain type.
+    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&spec_type)
     }
 
     /// Determines the combined set of dependencies.
@@ -82,7 +65,7 @@ impl Target {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    pub fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
@@ -113,7 +96,7 @@ impl Target {
     pub fn has_dependency(
         &self,
         dep_name: &PackageName,
-        spec_type: Option<SpecType>,
+        spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
         let current_dependency = self
@@ -164,7 +147,7 @@ impl Target {
         spec_type: SpecType,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
-        if self.has_dependency(dep_name, Some(spec_type), None) {
+        if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
                     return Ok(false)

@@ -722,7 +722,7 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::{FeatureName, FeaturesExt};
+    use pixi_manifest::{FeatureName, HasEnvironmentDependencies};
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use tempfile::tempdir;
@@ -807,7 +807,38 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .dependencies(None, Some(Platform::Linux64))
+                .environment_dependencies(Some(Platform::Linux64))
+        ));
+    }
+
+    #[test]
+    fn test_dependency_set_with_build_section() {
+        let file_contents = r#"
+        [dependencies]
+        foo = "1.0"
+
+        [build]
+        dependencies = []
+        build-backend = "foobar"
+
+        [host-dependencies]
+        libc = "2.12"
+
+        [build-dependencies]
+        bar = "1.0"
+        "#;
+
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+        .unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert_snapshot!(format_dependencies(
+            project
+                .default_environment()
+                .environment_dependencies(Some(Platform::Linux64))
         ));
     }
 
@@ -842,7 +873,7 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .dependencies(None, Some(Platform::Linux64))
+                .environment_dependencies(Some(Platform::Linux64))
         ));
     }
 

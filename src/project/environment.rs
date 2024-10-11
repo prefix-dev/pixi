@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -7,11 +6,13 @@ use std::{
     sync::Once,
 };
 
+use indexmap::IndexMap;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
-    self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
+    self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt,
+    HasEnvironmentDependencies, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements,
+    Task, TaskName,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -268,6 +269,8 @@ impl<'p> Environment<'p> {
     }
 }
 
+impl<'p> HasEnvironmentDependencies<'p> for Environment<'p> {}
+
 impl<'p> HasProjectRef<'p> for Environment<'p> {
     fn project(&self) -> &'p Project {
         self.project
@@ -465,7 +468,7 @@ mod tests {
         let deps = manifest
             .environment("foobar")
             .unwrap()
-            .dependencies(None, None);
+            .environment_dependencies(None);
         assert_snapshot!(format_dependencies(deps));
     }
 

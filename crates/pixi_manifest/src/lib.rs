@@ -7,6 +7,7 @@ mod environments;
 mod error;
 mod feature;
 mod features_ext;
+mod has_environment_dependencies;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
@@ -46,6 +47,7 @@ use thiserror::Error;
 
 pub use build::BuildSection;
 pub use features_ext::FeaturesExt;
+pub use has_environment_dependencies::HasEnvironmentDependencies;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
 
