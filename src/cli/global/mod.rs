@@ -11,6 +11,8 @@ mod remove;
 mod sync;
 mod uninstall;
 mod update;
+mod upgrade;
+mod upgrade_all;
 
 #[derive(Debug, Parser)]
 pub enum Command {
@@ -20,10 +22,8 @@ pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Uninstall(uninstall::Args),
-    // TODO: Needs to adapted
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
-    // TODO: Needs to adapted
     #[clap(visible_alias = "ls")]
     List(list::Args),
     #[clap(visible_alias = "s")]
@@ -31,8 +31,10 @@ pub enum Command {
     #[clap(visible_alias = "e")]
     #[command(subcommand)]
     Expose(expose::SubCommand),
-    #[clap(visible_alias = "u")]
     Update(update::Args),
+    Upgrade(upgrade::Args),
+    #[clap(visible_alias = "ua")]
+    UpgradeAll(upgrade_all::Args),
 }
 
 /// Subcommand for global package management actions
@@ -58,6 +60,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
         Command::Update(args) => update::execute(args).await?,
+        Command::Upgrade(args) => upgrade::execute(args).await?,
+        Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
     };
     Ok(())
 }
