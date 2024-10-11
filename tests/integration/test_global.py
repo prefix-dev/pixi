@@ -1018,3 +1018,49 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     assert dummy_b.is_file()
+
+
+def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "my-env",
+            "dummy-a",
+            "dummy-b",
+        ],
+        env=env,
+    )
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+    # Remove dummy-a
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+
+    # Remove non-existing package
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["Dependency", "dummy-a", "not", "my-env"],
+    )
+
+    # Remove package from non-existing environment
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "dummy-a", "dummy-a"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Environment dummy-a doesn't exist",
+    )

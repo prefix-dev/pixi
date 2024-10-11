@@ -1,5 +1,5 @@
 use crate::global::install::local_environment_matches_spec;
-use crate::global::{extract_executable_from_script, BinDir, EnvDir, ExposedName, Mapping};
+use crate::global::EnvDir;
 use crate::prefix::Prefix;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -7,11 +7,9 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use pixi_utils::executable_from_path;
 use rattler_conda_types::{MatchSpec, Platform};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
@@ -81,67 +79,6 @@ pub struct ParseEnvironmentNameError {
     pub attempted_parse: String,
 }
 
-/// Figures out what the status is of the exposed binaries of the environment.
-///
-/// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
-pub(crate) async fn get_expose_scripts_sync_status(
-    bin_dir: &BinDir,
-    env_dir: &EnvDir,
-    exposed: &IndexSet<Mapping>,
-) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
-    // Get all paths to the binaries from the scripts in the bin directory.
-    let locally_exposed = bin_dir.files().await?;
-    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|path| {
-        let path = path.clone();
-        async move {
-            extract_executable_from_script(&path)
-                .await
-                .ok()
-                .map(|exec| (path, exec))
-        }
-    }))
-    .await
-    .into_iter()
-    .flatten()
-    .collect_vec();
-
-    // Filter out all binaries that are related to the environment
-    let related_exposed = executable_paths
-        .into_iter()
-        .filter(|(_, exec)| exec.starts_with(env_dir.path()))
-        .map(|(path, _)| path)
-        .collect_vec();
-
-    // Get all related expose scripts not required by the environment manifest
-    let to_remove = related_exposed
-        .iter()
-        .filter(|path| {
-            !exposed
-                .iter()
-                .any(|mapping| executable_from_path(path) == mapping.exposed_name().to_string())
-        })
-        .cloned()
-        .collect::<IndexSet<PathBuf>>();
-
-    // Get all required exposed binaries that are not yet exposed
-    let to_add = exposed
-        .iter()
-        .filter_map(|mapping| {
-            if related_exposed
-                .iter()
-                .map(|path| executable_from_path(path))
-                .any(|exec| exec == mapping.exposed_name().to_string())
-            {
-                None
-            } else {
-                Some(mapping.exposed_name().clone())
-            }
-        })
-        .collect::<IndexSet<ExposedName>>();
-
-    Ok((to_remove, to_add))
-}
-
 /// Checks if the manifest is in sync with the locally installed environment and binaries.
 /// Returns `true` if the environment is in sync, `false` otherwise.
 pub(crate) async fn environment_specs_in_sync(
@@ -171,6 +108,7 @@ mod tests {
     use crate::global::EnvRoot;
     use fs_err::tokio as tokio_fs;
     use rattler_conda_types::ParseStrictness;
+    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_environment_specs_in_sync() {
@@ -205,90 +143,5 @@ mod tests {
             .await
             .unwrap();
         assert!(result);
-    }
-
-    #[tokio::test]
-    async fn test_get_expose_scripts_sync_status() {
-        let tmp_home_dir = tempfile::tempdir().unwrap();
-        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
-        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
-        let env_name = EnvironmentName::from_str("test").unwrap();
-        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
-        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
-
-        // Test empty
-        let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
-            .await
-            .unwrap();
-        assert!(to_remove.is_empty());
-        assert!(to_add.is_empty());
-
-        // Test with exposed
-        let mut exposed = IndexSet::new();
-        exposed.insert(Mapping::new(
-            ExposedName::from_str("test").unwrap(),
-            "test".to_string(),
-        ));
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
-            .await
-            .unwrap();
-        assert!(to_remove.is_empty());
-        assert_eq!(to_add.len(), 1);
-
-        // Add a script to the bin directory
-        let script_path = if cfg!(windows) {
-            bin_dir.path().join("test.bat")
-        } else {
-            bin_dir.path().join("test")
-        };
-
-        #[cfg(windows)]
-        {
-            let script = format!(
-                r#"
-            @"{}" %*
-            "#,
-                env_dir
-                    .path()
-                    .join("bin")
-                    .join("test.exe")
-                    .to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            let script = format!(
-                r#"#!/bin/sh
-            "{}" "$@"
-            "#,
-                env_dir.path().join("bin").join("test").to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&script_path, permissions)
-                .await
-                .unwrap();
-        };
-
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
-            .await
-            .unwrap();
-        assert!(to_remove.is_empty());
-        assert!(to_add.is_empty());
-
-        // Test to_remove
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
-                .await
-                .unwrap();
-        assert_eq!(to_remove.len(), 1);
-        assert!(to_add.is_empty());
     }
 }

@@ -81,7 +81,7 @@ impl Manifest {
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
-            miette::bail!("Environment {env_name} already exists.");
+            miette::bail!("Environment {} already exists.", env_name.fancy_display());
         }
         self.parsed.envs.insert(
             env_name.clone(),
@@ -96,7 +96,10 @@ impl Manifest {
             channels_array.push(channel.as_str());
         }
 
-        tracing::debug!("Added environment {} to toml document", env_name);
+        tracing::debug!(
+            "Added environment {} to toml document",
+            env_name.fancy_display()
+        );
         Ok(())
     }
 
@@ -135,15 +138,13 @@ impl Manifest {
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
             .dependencies
             .insert(name.clone(), spec.clone());
 
@@ -158,7 +159,46 @@ impl Manifest {
             "Added dependency {}={} to toml document for environment {}",
             name.as_normalized(),
             spec.to_toml_value().to_string(),
-            env_name
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes a dependency from the manifest
+    pub fn remove_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        spec: &MatchSpec,
+    ) -> miette::Result<()> {
+        // Determine the name of the package to add
+        let (Some(name), _spec) = spec.clone().into_nameless() else {
+            miette::bail!("pixi does not support wildcard dependencies")
+        };
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
+            .dependencies
+            .swap_remove(&name)
+            .ok_or(miette::miette!(
+                "Dependency {} not found in {}",
+                console::style(name.as_normalized()).green(),
+                env_name.fancy_display()
+            ))?;
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
+            .remove(name.as_normalized());
+
+        tracing::debug!(
+            "Removed dependency {} to toml document for environment {}",
+            console::style(name.as_normalized()).green(),
+            env_name.fancy_display()
         );
         Ok(())
     }
@@ -178,7 +218,9 @@ impl Manifest {
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("Can't find {} yet", env_name))?
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
             .platform
             .replace(platform);
 
@@ -877,5 +919,42 @@ mod tests {
         let expected_channels: IndexSet<PrioritizedChannel> =
             channels.into_iter().map(From::from).collect();
         assert_eq!(actual_channels, expected_channels);
+    }
+
+    #[test]
+    fn test_remove_dependency() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["test-channel"]
+dependencies = { "python" = "*", pytest = "*"}
+"#,
+        )
+        .unwrap();
+
+        // Remove dependency
+        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+
+        // Check document
+        assert!(!manifest
+            .document
+            .to_string()
+            .contains(match_spec.name.clone().unwrap().as_normalized()));
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .get(&match_spec.name.unwrap());
+        assert!(actual_value.is_none());
+
+        assert_snapshot!(manifest.document.to_string());
     }
 }
