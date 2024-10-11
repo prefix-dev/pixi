@@ -1,15 +1,15 @@
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
-use crate::global::common::{channel_url_to_prioritized_channel, find_package_records};
+use crate::global::common::{
+    channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
+};
 use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
-use crate::global::project::environment::{
-    environment_specs_in_sync, get_expose_scripts_sync_status,
-};
+use crate::global::project::environment::environment_specs_in_sync;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
-    global::{common::is_text, find_executables, EnvDir},
+    global::{find_executables, EnvDir},
     prefix::Prefix,
 };
 use ahash::HashSet;
@@ -267,7 +267,7 @@ impl Project {
     /// installation. If that one fails, an empty one will be created.
     pub(crate) async fn discover_or_create() -> miette::Result<Self> {
         let manifest_dir = Self::manifest_dir()?;
-        let manifest_path = manifest_dir.join(MANIFEST_DEFAULT_NAME);
+        let manifest_path = Self::default_manifest_path()?;
         // Prompt user if the manifest is empty and the user wants to create one
 
         let bin_dir = BinDir::from_env().await?;
@@ -305,22 +305,12 @@ impl Project {
             .files()
             .await?
             .into_iter()
-            .filter_map(|path| match is_text(&path) {
-                Ok(true) => Some(Ok(path)), // Success and is text, continue with path
-                Ok(false) => None,          // Success and isn't text, filter out
-                Err(e) => Some(Err(e)),     // Failure, continue with error
-            })
-            .map(|result| async {
-                match result {
-                    Ok(path) => {
-                        ExposedData::from_exposed_path(
-                            &path,
-                            &env_root,
-                            config.global_channel_config(),
-                        )
+            .map(|path| {
+                let env_root = env_root.clone();
+                let config = config.clone();
+                async move {
+                    ExposedData::from_exposed_path(&path, &env_root, config.global_channel_config())
                         .await
-                    }
-                    Err(e) => Err(e),
                 }
             })
             .collect::<futures::stream::FuturesOrdered<_>>()
@@ -372,6 +362,11 @@ impl Project {
             .ok_or_else(|| miette::miette!("Couldn't get home directory"))
     }
 
+    /// Get the default path to the global manifest file
+    pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
+        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+    }
+
     /// Loads a project from manifest file.
     pub(crate) fn from_path(
         manifest_path: &Path,
@@ -401,13 +396,17 @@ impl Project {
         self.manifest.parsed.envs.get(name)
     }
 
+    /// Returns the EnvDir with the environment name.
+    pub(crate) async fn environment_dir(&self, name: &EnvironmentName) -> miette::Result<EnvDir> {
+        EnvDir::from_env_root(self.env_root.clone(), name).await
+    }
+
     /// Returns the prefix of the environment with the given name.
     pub(crate) async fn environment_prefix(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<Prefix> {
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
-        Ok(Prefix::new(env_dir.path()))
+        Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
     }
 
     /// Create an authenticated reqwest client for this project
@@ -463,7 +462,10 @@ impl Project {
             .collect::<miette::Result<Vec<MatchSpec>>>()?;
 
         let repodata = await_in_progress(
-            format!("Querying repodata for {} ", env_name.fancy_display()),
+            format!(
+                "Querying repodata for environment: {} ",
+                env_name.fancy_display()
+            ),
             |_| async {
                 self.repodata_gateway()
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
@@ -484,14 +486,18 @@ impl Project {
             .collect();
 
         // Solve the environment
+        let cloned_env_name = env_name.clone();
         let solved_records = tokio::task::spawn_blocking(move || {
-            wrap_in_progress("solving environment", move || {
-                Solver.solve(SolverTask {
-                    specs: match_specs,
-                    virtual_packages,
-                    ..SolverTask::from_iter(&repodata)
-                })
-            })
+            wrap_in_progress(
+                format!("Solving environment: {}", cloned_env_name.fancy_display()),
+                move || {
+                    Solver.solve(SolverTask {
+                        specs: match_specs,
+                        virtual_packages,
+                        ..SolverTask::from_iter(&repodata)
+                    })
+                },
+            )
             .into_diagnostic()
             .context("failed to solve environment")
         })
@@ -538,7 +544,7 @@ impl Project {
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Remove the environment from the manifest, if it exists, otherwise ignore error.
         self.manifest.remove_environment(env_name)?;
@@ -557,15 +563,17 @@ impl Project {
             tokio_fs::remove_file(&binary_path)
                 .await
                 .into_diagnostic()?;
-            state_changes.push_change(StateChange::RemovedExposed(
-                ExposedName::from_str(&executable_from_path(&binary_path))?,
-                env_name.clone(),
-            ));
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
+                    &binary_path,
+                ))?),
+            );
         }
 
-        state_changes.push_change(StateChange::RemovedEnvironment(env_name.clone()));
+        state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
-        Ok(StateChanges::default())
+        Ok(state_changes)
     }
 
     /// Find all binaries related to the environment and remove those that are not listed as exposed.
@@ -582,10 +590,12 @@ impl Project {
 
         // Remove all removable binaries
         for exposed_path in to_remove {
-            state_changes.push_change(StateChange::RemovedExposed(
-                ExposedName::from_str(&executable_from_path(&exposed_path))?,
-                env_name.clone(),
-            ));
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
+                    &exposed_path,
+                ))?),
+            );
             tokio_fs::remove_file(&exposed_path)
                 .await
                 .into_diagnostic()?;
@@ -750,6 +760,11 @@ impl Project {
         // Prune environments that are not listed
         state_changes |= self.prune_old_environments().await?;
 
+        // Remove broken scripts
+        if let Err(err) = self.remove_broken_scripts().await {
+            tracing::warn!("Couldn't remove broken exposed executables: {err}")
+        }
+
         for (env_name, _parsed_environment) in self.environments() {
             state_changes |= self.sync_environment(env_name).await?;
         }
@@ -763,20 +778,43 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
         if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
                 "Environment {} specs not up to date with manifest",
                 env_name.fancy_display()
             );
             self.install_environment(env_name).await?;
-            state_changes.set_has_updated(true);
+            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment);
         }
 
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
         Ok(state_changes)
+    }
+
+    /// Delete scripts in the bin folder that are broken
+    pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
+        for exposed_path in self.bin_dir.files().await? {
+            if extract_executable_from_script(&exposed_path)
+                .await
+                .and_then(|path| {
+                    if path.is_file() {
+                        Ok(path)
+                    } else {
+                        miette::bail!("Path is not a file")
+                    }
+                })
+                .is_err()
+            {
+                tokio_fs::remove_file(exposed_path)
+                    .await
+                    .into_diagnostic()?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Delete all non required environments
@@ -814,7 +852,7 @@ impl Project {
                             .await
                             .into_diagnostic()?;
                     }
-                    state_changes.push_change(StateChange::RemovedEnvironment(env_name));
+                    state_changes.insert_change(&env_name, StateChange::RemovedEnvironment);
                 }
             }
         }
@@ -829,6 +867,7 @@ impl Project {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         state_changes.push_changes(
+            env_name,
             self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages(None)
@@ -836,7 +875,7 @@ impl Project {
                 .into_iter()
                 .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
                 .map(|r| r.repodata_record.package_record)
-                .map(|record| StateChange::AddedPackage(record, env_name.clone())),
+                .map(StateChange::AddedPackage),
         );
         Ok(state_changes)
     }
@@ -856,7 +895,7 @@ impl Repodata for Project {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use std::{collections::HashMap, io::Write};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -950,8 +989,16 @@ mod tests {
         let mut file = fs::File::create(&non_exposed_bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/not-python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
+                .unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&non_exposed_bin).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&non_exposed_bin, permissions)
+                .await
                 .unwrap();
         }
         #[cfg(windows)]
@@ -967,9 +1014,16 @@ mod tests {
         let mut file = fs::File::create(&bin).unwrap();
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let path = project.env_root.path().join("test/bin/python");
             file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
                 .unwrap();
+
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&bin).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&bin, permissions).await.unwrap();
         }
         #[cfg(windows)]
         {
@@ -986,7 +1040,10 @@ mod tests {
         let state_changes = project.prune_exposed(&env_name).await.unwrap();
         assert_eq!(
             state_changes.changes(),
-            vec![StateChange::RemovedExposed(not_python, env_name.clone())]
+            std::collections::HashMap::from([(
+                env_name.clone(),
+                vec![StateChange::RemovedExposed(not_python)]
+            )])
         );
 
         // Check if the non-exposed file was removed
@@ -1046,7 +1103,10 @@ mod tests {
         let state_changes = project.prune_old_environments().await.unwrap();
         assert_eq!(
             state_changes.changes(),
-            vec![StateChange::RemovedEnvironment("env2".parse().unwrap())]
+            HashMap::from([(
+                "env2".parse().unwrap(),
+                vec![StateChange::RemovedEnvironment]
+            )])
         );
 
         // Verify that only the specified directories remain

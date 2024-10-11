@@ -9,7 +9,6 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
 use crate::global::project::ParsedEnvironment;
-use crate::global::StateChange;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
@@ -75,14 +74,14 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         channels: Option<Vec<NamedChannelOrUrl>>,
-    ) -> miette::Result<StateChange> {
+    ) -> miette::Result<()> {
         let channels = channels
             .filter(|c| !c.is_empty())
             .unwrap_or_else(|| Config::load_global().default_channels());
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
-            miette::bail!("Environment {env_name} already exists.");
+            miette::bail!("Environment {} already exists.", env_name.fancy_display());
         }
         self.parsed.envs.insert(
             env_name.clone(),
@@ -97,8 +96,11 @@ impl Manifest {
             channels_array.push(channel.as_str());
         }
 
-        tracing::debug!("Added environment {} to toml document", env_name);
-        Ok(StateChange::AddedEnvironment(env_name.clone()))
+        tracing::debug!(
+            "Added environment {} to toml document",
+            env_name.fancy_display()
+        );
+        Ok(())
     }
 
     /// Removes a specific environment from the manifest
@@ -136,15 +138,13 @@ impl Manifest {
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
 
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
             .dependencies
             .insert(name.clone(), spec.clone());
 
@@ -159,7 +159,46 @@ impl Manifest {
             "Added dependency {}={} to toml document for environment {}",
             name.as_normalized(),
             spec.to_toml_value().to_string(),
-            env_name
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes a dependency from the manifest
+    pub fn remove_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        spec: &MatchSpec,
+    ) -> miette::Result<()> {
+        // Determine the name of the package to add
+        let (Some(name), _spec) = spec.clone().into_nameless() else {
+            miette::bail!("pixi does not support wildcard dependencies")
+        };
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
+            .dependencies
+            .swap_remove(&name)
+            .ok_or(miette::miette!(
+                "Dependency {} not found in {}",
+                console::style(name.as_normalized()).green(),
+                env_name.fancy_display()
+            ))?;
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))?
+            .remove(name.as_normalized());
+
+        tracing::debug!(
+            "Removed dependency {} to toml document for environment {}",
+            console::style(name.as_normalized()).green(),
+            env_name.fancy_display()
         );
         Ok(())
     }
@@ -179,7 +218,9 @@ impl Manifest {
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("Can't find {} yet", env_name))?
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
             .platform
             .replace(platform);
 
@@ -245,6 +286,7 @@ impl Manifest {
         Ok(())
     }
 
+    /// Matches an exposed name to its corresponding environment name.
     pub fn match_exposed_name_to_environment(
         &self,
         exposed_name: &ExposedName,
@@ -262,6 +304,18 @@ impl Manifest {
         ))
     }
 
+    /// Checks if an exposed name already exists
+    pub fn exposed_name_already_exists(&self, exposed_name: &ExposedName) -> bool {
+        for env in self.parsed.envs.values() {
+            for mapping in &env.exposed {
+                if mapping.exposed_name == *exposed_name {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Adds exposed mapping to the manifest
     pub fn add_exposed_mapping(
         &mut self,
@@ -272,6 +326,15 @@ impl Manifest {
         if !self.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
+
+        // Ensure exposed name is unique
+        if !self.exposed_name_already_exists(&mapping.exposed_name) {
+            miette::bail!(
+                "Exposed name {} already exists",
+                mapping.exposed_name.fancy_display()
+            );
+        }
+
         // Update self.parsed
         self.parsed
             .envs
@@ -319,6 +382,31 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
+        Ok(())
+    }
+
+    /// Removes all exposed mappings for a specific environment
+    pub fn remove_all_exposed_mappings(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
+            miette::miette!("Environment {} doesn't exist", env_name.fancy_display())
+        })?;
+
+        // Clear the exposed mappings
+        env.exposed.clear();
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .remove("exposed");
+
+        tracing::debug!(
+            "Removed all exposed mappings for environment {} in toml document",
+            env_name.fancy_display()
+        );
         Ok(())
     }
 
@@ -396,11 +484,8 @@ mod tests {
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
+
         let result = manifest.add_exposed_mapping(&env_name, &mapping);
         assert!(result.is_ok());
 
@@ -438,11 +523,8 @@ mod tests {
         let executable_name1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
+
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
         let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
@@ -511,11 +593,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Add and remove mapping again
         manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
@@ -559,11 +637,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Check document
         let actual_value = manifest
@@ -597,13 +671,9 @@ mod tests {
         ]);
 
         // Add environment
-        let state_change = manifest
+        manifest
             .add_environment(&env_name, Some(channels.clone()))
             .unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
 
         // Check document
         let actual_value = manifest
@@ -631,11 +701,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Remove environment
         manifest.remove_environment(&env_name).unwrap();
@@ -675,11 +741,7 @@ mod tests {
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Add dependency
         manifest
@@ -742,11 +804,7 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Add dependency
         manifest
@@ -796,11 +854,7 @@ mod tests {
         let platform = Platform::LinuxRiscv64;
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Set platform
         manifest.set_platform(&env_name, platform).unwrap();
@@ -834,11 +888,7 @@ mod tests {
         channels.push(channel.clone());
 
         // Add environment
-        let state_change = manifest.add_environment(&env_name, None).unwrap();
-        assert_eq!(
-            state_change,
-            StateChange::AddedEnvironment(env_name.clone())
-        );
+        manifest.add_environment(&env_name, None).unwrap();
 
         // Add channel
         manifest.add_channel(&env_name, &channel).unwrap();
@@ -869,5 +919,42 @@ mod tests {
         let expected_channels: IndexSet<PrioritizedChannel> =
             channels.into_iter().map(From::from).collect();
         assert_eq!(actual_channels, expected_channels);
+    }
+
+    #[test]
+    fn test_remove_dependency() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["test-channel"]
+dependencies = { "python" = "*", pytest = "*"}
+"#,
+        )
+        .unwrap();
+
+        // Remove dependency
+        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+
+        // Check document
+        assert!(!manifest
+            .document
+            .to_string()
+            .contains(match_spec.name.clone().unwrap().as_normalized()));
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .get(&match_spec.name.unwrap());
+        assert!(actual_value.is_none());
+
+        assert_snapshot!(manifest.document.to_string());
     }
 }

@@ -1,11 +1,16 @@
-use super::{EnvironmentName, ExposedName};
+use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
+use indexmap::IndexSet;
+use is_executable::IsExecutable;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
+use pixi_utils::executable_from_path;
 use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::{
@@ -49,7 +54,7 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() {
+            if path.is_file() && path.is_executable() && is_text(&path)? {
                 files.push(path);
             }
         }
@@ -192,167 +197,180 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
-    AddedExposed(ExposedName, EnvironmentName),
-    RemovedExposed(ExposedName, EnvironmentName),
-    UpdatedExposed(ExposedName, EnvironmentName),
-    AddedPackage(PackageRecord, EnvironmentName),
-    AddedEnvironment(EnvironmentName),
-    RemovedEnvironment(EnvironmentName),
-}
-
-impl StateChange {
-    fn env(&self) -> &EnvironmentName {
-        match self {
-            StateChange::AddedExposed(_, env)
-            | StateChange::RemovedExposed(_, env)
-            | StateChange::UpdatedExposed(_, env)
-            | StateChange::AddedPackage(_, env)
-            | StateChange::AddedEnvironment(env)
-            | StateChange::RemovedEnvironment(env) => env,
-        }
-    }
+    AddedExposed(ExposedName),
+    RemovedExposed(ExposedName),
+    UpdatedExposed(ExposedName),
+    AddedPackage(PackageRecord),
+    AddedEnvironment,
+    RemovedEnvironment,
+    UpdatedEnvironment,
 }
 
 #[must_use]
 #[derive(Debug, Default)]
 pub(crate) struct StateChanges {
-    changes: Vec<StateChange>,
-    has_updated: bool,
+    changes: HashMap<EnvironmentName, Vec<StateChange>>,
 }
 
 impl StateChanges {
+    /// Creates a new `StateChanges` instance with a single environment name and an empty vector as its value.
+    pub(crate) fn new_with_env(env_name: EnvironmentName) -> Self {
+        Self {
+            changes: HashMap::from([(env_name, Vec::new())]),
+        }
+    }
+
     pub(crate) fn has_changed(&self) -> bool {
-        self.has_updated || !self.changes.is_empty()
+        !self.changes.values().all(Vec::is_empty)
     }
 
-    pub(crate) fn set_has_updated(&mut self, has_updated: bool) {
-        self.has_updated = has_updated;
+    pub(crate) fn insert_change(&mut self, env_name: &EnvironmentName, change: StateChange) {
+        if let Some(entry) = self.changes.get_mut(env_name) {
+            entry.push(change);
+        } else {
+            self.changes.insert(env_name.clone(), Vec::from([change]));
+        }
     }
 
-    pub(crate) fn push_change(&mut self, change: StateChange) {
-        self.changes.push(change);
-    }
-
-    pub(crate) fn push_changes(&mut self, changes: impl IntoIterator<Item = StateChange>) {
-        self.changes.extend(changes);
+    pub(crate) fn push_changes(
+        &mut self,
+        env_name: &EnvironmentName,
+        changes: impl IntoIterator<Item = StateChange>,
+    ) {
+        if let Some(entry) = self.changes.get_mut(env_name) {
+            entry.extend(changes);
+        } else {
+            self.changes
+                .insert(env_name.clone(), changes.into_iter().collect());
+        }
     }
 
     #[cfg(test)]
-    pub fn changes(self) -> Vec<StateChange> {
+    pub fn changes(self) -> HashMap<EnvironmentName, Vec<StateChange>> {
         self.changes
     }
 
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
-        // Remove changes if the environment is removed afterwards
-        let mut pruned_changes: Vec<StateChange> = Vec::new();
-        for change in &self.changes {
-            if let StateChange::RemovedEnvironment(env) = change {
-                pruned_changes.retain(|change| match change {
-                    StateChange::RemovedEnvironment(_) => true,
-                    c => c.env() != env,
-                });
-            }
-            pruned_changes.push(change.clone());
-        }
-        self.changes = pruned_changes;
+        self.changes = self
+            .changes
+            .iter()
+            .map(|(env, changes_for_env)| {
+                // Remove changes if the environment is removed afterwards
+                let mut pruned_changes: Vec<StateChange> = Vec::new();
+                for change in changes_for_env {
+                    if let StateChange::RemovedEnvironment = change {
+                        pruned_changes.clear();
+                    }
+                    pruned_changes.push(change.clone());
+                }
+                (env.clone(), pruned_changes)
+            })
+            .collect()
     }
 
     pub(crate) fn report(mut self) {
         self.prune();
 
-        let mut iter = self.changes.iter().peekable();
+        for (env_name, changes_for_env) in self.changes {
+            if changes_for_env.is_empty() {
+                eprintln!(
+                    "{}The environment {} was already up-to-date",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    env_name.fancy_display()
+                );
+            }
 
-        while let Some(change) = iter.next() {
-            match change {
-                StateChange::AddedExposed(exposed, env_name) => {
-                    let mut exposed_names = vec![exposed.clone()];
-                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
-                    {
-                        if next_env == env_name {
+            let mut iter = changes_for_env.iter().peekable();
+
+            while let Some(change) = iter.next() {
+                match change {
+                    StateChange::AddedExposed(exposed) => {
+                        let mut exposed_names = vec![exposed.clone()];
+                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
                             exposed_names.push(next_exposed.clone());
                             iter.next();
+                        }
+                        if exposed_names.len() == 1 {
+                            eprintln!(
+                                "{}Exposed executable {} from environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                exposed_names[0].fancy_display(),
+                                env_name.fancy_display()
+                            );
                         } else {
-                            break;
+                            eprintln!(
+                                "{}Exposed executables from environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for exposed_name in exposed_names {
+                                eprintln!("   - {}", exposed_name.fancy_display());
+                            }
                         }
                     }
-                    if exposed_names.len() == 1 {
+                    StateChange::RemovedExposed(exposed) => {
                         eprintln!(
-                            "{}Exposed executable {} from environment {}.",
+                            "{}Removed exposed executable {} from environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
-                            exposed_names[0].fancy_display(),
+                            exposed.fancy_display(),
                             env_name.fancy_display()
                         );
-                    } else {
-                        eprintln!(
-                            "{}Exposed executables from environment {}:",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                        for exposed_name in exposed_names {
-                            eprintln!("   - {}", exposed_name.fancy_display());
-                        }
                     }
-                }
-                StateChange::RemovedExposed(exposed, env_name) => {
-                    eprintln!(
-                        "{}Removed exposed executable {} from environment {}.",
-                        console::style(console::Emoji("✔ ", "")).green(),
-                        exposed.fancy_display(),
-                        env_name.fancy_display()
-                    );
-                }
-                StateChange::UpdatedExposed(exposed, env_name) => {
-                    let mut exposed_names = vec![exposed.clone()];
-                    while let Some(StateChange::AddedExposed(next_exposed, next_env)) = iter.peek()
-                    {
-                        if next_env == env_name {
+                    StateChange::UpdatedExposed(exposed) => {
+                        let mut exposed_names = vec![exposed.clone()];
+                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
                             exposed_names.push(next_exposed.clone());
                             iter.next();
+                        }
+                        if exposed_names.len() == 1 {
+                            eprintln!(
+                                "{}Updated executable {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                exposed_names[0].fancy_display(),
+                                env_name.fancy_display()
+                            );
                         } else {
-                            break;
+                            eprintln!(
+                                "{}Updated executables of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for exposed_name in exposed_names {
+                                eprintln!("   - {}", exposed_name.fancy_display());
+                            }
                         }
                     }
-                    if exposed_names.len() == 1 {
+                    StateChange::AddedPackage(pkg) => {
                         eprintln!(
-                            "{}Updated executable {} of environment {}.",
+                            "{}Added package {}={} to environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
-                            exposed_names[0].fancy_display(),
+                            console::style(pkg.name.as_normalized()).green(),
+                            console::style(&pkg.version).blue(),
                             env_name.fancy_display()
                         );
-                    } else {
-                        eprintln!(
-                            "{}Updated executables of environment {}:",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                        for exposed_name in exposed_names {
-                            eprintln!("   - {}", exposed_name.fancy_display());
-                        }
                     }
-                }
-                StateChange::AddedPackage(pkg, env_name) => {
-                    eprintln!(
-                        "{}Added package {}={} to environment {}.",
-                        console::style(console::Emoji("✔ ", "")).green(),
-                        pkg.name.as_normalized(),
-                        pkg.version,
-                        env_name.fancy_display()
-                    );
-                }
-                StateChange::AddedEnvironment(env_name) => {
-                    eprintln!(
-                        "{}Added environment {}.",
-                        console::style(console::Emoji("✔ ", "")).green(),
-                        env_name.fancy_display()
-                    );
-                }
-                StateChange::RemovedEnvironment(env_name) => {
-                    eprintln!(
-                        "{}Removed environment {}.",
-                        console::style(console::Emoji("✔ ", "")).green(),
-                        env_name.fancy_display()
-                    );
+                    StateChange::AddedEnvironment => {
+                        eprintln!(
+                            "{}Added environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                    }
+                    StateChange::RemovedEnvironment => {
+                        eprintln!(
+                            "{}Removed environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                    }
+                    StateChange::UpdatedEnvironment => {
+                        eprintln!(
+                            "{}Updated environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            env_name.fancy_display()
+                        );
+                    }
                 }
             }
         }
@@ -361,8 +379,12 @@ impl StateChanges {
 
 impl std::ops::BitOrAssign for StateChanges {
     fn bitor_assign(&mut self, rhs: Self) {
-        self.changes.extend(rhs.changes);
-        self.has_updated |= rhs.has_updated;
+        for (env_name, changes_for_env) in rhs.changes {
+            self.changes
+                .entry(env_name)
+                .or_default()
+                .extend(changes_for_env);
+        }
     }
 }
 
@@ -385,6 +407,67 @@ pub(crate) fn channel_url_to_prioritized_channel(
     Ok(NamedChannelOrUrl::from_str(channel)
         .into_diagnostic()?
         .into())
+}
+
+/// Figures out what the status is of the exposed binaries of the environment.
+///
+/// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
+pub(crate) async fn get_expose_scripts_sync_status(
+    bin_dir: &BinDir,
+    env_dir: &EnvDir,
+    exposed: &IndexSet<Mapping>,
+) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
+    // Get all paths to the binaries from the scripts in the bin directory.
+    let locally_exposed = bin_dir.files().await?;
+    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|path| {
+        let path = path.clone();
+        async move {
+            extract_executable_from_script(&path)
+                .await
+                .ok()
+                .map(|exec| (path, exec))
+        }
+    }))
+    .await
+    .into_iter()
+    .flatten()
+    .collect_vec();
+
+    // Filter out all binaries that are related to the environment
+    let related_exposed = executable_paths
+        .into_iter()
+        .filter(|(_, exec)| exec.starts_with(env_dir.path()))
+        .map(|(path, _)| path)
+        .collect_vec();
+
+    // Get all related expose scripts not required by the environment manifest
+    let to_remove = related_exposed
+        .iter()
+        .filter(|path| {
+            !exposed
+                .iter()
+                .any(|mapping| executable_from_path(path) == mapping.exposed_name().to_string())
+        })
+        .cloned()
+        .collect::<IndexSet<PathBuf>>();
+
+    // Get all required exposed binaries that are not yet exposed
+    let to_add = exposed
+        .iter()
+        .filter_map(|mapping| {
+            if related_exposed
+                .iter()
+                .map(|path| executable_from_path(path))
+                .any(|exec| exec == mapping.exposed_name().to_string())
+            {
+                None
+            } else {
+                Some(mapping.exposed_name().clone())
+            }
+        })
+        .collect::<IndexSet<ExposedName>>();
+
+    Ok((to_remove, to_add))
 }
 
 #[cfg(test)]
@@ -487,5 +570,90 @@ mod tests {
         } else {
             assert_eq!(executable_script_path, path.join(exposed_name.to_string()));
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_expose_scripts_sync_status() {
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        // Test empty
+        let exposed = IndexSet::new();
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test with exposed
+        let mut exposed = IndexSet::new();
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("test").unwrap(),
+            "test".to_string(),
+        ));
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert_eq!(to_add.len(), 1);
+
+        // Add a script to the bin directory
+        let script_path = if cfg!(windows) {
+            bin_dir.path().join("test.bat")
+        } else {
+            bin_dir.path().join("test")
+        };
+
+        #[cfg(windows)]
+        {
+            let script = format!(
+                r#"
+            @"{}" %*
+            "#,
+                env_dir
+                    .path()
+                    .join("bin")
+                    .join("test.exe")
+                    .to_string_lossy()
+            );
+            tokio_fs::write(&script_path, script).await.unwrap();
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let script = format!(
+                r#"#!/bin/sh
+            "{}" "$@"
+            "#,
+                env_dir.path().join("bin").join("test").to_string_lossy()
+            );
+            tokio_fs::write(&script_path, script).await.unwrap();
+            // Set the file permissions to make it executable
+            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755); // rwxr-xr-x
+            tokio_fs::set_permissions(&script_path, permissions)
+                .await
+                .unwrap();
+        };
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test to_remove
+        let (to_remove, to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+                .await
+                .unwrap();
+        assert_eq!(to_remove.len(), 1);
+        assert!(to_add.is_empty());
     }
 }
