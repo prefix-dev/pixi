@@ -33,7 +33,7 @@ pub enum Command {
     Expose(expose::SubCommand),
     Update(update::Args),
     Upgrade(upgrade::Args),
-    #[clap(visible_alias = "ua")]
+    #[clap(alias = "ua")]
     UpgradeAll(upgrade_all::Args),
 }
 
