@@ -67,6 +67,9 @@ fn start_powershell(
     command.arg("-File");
     command.arg(&temp_path);
 
+    // Set up Ctrl-C handler to ignore it in the shell (the child process should react on CTRL-C)
+    ctrlc::set_handler(move || {}).into_diagnostic()?;
+
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
 }
@@ -99,6 +102,9 @@ fn start_cmdexe(
     let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
     command.arg(temp_file.path());
+
+    // Set up Ctrl-C handler to ignore it in the shell (the child process should react on CTRL-C)
+    ctrlc::set_handler(move || {}).into_diagnostic()?;
 
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
