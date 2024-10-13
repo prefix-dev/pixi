@@ -36,6 +36,18 @@ pub struct Args {
     prompt_config: ConfigCliPrompt,
 }
 
+/// Set up Ctrl-C handler to ignore it (the child process should react on CTRL-C)
+fn ignore_ctrl_c() {
+    tokio::spawn(async move {
+        loop {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to listen for Ctrl+C");
+            // Do nothing, effectively ignoring the Ctrl+C signal
+        }
+    });
+}
+
 fn start_powershell(
     pwsh: PowerShell,
     env: &HashMap<String, String>,
@@ -67,8 +79,7 @@ fn start_powershell(
     command.arg("-File");
     command.arg(&temp_path);
 
-    // Set up Ctrl-C handler to ignore it in the shell (the child process should react on CTRL-C)
-    ctrlc::set_handler(move || {}).into_diagnostic()?;
+    ignore_ctrl_c();
 
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
@@ -103,8 +114,7 @@ fn start_cmdexe(
     command.arg("/K");
     command.arg(temp_file.path());
 
-    // Set up Ctrl-C handler to ignore it in the shell (the child process should react on CTRL-C)
-    ctrlc::set_handler(move || {}).into_diagnostic()?;
+    ignore_ctrl_c();
 
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
