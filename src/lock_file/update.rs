@@ -597,7 +597,11 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(get_cache_dir()?, project.channel_config()),
+            build_context: BuildContext::new(
+                get_cache_dir()?,
+                project.pixi_dir(),
+                project.channel_config(),
+            ),
             glob_hash_cache,
         });
     }
@@ -621,7 +625,11 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(get_cache_dir()?, project.channel_config()),
+            build_context: BuildContext::new(
+                get_cache_dir()?,
+                project.pixi_dir(),
+                project.channel_config(),
+            ),
             glob_hash_cache,
         });
     }
@@ -924,8 +932,11 @@ impl<'p> UpdateContextBuilder<'p> {
             .max_concurrent_solves
             .unwrap_or_else(default_max_concurrent_solves);
 
-        let build_context =
-            BuildContext::new(pixi_config::get_cache_dir()?, project.channel_config());
+        let build_context = BuildContext::new(
+            pixi_config::get_cache_dir()?,
+            project.pixi_dir(),
+            project.channel_config(),
+        );
 
         Ok(UpdateContext {
             project,

@@ -33,6 +33,13 @@ pub struct CondaBuildParams {
     /// outputs.
     #[serde(default)]
     pub outputs: Option<Vec<CondaOutputIdentifier>>,
+
+    /// A directory that can be used by the backend to store files for
+    /// subsequent requests. This directory is unique for each separate source
+    /// dependency.
+    ///
+    /// The directory may not yet exist.
+    pub work_directory: PathBuf,
 }
 
 /// Identifier of an output.

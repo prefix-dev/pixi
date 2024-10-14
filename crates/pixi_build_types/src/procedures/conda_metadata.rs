@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use url::Url;
 
 use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages};
@@ -25,6 +26,13 @@ pub struct CondaMetadataParams {
 
     /// The channel configuration to use to resolve dependencies.
     pub channel_configuration: ChannelConfiguration,
+
+    /// A directory that can be used by the backend to store files for
+    /// subsequent requests. This directory is unique for each separate source
+    /// dependency.
+    ///
+    /// The directory may not yet exist.
+    pub work_directory: PathBuf,
 }
 
 /// Contains the result of the `conda/getMetadata` request.

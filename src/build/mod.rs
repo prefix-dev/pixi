@@ -2,11 +2,13 @@ mod cache;
 
 use std::{
     ffi::OsStr,
+    hash::{Hash, Hasher},
     ops::Not,
     path::{Component, Path, PathBuf},
     str::FromStr,
 };
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -30,6 +32,7 @@ use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
@@ -44,6 +47,7 @@ pub struct BuildContext {
     source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
     cache_dir: PathBuf,
+    work_dir: PathBuf,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -79,7 +83,7 @@ pub enum BuildError {
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceCheckout {
     /// The path to where the source is located locally on disk.
     pub path: PathBuf,
@@ -99,13 +103,14 @@ pub struct SourceMetadata {
 }
 
 impl BuildContext {
-    pub fn new(cache_dir: PathBuf, channel_config: ChannelConfig) -> Self {
+    pub fn new(cache_dir: PathBuf, dot_pixi_dir: PathBuf, channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
             build_cache: BuildCache::new(cache_dir.clone()),
             cache_dir,
+            work_dir: dot_pixi_dir.join("build-v0"),
         }
     }
 
@@ -226,7 +231,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .with_cache_dir(self.cache_dir.clone())
             .setup_protocol(SetupRequest {
-                source_dir: source_checkout.path,
+                source_dir: source_checkout.path.clone(),
                 build_tool_overrides: Default::default(),
             })
             .await
@@ -250,6 +255,15 @@ impl BuildContext {
                     build: Some(source_spec.package_record.build.clone()),
                     subdir: Some(source_spec.package_record.subdir.clone()),
                 }]),
+                work_directory: self.work_dir.join(
+                    WorkDirKey {
+                        source: source_checkout.clone(),
+                        host_platform,
+                        // TODO: Replace this with the actual build backend.
+                        build_backend: "conda".to_string(),
+                    }
+                    .key(),
+                ),
             })
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -470,6 +484,15 @@ impl BuildContext {
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),
                 },
+                work_directory: self.work_dir.join(
+                    WorkDirKey {
+                        source: source.clone(),
+                        host_platform,
+                        // TODO: Replace this with the actual build backend.
+                        build_backend: String::from("conda"),
+                    }
+                    .key(),
+                ),
             })
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -601,4 +624,32 @@ fn normalize_absolute_path(path: &Path) -> Result<PathBuf, std::io::Error> {
         }
     }
     Ok(ret)
+}
+
+/// A key to uniquely identify a work directory. If there is a source build with
+/// the same key they will share the same working directory.
+struct WorkDirKey {
+    /// The location of the source
+    source: SourceCheckout,
+
+    /// The platform the dependency will run on
+    host_platform: Platform,
+
+    /// The build backend name
+    /// TODO: Maybe we should also include the version.
+    build_backend: String,
+}
+
+impl WorkDirKey {
+    pub fn key(&self) -> String {
+        let mut hasher = Xxh3::new();
+        self.source.pinned.to_string().hash(&mut hasher);
+        self.host_platform.hash(&mut hasher);
+        self.build_backend.hash(&mut hasher);
+        let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+        match self.source.path.file_name().and_then(OsStr::to_str) {
+            Some(name) => format!("{}-{}", name, unique_key),
+            None => unique_key,
+        }
+    }
 }
