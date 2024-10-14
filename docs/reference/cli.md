@@ -829,10 +829,17 @@ Checkout the [pixi configuration](./pixi_configuration.md) for more information 
 
 Edit the configuration file in the default editor.
 
+
+##### Arguments
+
+1. `[EDITOR]`: The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
+
 ```shell
 pixi config edit --system
 pixi config edit --local
 pixi config edit -g
+pixi config edit --global code
+pixi config edit --system vim
 ```
 
 ### `config list`

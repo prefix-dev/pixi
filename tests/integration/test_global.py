@@ -193,7 +193,7 @@ exposed = {{ xz = "xz" }}
     assert tomllib.loads(migrated_manifest) == tomllib.loads(original_manifest)
 
 
-def test_sync_duplicated_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_sync_duplicated_expose_error(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
@@ -216,7 +216,7 @@ exposed = {{ dummy-1 = "dummy-b" }}
         [pixi, "global", "sync"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Duplicated exposed names found: 'dummy-1'",
+        stderr_contains="Duplicated exposed names found: dummy-1",
     )
 
 
@@ -349,6 +349,108 @@ dummy-a = "dummy-a"
     assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
 
+def test_expose_duplicated_expose_allow_for_same_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+version = {MANIFEST_VERSION}
+
+[envs.one]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-1 = "dummy-a" }}
+
+[envs.two]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-2 = "dummy-a" }}
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+    )
+
+    # This will not work sinced there would be two times `dummy-2` after this command
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment", "one", "dummy-2=dummy-b"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Exposed name dummy-2 already exists",
+    )
+
+    # This should work, since it just overwrites the existing `dummy-2` mapping
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment", "two", "dummy-2=dummy-b"],
+        env=env,
+    )
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["two"]["exposed"]["dummy-2"] == "dummy-b"
+
+
+def test_install_duplicated_expose_allow_for_same_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "dummy-a",
+            "--expose",
+            "dummy=dummy-a",
+            "--channel",
+            dummy_channel_1,
+        ],
+        env=env,
+    )
+
+    # This will not work sinced there would be two times `dummy` after this command
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "dummy-b",
+            "--expose",
+            "dummy=dummy-b",
+            "--channel",
+            dummy_channel_1,
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Exposed name dummy already exists",
+    )
+
+    # This should work, since it just overwrites the existing properties of environment `dummy-a`
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "dummy-a",
+            "--expose",
+            "dummy=dummy-aa",
+            "--channel",
+            dummy_channel_1,
+            "-vvvv",
+        ],
+        env=env,
+    )
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["dummy-a"]["exposed"]["dummy"] == "dummy-aa"
+
+
 def test_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -441,6 +543,40 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
         stderr_contains="The environment dummy-b was already up-to-date",
     )
     assert dummy_b.is_file()
+
+
+def test_install_underscore(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_e = tmp_path / "bin" / exec_extension("dummy_e")
+
+    # Install package `dummy_e`
+    # It should be installed in environment `dummy-e`
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy_e",
+        ],
+        env=env,
+    )
+    assert dummy_e.is_file()
+
+    # Uninstall `dummy_e`
+    # The `_` will again automatically be converted into an `-`
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "uninstall",
+            "dummy_e",
+        ],
+        env=env,
+    )
+    assert not dummy_e.is_file()
 
 
 def test_install_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

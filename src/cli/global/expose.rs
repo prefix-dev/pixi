@@ -10,9 +10,11 @@ use crate::{
 
 /// Add exposed binaries from an environment to your global environment
 ///
-/// `pixi global expose add python310=python3.10 python3=python3 --environment myenv`
-/// will expose the `python3.10` executable as `python310` and the `python3` executable as `python3`
+/// Example:
+/// - pixi global expose add python310=python3.10 python3=python3 --environment myenv
+/// - pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct AddArgs {
     /// Add one or more mapping which describe which executables are exposed.
     /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.

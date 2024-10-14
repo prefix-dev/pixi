@@ -57,7 +57,7 @@ impl FromStr for EnvironmentName {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         static REGEX: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let regex = REGEX
-            .get_or_init(|| Regex::new(r"^[a-z0-9-]+$").expect("Regex should be able to compile"));
+            .get_or_init(|| Regex::new(r"^[a-z0-9-_]+$").expect("Regex should be able to compile"));
 
         if !regex.is_match(s) {
             // Return an error if the string doesn't match the regex
@@ -73,7 +73,7 @@ impl FromStr for EnvironmentName {
 ///
 /// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
+#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores")]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,

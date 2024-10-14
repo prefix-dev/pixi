@@ -205,7 +205,7 @@ impl<'de> serde::Deserialize<'de> for ParsedManifest {
         }
         if !duplicates.is_empty() {
             return Err(serde::de::Error::custom(format!(
-                "Duplicated exposed names found: '{}'",
+                "Duplicated exposed names found: {}",
                 duplicates
                     .keys()
                     .sorted()
@@ -372,8 +372,7 @@ mod tests {
         let examples = [
             "[invalid]",
             "[envs.ipython.invalid]",
-            "[envs.INVALID.dependencies]",
-            "[envs.python_3.dependencies]",
+            r#"[envs."python;3".dependencies]"#,
         ];
         assert_snapshot!(examples
             .into_iter()
