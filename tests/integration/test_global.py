@@ -882,7 +882,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         env=env,
     )
 
-    # Verify list with dummy-b
+    # Verify list with dummy-a
     verify_cli_command(
         [pixi, "global", "list", "dummy-a"],
         env=env,
