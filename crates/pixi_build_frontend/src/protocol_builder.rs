@@ -1,8 +1,13 @@
-use crate::protocol::{DiscoveryError, FinishError};
-use crate::tool::Tool;
-use crate::{conda_build_protocol, pixi_protocol, Protocol, ToolSpec};
+use std::path::{Path, PathBuf};
+
 use rattler_conda_types::ChannelConfig;
-use std::path::Path;
+
+use crate::{
+    conda_build_protocol, pixi_protocol,
+    protocol::{DiscoveryError, FinishError},
+    tool::ToolCache,
+    BackendOverride, BuildFrontendError, Protocol,
+};
 
 #[derive(Debug)]
 pub(crate) enum ProtocolBuilder {
@@ -32,13 +37,11 @@ impl ProtocolBuilder {
         if source_dir.is_file() {
             return Err(DiscoveryError::NotADirectory);
         } else if !source_dir.is_dir() {
-            return Err(DiscoveryError::NotFound(source_dir.display().to_string()));
+            return Err(DiscoveryError::NotFound(source_dir.to_path_buf()));
         }
 
         // Try to discover as a pixi project
-        if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)
-            .map_err(|e| DiscoveryError::ManifestError(e.to_string()))?
-        {
+        if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)? {
             return Ok(protocol.into());
         }
 
@@ -63,6 +66,23 @@ impl ProtocolBuilder {
         }
     }
 
+    pub(crate) fn with_backend_override(self, backend: Option<BackendOverride>) -> Self {
+        match self {
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_backend_override(backend)),
+            Self::CondaBuild(protocol) => Self::CondaBuild(protocol.with_backend_override(backend)),
+        }
+    }
+
+    /// Sets the cache directory to use for any caching.
+    pub fn with_opt_cache_dir(self, cache_directory: Option<PathBuf>) -> Self {
+        match self {
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_opt_cache_dir(cache_directory)),
+            Self::CondaBuild(protocol) => {
+                Self::CondaBuild(protocol.with_opt_cache_dir(cache_directory))
+            }
+        }
+    }
+
     /// Returns the name of the protocol.
     pub fn name(&self) -> &str {
         match self {
@@ -71,20 +91,20 @@ impl ProtocolBuilder {
         }
     }
 
-    /// Returns a build tool specification for the protocol. This describes how
-    /// to acquire the build tool for the specific package.
-    pub fn backend_tool(&self) -> ToolSpec {
-        match self {
-            Self::Pixi(protocol) => protocol.backend_tool(),
-            Self::CondaBuild(protocol) => protocol.backend_tool(),
-        }
-    }
-
     /// Finish the construction of the protocol and return the protocol object
-    pub async fn finish(self, tool: Tool) -> Result<Protocol, FinishError> {
+    pub async fn finish(self, tool_cache: &ToolCache) -> Result<Protocol, BuildFrontendError> {
         match self {
-            Self::Pixi(protocol) => Ok(Protocol::Pixi(protocol.finish(tool).await?)),
-            Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(protocol.finish(tool))),
+            Self::Pixi(protocol) => Ok(Protocol::Pixi(
+                protocol
+                    .finish(tool_cache)
+                    .await
+                    .map_err(FinishError::Pixi)?,
+            )),
+            Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(
+                protocol
+                    .finish(tool_cache)
+                    .map_err(FinishError::CondaBuild)?,
+            )),
         }
     }
 }

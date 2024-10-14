@@ -2,12 +2,14 @@ mod cache;
 
 use std::{
     ffi::OsStr,
+    hash::{Hash, Hasher},
     ops::Not,
     path::{Component, Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -17,18 +19,21 @@ use pixi_build_types::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
         conda_metadata::CondaMetadataParams,
     },
-    ChannelConfiguration, CondaPackageMetadata,
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
 };
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
-use rattler_conda_types::{ChannelConfig, PackageRecord, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    ChannelConfig, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+};
 use rattler_digest::Sha256;
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
@@ -42,6 +47,8 @@ pub struct BuildContext {
     glob_hash_cache: GlobHashCache,
     source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
+    cache_dir: PathBuf,
+    work_dir: PathBuf,
     metadata_reporter: Arc<NoopCondaMetadataReporter>,
     build_reporter: Arc<NoopCondaBuildReporter>,
 }
@@ -79,7 +86,7 @@ pub enum BuildError {
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceCheckout {
     /// The path to where the source is located locally on disk.
     pub path: PathBuf,
@@ -99,12 +106,14 @@ pub struct SourceMetadata {
 }
 
 impl BuildContext {
-    pub fn new(cache_dir: PathBuf, channel_config: ChannelConfig) -> Self {
+    pub fn new(cache_dir: PathBuf, dot_pixi_dir: PathBuf, channel_config: ChannelConfig) -> Self {
         Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
-            build_cache: BuildCache::new(cache_dir),
+            build_cache: BuildCache::new(cache_dir.clone()),
+            cache_dir,
+            work_dir: dot_pixi_dir.join("build-v0"),
             metadata_reporter: NoopCondaMetadataReporter::new(),
             build_reporter: NoopCondaBuildReporter::new(),
         }
@@ -123,11 +132,21 @@ impl BuildContext {
         &self,
         source_spec: &SourceSpec,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_platform: Platform,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
-            .extract_records(&source, channels, target_platform)
+            .extract_records(
+                &source,
+                channels,
+                host_platform,
+                host_virtual_packages,
+                build_platform,
+                build_virtual_packages,
+            )
             .await?;
 
         Ok(SourceMetadata { source, records })
@@ -139,7 +158,9 @@ impl BuildContext {
         &self,
         source_spec: &SourceRecord,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -154,10 +175,13 @@ impl BuildContext {
                     channel_urls: channels.to_vec(),
                     target_platform: Platform::from_str(&source_spec.package_record.subdir)
                         .ok()
-                        .unwrap_or(target_platform),
+                        .unwrap_or(host_platform),
                     name: source_spec.package_record.name.as_normalized().to_string(),
                     version: source_spec.package_record.version.to_string(),
                     build: source_spec.package_record.build.clone(),
+                    host_platform,
+                    host_virtual_packages: host_virtual_packages.clone(),
+                    build_virtual_packages: build_virtual_packages.clone(),
                 },
             )
             .await?;
@@ -210,9 +234,10 @@ impl BuildContext {
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
+            .with_cache_dir(self.cache_dir.clone())
             .setup_protocol(SetupRequest {
-                source_dir: source_checkout.path,
-                build_tool_overrides: Default::default(),
+                source_dir: source_checkout.path.clone(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -221,7 +246,11 @@ impl BuildContext {
         let build_result = protocol
             .conda_build(
                 &CondaBuildParams {
-                    target_platform: Some(target_platform),
+                    host_platform: Some(PlatformAndVirtualPackages {
+                        platform: host_platform,
+                        virtual_packages: Some(host_virtual_packages.clone()),
+                    }),
+                    build_platform_virtual_packages: Some(build_virtual_packages.clone()),
                     channel_base_urls: Some(channels.to_owned()),
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
@@ -232,6 +261,14 @@ impl BuildContext {
                         build: Some(source_spec.package_record.build.clone()),
                         subdir: Some(source_spec.package_record.subdir.clone()),
                     }]),
+                    work_directory: self.work_dir.join(
+                        WorkDirKey {
+                            source: source_checkout.clone(),
+                            host_platform,
+                            build_backend: protocol.identifier().to_string(),
+                        }
+                        .key(),
+                    ),
                 },
                 self.build_reporter.clone(),
             )
@@ -374,12 +411,15 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
-    #[instrument(skip_all, fields(source = %source.pinned, platform = %target_platform))]
+    #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
         channels: &[Url],
-        target_platform: Platform,
+        host_platform: Platform,
+        host_virtual_packages: Vec<GenericVirtualPackage>,
+        build_platform: Platform,
+        build_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -387,7 +427,10 @@ impl BuildContext {
                 source,
                 &SourceMetadataInput {
                     channel_urls: channels.to_vec(),
-                    target_platform,
+                    build_platform,
+                    build_virtual_packages: build_virtual_packages.clone(),
+                    host_platform,
+                    host_virtual_packages: host_virtual_packages.clone(),
                 },
             )
             .await?;
@@ -428,7 +471,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_overrides: Default::default(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -437,11 +480,26 @@ impl BuildContext {
         let metadata = protocol
             .get_conda_metadata(
                 &CondaMetadataParams {
-                    target_platform: Some(target_platform),
+                    build_platform: Some(PlatformAndVirtualPackages {
+                        platform: build_platform,
+                        virtual_packages: Some(build_virtual_packages),
+                    }),
+                    host_platform: Some(PlatformAndVirtualPackages {
+                        platform: host_platform,
+                        virtual_packages: Some(host_virtual_packages),
+                    }),
                     channel_base_urls: Some(channels.to_owned()),
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
+                    work_directory: self.work_dir.join(
+                        WorkDirKey {
+                            source: source.clone(),
+                            host_platform,
+                            build_backend: protocol.identifier().to_string(),
+                        }
+                        .key(),
+                    ),
                 },
                 self.metadata_reporter.clone(),
             )
@@ -575,4 +633,32 @@ fn normalize_absolute_path(path: &Path) -> Result<PathBuf, std::io::Error> {
         }
     }
     Ok(ret)
+}
+
+/// A key to uniquely identify a work directory. If there is a source build with
+/// the same key they will share the same working directory.
+struct WorkDirKey {
+    /// The location of the source
+    source: SourceCheckout,
+
+    /// The platform the dependency will run on
+    host_platform: Platform,
+
+    /// The build backend name
+    /// TODO: Maybe we should also include the version.
+    build_backend: String,
+}
+
+impl WorkDirKey {
+    pub fn key(&self) -> String {
+        let mut hasher = Xxh3::new();
+        self.source.pinned.to_string().hash(&mut hasher);
+        self.host_platform.hash(&mut hasher);
+        self.build_backend.hash(&mut hasher);
+        let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+        match self.source.path.file_name().and_then(OsStr::to_str) {
+            Some(name) => format!("{}-{}", name, unique_key),
+            None => unique_key,
+        }
+    }
 }

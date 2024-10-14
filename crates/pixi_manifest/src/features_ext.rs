@@ -155,13 +155,30 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     /// features define a requirement for the same package that both
     /// requirements are returned. The different requirements per package
     /// are sorted in the same order as the features they came from.
-    fn dependencies(
-        &self,
-        kind: Option<SpecType>,
-        platform: Option<Platform>,
-    ) -> CondaDependencies {
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
         self.features()
             .filter_map(|f| f.dependencies(kind, platform))
+            .into()
+    }
+
+    /// Returns the combined dependencies to install for this collection.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
+    ///
+    /// The dependencies of all features are combined. This means that if two
+    /// features define a requirement for the same package that both
+    /// requirements are returned. The different requirements per package
+    /// are sorted in the same order as the features they came from.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
+        self.features()
+            .filter_map(|f| f.combined_dependencies(platform))
             .into()
     }
 

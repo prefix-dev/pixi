@@ -3,8 +3,9 @@ mod jsonrpc;
 pub mod protocol;
 mod protocols;
 
-pub(crate) use protocols::conda_build as conda_build_protocol;
-pub(crate) use protocols::pixi as pixi_protocol;
+use std::fmt::{Debug, Formatter};
+
+pub(crate) use protocols::{conda_build as conda_build_protocol, pixi as pixi_protocol};
 
 mod protocol_builder;
 mod reporters;
@@ -12,21 +13,50 @@ mod tool;
 
 use std::path::PathBuf;
 
-pub use crate::protocol::Protocol;
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
 use rattler_conda_types::MatchSpec;
 pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
 pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
+use tokio::io::{AsyncRead, AsyncWrite};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;
 
-#[derive(Debug, Clone, Default)]
-pub struct BackendOverrides {
-    /// The specs to use for the build tool.
-    pub spec: Option<MatchSpec>,
+pub use crate::protocol::Protocol;
 
-    /// Path to a system build tool.
-    pub path: Option<PathBuf>,
+#[derive(Debug)]
+pub enum BackendOverride {
+    /// Overrwide the backend with a specific tool.
+    Spec(MatchSpec),
+
+    /// Overwrite the backend with a specific tool.
+    Path(PathBuf),
+
+    /// Use the given IO for the backend.
+    Io(InProcessBackend),
+}
+
+impl From<InProcessBackend> for BackendOverride {
+    fn from(value: InProcessBackend) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<InProcessBackend> for Option<BackendOverride> {
+    fn from(value: InProcessBackend) -> Self {
+        Some(value.into())
+    }
+}
+
+/// A backend communication protocol that can run in the same process.
+pub struct InProcessBackend {
+    pub rpc_in: Box<dyn AsyncRead + Send + Sync + Unpin>,
+    pub rpc_out: Box<dyn AsyncWrite + Send + Sync + Unpin>,
+}
+
+impl Debug for InProcessBackend {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InProcessBackend").finish()
+    }
 }
 
 #[derive(Debug)]
@@ -35,7 +65,7 @@ pub struct SetupRequest {
     pub source_dir: PathBuf,
 
     /// Overrides for the build tool.
-    pub build_tool_overrides: BackendOverrides,
+    pub build_tool_override: Option<BackendOverride>,
 }
 
 #[derive(Debug)]

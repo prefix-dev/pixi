@@ -675,6 +675,7 @@ async fn test_setuptools_override_failure() {
 
         [dependencies]
         pip = ">=24.0,<25"
+        python = "<3.13"
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]

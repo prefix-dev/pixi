@@ -1,29 +1,42 @@
-use std::sync::Arc;
-
+use miette::Diagnostic;
 use pixi_build_types::procedures::{
     conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::{conda_build_protocol, pixi_protocol, CondaBuildReporter, CondaMetadataReporter};
 
 /// Top-level error type for protocol errors.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum FinishError {
     #[error(transparent)]
-    Pixi(#[from] pixi_protocol::InitializeError),
+    #[diagnostic(transparent)]
+    Pixi(#[from] pixi_protocol::FinishError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaBuild(#[from] conda_build_protocol::FinishError),
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum DiscoveryError {
-    #[error("source directory must be a directory")]
+    #[error(
+        "failed to discover a valid project manifest, the source does not refer to a directory"
+    )]
     NotADirectory,
-    #[error("cannot find source directory '{0}'")]
-    NotFound(String),
-    #[error("loading manifest error '{0}'")]
-    ManifestError(String),
-    #[error("unable to discover communication protocol, currently expects pixi.toml or meta.yaml")]
+    #[error("failed to discover a valid project manifest, the source path '{}' could not be found", .0.display())]
+    NotFound(PathBuf),
+    #[error("unable to discover communication protocol, the source directory does not contain a supported manifest")]
+    #[diagnostic(help(
+        "Ensure that the source directory contains a valid pixi.toml or meta.yaml file."
+    ))]
     UnsupportedFormat,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Pixi(#[from] pixi_protocol::ProtocolBuildError),
 }
 
 /// A protocol describes how to communicate with a build backend. A build
@@ -53,6 +66,7 @@ pub enum DiscoveryError {
 // I think because we mostly have a single variant in use, boxing does not make
 // sense here.
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum Protocol {
     Pixi(pixi_protocol::Protocol),
     CondaBuild(conda_build_protocol::Protocol),
@@ -103,6 +117,13 @@ impl Protocol {
         match self {
             Self::Pixi(protocol) => protocol.conda_build(request, reporter.as_ref()).await,
             Self::CondaBuild(_) => unreachable!(),
+        }
+    }
+
+    pub fn identifier(&self) -> &str {
+        match self {
+            Self::Pixi(protocol) => protocol.backend_identifier(),
+            Self::CondaBuild(protocol) => protocol.backend_identifier(),
         }
     }
 }

@@ -1,21 +1,21 @@
 use std::{
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
 };
-
-use async_fd_lock::{LockWrite, RwLockWriteGuard};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use rattler_conda_types::{Platform, RepoDataRecord};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use url::Url;
 
 use crate::{
     build::{cache::source_checkout_cache_key, SourceCheckout},
     utils::{move_file, MoveError},
 };
+use async_fd_lock::{LockWrite, RwLockWriteGuard};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use rattler_conda_types::{GenericVirtualPackage, Platform, RepoDataRecord};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -53,6 +53,15 @@ pub struct BuildInput {
 
     /// The build string of the package to build
     pub build: String,
+
+    /// The host platform
+    pub host_platform: Platform,
+
+    /// The virtual packages of the target host
+    pub host_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The virtual packages used to build the package
+    pub build_virtual_packages: Vec<GenericVirtualPackage>,
 }
 
 impl BuildInput {
@@ -66,12 +75,18 @@ impl BuildInput {
             name,
             version,
             build,
+            host_platform,
+            host_virtual_packages,
+            build_virtual_packages,
         } = self;
 
         // Hash some of the keys
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
+        host_platform.hash(&mut hasher);
+        host_virtual_packages.hash(&mut hasher);
+        build_virtual_packages.hash(&mut hasher);
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
         format!("{name}-{version}-{target_platform}-{hash}",)

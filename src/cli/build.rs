@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{NoopCondaBuildReporter, SetupRequest};
-use pixi_build_types::{procedures::conda_build::CondaBuildParams, ChannelConfiguration};
+use pixi_build_types::{
+    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
@@ -45,18 +47,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_channel_config(channel_config.clone())
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_overrides: Default::default(),
+            build_tool_override: Default::default(),
         })
         .await
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
-
     let conda_build_noop = NoopCondaBuildReporter::new();
+    // Construct a temporary directory to build the package in. This path is also
+    // automatically removed after the build finishes.
+    let work_dir = tempfile::Builder::new()
+        .prefix("pixi-build-")
+        .tempdir_in(project.pixi_dir())
+        .into_diagnostic()
+        .context("failed to create temporary working directory in the .pixi directory")?;
+
     // Build the individual packages.
     let result = protocol
         .conda_build(
             &CondaBuildParams {
-                target_platform: Some(args.target_platform),
+                build_platform_virtual_packages: None,
+                host_platform: Some(PlatformAndVirtualPackages {
+                    platform: args.target_platform,
+                    virtual_packages: None,
+                }),
                 channel_base_urls: Some(
                     project
                         .default_environment()
@@ -70,6 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     base_url: channel_config.channel_alias,
                 },
                 outputs: None,
+                work_directory: work_dir.path().to_path_buf(),
             },
             conda_build_noop.clone(),
         )

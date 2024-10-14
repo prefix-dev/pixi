@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
 use pixi::Project;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -88,7 +88,7 @@ async fn parse_project() {
     fn dependency_names(project: &Project, platform: Platform) -> Vec<String> {
         project
             .default_environment()
-            .dependencies(None, Some(platform))
+            .environment_dependencies(Some(platform))
             .iter()
             .map(|dep| dep.0.as_normalized().to_string())
             .collect()
