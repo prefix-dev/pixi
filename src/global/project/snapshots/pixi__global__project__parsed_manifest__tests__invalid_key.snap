@@ -18,4 +18,4 @@ TOML parse error at line 1, column 7
   |
 1 | [envs."python;3".dependencies]
   |       ^^^^^^^^^^
-Failed to parse environment name 'python;3', please use only lowercase letters, numbers and dashes
+Failed to parse environment name 'python;3', please use only lowercase letters, numbers, dashes and underscores
