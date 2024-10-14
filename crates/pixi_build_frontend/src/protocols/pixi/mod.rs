@@ -14,7 +14,7 @@ use crate::tool::{IsolatedToolSpec, Tool, ToolSpec};
 #[derive(Debug)]
 pub(crate) struct ProtocolBuilder {
     source_dir: PathBuf,
-    _manifest: Manifest,
+    manifest: Manifest,
     backend_spec: ToolSpec,
     channel_config: ChannelConfig,
 }
@@ -27,7 +27,7 @@ pub enum ProtocolBuildError {
 
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
+    pub(crate) fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
         let backend_spec = manifest
             .build_section()
             .map(IsolatedToolSpec::from_build_section)
@@ -35,7 +35,7 @@ impl ProtocolBuilder {
 
         Ok(Self {
             source_dir,
-            _manifest: manifest,
+            manifest,
             backend_spec: backend_spec.into(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
         })
@@ -68,7 +68,8 @@ impl ProtocolBuilder {
     pub async fn finish(self, tool: Tool) -> Result<Protocol, InitializeError> {
         Protocol::setup(
             self.source_dir,
-            self._manifest.path,
+            self.manifest.path,
+            self.manifest.parsed.project.name,
             self.channel_config,
             tool,
         )

@@ -5,12 +5,13 @@ use std::{
     ops::Not,
     path::{Component, Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::SetupRequest;
+use pixi_build_frontend::{NoopCondaBuildReporter, NoopCondaMetadataReporter, SetupRequest};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -41,6 +42,8 @@ pub struct BuildContext {
     glob_hash_cache: GlobHashCache,
     source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
+    metadata_reporter: Arc<NoopCondaMetadataReporter>,
+    build_reporter: Arc<NoopCondaBuildReporter>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -102,6 +105,8 @@ impl BuildContext {
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
             build_cache: BuildCache::new(cache_dir),
+            metadata_reporter: NoopCondaMetadataReporter::new(),
+            build_reporter: NoopCondaBuildReporter::new(),
         }
     }
 
@@ -214,19 +219,22 @@ impl BuildContext {
 
         // Extract the conda metadata for the package.
         let build_result = protocol
-            .conda_build(&CondaBuildParams {
-                target_platform: Some(target_platform),
-                channel_base_urls: Some(channels.to_owned()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
+            .conda_build(
+                &CondaBuildParams {
+                    target_platform: Some(target_platform),
+                    channel_base_urls: Some(channels.to_owned()),
+                    channel_configuration: ChannelConfiguration {
+                        base_url: self.channel_config.channel_alias.clone(),
+                    },
+                    outputs: Some(vec![CondaOutputIdentifier {
+                        name: Some(source_spec.package_record.name.as_normalized().to_string()),
+                        version: Some(source_spec.package_record.version.version().to_string()),
+                        build: Some(source_spec.package_record.build.clone()),
+                        subdir: Some(source_spec.package_record.subdir.clone()),
+                    }]),
                 },
-                outputs: Some(vec![CondaOutputIdentifier {
-                    name: Some(source_spec.package_record.name.as_normalized().to_string()),
-                    version: Some(source_spec.package_record.version.version().to_string()),
-                    build: Some(source_spec.package_record.build.clone()),
-                    subdir: Some(source_spec.package_record.subdir.clone()),
-                }]),
-            })
+                self.build_reporter.clone(),
+            )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
@@ -427,13 +435,16 @@ impl BuildContext {
 
         // Extract the conda metadata for the package.
         let metadata = protocol
-            .get_conda_metadata(&CondaMetadataParams {
-                target_platform: Some(target_platform),
-                channel_base_urls: Some(channels.to_owned()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
+            .get_conda_metadata(
+                &CondaMetadataParams {
+                    target_platform: Some(target_platform),
+                    channel_base_urls: Some(channels.to_owned()),
+                    channel_configuration: ChannelConfiguration {
+                        base_url: self.channel_config.channel_alias.clone(),
+                    },
                 },
-            })
+                self.metadata_reporter.clone(),
+            )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 

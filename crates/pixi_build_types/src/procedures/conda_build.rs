@@ -12,10 +12,10 @@ pub const METHOD_NAME: &str = "conda/build";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildParams {
-    /// The target platform that the metadata should be fetched for.
+    /// The target platform that package should be built for.
     pub target_platform: Option<Platform>,
 
-    /// The channel base URLs that the metadata should be fetched from.
+    /// The channel base URLs for the conda channels to use to resolve
     pub channel_base_urls: Option<Vec<Url>>,
 
     /// The channel configuration to use to resolve dependencies.

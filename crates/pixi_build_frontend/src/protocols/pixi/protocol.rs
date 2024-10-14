@@ -22,6 +22,7 @@ use crate::{
     jsonrpc::{stdio_transport, RpcParams},
     protocols::error::BackendError,
     tool::Tool,
+    CondaBuildReporter, CondaMetadataReporter,
 };
 
 #[derive(Debug, Error)]
@@ -71,6 +72,9 @@ pub struct Protocol {
     /// The path to the manifest relative to the source directory.
     relative_manifest_path: PathBuf,
 
+    /// Name of the project taken from the manifest
+    project_name: Option<String>,
+
     _backend_capabilities: BackendCapabilities,
 }
 
@@ -78,6 +82,7 @@ impl Protocol {
     pub(crate) async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        project_name: Option<String>,
         channel_config: ChannelConfig,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
@@ -97,12 +102,21 @@ impl Protocol {
         // Construct a JSON-RPC client to communicate with the backend process.
         let (tx, rx) = stdio_transport(stdin, stdout);
 
-        Self::setup_with_transport(source_dir, manifest_path, channel_config, tx, rx).await
+        Self::setup_with_transport(
+            source_dir,
+            manifest_path,
+            project_name,
+            channel_config,
+            tx,
+            rx,
+        )
+        .await
     }
 
     pub async fn setup_with_transport(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        project_name: Option<String>,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
@@ -133,6 +147,7 @@ impl Protocol {
 
         Ok(Self {
             _channel_config: channel_config,
+            project_name,
             client,
             _backend_capabilities: result.capabilities,
             relative_manifest_path,
@@ -152,8 +167,11 @@ impl Protocol {
     pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
+        reporter: &dyn CondaMetadataReporter,
     ) -> miette::Result<CondaMetadataResult> {
-        self.client
+        let operation = reporter.on_metadata_start(self.project_name.as_deref().unwrap_or(""));
+        let result = self
+            .client
             .request(
                 procedures::conda_metadata::METHOD_NAME,
                 RpcParams::from(request),
@@ -162,15 +180,20 @@ impl Protocol {
             .map_err(|err| {
                 ProtocolError::from_client_error(err, procedures::conda_metadata::METHOD_NAME)
             })
-            .into_diagnostic()
+            .into_diagnostic();
+        reporter.on_metadata_end(operation);
+        result
     }
 
     /// Build a specific conda package output
     pub async fn conda_build(
         &self,
         request: &CondaBuildParams,
+        reporter: &dyn CondaBuildReporter,
     ) -> miette::Result<CondaBuildResult> {
-        self.client
+        let operation = reporter.on_build_start(self.project_name.as_deref().unwrap_or(""));
+        let result = self
+            .client
             .request(
                 procedures::conda_build::METHOD_NAME,
                 RpcParams::from(request),
@@ -179,6 +202,8 @@ impl Protocol {
             .map_err(|err| {
                 ProtocolError::from_client_error(err, procedures::conda_build::METHOD_NAME)
             })
-            .into_diagnostic()
+            .into_diagnostic();
+        reporter.on_build_end(operation);
+        result
     }
 }
