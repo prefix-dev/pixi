@@ -24,11 +24,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     });
 
-    let mut child = std::process::Command::new(editor.as_str())
-        .arg(&manifest_path)
-        .spawn()
-        .into_diagnostic()?;
+    let mut child = if cfg!(windows) {
+        std::process::Command::new("cmd")
+            .arg("/C")
+            .arg(editor.as_str())
+            .arg(&manifest_path)
+            .spawn()
+            .into_diagnostic()?
+    } else {
+        std::process::Command::new(editor.as_str())
+            .arg(&manifest_path)
+            .spawn()
+            .into_diagnostic()?
+    };
     child.wait().into_diagnostic()?;
-
     Ok(())
 }
