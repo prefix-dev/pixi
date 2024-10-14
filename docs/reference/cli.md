@@ -443,6 +443,10 @@ pixi task list --summary
 
 List project's packages. Highlighted packages are explicit dependencies.
 
+##### Arguments
+
+1. `[REGEX]`: List only packages matching a regular expression (optional).
+
 ##### Options
 
 - `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
@@ -458,6 +462,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 
 ```shell
 pixi list
+pixi list py
 pixi list --json-pretty
 pixi list --explicit
 pixi list --sort-by size
