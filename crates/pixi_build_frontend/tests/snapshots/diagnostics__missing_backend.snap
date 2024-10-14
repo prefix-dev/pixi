@@ -1,0 +1,5 @@
+---
+source: crates/pixi_build_frontend/tests/diagnostics.rs
+expression: snapshot
+---
+  × failed to setup a build backend, the backend tool 'non-existing' could not be found

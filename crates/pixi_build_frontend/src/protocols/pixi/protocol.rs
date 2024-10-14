@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
     types::ErrorCode,
 };
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::{diagnostic, Diagnostic, IntoDiagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{
@@ -19,54 +19,69 @@ use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
 use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
+    jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
     protocols::error::BackendError,
     tool::Tool,
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
-    #[error("an unexpected io error occurred while communicating with the pixi build backend")]
+    #[error("failed to setup communication with the build backend, an unexpected io error occurred while communicating with the pixi build backend")]
+    #[diagnostic(help("Ensure that the project manifest contains a valid [build] section."))]
     Io(#[from] std::io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Protocol(#[from] ProtocolError),
-    #[error("failed to acquire stdin handle")]
-    StdinHandle,
-    #[error("failed to acquire stdout handle")]
-    StdoutHandle,
 }
 
 impl ProtocolError {
-    pub fn from_client_error(err: ClientError, method: &str) -> Self {
+    pub fn from_client_error(backend_identifier: String, err: ClientError, method: &str) -> Self {
         match err {
             Error::Call(err) if err.code() > -32001 => Self::BackendError(BackendError::from(err)),
             Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
-                Self::MethodNotImplemented(method.to_string())
+                Self::MethodNotImplemented(backend_identifier, method.to_string())
             }
-            Error::ParseError(err) => Self::ParseError(method.to_string(), err),
-            e => Self::JsonRpc(e),
+            Error::ParseError(err) => Self::ParseError(backend_identifier, method.to_string(), err),
+            e => Self::JsonRpc(backend_identifier, e),
         }
     }
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ProtocolError {
+    #[error("failed to communicate with the build backend ({0})")]
+    #[diagnostic(help(
+        "Ensure that the build backend implements the JSON-RPC protocol correctly."
+    ))]
+    JsonRpc(String, #[source] ClientError),
+    #[error("received invalid response from the build backend ({0}) when calling '{1}'")]
+    ParseError(String, String, #[source] serde_json::Error),
     #[error(transparent)]
-    JsonRpc(ClientError),
-    #[error("received invalid response from backend when calling '{0}'")]
-    ParseError(String, #[source] serde_json::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    BackendError(#[from] BackendError),
-    #[error("the build backend does not implement the method '{0}'")]
-    MethodNotImplemented(String),
+    #[diagnostic(
+        transparent,
+        help("This error originates from the build backend specified in the project manifest.")
+    )]
+    BackendError(
+        #[from]
+        #[diagnostic_source]
+        BackendError,
+    ),
+    #[error("the build backend ({0}) does not implement the method '{1}'")]
+    #[diagnostic(help(
+        "This is often caused by the build backend incorrectly reporting certain capabilities. Consider contacting the build backend maintainers for a fix."
+    ))]
+    MethodNotImplemented(String, String),
 }
 
 /// A protocol that uses a pixi manifest to invoke a build backend.
 /// and uses a JSON-RPC client to communicate with the backend.
+#[derive(Debug)]
 pub struct Protocol {
     pub(super) _channel_config: ChannelConfig,
     pub(super) client: Client,
+
+    /// A user friendly name for the backend.
+    backend_identifier: String,
 
     /// The path to the manifest relative to the source directory.
     relative_manifest_path: PathBuf,
@@ -82,27 +97,60 @@ impl Protocol {
         channel_config: ChannelConfig,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
-        // Spawn the tool and capture stdin/stdout.
-        let process = tokio::process::Command::from(tool.command())
-            .stdout(std::process::Stdio::piped())
-            .stdin(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::inherit()) // TODO: Capture this?
-            .spawn()?;
+        match tool.try_into_executable() {
+            Ok(tool) => {
+                // Spawn the tool and capture stdin/stdout.
+                let mut process = tokio::process::Command::from(tool.command())
+                    .stdout(std::process::Stdio::piped())
+                    .stdin(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::inherit()) // TODO: Capture this?
+                    .spawn()?;
 
-        // Acquire the stdin/stdout handles.
-        let stdin = process.stdin.ok_or_else(|| InitializeError::StdinHandle)?;
-        let stdout = process
-            .stdout
-            .ok_or_else(|| InitializeError::StdoutHandle)?;
+                let backend_identifier = tool
+                    .executable()
+                    .file_stem()
+                    .and_then(OsStr::to_str)
+                    .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
 
-        // Construct a JSON-RPC client to communicate with the backend process.
-        let (tx, rx) = stdio_transport(stdin, stdout);
+                // Acquire the stdin/stdout handles.
+                let stdin = process
+                    .stdin
+                    .take()
+                    .expect("since we piped stdin we expect a valid value here");
+                let stdout = process
+                    .stdout
+                    .expect("since we piped stdout we expect a valid value here");
 
-        Self::setup_with_transport(source_dir, manifest_path, cache_dir, channel_config, tx, rx)
-            .await
+                // Construct a JSON-RPC client to communicate with the backend process.
+                let (tx, rx) = stdio_transport(stdin, stdout);
+                Self::setup_with_transport(
+                    backend_identifier,
+                    source_dir,
+                    manifest_path,
+                    cache_dir,
+                    channel_config,
+                    tx,
+                    rx,
+                )
+                .await
+            }
+            Err(ipc) => {
+                Self::setup_with_transport(
+                    "<IPC>".to_string(),
+                    source_dir,
+                    manifest_path,
+                    cache_dir,
+                    channel_config,
+                    Sender::from(ipc.rpc_out),
+                    Receiver::from(ipc.rpc_in),
+                )
+                .await
+            }
+        }
     }
 
     pub async fn setup_with_transport(
+        backend_identifier: String,
         source_dir: PathBuf,
         manifest_path: PathBuf,
         cache_dir: Option<PathBuf>,
@@ -132,10 +180,15 @@ impl Protocol {
             )
             .await
             .map_err(|err| {
-                ProtocolError::from_client_error(err, procedures::initialize::METHOD_NAME)
+                ProtocolError::from_client_error(
+                    backend_identifier.clone(),
+                    err,
+                    procedures::initialize::METHOD_NAME,
+                )
             })?;
 
         Ok(Self {
+            backend_identifier,
             _channel_config: channel_config,
             client,
             _backend_capabilities: result.capabilities,
@@ -164,7 +217,11 @@ impl Protocol {
             )
             .await
             .map_err(|err| {
-                ProtocolError::from_client_error(err, procedures::conda_metadata::METHOD_NAME)
+                ProtocolError::from_client_error(
+                    self.backend_identifier.clone(),
+                    err,
+                    procedures::conda_metadata::METHOD_NAME,
+                )
             })
             .into_diagnostic()
     }
@@ -181,8 +238,17 @@ impl Protocol {
             )
             .await
             .map_err(|err| {
-                ProtocolError::from_client_error(err, procedures::conda_build::METHOD_NAME)
+                ProtocolError::from_client_error(
+                    self.backend_identifier.clone(),
+                    err,
+                    procedures::conda_build::METHOD_NAME,
+                )
             })
             .into_diagnostic()
+    }
+
+    /// Returns a unique identifier for the backend.
+    pub fn backend_identifier(&self) -> &str {
+        &self.backend_identifier
     }
 }

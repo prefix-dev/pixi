@@ -232,7 +232,7 @@ impl BuildContext {
             .with_cache_dir(self.cache_dir.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
-                build_tool_overrides: Default::default(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -259,8 +259,7 @@ impl BuildContext {
                     WorkDirKey {
                         source: source_checkout.clone(),
                         host_platform,
-                        // TODO: Replace this with the actual build backend.
-                        build_backend: "conda".to_string(),
+                        build_backend: protocol.identifier().to_string(),
                     }
                     .key(),
                 ),
@@ -464,7 +463,7 @@ impl BuildContext {
             .with_channel_config(self.channel_config.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_overrides: Default::default(),
+                build_tool_override: Default::default(),
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -488,8 +487,7 @@ impl BuildContext {
                     WorkDirKey {
                         source: source.clone(),
                         host_platform,
-                        // TODO: Replace this with the actual build backend.
-                        build_backend: String::from("conda"),
+                        build_backend: protocol.identifier().to_string(),
                     }
                     .key(),
                 ),

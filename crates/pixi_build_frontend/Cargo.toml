@@ -34,5 +34,6 @@ which = { workspace = true }
 pixi_build_types = { path = "../pixi_build_types" }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml"] }
+insta = { workspace = true, features = ["yaml", "filters"] }
 rstest = { workspace = true }
+tempfile = { workspace = true }
