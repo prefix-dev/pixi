@@ -889,6 +889,15 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         stdout_contains=["dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
     )
 
+    # Verify list filter for environment dummy-a.
+    # It should not contains dummy-b
+    verify_cli_command(
+        [pixi, "global", "list", "--environment", "dummy-a", "dummy-a"],
+        env=env,
+        stdout_contains=["The dummy-a environment", "dummy-a 0.1.0"],
+        stdout_excludes=["dummy-b"],
+    )
+
 
 # Test that we correctly uninstall the required packages
 # - Checking that the binaries are removed
