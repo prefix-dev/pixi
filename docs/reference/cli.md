@@ -462,6 +462,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 
 ```shell
 pixi list
+pixi list py
 pixi list --json-pretty
 pixi list --explicit
 pixi list --sort-by size
