@@ -259,14 +259,14 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
         let python = PackageName::from_str("python").unwrap();
         // If the target doesn't have any python dependency, we add it from the
         // `requires-python`
-        if !target.has_dependency(&python, Some(SpecType::Run), None) {
+        if !target.has_dependency(&python, SpecType::Run, None) {
             target.add_dependency(
                 &python,
                 &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
-            if target.has_dependency(&python, Some(SpecType::Run), None) {
+            if target.has_dependency(&python, SpecType::Run, None) {
                 // TODO: implement some comparison or spec merging logic here
                 tracing::info!(
                     "Overriding the requires-python with the one defined in pixi dependencies"

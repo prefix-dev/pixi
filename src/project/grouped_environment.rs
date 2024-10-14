@@ -8,7 +8,8 @@ use fancy_display::FancyDisplay;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Feature, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements,
+    EnvironmentName, Feature, HasEnvironmentDependencies, HasFeaturesIter, HasManifestRef,
+    Manifest, SystemRequirements,
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
@@ -119,6 +120,8 @@ impl<'p> HasProjectRef<'p> for GroupedEnvironment<'p> {
         }
     }
 }
+
+impl<'p> HasEnvironmentDependencies<'p> for GroupedEnvironment<'p> {}
 
 impl<'p> HasManifestRef<'p> for GroupedEnvironment<'p> {
     fn manifest(&self) -> &'p Manifest {

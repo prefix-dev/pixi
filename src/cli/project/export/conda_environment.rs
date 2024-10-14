@@ -1,20 +1,20 @@
 use std::path::PathBuf;
 
-use crate::project::Environment;
-use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
-    FeaturesExt, HasFeaturesIter, PyPiRequirement,
+    FeaturesExt, HasEnvironmentDependencies, PyPiRequirement,
 };
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
 use rattler_lock::FindLinksUrlOrPath;
+
+use crate::{project::Environment, Project};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -140,30 +140,30 @@ fn build_env_yaml(
 
     let mut pip_dependencies: Vec<String> = Vec::new();
 
-    for feature in environment.features() {
-        if let Some(dependencies) = feature.dependencies(None, Some(*platform)) {
-            for (name, pixi_spec) in dependencies.iter() {
-                if let Some(nameless_spec) = pixi_spec
-                    .clone()
-                    .try_into_nameless_match_spec(config)
-                    .into_diagnostic()?
-                {
-                    let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
-                    env_yaml
-                        .dependencies
-                        .push(MatchSpecOrSubSection::MatchSpec(spec));
-                } else {
-                    tracing::warn!("Failed to convert dependency to conda environment spec: {:?}. Skipping dependency", name);
-                }
-            }
+    for (name, pixi_spec) in environment
+        .environment_dependencies(Some(*platform))
+        .into_specs()
+    {
+        if let Some(nameless_spec) = pixi_spec
+            .clone()
+            .try_into_nameless_match_spec(config)
+            .into_diagnostic()?
+        {
+            let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
+            env_yaml
+                .dependencies
+                .push(MatchSpecOrSubSection::MatchSpec(spec));
+        } else {
+            tracing::warn!(
+                "Failed to convert dependency to conda environment spec: {:?}. Skipping dependency",
+                name
+            );
         }
+    }
 
-        if feature.has_pypi_dependencies() {
-            if let Some(pypi_dependencies) = feature.pypi_dependencies(Some(*platform)) {
-                for (name, requirement) in pypi_dependencies.iter() {
-                    pip_dependencies.push(format_pip_dependency(name, requirement));
-                }
-            }
+    if environment.has_pypi_dependencies() {
+        for (name, requirement) in environment.pypi_dependencies(Some(*platform)).into_specs() {
+            pip_dependencies.push(format_pip_dependency(&name, &requirement));
         }
     }
 
@@ -206,7 +206,8 @@ fn build_env_yaml(
     Ok(env_yaml)
 }
 
-/// Add `nodefaults` channel if the environment doesn't have `main`, `r`, or `msys2`
+/// Add `nodefaults` channel if the environment doesn't have `main`, `r`, or
+/// `msys2`
 fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
     let mut channels = channels;
     if !channels.iter().any(|channel| {
@@ -239,9 +240,9 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_export_conda_env_yaml() {

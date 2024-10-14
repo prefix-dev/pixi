@@ -11,7 +11,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use pixi_uv_conversions::pypi_options_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
@@ -163,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the explicit project dependencies
     let mut project_dependency_names = environment
-        .dependencies(None, Some(platform))
+        .environment_dependencies(Some(platform))
         .names()
         .map(|p| p.as_source().to_string())
         .collect_vec();

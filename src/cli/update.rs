@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 use serde::Serialize;
@@ -648,7 +648,7 @@ impl LockFileJsonDiff {
             for (platform, packages_diff) in environment_diff {
                 let conda_dependencies = project
                     .environment(environment_name.as_str())
-                    .map(|env| env.dependencies(None, Some(platform)))
+                    .map(|env| env.environment_dependencies(Some(platform)))
                     .unwrap_or_default();
 
                 let pypi_dependencies = project
