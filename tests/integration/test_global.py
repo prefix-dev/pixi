@@ -829,9 +829,7 @@ def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
-def test_pixi_install_same_package_different_expose(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
-) -> None:
+def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
@@ -1121,6 +1119,42 @@ def test_global_update_all_packages(
     # Check content of package2 file to be updated
     bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / exec_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
+
+
+def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+
+    # We change the matchspec to '*'
+    # Syncing shouldn't do anything
+    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Update the environment
+    # The package should now have the version `0.2.0` and expose a different executable
+    # The old executable should be removed
+    # The new executable will also not be there, since `pixi global update` doesn't add new exposed mappings to the manifest.
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert not package0_2_0.is_file()
 
 
 def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
