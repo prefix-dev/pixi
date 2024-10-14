@@ -8,9 +8,12 @@ use pixi_config::{Config, ConfigCli};
 use rattler_conda_types::MatchSpec;
 use std::str::FromStr;
 
-/// Removes a package previously installed into a globally accessible location via `pixi global install`.
+/// Removes dependencies from an environment
+///
+/// Example:
+/// - pixi global remove --environment python numpy
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be removed.
     #[arg(num_args = 1..)]

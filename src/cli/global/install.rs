@@ -14,9 +14,14 @@ use crate::{
 };
 use pixi_config::{self, Config, ConfigCli};
 
-/// Installs the defined package in a globally accessible location.
+/// Installs the defined packages in a globally accessible location and exposes their command line applications.
+///
+/// Example:
+/// - pixi global install starship nushell ripgrep bat
+/// - pixi global install --environment science jupyter polars
+/// - pixi global install --expose python3.8=python python=3.8
 #[derive(Parser, Debug, Clone)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be installed.
     #[arg(num_args = 1..)]
