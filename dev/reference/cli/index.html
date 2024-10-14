@@ -3018,6 +3018,10 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 </span></code></pre></div>
 <h2 id="list"><code>list</code><a class="headerlink" href="#list" title="Permanent link">#</a></h2>
 <p>List project's packages. Highlighted packages are explicit dependencies.</p>
+<h5 id="arguments_9">Arguments<a class="headerlink" href="#arguments_9" title="Permanent link">#</a></h5>
+<ol>
+<li><code>[REGEX]</code>: List only packages matching a regular expression (optional).</li>
+</ol>
 <h5 id="options_12">Options<a class="headerlink" href="#options_12" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform to list packages for. Defaults to the current platform</li>
@@ -3032,14 +3036,15 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>list
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>list<span class="w"> </span>--json-pretty
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pixi<span class="w"> </span>list<span class="w"> </span>--explicit
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>list<span class="w"> </span>--sort-by<span class="w"> </span>size
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>list<span class="w"> </span>--platform<span class="w"> </span>win-64
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span>cuda
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>pixi<span class="w"> </span>list<span class="w"> </span>--frozen
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>pixi<span class="w"> </span>list<span class="w"> </span>--locked
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>pixi<span class="w"> </span>list<span class="w"> </span>--no-install
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>list<span class="w"> </span>py
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pixi<span class="w"> </span>list<span class="w"> </span>--json-pretty
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>list<span class="w"> </span>--explicit
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>list<span class="w"> </span>--sort-by<span class="w"> </span>size
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>pixi<span class="w"> </span>list<span class="w"> </span>--platform<span class="w"> </span>win-64
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span>cuda
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>pixi<span class="w"> </span>list<span class="w"> </span>--frozen
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>pixi<span class="w"> </span>list<span class="w"> </span>--locked
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>pixi<span class="w"> </span>list<span class="w"> </span>--no-install
 </span></code></pre></div>
 <p>Output will look like this, where <code>python</code> will be green as it is the package that was explicitly added to the <a href="../project_configuration/">manifest file</a>:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>list
@@ -3069,7 +3074,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <h2 id="tree"><code>tree</code><a class="headerlink" href="#tree" title="Permanent link">#</a></h2>
 <p>Display the project's packages in a tree. Highlighted packages are those specified in the manifest.</p>
 <p>The package tree can also be inverted (<code>-i</code>), to see which packages require a specific dependencies.</p>
-<h5 id="arguments_9">Arguments<a class="headerlink" href="#arguments_9" title="Permanent link">#</a></h5>
+<h5 id="arguments_10">Arguments<a class="headerlink" href="#arguments_10" title="Permanent link">#</a></h5>
 <ul>
 <li><code>REGEX</code> optional regex of which dependencies to filter the tree to, or which dependencies to start with when inverting the tree.</li>
 </ul>
@@ -3221,7 +3226,7 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 </span></code></pre></div>
 <h2 id="search"><code>search</code><a class="headerlink" href="#search" title="Permanent link">#</a></h2>
 <p>Search a package, output will list the latest version of the package.</p>
-<h5 id="arguments_10">Arguments<a class="headerlink" href="#arguments_10" title="Permanent link">#</a></h5>
+<h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: Name of package to search, it's possible to use wildcards (<code>*</code>).</li>
 </ol>
@@ -3285,7 +3290,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h2 id="upload"><code>upload</code><a class="headerlink" href="#upload" title="Permanent link">#</a></h2>
 <p>Upload a package to a prefix.dev channel</p>
-<h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
+<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host + channel to upload to.</li>
 <li><code>&lt;PACKAGE_FILE&gt;</code>: The package file to upload.</li>
@@ -3300,7 +3305,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 <p class="admonition-title">Tip</p>
 <p>The host is real hostname not a channel.</p>
 </div>
-<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
+<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host to authenticate with.</li>
 </ol>
@@ -3317,7 +3322,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="auth-logout"><code>auth logout</code><a class="headerlink" href="#auth-logout" title="Permanent link">#</a></h3>
 <p>Remove authentication information for a given host.</p>
-<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
+<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host to authenticate with.</li>
 </ol>
@@ -3342,7 +3347,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="config-list"><code>config list</code><a class="headerlink" href="#config-list" title="Permanent link">#</a></h3>
 <p>List the configuration</p>
-<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
+<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
 <ol>
 <li><code>[KEY]</code>: The key to list the value of. (all if not provided)</li>
 </ol>
@@ -3357,7 +3362,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="config-prepend"><code>config prepend</code><a class="headerlink" href="#config-prepend" title="Permanent link">#</a></h3>
 <p>Prepend a value to a list configuration key.</p>
-<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
+<h5 id="arguments_16">Arguments<a class="headerlink" href="#arguments_16" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;KEY&gt;</code>: The key to prepend the value to.</li>
 <li><code>&lt;VALUE&gt;</code>: The value to prepend.</li>
@@ -3366,7 +3371,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="config-append"><code>config append</code><a class="headerlink" href="#config-append" title="Permanent link">#</a></h3>
 <p>Append a value to a list configuration key.</p>
-<h5 id="arguments_16">Arguments<a class="headerlink" href="#arguments_16" title="Permanent link">#</a></h5>
+<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;KEY&gt;</code>: The key to append the value to.</li>
 <li><code>&lt;VALUE&gt;</code>: The value to append.</li>
@@ -3376,7 +3381,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="config-set"><code>config set</code><a class="headerlink" href="#config-set" title="Permanent link">#</a></h3>
 <p>Set a configuration key to a value.</p>
-<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
+<h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;KEY&gt;</code>: The key to set the value of.</li>
 <li><code>[VALUE]</code>: The value to set. (if not provided, the key will be removed)</li>
@@ -3389,7 +3394,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span></code></pre></div>
 <h3 id="config-unset"><code>config unset</code><a class="headerlink" href="#config-unset" title="Permanent link">#</a></h3>
 <p>Unset a configuration key.</p>
-<h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
+<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;KEY&gt;</code>: The key to unset.</li>
 </ol>
@@ -3408,7 +3413,7 @@ variable.</p>
 </div>
 <h3 id="global-install"><code>global install</code><a class="headerlink" href="#global-install" title="Permanent link">#</a></h3>
 <p>This command installs package(s) into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
-<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
+<h5 id="arguments_20">Arguments<a class="headerlink" href="#arguments_20" title="Permanent link">#</a></h5>
 <p>1.<code>&lt;PACKAGE&gt;</code>: The package(s) to install, this can also be a version constraint.</p>
 <h5 id="options_24">Options<a class="headerlink" href="#options_24" title="Permanent link">#</a></h5>
 <ul>
@@ -3462,7 +3467,7 @@ they will be listed out in the command output. Here is an example of a few insta
 </span></code></pre></div>
 <h3 id="global-upgrade"><code>global upgrade</code><a class="headerlink" href="#global-upgrade" title="Permanent link">#</a></h3>
 <p>This command upgrades a globally installed package (to the latest version by default).</p>
-<h5 id="arguments_20">Arguments<a class="headerlink" href="#arguments_20" title="Permanent link">#</a></h5>
+<h5 id="arguments_21">Arguments<a class="headerlink" href="#arguments_21" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package to upgrade.</li>
 </ol>
@@ -3500,7 +3505,7 @@ they will be listed out in the command output. Here is an example of a few insta
 <p>Removes a package previously installed into a globally accessible location via
 <code>pixi global install</code></p>
 <p>Use <code>pixi global info</code> to find out what the package name is that belongs to the tool you want to remove.</p>
-<h5 id="arguments_21">Arguments<a class="headerlink" href="#arguments_21" title="Permanent link">#</a></h5>
+<h5 id="arguments_22">Arguments<a class="headerlink" href="#arguments_22" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package(s) to remove.</li>
 </ol>
@@ -3518,7 +3523,7 @@ they will be listed out in the command output. Here is an example of a few insta
 <h3 id="project-channel-add"><code>project channel add</code><a class="headerlink" href="#project-channel-add" title="Permanent link">#</a></h3>
 <p>Add channels to the channel list in the project configuration.
 When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.</p>
-<h5 id="arguments_22">Arguments<a class="headerlink" href="#arguments_22" title="Permanent link">#</a></h5>
+<h5 id="arguments_23">Arguments<a class="headerlink" href="#arguments_23" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;CHANNEL&gt;</code>: The channels to add, name or URL.</li>
 </ol>
@@ -3550,7 +3555,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 </span></code></pre></div>
 <h3 id="project-channel-remove"><code>project channel remove</code><a class="headerlink" href="#project-channel-remove" title="Permanent link">#</a></h3>
 <p>List the channels in the manifest file</p>
-<h5 id="arguments_23">Arguments<a class="headerlink" href="#arguments_23" title="Permanent link">#</a></h5>
+<h5 id="arguments_24">Arguments<a class="headerlink" href="#arguments_24" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;CHANNEL&gt;...</code>: The channels to remove, name(s) or URL(s).</li>
 </ol>
@@ -3571,7 +3576,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 </span></code></pre></div>
 <h3 id="project-description-set"><code>project description set</code><a class="headerlink" href="#project-description-set" title="Permanent link">#</a></h3>
 <p>Set the project description.</p>
-<h5 id="arguments_24">Arguments<a class="headerlink" href="#arguments_24" title="Permanent link">#</a></h5>
+<h5 id="arguments_25">Arguments<a class="headerlink" href="#arguments_25" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;DESCRIPTION&gt;</code>: The description to set.</li>
 </ol>
@@ -3579,7 +3584,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 </span></code></pre></div>
 <h3 id="project-environment-add"><code>project environment add</code><a class="headerlink" href="#project-environment-add" title="Permanent link">#</a></h3>
 <p>Add an environment to the manifest file.</p>
-<h5 id="arguments_25">Arguments<a class="headerlink" href="#arguments_25" title="Permanent link">#</a></h5>
+<h5 id="arguments_26">Arguments<a class="headerlink" href="#arguments_26" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;NAME&gt;</code>: The name of the environment to add.</li>
 </ol>
@@ -3597,7 +3602,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 </span></code></pre></div>
 <h3 id="project-environment-remove"><code>project environment remove</code><a class="headerlink" href="#project-environment-remove" title="Permanent link">#</a></h3>
 <p>Remove an environment from the manifest file.</p>
-<h5 id="arguments_26">Arguments<a class="headerlink" href="#arguments_26" title="Permanent link">#</a></h5>
+<h5 id="arguments_27">Arguments<a class="headerlink" href="#arguments_27" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;NAME&gt;</code>: The name of the environment to remove.</li>
 </ol>
@@ -3612,7 +3617,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment<span class="w"> </span>environment.yml
 </span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a>mamba<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>&lt;env&gt;<span class="w"> </span>--file<span class="w"> </span>environment.yml
 </span></code></pre></div>
-<h5 id="arguments_27">Arguments<a class="headerlink" href="#arguments_27" title="Permanent link">#</a></h5>
+<h5 id="arguments_28">Arguments<a class="headerlink" href="#arguments_28" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;OUTPUT_PATH&gt;</code>: Optional path to render environment.yml to. Otherwise it will be printed to standard out.</li>
 </ol>
@@ -3630,7 +3635,7 @@ for an environment. The file can be then used to create a conda environment usin
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>mamba<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>&lt;env&gt;<span class="w"> </span>--file<span class="w"> </span>&lt;explicit<span class="w"> </span>spec<span class="w"> </span>file&gt;
 </span></code></pre></div>
 <p>As the explicit specification file format does not support pypi-dependencies, use the <code>--ignore-pypi-errors</code> option to ignore those dependencies.</p>
-<h5 id="arguments_28">Arguments<a class="headerlink" href="#arguments_28" title="Permanent link">#</a></h5>
+<h5 id="arguments_29">Arguments<a class="headerlink" href="#arguments_29" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;OUTPUT_DIR&gt;</code>:  Output directory for rendered explicit environment spec files.</li>
 </ol>
@@ -3645,7 +3650,7 @@ for an environment. The file can be then used to create a conda environment usin
 </span></code></pre></div>
 <h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
 <p>Adds a platform(s) to the manifest file and updates the lock file.</p>
-<h5 id="arguments_29">Arguments<a class="headerlink" href="#arguments_29" title="Permanent link">#</a></h5>
+<h5 id="arguments_30">Arguments<a class="headerlink" href="#arguments_30" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
 </ol>
@@ -3667,7 +3672,7 @@ for an environment. The file can be then used to create a conda environment usin
 </span></code></pre></div>
 <h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
 <p>Remove platform(s) from the manifest file and updates the lock file.</p>
-<h5 id="arguments_30">Arguments<a class="headerlink" href="#arguments_30" title="Permanent link">#</a></h5>
+<h5 id="arguments_31">Arguments<a class="headerlink" href="#arguments_31" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
 </ol>
@@ -3686,7 +3691,7 @@ for an environment. The file can be then used to create a conda environment usin
 </span></code></pre></div>
 <h3 id="project-version-set"><code>project version set</code><a class="headerlink" href="#project-version-set" title="Permanent link">#</a></h3>
 <p>Set the project version.</p>
-<h5 id="arguments_31">Arguments<a class="headerlink" href="#arguments_31" title="Permanent link">#</a></h5>
+<h5 id="arguments_32">Arguments<a class="headerlink" href="#arguments_32" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;VERSION&gt;</code>: The version to set.</li>
 </ol>
