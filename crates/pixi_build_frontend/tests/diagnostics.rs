@@ -72,7 +72,9 @@ async fn test_invalid_manifest() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = snapshot
+        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
+        .replace('\\', "/");
 
     insta::assert_snapshot!(snapshot);
 }
@@ -109,7 +111,9 @@ async fn test_missing_backend() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = snapshot
+        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
+        .replace('\\', "/");
     insta::assert_snapshot!(snapshot);
 }
 
@@ -152,6 +156,8 @@ async fn test_invalid_backend() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = snapshot
+        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
+        .replace('\\', "/");
     insta::assert_snapshot!(snapshot);
 }
