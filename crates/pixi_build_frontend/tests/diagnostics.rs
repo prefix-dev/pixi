@@ -5,7 +5,7 @@ fn error_to_snapshot(diag: &impl Diagnostic) -> String {
     let mut report_str = String::new();
     GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
         .without_syntax_highlighting()
-        .with_width(120)
+        .with_width(160)
         .render_report(&mut report_str, diag)
         .unwrap();
     report_str
@@ -73,6 +73,7 @@ async fn test_invalid_manifest() {
 
     let snapshot = error_to_snapshot(&err);
     let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+
     insta::assert_snapshot!(snapshot);
 }
 
