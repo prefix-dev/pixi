@@ -129,9 +129,15 @@ async fn list_environment(
         })
         .collect();
 
+    // Filter according to the regex
+    if let Some(ref regex) = regex {
+        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
+    }
+
     let output_message = if let Some(ref regex) = regex {
         format!(
-            "The {} environment has {} packages filtered by regex {}:",
+            "The {} environment has {} packages filtered by regex `{}`:",
             environment_name.fancy_display(),
             console::style(packages_to_output.len()).bold(),
             regex
@@ -143,13 +149,6 @@ async fn list_environment(
             console::style(packages_to_output.len()).bold()
         )
     };
-
-    // Filter according to the regex
-
-    if let Some(regex) = regex {
-        let regex = regex::Regex::new(&regex).into_diagnostic()?;
-        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
-    }
 
     // Sort according to the sorting strategy
     match sort_by {
