@@ -9,9 +9,6 @@ use pixi_config::{Config, ConfigCli};
 /// Uninstalls environments from the global environment.
 ///
 /// Example:
-/// # Uninstall one environment
-/// pixi global uninstall pixi-pack
-/// # Uninstall multiple environments
 /// pixi global uninstall pixi-pack rattler-build
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
