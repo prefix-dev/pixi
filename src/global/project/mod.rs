@@ -800,7 +800,7 @@ impl Project {
 
     // Syncs the manifest with the local environments
     // Returns true if the global installation had to be updated
-    pub(crate) async fn sync(&mut self) -> Result<StateChanges, miette::Error> {
+    pub(crate) async fn sync(&self) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::default();
 
         // Prune environments that are not listed
@@ -811,7 +811,7 @@ impl Project {
             tracing::warn!("Couldn't remove broken exposed executables: {err}")
         }
 
-        for env_name in self.environments().clone().keys() {
+        for env_name in self.environments().keys() {
             state_changes |= self.sync_environment(env_name).await?;
         }
 

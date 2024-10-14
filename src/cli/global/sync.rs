@@ -12,7 +12,7 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let mut project = global::Project::discover_or_create()
+    let project = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
