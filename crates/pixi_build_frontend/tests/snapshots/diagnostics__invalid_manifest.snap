@@ -9,5 +9,4 @@ expression: snapshot
          · ─────────
          ╰────
       
-  help: Ensure that the manifest at '[SOURCE_DIR]/pixi.toml' is a
-        valid pixi project manifest
+  help: Ensure that the manifest at '[SOURCE_DIR]/pixi.toml' is a valid pixi project manifest
