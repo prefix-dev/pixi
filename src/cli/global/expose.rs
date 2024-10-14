@@ -69,7 +69,7 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let mut project_original = global::Project::discover_or_create()
+    let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -95,7 +95,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &mut project_original)
+            revert_environment_after_error(&args.environment, &project_original)
                 .await
                 .wrap_err("Couldn't add exposed mappings. Reverting also failed.")?;
             Err(err)
@@ -148,7 +148,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             }
             Err(err) => {
                 state_changes.report();
-                revert_environment_after_error(&env_name, &mut last_updated_project)
+                revert_environment_after_error(&env_name, &last_updated_project)
                     .await
                     .wrap_err_with(|| {
                         format!(

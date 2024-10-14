@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match apply_changes(&env_name, &mut project).await {
             Ok(sc) => state_changes |= sc,
             Err(err) => {
-                revert_environment_after_error(&env_name, &mut last_updated_project).await?;
+                revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);
             }
         }

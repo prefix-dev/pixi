@@ -821,7 +821,7 @@ impl Project {
     /// Syncs the parsed environment with the installation.
     /// Returns true if the environment had to be updated.
     pub(crate) async fn sync_environment(
-        &mut self,
+        &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -833,8 +833,6 @@ impl Project {
             self.install_environment(env_name).await?;
             state_changes.insert_change(env_name, StateChange::UpdatedEnvironment);
         }
-
-        state_changes |= self.remove_broken_expose_names(env_name).await?;
 
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
