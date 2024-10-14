@@ -4,6 +4,7 @@ import rospy
 from turtlesim.msg import Pose
 from visualization_msgs.msg import Marker
 
+
 def pose_callback(turtle_pose):
     marker = Marker()
 
@@ -43,15 +44,16 @@ def pose_callback(turtle_pose):
     # Publish the marker
     marker_pub.publish(marker)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Initialize the ROS node
-    rospy.init_node('turtle_marker_node', anonymous=True)
+    rospy.init_node("turtle_marker_node", anonymous=True)
 
     # Publisher for RViz Marker
-    marker_pub = rospy.Publisher('/turtle_marker', Marker, queue_size=10)
+    marker_pub = rospy.Publisher("/turtle_marker", Marker, queue_size=10)
 
     # Subscriber for the turtle pose
-    rospy.Subscriber('/turtle1/pose', Pose, pose_callback)
+    rospy.Subscriber("/turtle1/pose", Pose, pose_callback)
 
     # Keep the node running
     rospy.spin()

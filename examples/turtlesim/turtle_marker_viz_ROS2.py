@@ -5,15 +5,16 @@ from turtlesim.msg import Pose
 from visualization_msgs.msg import Marker
 from builtin_interfaces.msg import Duration
 
+
 class TurtleMarkerNode(Node):
     def __init__(self):
-        super().__init__('turtle_marker_node')
+        super().__init__("turtle_marker_node")
 
         # Create publisher for RViz Marker
-        self.marker_pub = self.create_publisher(Marker, '/turtle_marker', 10)
+        self.marker_pub = self.create_publisher(Marker, "/turtle_marker", 10)
 
         # Create subscriber for turtle pose
-        self.create_subscription(Pose, '/turtle1/pose', self.pose_callback, 10)
+        self.create_subscription(Pose, "/turtle1/pose", self.pose_callback, 10)
 
     def pose_callback(self, turtle_pose):
         marker = Marker()
@@ -66,5 +67,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
