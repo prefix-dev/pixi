@@ -1,4 +1,5 @@
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
+use crate::activation::{run_activation, CurrentEnvVarBehavior};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
@@ -740,11 +741,14 @@ impl Project {
             "Exposing executables for environment {}",
             env_name.fancy_display()
         );
+
+        let activation_variables = 
+
         state_changes |= create_executable_scripts(
             &script_mapping,
             &prefix,
             &shell,
-            activation_script,
+            activation_variables,
             env_name,
         )
         .await?;
