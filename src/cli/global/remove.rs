@@ -13,7 +13,7 @@ use std::str::FromStr;
 /// Example:
 /// - pixi global remove --environment python numpy
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be removed.
     #[arg(num_args = 1..)]
