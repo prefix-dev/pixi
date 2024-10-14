@@ -11,10 +11,10 @@ ros-humble-desktop = "0.10.0.*"
 ros-humble-turtlesim = "1.4.2.*"
 
 [feature.humble.tasks]
+rviz = "ros2 run rviz2 rviz2"
 start = "ros2 run turtlesim turtlesim_node"
 teleop = "ros2 run turtlesim turtle_teleop_key"
 viz = "python turtle_marker_viz_ROS2.py"
-rviz = "ros2 run rviz2 rviz2"
 
 # ROS2 Humble feature --------------------------------------
 [feature.noetic.dependencies]
@@ -23,12 +23,12 @@ ros-noetic-turtlesim = ">=0.10.2,<0.11"
 
 [feature.noetic.tasks]
 core = "roscore"
+rviz = "rosrun rviz rviz"
 start = "rosrun turtlesim turtlesim_node"
 teleop = "rosrun turtlesim turtle_teleop_key"
 viz = "python turtle_marker_viz_ROS1.py"
-rviz = "rosrun rviz rviz"
 
 [environments]
-default = ["humble"]
 all = ["humble", "noetic"]
+default = ["humble"]
 noetic = { features = ["noetic"], no-default-feature = true }
