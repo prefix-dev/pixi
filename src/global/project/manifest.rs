@@ -304,16 +304,18 @@ impl Manifest {
         ))
     }
 
-    /// Checks if an exposed name already exists
-    pub fn exposed_name_already_exists(&self, exposed_name: &ExposedName) -> bool {
-        for env in self.parsed.envs.values() {
-            for mapping in &env.exposed {
-                if mapping.exposed_name == *exposed_name {
-                    return false;
-                }
-            }
-        }
-        true
+    /// Checks if an exposed name already exists in other environments
+    pub fn exposed_name_already_exists_in_other_envs(
+        &self,
+        exposed_name: &ExposedName,
+        env_name: &EnvironmentName,
+    ) -> bool {
+        self.parsed
+            .envs
+            .iter()
+            .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
+            .flat_map(|env| env.exposed.iter())
+            .any(|mapping| mapping.exposed_name == *exposed_name)
     }
 
     /// Adds exposed mapping to the manifest
@@ -328,7 +330,7 @@ impl Manifest {
         }
 
         // Ensure exposed name is unique
-        if !self.exposed_name_already_exists(&mapping.exposed_name) {
+        if self.exposed_name_already_exists_in_other_envs(&mapping.exposed_name, env_name) {
             miette::bail!(
                 "Exposed name {} already exists",
                 mapping.exposed_name.fancy_display()

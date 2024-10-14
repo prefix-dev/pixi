@@ -415,7 +415,7 @@ pub(crate) fn channel_url_to_prioritized_channel(
 pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
-    exposed: &IndexSet<Mapping>,
+    mappings: &IndexSet<Mapping>,
 ) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from the scripts in the bin directory.
     let locally_exposed = bin_dir.files().await?;
@@ -434,31 +434,39 @@ pub(crate) async fn get_expose_scripts_sync_status(
     .collect_vec();
 
     // Filter out all binaries that are related to the environment
-    let related_exposed = executable_paths
+    let related = executable_paths
         .into_iter()
         .filter(|(_, exec)| exec.starts_with(env_dir.path()))
-        .map(|(path, _)| path)
         .collect_vec();
 
+    fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
+        executable_from_path(exposed) == mapping.exposed_name().to_string()
+            && executable_from_path(executable) == mapping.executable_name()
+    }
+
     // Get all related expose scripts not required by the environment manifest
-    let to_remove = related_exposed
+    let to_remove = related
         .iter()
-        .filter(|path| {
-            !exposed
+        .filter_map(|(exposed, executable)| {
+            if mappings
                 .iter()
-                .any(|mapping| executable_from_path(path) == mapping.exposed_name().to_string())
+                .any(|mapping| match_mapping(mapping, exposed, executable))
+            {
+                None
+            } else {
+                Some(exposed)
+            }
         })
         .cloned()
         .collect::<IndexSet<PathBuf>>();
 
     // Get all required exposed binaries that are not yet exposed
-    let to_add = exposed
+    let to_add = mappings
         .iter()
         .filter_map(|mapping| {
-            if related_exposed
+            if related
                 .iter()
-                .map(|path| executable_from_path(path))
-                .any(|exec| exec == mapping.exposed_name().to_string())
+                .any(|(exposed, executable)| match_mapping(mapping, exposed, executable))
             {
                 None
             } else {
