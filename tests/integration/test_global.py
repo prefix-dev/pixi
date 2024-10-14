@@ -863,6 +863,43 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
 
 
+def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a and dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify list with dummy-a
+    verify_cli_command(
+        [pixi, "global", "list", "dummy-a"],
+        env=env,
+        stdout_contains=["dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
+        stdout_excludes=["dummy-b"],
+    )
+
+    # Verify list filter for environment dummy-a.
+    # It should not contains dummy-b, but should contain dummy-a
+    verify_cli_command(
+        [pixi, "global", "list", "--environment", "dummy-a", "dummy"],
+        env=env,
+        stdout_contains=["The dummy-a environment", "dummy-a  0.1.0"],
+        stdout_excludes=["dummy-b"],
+    )
+
+
 # Test that we correctly uninstall the required packages
 # - Checking that the binaries are removed
 # - Checking that the non-requested to remove binaries are still there

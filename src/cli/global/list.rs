@@ -28,6 +28,11 @@ use std::str::FromStr;
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
+    /// List only packages matching a regular expression.
+    /// Without regex syntax it acts like a `contains` filter.
+    #[arg()]
+    pub regex: Option<String>,
+
     #[clap(flatten)]
     config: ConfigCli,
 
@@ -52,13 +57,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if !project.environment_in_sync(&env_name).await? {
             tracing::warn!("The environment {} is not in sync with the manifest, to sync run\n\tpixi global sync", env_name.fancy_display());
         }
-        list_environment(project, &env_name, args.sort_by).await?;
+        list_environment(project, &env_name, args.sort_by, args.regex).await?;
     } else {
         // Verify that the environments are in sync with the manifest and report to the user otherwise
         if !project.environments_in_sync().await? {
             tracing::warn!("The environments are not in sync with the manifest, to sync run\n\tpixi global sync");
         }
-        list_global_environments(project).await?;
+        list_global_environments(project, args.regex).await?;
     }
 
     Ok(())
@@ -97,6 +102,7 @@ async fn list_environment(
     project: Project,
     environment_name: &EnvironmentName,
     sort_by: GlobalSortBy,
+    regex: Option<String>,
 ) -> miette::Result<()> {
     let env = project
         .environments()
@@ -123,6 +129,27 @@ async fn list_environment(
         })
         .collect();
 
+    // Filter according to the regex
+    if let Some(ref regex) = regex {
+        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
+    }
+
+    let output_message = if let Some(ref regex) = regex {
+        format!(
+            "The {} environment has {} packages filtered by regex `{}`:",
+            environment_name.fancy_display(),
+            console::style(packages_to_output.len()).bold(),
+            regex
+        )
+    } else {
+        format!(
+            "The {} environment has {} packages:",
+            environment_name.fancy_display(),
+            console::style(packages_to_output.len()).bold()
+        )
+    };
+
     // Sort according to the sorting strategy
     match sort_by {
         GlobalSortBy::Size => {
@@ -133,11 +160,7 @@ async fn list_environment(
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
         }
     }
-    println!(
-        "The {} environment has {} packages:",
-        environment_name.fancy_display(),
-        console::style(packages_to_output.len()).bold()
-    );
+    println!("{}", output_message);
     print_package_table(packages_to_output).into_diagnostic()?;
     println!();
     print_meta_info(env);
@@ -219,9 +242,14 @@ fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Er
 }
 
 /// List all environments in the global environment
-async fn list_global_environments(project: Project) -> miette::Result<()> {
+async fn list_global_environments(project: Project, regex: Option<String>) -> miette::Result<()> {
     let mut envs = project.environments().clone();
     envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
+
+    if let Some(regex) = regex {
+        let regex = regex::Regex::new(&regex).into_diagnostic()?;
+        envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
+    }
 
     let mut message = String::new();
 
