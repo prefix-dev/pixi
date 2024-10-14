@@ -1,9 +1,13 @@
 use std::{
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
 };
 
+use crate::{
+    build::{cache::source_checkout_cache_key, SourceCheckout},
+    utils::{move_file, MoveError},
+};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rattler_conda_types::{GenericVirtualPackage, Platform, RepoDataRecord};
@@ -11,11 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;
-
-use crate::{
-    build::{cache::source_checkout_cache_key, SourceCheckout},
-    utils::{move_file, MoveError},
-};
+use xxhash_rust::xxh3::Xxh3;
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -81,7 +81,7 @@ impl BuildInput {
         } = self;
 
         // Hash some of the keys
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);

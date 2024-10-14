@@ -113,4 +113,11 @@ impl Protocol {
             Self::CondaBuild(_) => unreachable!(),
         }
     }
+
+    pub fn identifier(&self) -> &str {
+        match self {
+            Self::Pixi(protocol) => protocol.backend_identifier(),
+            Self::CondaBuild(protocol) => protocol.backend_identifier(),
+        }
+    }
 }

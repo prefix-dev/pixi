@@ -246,4 +246,9 @@ impl Protocol {
             })
             .into_diagnostic()
     }
+
+    /// Returns a unique identifier for the backend.
+    pub fn backend_identifier(&self) -> &str {
+        &self.backend_identifier
+    }
 }

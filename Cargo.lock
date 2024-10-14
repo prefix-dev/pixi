@@ -1430,7 +1430,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.5"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -4266,7 +4266,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.27.15"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "anyhow",
  "clap",
@@ -4334,7 +4334,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.2.6"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4361,7 +4361,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.28.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "chrono",
  "dirs",
@@ -4396,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "blake2",
  "digest",
@@ -4412,7 +4412,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.27"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "chrono",
  "file_url",
@@ -4436,7 +4436,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "quote",
  "syn 2.0.72",
@@ -4445,7 +4445,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.21.4"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4472,7 +4472,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.10"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4499,7 +4499,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.2"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -4509,7 +4509,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.17"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4563,7 +4563,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.4"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.3.0",
@@ -4580,7 +4580,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.1.0"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "chrono",
  "futures",
@@ -4598,7 +4598,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "1.1.7"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "archspec",
  "libloading",
@@ -5688,7 +5688,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#6e1327f1258104d4ba9ef0715e329a95bb32d263"
+source = "git+https://github.com/conda/rattler?branch=feat/pixi-build#792442824a3f76ed99e8ecf495dfb3ffd4245bf8"
 dependencies = [
  "tokio",
 ]

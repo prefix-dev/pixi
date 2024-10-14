@@ -53,6 +53,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
 
+    // Construct a temporary directory to build the package in. This path is also
+    // automatically removed after the build finishes.
+    let work_dir = tempfile::Builder::new()
+        .prefix("pixi-build-")
+        .tempdir_in(project.pixi_dir())
+        .into_diagnostic()
+        .context("failed to create temporary working directory in the .pixi directory")?;
+
     // Build the individual packages.
     let result = protocol
         .conda_build(&CondaBuildParams {
@@ -74,6 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 base_url: channel_config.channel_alias,
             },
             outputs: None,
+            work_directory: work_dir.path().to_path_buf(),
         })
         .await
         .wrap_err("during the building of the project the following error occurred")?;

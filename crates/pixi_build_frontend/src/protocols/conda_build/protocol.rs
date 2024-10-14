@@ -22,6 +22,11 @@ pub struct Protocol {
 }
 
 impl Protocol {
+    /// Returns a unique identifier for the backend.
+    pub fn backend_identifier(&self) -> &str {
+        "conda-build"
+    }
+
     /// Returns the relative path from the source directory to the recipe.
     pub fn manifests(&self) -> Vec<String> {
         self.recipe_dir
