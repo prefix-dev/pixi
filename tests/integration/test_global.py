@@ -868,7 +868,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
 
-    # Install dummy-b from dummy-channel-1
+    # Install dummy-a and dummy-b from dummy-channel-1
     verify_cli_command(
         [
             pixi,
