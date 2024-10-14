@@ -887,6 +887,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         [pixi, "global", "list", "dummy-a"],
         env=env,
         stdout_contains=["dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
+        stdout_excludes=["dummy-b"],
     )
 
     # Verify list filter for environment dummy-a.
@@ -894,7 +895,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     verify_cli_command(
         [pixi, "global", "list", "--environment", "dummy-a", "dummy-a"],
         env=env,
-        stdout_contains=["The dummy-a environment", "dummy-a 0.1.0"],
+        stdout_contains=["The dummy-a environment", "dummy-a  0.1.0"],
         stdout_excludes=["dummy-b"],
     )
 
