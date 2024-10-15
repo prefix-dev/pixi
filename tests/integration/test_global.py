@@ -582,7 +582,7 @@ def test_install_twice_with_force_reinstall(
             "global",
             "install",
             "--channel",
-            dummy_channel_1,
+            dummy_channel_2,
             "dummy-b",
         ],
         env=env,
