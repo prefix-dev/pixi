@@ -891,7 +891,7 @@ def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
-@pytest.mark.skipif(platform.system() == "Windows", reason="Not relieable on Windows")
+@pytest.mark.skipif(platform.system() == "Windows", reason="Not reliable on Windows")
 def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
