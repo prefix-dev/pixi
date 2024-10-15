@@ -91,7 +91,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 
     let mut project_modified = project_original.clone();
     match apply_changes(&args, &mut project_modified).await {
-        Ok(state_changes) => {
+        Ok(mut state_changes) => {
             project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())

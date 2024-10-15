@@ -24,7 +24,7 @@ use pixi_config::{self, Config, ConfigCli};
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be installed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
     /// The channels to consider as a name or a url.
@@ -52,6 +52,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// Specifies that the packages should be reinstalled even if they are already installed.
+    #[arg(action, long)]
+    force_reinstall: bool,
 }
 
 impl HasSpecs for Args {
@@ -158,7 +162,7 @@ async fn setup_environment(
         }
     }
 
-    if project.environment_in_sync(env_name).await? {
+    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
