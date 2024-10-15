@@ -545,6 +545,67 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
     assert dummy_b.is_file()
 
 
+def test_install_twice_with_force_reinstall(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+
+    # Modify dummy-b channel and try to install it again
+    # Even though we changed the channels, it will claim the environment is up-to-date
+
+    manifests = tmp_path / "manifests" / "pixi-global.toml"
+    parsed_toml = tomllib.loads(manifests.read_text())
+
+    parsed_toml["envs"]["dummy-b"]["channels"] = [dummy_channel_2]
+
+    manifests.write_text(tomli_w.dumps(parsed_toml))
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_2,
+            "dummy-b",
+        ],
+        env=env,
+        stderr_contains="The environment dummy-b was already up-to-date",
+    )
+
+    # Install dummy-b again, but with force-reinstall
+    # It should install it again
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--force-reinstall",
+            "--channel",
+            dummy_channel_2,
+            "dummy-b",
+        ],
+        env=env,
+        stderr_contains="Added package dummy-b=0.1.0 to environment dummy-b",
+    )
+
+
 def test_install_underscore(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
