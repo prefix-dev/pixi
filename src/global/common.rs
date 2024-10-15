@@ -252,8 +252,6 @@ impl StateChanges {
 
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
-        eprintln!("changes are {:?}", self.changes);
-
         self.changes = self
             .changes
             .iter()
