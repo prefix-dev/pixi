@@ -116,7 +116,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
+    // When the environment is already up to date, we want to show a more detailed view about it.
+    if !state_changes.has_changed() {
+        list_environment(project, &env_name, args.sort_by, args.regex).await?;
+    } else {
+        state_changes.report();
+    }
 
     Ok(())
 }

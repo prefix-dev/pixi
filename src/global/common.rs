@@ -273,12 +273,9 @@ impl StateChanges {
         self.prune();
 
         for (env_name, changes_for_env) in &self.changes {
+            // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
-                eprintln!(
-                    "{}The environment {} was already up-to-date",
-                    console::style(console::Emoji("✔ ", "")).green(),
-                    env_name.fancy_display()
-                );
+                continue;
             }
 
             let mut iter = changes_for_env.iter().peekable();
