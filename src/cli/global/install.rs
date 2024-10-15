@@ -169,6 +169,9 @@ async fn setup_environment(
     // Installing the environment to be able to find the bin paths later
     project.install_environment(env_name).await?;
 
+    // Cleanup removed executables
+    state_changes |= project.remove_broken_expose_names(env_name).await?;
+
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest
         for (package_name, _spec) in &specs {
