@@ -156,6 +156,7 @@ impl Protocol {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn setup_with_transport(
         backend_identifier: String,
         source_dir: PathBuf,
