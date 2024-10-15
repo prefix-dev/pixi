@@ -5,7 +5,7 @@ use pixi_manifest::EnvironmentName;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The name of the environment to add.
-    pub name: String,
+    pub name: EnvironmentName,
 
     /// Features to add to the environment.
     #[arg(short, long = "feature")]
@@ -25,9 +25,7 @@ pub struct Args {
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    let environment_exists = project
-        .environment(&EnvironmentName::Named(args.name.clone()))
-        .is_some();
+    let environment_exists = project.environment(&args.name).is_some();
     if environment_exists && !args.force {
         return Err(miette::miette!(
             help = "use --force to overwrite the existing environment",
@@ -38,7 +36,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
 
     // Add the platforms to the lock-file
     project.manifest.add_environment(
-        args.name.clone(),
+        args.name.as_str().to_string(),
         args.features,
         args.solve_group,
         args.no_default_feature,
