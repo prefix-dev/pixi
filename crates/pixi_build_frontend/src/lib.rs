@@ -8,12 +8,15 @@ use std::fmt::{Debug, Formatter};
 pub(crate) use protocols::{conda_build as conda_build_protocol, pixi as pixi_protocol};
 
 mod protocol_builder;
+mod reporters;
 mod tool;
 
 use std::path::PathBuf;
 
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
 use rattler_conda_types::MatchSpec;
+pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
+pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 use url::Url;

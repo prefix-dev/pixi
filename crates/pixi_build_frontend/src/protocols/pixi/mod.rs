@@ -23,7 +23,7 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct ProtocolBuilder {
     source_dir: PathBuf,
-    _manifest: Manifest,
+    manifest: Manifest,
     backend_spec: Option<ToolSpec>,
     channel_config: ChannelConfig,
     cache_dir: Option<PathBuf>,
@@ -60,14 +60,14 @@ impl Display for FinishError {
 
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
+    pub(crate) fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
         let backend_spec = manifest
             .build_section()
             .map(IsolatedToolSpec::from_build_section);
 
         Ok(Self {
             source_dir,
-            _manifest: manifest,
+            manifest,
             backend_spec: backend_spec.map(Into::into),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
@@ -119,11 +119,12 @@ impl ProtocolBuilder {
     pub async fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
         let tool_spec = self
             .backend_spec
-            .ok_or(FinishError::NoBuildSection(self._manifest.path.clone()))?;
+            .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
         let tool = tool.instantiate(tool_spec).map_err(FinishError::Tool)?;
         Ok(Protocol::setup(
             self.source_dir,
-            self._manifest.path,
+            self.manifest.path,
+            self.manifest.parsed.project.name,
             self.cache_dir,
             self.channel_config,
             tool,

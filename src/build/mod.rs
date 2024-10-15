@@ -6,13 +6,14 @@ use std::{
     ops::Not,
     path::{Component, Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::SetupRequest;
+use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter, SetupRequest};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -123,6 +124,7 @@ impl BuildContext {
     }
 
     /// Extracts the metadata for a package from the given source specification.
+    #[allow(clippy::too_many_arguments)]
     pub async fn extract_source_metadata(
         &self,
         source_spec: &SourceSpec,
@@ -131,6 +133,7 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        metadata_reporter: Arc<dyn CondaMetadataReporter>,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
@@ -141,6 +144,7 @@ impl BuildContext {
                 host_virtual_packages,
                 build_platform,
                 build_virtual_packages,
+                metadata_reporter.clone(),
             )
             .await?;
 
@@ -149,6 +153,7 @@ impl BuildContext {
 
     /// Build a package from the given source specification.
     #[instrument(skip_all, fields(source = %source_spec.source))]
+    #[allow(clippy::too_many_arguments)]
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
@@ -156,6 +161,7 @@ impl BuildContext {
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        build_reporter: Arc<dyn CondaBuildReporter>,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -239,31 +245,34 @@ impl BuildContext {
 
         // Extract the conda metadata for the package.
         let build_result = protocol
-            .conda_build(&CondaBuildParams {
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: host_platform,
-                    virtual_packages: Some(host_virtual_packages.clone()),
-                }),
-                build_platform_virtual_packages: Some(build_virtual_packages.clone()),
-                channel_base_urls: Some(channels.to_owned()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
+            .conda_build(
+                &CondaBuildParams {
+                    host_platform: Some(PlatformAndVirtualPackages {
+                        platform: host_platform,
+                        virtual_packages: Some(host_virtual_packages.clone()),
+                    }),
+                    build_platform_virtual_packages: Some(build_virtual_packages.clone()),
+                    channel_base_urls: Some(channels.to_owned()),
+                    channel_configuration: ChannelConfiguration {
+                        base_url: self.channel_config.channel_alias.clone(),
+                    },
+                    outputs: Some(vec![CondaOutputIdentifier {
+                        name: Some(source_spec.package_record.name.as_normalized().to_string()),
+                        version: Some(source_spec.package_record.version.version().to_string()),
+                        build: Some(source_spec.package_record.build.clone()),
+                        subdir: Some(source_spec.package_record.subdir.clone()),
+                    }]),
+                    work_directory: self.work_dir.join(
+                        WorkDirKey {
+                            source: source_checkout.clone(),
+                            host_platform,
+                            build_backend: protocol.identifier().to_string(),
+                        }
+                        .key(),
+                    ),
                 },
-                outputs: Some(vec![CondaOutputIdentifier {
-                    name: Some(source_spec.package_record.name.as_normalized().to_string()),
-                    version: Some(source_spec.package_record.version.version().to_string()),
-                    build: Some(source_spec.package_record.build.clone()),
-                    subdir: Some(source_spec.package_record.subdir.clone()),
-                }]),
-                work_directory: self.work_dir.join(
-                    WorkDirKey {
-                        source: source_checkout.clone(),
-                        host_platform,
-                        build_backend: protocol.identifier().to_string(),
-                    }
-                    .key(),
-                ),
-            })
+                build_reporter.clone(),
+            )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
@@ -404,6 +413,7 @@ impl BuildContext {
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
     #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
+    #[allow(clippy::too_many_arguments)]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
@@ -412,6 +422,7 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        metadata_reporter: Arc<dyn CondaMetadataReporter>,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -470,28 +481,31 @@ impl BuildContext {
 
         // Extract the conda metadata for the package.
         let metadata = protocol
-            .get_conda_metadata(&CondaMetadataParams {
-                build_platform: Some(PlatformAndVirtualPackages {
-                    platform: build_platform,
-                    virtual_packages: Some(build_virtual_packages),
-                }),
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: host_platform,
-                    virtual_packages: Some(host_virtual_packages),
-                }),
-                channel_base_urls: Some(channels.to_owned()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
+            .get_conda_metadata(
+                &CondaMetadataParams {
+                    build_platform: Some(PlatformAndVirtualPackages {
+                        platform: build_platform,
+                        virtual_packages: Some(build_virtual_packages),
+                    }),
+                    host_platform: Some(PlatformAndVirtualPackages {
+                        platform: host_platform,
+                        virtual_packages: Some(host_virtual_packages),
+                    }),
+                    channel_base_urls: Some(channels.to_owned()),
+                    channel_configuration: ChannelConfiguration {
+                        base_url: self.channel_config.channel_alias.clone(),
+                    },
+                    work_directory: self.work_dir.join(
+                        WorkDirKey {
+                            source: source.clone(),
+                            host_platform,
+                            build_backend: protocol.identifier().to_string(),
+                        }
+                        .key(),
+                    ),
                 },
-                work_directory: self.work_dir.join(
-                    WorkDirKey {
-                        source: source.clone(),
-                        host_platform,
-                        build_backend: protocol.identifier().to_string(),
-                    }
-                    .key(),
-                ),
-            })
+                metadata_reporter.clone(),
+            )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 

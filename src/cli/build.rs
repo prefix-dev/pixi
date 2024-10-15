@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::SetupRequest;
+use pixi_build_frontend::{NoopCondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -52,7 +52,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
-
+    let conda_build_noop = NoopCondaBuildReporter::new();
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
     let work_dir = tempfile::Builder::new()
@@ -63,27 +63,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Build the individual packages.
     let result = protocol
-        .conda_build(&CondaBuildParams {
-            build_platform_virtual_packages: None,
-            host_platform: Some(PlatformAndVirtualPackages {
-                platform: args.target_platform,
-                virtual_packages: None,
-            }),
-            channel_base_urls: Some(
-                project
-                    .default_environment()
-                    .channels()
-                    .iter()
-                    .map(|&c| c.clone().into_base_url(&channel_config))
-                    .collect::<Result<Vec<_>, _>>()
-                    .into_diagnostic()?,
-            ),
-            channel_configuration: ChannelConfiguration {
-                base_url: channel_config.channel_alias,
+        .conda_build(
+            &CondaBuildParams {
+                build_platform_virtual_packages: None,
+                host_platform: Some(PlatformAndVirtualPackages {
+                    platform: args.target_platform,
+                    virtual_packages: None,
+                }),
+                channel_base_urls: Some(
+                    project
+                        .default_environment()
+                        .channels()
+                        .iter()
+                        .map(|&c| c.clone().into_base_url(&channel_config))
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?,
+                ),
+                channel_configuration: ChannelConfiguration {
+                    base_url: channel_config.channel_alias,
+                },
+                outputs: None,
+                work_directory: work_dir.path().to_path_buf(),
             },
-            outputs: None,
-            work_directory: work_dir.path().to_path_buf(),
-        })
+            conda_build_noop.clone(),
+        )
         .await
         .wrap_err("during the building of the project the following error occurred")?;
 

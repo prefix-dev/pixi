@@ -16,6 +16,7 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use pixi_build_frontend::NoopCondaMetadataReporter;
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -1641,6 +1642,7 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
+            let noop_conda_metadata_reporter = NoopCondaMetadataReporter::new();
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (name, source_spec) in source_specs.iter() {
@@ -1653,6 +1655,7 @@ async fn spawn_solve_conda_environment_task(
                             virtual_packages.clone(),
                             platform,
                             virtual_packages.clone(),
+                            noop_conda_metadata_reporter.clone(),
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(

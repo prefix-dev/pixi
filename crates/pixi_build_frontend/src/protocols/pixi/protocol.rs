@@ -22,6 +22,7 @@ use crate::{
     jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
     protocols::error::BackendError,
     tool::Tool,
+    CondaBuildReporter, CondaMetadataReporter,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -86,6 +87,9 @@ pub struct Protocol {
     /// The path to the manifest relative to the source directory.
     relative_manifest_path: PathBuf,
 
+    /// Name of the project taken from the manifest
+    project_name: Option<String>,
+
     _backend_capabilities: BackendCapabilities,
 }
 
@@ -93,6 +97,7 @@ impl Protocol {
     pub(crate) async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        project_name: Option<String>,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         tool: Tool,
@@ -127,6 +132,7 @@ impl Protocol {
                     backend_identifier,
                     source_dir,
                     manifest_path,
+                    project_name,
                     cache_dir,
                     channel_config,
                     tx,
@@ -139,6 +145,7 @@ impl Protocol {
                     "<IPC>".to_string(),
                     source_dir,
                     manifest_path,
+                    project_name,
                     cache_dir,
                     channel_config,
                     Sender::from(ipc.rpc_out),
@@ -149,10 +156,12 @@ impl Protocol {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn setup_with_transport(
         backend_identifier: String,
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        project_name: Option<String>,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
@@ -190,6 +199,7 @@ impl Protocol {
         Ok(Self {
             backend_identifier,
             _channel_config: channel_config,
+            project_name,
             client,
             _backend_capabilities: result.capabilities,
             relative_manifest_path,
@@ -209,8 +219,11 @@ impl Protocol {
     pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
+        reporter: &dyn CondaMetadataReporter,
     ) -> miette::Result<CondaMetadataResult> {
-        self.client
+        let operation = reporter.on_metadata_start(self.project_name.as_deref().unwrap_or(""));
+        let result = self
+            .client
             .request(
                 procedures::conda_metadata::METHOD_NAME,
                 RpcParams::from(request),
@@ -223,15 +236,20 @@ impl Protocol {
                     procedures::conda_metadata::METHOD_NAME,
                 )
             })
-            .into_diagnostic()
+            .into_diagnostic();
+        reporter.on_metadata_end(operation);
+        result
     }
 
     /// Build a specific conda package output
     pub async fn conda_build(
         &self,
         request: &CondaBuildParams,
+        reporter: &dyn CondaBuildReporter,
     ) -> miette::Result<CondaBuildResult> {
-        self.client
+        let operation = reporter.on_build_start(self.project_name.as_deref().unwrap_or(""));
+        let result = self
+            .client
             .request(
                 procedures::conda_build::METHOD_NAME,
                 RpcParams::from(request),
@@ -244,7 +262,9 @@ impl Protocol {
                     procedures::conda_build::METHOD_NAME,
                 )
             })
-            .into_diagnostic()
+            .into_diagnostic();
+        reporter.on_build_end(operation);
+        result
     }
 
     /// Returns a unique identifier for the backend.

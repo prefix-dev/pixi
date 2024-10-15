@@ -22,7 +22,7 @@ pub struct CondaBuildParams {
     /// The target platform that the metadata should be fetched for.
     pub host_platform: Option<PlatformAndVirtualPackages>,
 
-    /// The channel base URLs that the metadata should be fetched from.
+    /// The channel base URLs for the conda channels to use to resolve
     pub channel_base_urls: Option<Vec<Url>>,
 
     /// The channel configuration to use to resolve dependencies.

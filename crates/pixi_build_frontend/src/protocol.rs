@@ -1,12 +1,12 @@
-use std::path::PathBuf;
-
 use miette::Diagnostic;
 use pixi_build_types::procedures::{
     conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::{conda_build_protocol, pixi_protocol};
+use crate::{conda_build_protocol, pixi_protocol, CondaBuildReporter, CondaMetadataReporter};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -97,9 +97,14 @@ impl Protocol {
     pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
+        reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
-            Self::Pixi(protocol) => protocol.get_conda_metadata(request).await,
+            Self::Pixi(protocol) => {
+                protocol
+                    .get_conda_metadata(request, reporter.as_ref())
+                    .await
+            }
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
         }
     }
@@ -107,9 +112,10 @@ impl Protocol {
     pub async fn conda_build(
         &self,
         request: &CondaBuildParams,
+        reporter: Arc<dyn CondaBuildReporter>,
     ) -> miette::Result<CondaBuildResult> {
         match self {
-            Self::Pixi(protocol) => protocol.conda_build(request).await,
+            Self::Pixi(protocol) => protocol.conda_build(request, reporter.as_ref()).await,
             Self::CondaBuild(_) => unreachable!(),
         }
     }
