@@ -13,7 +13,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::{NoopCondaBuildReporter, NoopCondaMetadataReporter, SetupRequest};
+use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter, SetupRequest};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -49,8 +49,6 @@ pub struct BuildContext {
     build_cache: BuildCache,
     cache_dir: PathBuf,
     work_dir: PathBuf,
-    metadata_reporter: Arc<NoopCondaMetadataReporter>,
-    build_reporter: Arc<NoopCondaBuildReporter>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -114,8 +112,6 @@ impl BuildContext {
             build_cache: BuildCache::new(cache_dir.clone()),
             cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
-            metadata_reporter: NoopCondaMetadataReporter::new(),
-            build_reporter: NoopCondaBuildReporter::new(),
         }
     }
 
@@ -136,6 +132,7 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        metadata_reporter: Arc<dyn CondaMetadataReporter>,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
@@ -146,6 +143,7 @@ impl BuildContext {
                 host_virtual_packages,
                 build_platform,
                 build_virtual_packages,
+                metadata_reporter.clone(),
             )
             .await?;
 
@@ -161,6 +159,7 @@ impl BuildContext {
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        build_reporter: Arc<dyn CondaBuildReporter>,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -270,7 +269,7 @@ impl BuildContext {
                         .key(),
                     ),
                 },
-                self.build_reporter.clone(),
+                build_reporter.clone(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -420,6 +419,7 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
+        metadata_reporter: Arc<dyn CondaMetadataReporter>,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -501,7 +501,7 @@ impl BuildContext {
                         .key(),
                     ),
                 },
-                self.metadata_reporter.clone(),
+                metadata_reporter.clone(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;

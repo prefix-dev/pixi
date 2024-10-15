@@ -12,6 +12,7 @@ use fancy_display::FancyDisplay;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_build_frontend::NoopCondaBuildReporter;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
@@ -517,6 +518,7 @@ pub async fn update_prefix_conda(
     let mut processed_source_packages = stream::iter(source_records)
         .map(Ok)
         .and_then(|record| {
+            let noop_build_reporter = NoopCondaBuildReporter::new();
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
@@ -528,6 +530,7 @@ pub async fn update_prefix_conda(
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
+                        noop_build_reporter.clone(),
                     )
                     .await
             }
