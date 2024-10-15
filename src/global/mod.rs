@@ -1,5 +1,6 @@
 pub(crate) mod common;
 pub(crate) mod install;
+pub(crate) mod list;
 pub(crate) mod project;
 
 pub(crate) use common::{BinDir, EnvDir, EnvRoot, StateChange, StateChanges};

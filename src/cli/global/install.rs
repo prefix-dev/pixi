@@ -9,7 +9,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
+    global::{
+        self, list::list_global_environments, EnvironmentName, ExposedName, Mapping, Project,
+        StateChange, StateChanges,
+    },
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -118,7 +121,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     // When the environment is already up to date, we want to show a more detailed view about it.
     if !state_changes.has_changed() {
-        list_environment(project, &env_name, args.sort_by, args.regex).await?;
+        if env_names.len() > 1 {
+            eprintln!(
+                "Environments {} are already up to date.",
+                env_names.iter().map(FancyDisplay::fancy_display).join(", ")
+            );
+        } else {
+            eprintln!(
+                "Environment {} is already up to date.",
+                env_names[0].fancy_display()
+            );
+        }
+        list_global_environments(&last_updated_project, Some(&env_names), None).await?;
     } else {
         state_changes.report();
     }
