@@ -10,6 +10,8 @@ use std::str::FromStr;
 
 /// Removes dependencies from an environment
 ///
+/// Use `pixi global uninstall` to remove the whole environment
+///
 /// Example:
 /// - pixi global remove --environment python numpy
 #[derive(Parser, Debug)]
