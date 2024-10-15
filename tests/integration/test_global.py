@@ -567,7 +567,7 @@ def test_install_twice_with_force_reinstall(
     assert dummy_b.is_file()
 
     # Modify dummy-b channel and try to install it again
-    # it will not change anything
+    # Even though we changed the channels, it will claim the environment is up-to-date
 
     manifests = tmp_path / "manifests" / "pixi-global.toml"
     parsed_toml = tomllib.loads(manifests.read_text())
