@@ -124,6 +124,7 @@ impl BuildContext {
     }
 
     /// Extracts the metadata for a package from the given source specification.
+    #[allow(clippy::too_many_arguments)]
     pub async fn extract_source_metadata(
         &self,
         source_spec: &SourceSpec,
@@ -152,6 +153,7 @@ impl BuildContext {
 
     /// Build a package from the given source specification.
     #[instrument(skip_all, fields(source = %source_spec.source))]
+    #[allow(clippy::too_many_arguments)]
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
@@ -411,6 +413,7 @@ impl BuildContext {
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
     #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
+    #[allow(clippy::too_many_arguments)]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
