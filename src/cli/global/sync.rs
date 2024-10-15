@@ -16,7 +16,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let state_changes = project.sync().await?;
+    let mut state_changes = project.sync().await?;
 
     if state_changes.has_changed() {
         state_changes.report();

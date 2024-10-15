@@ -16,7 +16,7 @@ use std::str::FromStr;
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be removed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be removed from.
@@ -94,7 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "Couldn't remove packages from {}",
             &args.environment
         )) {
-        Ok(state_changes) => {
+        Ok(ref mut state_changes) => {
             state_changes.report();
         }
         Err(err) => {

@@ -269,10 +269,10 @@ impl StateChanges {
             .collect()
     }
 
-    pub(crate) fn report(mut self) {
+    pub(crate) fn report(&mut self) {
         self.prune();
 
-        for (env_name, changes_for_env) in self.changes {
+        for (env_name, changes_for_env) in &self.changes {
             if changes_for_env.is_empty() {
                 eprintln!(
                     "{}The environment {} was already up-to-date",

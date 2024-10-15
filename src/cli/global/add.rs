@@ -16,7 +16,7 @@ use rattler_conda_types::MatchSpec;
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be added to the environment.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be added to.
@@ -97,7 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await
     {
-        Ok(state_changes) => {
+        Ok(ref mut state_changes) => {
             state_changes.report();
             Ok(())
         }
