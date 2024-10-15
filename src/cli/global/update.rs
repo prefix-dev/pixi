@@ -2,7 +2,6 @@ use crate::cli::global::revert_environment_after_error;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
 
 /// Updates environments in the global environment.
@@ -32,11 +31,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove broken executables
         state_changes |= project.remove_broken_expose_names(env_name).await?;
 
-        eprintln!(
-            "{}Updated environment: {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
+        state_changes.insert_change(env_name, global::StateChange::UpdatedEnvironment);
 
         Ok(state_changes)
     }
@@ -55,6 +50,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match apply_changes(&env_name, &mut project).await {
             Ok(sc) => state_changes |= sc,
             Err(err) => {
+                state_changes.report();
                 revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);
             }
