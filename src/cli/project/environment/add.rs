@@ -1,6 +1,7 @@
 use crate::Project;
 use clap::Parser;
 use pixi_manifest::EnvironmentName;
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -26,7 +27,7 @@ pub struct Args {
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     let environment_exists = project
-        .environment(&EnvironmentName::Named(args.name.clone()))
+        .environment(&EnvironmentName::from_str(args.name.as_str())?)
         .is_some();
     if environment_exists && !args.force {
         return Err(miette::miette!(
