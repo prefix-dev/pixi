@@ -54,7 +54,7 @@ pub struct Args {
     config: ConfigCli,
 
     /// Specifies that the packages should be reinstalled even if they are already installed.
-    #[arg(action, short, long)]
+    #[arg(action, long)]
     force_reinstall: bool,
 }
 
@@ -162,7 +162,7 @@ async fn setup_environment(
         }
     }
 
-    if project.environment_in_sync(env_name).await? && !args.force_reinstall {
+    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
