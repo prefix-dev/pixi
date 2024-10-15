@@ -2,7 +2,6 @@ use crate::cli::global::revert_environment_after_error;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 use pixi_utils::executable_from_path;
@@ -66,11 +65,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Remove outdated binaries
         state_changes |= project.prune_exposed(env_name).await?;
-        eprintln!(
-            "{}Updated environment: {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
+
+        state_changes.report();
 
         Ok(state_changes)
     }
