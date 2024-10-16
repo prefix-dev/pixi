@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Use JupyterLab with pixi environments">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/">
-      
-      
-        <link rel="prev" href="../../CHANGELOG/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/global_tools/">
       
       
-        <link rel="next" href="../pycharm/">
+        <link rel="prev" href="../system_requirements/">
+      
+      
+        <link rel="next" href="../../design_proposals/pixi_global_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>JupyterLab Integration - Pixi by prefix.dev</title>
+        <title>Global Tools - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="JupyterLab Integration - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Global Tools - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Use JupyterLab with pixi environments" >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/jupyterlab.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/global_tools.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/global_tools/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="JupyterLab Integration - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Global Tools - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Use JupyterLab with pixi environments" >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/jupyterlab.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/global_tools.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#basic-usage" class="md-skip">
+        <a href="#pixi-global-tool-environment-installation" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              JupyterLab Integration
+              Global Tools
             
           </span>
         </div>
@@ -441,8 +439,6 @@
       
   
   
-    
-  
   
   
     
@@ -454,11 +450,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -472,7 +468,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             IDE Integration
@@ -483,28 +479,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    JupyterLab
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../ide_integration/jupyterlab/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -513,81 +491,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Basic usage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Basic usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-kernels-are-available" class="md-nav__link">
-    <span class="md-ellipsis">
-      What kernels are available?
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Advanced usage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#configuring-jupyterlab" class="md-nav__link">
-    <span class="md-ellipsis">
-      Configuring JupyterLab
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#binder" class="md-nav__link">
-    <span class="md-ellipsis">
-      Binder
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -600,7 +503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pycharm/" class="md-nav__link">
+      <a href="../../ide_integration/pycharm/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -621,7 +524,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../r_studio/" class="md-nav__link">
+      <a href="../../ide_integration/r_studio/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -642,7 +545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../devcontainer/" class="md-nav__link">
+      <a href="../../ide_integration/devcontainer/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -887,8 +790,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -898,11 +803,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -916,7 +821,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -930,7 +835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/environment/" class="md-nav__link">
+      <a href="../environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -951,7 +856,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/advanced_tasks/" class="md-nav__link">
+      <a href="../advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -972,7 +877,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
+      <a href="../multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -993,7 +898,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/multi_environment/" class="md-nav__link">
+      <a href="../multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1014,7 +919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/lockfile/" class="md-nav__link">
+      <a href="../lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1035,7 +940,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/system_requirements/" class="md-nav__link">
+      <a href="../system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1053,10 +958,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../features/global_tools/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Global Tools
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1065,6 +990,95 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-global-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Global Manifest
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Global Manifest">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Channels
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exposed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-adding-a-series-of-tools-at-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Adding a series of tools at once
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-creating-a-data-science-sandbox-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Creating a Data Science Sandbox Environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-install-packages-for-a-different-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Install packages for a different platform
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1597,6 +1611,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1605,52 +1621,64 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#the-global-manifest" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic usage
+      The Global Manifest
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Basic usage">
+    <nav class="md-nav" aria-label="The Global Manifest">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-kernels-are-available" class="md-nav__link">
+  <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
-      What kernels are available?
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Advanced usage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#configuring-jupyterlab" class="md-nav__link">
-    <span class="md-ellipsis">
-      Configuring JupyterLab
+      Channels
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#binder" class="md-nav__link">
+  <a href="#exposed" class="md-nav__link">
     <span class="md-ellipsis">
-      Binder
+      Exposed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-adding-a-series-of-tools-at-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Adding a series of tools at once
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-creating-a-data-science-sandbox-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Creating a Data Science Sandbox Environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-install-packages-for-a-different-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Install packages for a different platform
     </span>
   </a>
   
@@ -1676,7 +1704,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/ide_integration/jupyterlab.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/global_tools.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1684,58 +1712,155 @@
   
 
 
-  <h1>JupyterLab</h1>
-
-<h2 id="basic-usage">Basic usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
-<p>Using JupyterLab with pixi is very simple.
-You can just create a new pixi project and add the <code>jupyterlab</code> package to it.
-The full example is provided under the following <a href="https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab">Github link</a>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab
+<h1 id="pixi-global-tool-environment-installation">Pixi Global Tool Environment Installation<a class="headerlink" href="#pixi-global-tool-environment-installation" title="Permanent link">#</a></h1>
+<p>With <code>pixi global</code>, users can manage globally installed tools in a way that makes them available from any directory.
+This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system <code>PATH</code>, allowing you to run them from the command line.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The design for global tools is still in progress, and the commands and behavior may change in future releases.
+The proposal for the global tools feature can be found <a href="../../design_proposals/pixi_global_manifest/">here</a>.</p>
+</div>
+<h2 id="the-global-manifest">The Global Manifest<a class="headerlink" href="#the-global-manifest" title="Permanent link">#</a></h2>
+<p>Since <code>v0.33.0</code> pixi has a new manifest file that will be created in the global directory (default: <code>$HOME/.pixi/manifests/pixi-global.toml</code>).
+This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
+The manifest can be edited, synced, checked in to a version control system, and shared with others.</p>
+<p>A simple version looks like this:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[envs.vim]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">vimdiff</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;vimdiff&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;vim&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">[envs.gh]</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">gh</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">gh</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;gh&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">[envs.python]</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10,&lt;3.11&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python310</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (3)!</span>
+</span></code></pre></div></p>
+<ol>
+<li>Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.</li>
+<li>The exposed binaries are the ones that will be available in the system path. <code>vim</code> has multiple and all of them are exposed.</li>
+<li>Here python is exposed as <code>python310</code> to avoid conflicts with other python installations. You can give it any name you want.</li>
+</ol>
+<h3 id="channels">Channels<a class="headerlink" href="#channels" title="Permanent link">#</a></h3>
+<p>The channels are the conda channels that will be used to search for the packages.
+There is a priority to these, so the first one will have the highest priority, if a package is not found in that channel the next one will be used.
+For example, running:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install --channel conda-forge --channel bioconda snakemake
 </span></code></pre></div>
-<p>This will create a new pixi project and add the <code>jupyterlab</code> package to it. You can then start JupyterLab using the
-following command:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
+Results in the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[envs.snakemake]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;snakemake&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div></p>
+<p>More information on channels can be found <a href="../../advanced/channel_priority/">here</a>.</p>
+<h3 id="exposed">Exposed<a class="headerlink" href="#exposed" title="Permanent link">#</a></h3>
+<p>The exposed binaries are the ones that will be available in the system <code>PATH</code>.
+This is useful when the package has multiple binaries, but you want to get a select few, or you want to expose it with a different name.
+For example, the <code>python</code> package has multiple binaries, but you only want to expose the interpreter as <code>py3</code>.
+Running:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi global expose add --environment python py3=python3
 </span></code></pre></div>
-<p>If you want to add more "kernels" to JupyterLab, you can simply add them to your current project – as well as any dependencies from the scientific stack you might need.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>bash_kernel<span class="w"> </span>ipywidgets<span class="w"> </span>matplotlib<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w">  </span><span class="c1"># ...</span>
+will create the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[envs.python]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10,&lt;3.11&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">py3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python3&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<h3 id="what-kernels-are-available">What kernels are available?<a class="headerlink" href="#what-kernels-are-available" title="Permanent link">#</a></h3>
-<p>You can easily install more "kernels" for JupyterLab. The <code>conda-forge</code> repository has a number of interesting additional kernels - not just Python!</p>
-<ul>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/bash_kernel"><strong><code>bash_kernel</code></strong></a> A kernel for bash</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cpp"><strong><code>xeus-cpp</code></strong></a> A C++ kernel based on the new clang-repl</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cling"><strong><code>xeus-cling</code></strong></a> A C++ kernel based on the slightly older Cling</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-lua"><strong><code>xeus-lua</code></strong></a> A Lua kernel</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-sql"><strong><code>xeus-sql</code></strong></a> A kernel for SQL</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/r-irkernel"><strong><code>r-irkernel</code></strong></a> An R kernel</li>
-</ul>
-<h2 id="advanced-usage">Advanced usage<a class="headerlink" href="#advanced-usage" title="Permanent link">#</a></h2>
-<!--
-Modifications to the following section are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
-https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in sync by making a PR in both
--->
-
-<p>If you want to have only one instance of JupyterLab running but still want per-directory Pixi environments, you can use
-one of the kernels provided by the <a href="https://prefix.dev/channels/conda-forge/packages/pixi-kernel"><strong><code>pixi-kernel</code></strong></a>
-package.</p>
-<h3 id="configuring-jupyterlab">Configuring JupyterLab<a class="headerlink" href="#configuring-jupyterlab" title="Permanent link">#</a></h3>
-<p>To get started, create a Pixi project, add <code>jupyterlab</code> and <code>pixi-kernel</code> and then start JupyterLab:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab<span class="w"> </span>pixi-kernel
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
+Now you can run <code>py3</code> to start the python interpreter.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>py3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(&#39;Hello World&#39;)&quot;</span>
+</span></code></pre></div></p>
+<p>There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
+Even if the binary name is only exposed through dependencies of the package
+For example, running:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global install ansible
 </span></code></pre></div>
-<p>This will start JupyterLab and open it in your browser.</p>
-<p><img alt="JupyterLab launcher screen showing Pixi
-Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-light.png#only-light" />
-<img alt="JupyterLab launcher screen showing Pixi
-Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-dark.png#only-dark" /></p>
-<p><code>pixi-kernel</code> searches for a manifest file, either <code>pixi.toml</code> or <code>pyproject.toml</code>, in the same directory of your
-notebook or in any parent directory. When it finds one, it will use the environment specified in the manifest file to
-start the kernel and run your notebooks.</p>
-<h3 id="binder">Binder<a class="headerlink" href="#binder" title="Permanent link">#</a></h3>
-<p>If you just want to check a JupyterLab environment running in the cloud using <code>pixi-kernel</code>, you can visit
-<a href="https://mybinder.org/v2/gh/renan-r-santos/pixi-kernel-binder/main?labpath=example.ipynb">Binder</a>.</p>
+will create the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[envs.ansible]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ansible&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span></code></pre></div></p>
+<ol>
+<li>The <code>ansible</code> binary is exposed even though it is installed by a dependency of <code>ansible</code>, the <code>ansible-core</code> package.</li>
+</ol>
+<h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
+<p>Dependencies are the <strong>Conda</strong> packages that will be installed into your environment. For example, running:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi global install &quot;python&lt;3.12&quot;
+</span></code></pre></div>
+creates the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[envs.vim]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&lt;3.12&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># ...</span>
+</span></code></pre></div>
+Typically, you'd specify just the tool you're installing, but you can add more packages if needed.
+Defining the environment to install into will allow you to add multiple dependencies at once.
+For example, running:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>git<span class="w"> </span>vim<span class="w"> </span>python
+</span></code></pre></div>
+will create the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[envs.my-env]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># ...</span>
+</span></code></pre></div></p>
+<p>You can <code>add</code> a dependency to an existing environment by running:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
+</span></code></pre></div>
+This will be added as dependencies to the <code>my-env</code> environment but won't auto expose the binaries from the new packages.</p>
+<p>You can <code>remove</code> dependencies by running:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
+</span></code></pre></div></p>
+<h3 id="example-adding-a-series-of-tools-at-once">Example: Adding a series of tools at once<a class="headerlink" href="#example-adding-a-series-of-tools-at-once" title="Permanent link">#</a></h3>
+<p>Without specifying an environment, you can add multiple tools at once:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
+</span></code></pre></div>
+This command generates the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[envs.pixi-pack]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">dependencies</span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-pack&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">[envs.rattler-build]</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rattler-build&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+Creating two separate non-interfering environments, while exposing only the minimum required binaries.</p>
+<h3 id="example-creating-a-data-science-sandbox-environment">Example: Creating a Data Science Sandbox Environment<a class="headerlink" href="#example-creating-a-data-science-sandbox-environment" title="Permanent link">#</a></h3>
+<p>You can create an environment with multiple tools using the following command:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>--expose<span class="w"> </span><span class="nv">jupyter</span><span class="o">=</span>jupyter<span class="w"> </span>--expose<span class="w"> </span><span class="nv">ipython</span><span class="o">=</span>ipython<span class="w"> </span>jupyter<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>matplotlib<span class="w"> </span>ipython
+</span></code></pre></div>
+This command generates the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[envs.data-science]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;jupyter&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+In this setup, both <code>jupyter</code> and <code>ipython</code> are exposed from the <code>data-science</code> environment, allowing you to run:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>&gt;<span class="w"> </span>ipython
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Or</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>&gt;<span class="w"> </span>jupyter<span class="w"> </span>lab
+</span></code></pre></div>
+These commands will be available globally, making it easy to access your preferred tools without switching environments.</p>
+<h3 id="example-install-packages-for-a-different-platform">Example: Install packages for a different platform<a class="headerlink" href="#example-install-packages-for-a-different-platform" title="Permanent link">#</a></h3>
+<p>You can install packages for a different platform using the <code>--platform</code> flag.
+This is useful when you want to install packages for a different platform, such as <code>osx-64</code> packages on <code>osx-arm64</code>.
+For example, running this on <code>osx-arm64</code>:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>python
+</span></code></pre></div>
+will create the following entry in the manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[envs.python]</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># ...</span>
+</span></code></pre></div></p>
 
 
 
@@ -1807,9 +1932,9 @@ start the kernel and run your notebooks.</p>
           
             
             <a
-              href="../../CHANGELOG/"
+              href="../system_requirements/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Changelog"
+              aria-label="Previous: System Requirements"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1820,7 +1945,7 @@ start the kernel and run your notebooks.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Changelog
+                  System Requirements
                 </div>
               </div>
             </a>
@@ -1830,16 +1955,16 @@ start the kernel and run your notebooks.</p>
           
             
             <a
-              href="../pycharm/"
+              href="../../design_proposals/pixi_global_manifest/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: PyCharm"
+              aria-label="Next: Pixi Global Manifest"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  PyCharm
+                  Pixi Global Manifest
                 </div>
               </div>
               <div class="md-footer__button md-icon">
