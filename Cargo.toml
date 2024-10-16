@@ -94,7 +94,9 @@ rattler_cache = { version = "0.2.6", default-features = false }
 rattler_conda_types = { version = "0.28.2", default-features = false }
 rattler_digest = { version = "1.0.1", default-features = false }
 rattler_lock = { version = "0.22.27", default-features = false }
-rattler_networking = { version = "0.21.4", default-features = false }
+rattler_networking = { version = "0.21.4", default-features = false, features = [
+  "google-cloud-auth",
+] }
 rattler_repodata_gateway = { version = "0.21.17", default-features = false }
 rattler_shell = { version = "0.22.4", default-features = false }
 rattler_solve = { version = "1.1.0", default-features = false }
@@ -141,7 +143,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.32.1"
+version = "0.32.2"
 
 [features]
 default = ["rustls-tls"]
