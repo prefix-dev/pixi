@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.32.2] - 2024-10-16
 #### ✨ Highlights
 
-- `pixi self-update` is now a compile time feature which we'll only turn on in the GitHub releases.
+- `pixi self-update` will only work on the binaries from the GitHub releases, avoiding accidentally breaking the installation.
 - We now support `gcs://` conda registries.
 - No more broken PowerShell after using `pixi shell`.
 
