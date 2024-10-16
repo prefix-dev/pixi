@@ -5,6 +5,332 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.33.0] - 2024-10-16
+#### ✨ Highlights
+
+This is the first release with the new `pixi global` implementation. It's a full reimplementation of `pixi global` where it now uses a manifest file just like `pixi` projects. This way you can declare your environments and save them to a VCS.
+
+It also brings features like, adding dependencies to a global environment, and exposing multiple binaries from the same environment that are not part of the main installed packages.
+
+Test it out with:
+```shell
+# Normal feature
+pixi global install ipython
+
+# New features
+pixi global install \
+    --environment science \           # Defined the environment name
+    --expose scipython=ipython \      # Expose binaries under custom names
+    ipython scipy                     # Define multiple dependencies for one environment
+```
+
+This should result in a manifest in `$HOME/.pixi/manifests/pixi-global.toml`:
+```toml
+version = 1
+
+[envs.ipython]
+channels = ["conda-forge"]
+dependencies = { ipython = "*" }
+exposed = { ipython = "ipython", ipython3 = "ipython3" }
+
+[envs.science]
+channels = ["conda-forge"]
+dependencies = { ipython = "*", scipy = "*" }
+exposed = { scipython = "ipython" }
+```
+
+#### :book: Documentation
+Checkout the updated documentation on this new feature:
+- Main documentation on this tag: https://pixi.sh/v0.33.0/
+- Global CLI documentation: https://pixi.sh/v0.33.0/reference/cli/#global
+- The implementation documentation: https://pixi.sh/v0.33.0/features/global_tools/
+- The initial design proposal: https://pixi.sh/v0.33.0/design_proposals/pixi_global_manifest/
+
+
+#### Added
+
+- Add pixi global list filter by @nichmor in [#2272](https://github.com/prefix-dev/pixi/pull/2272)
+
+
+- Add --force-reinstall for global install by @nichmor in [#2275](https://github.com/prefix-dev/pixi/pull/2275)
+
+
+#### Changed
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Re-add `pixi global upgrade` by @Hofer-Julian in [#2254](https://github.com/prefix-dev/pixi/pull/2254)
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Merge pull request #1833 from prefix-dev/feature/pixi-global
+
+feat: new `pixi global` by @Hofer-Julian in [#1833](https://github.com/prefix-dev/pixi/pull/1833)
+
+
+#### Documentation
+
+- Update `pixi global` docs by @Hofer-Julian in [#2270](https://github.com/prefix-dev/pixi/pull/2270)
+
+
+#### Fixed
+
+- `global install/uninstall` allow `_` in packages by @Hofer-Julian in [#2259](https://github.com/prefix-dev/pixi/pull/2259)
+
+
+- Unique exposed name detection by @Hofer-Julian in [#2258](https://github.com/prefix-dev/pixi/pull/2258)
+
+
+- Edit cli on windows and for both config and global by @ruben-arts in [#2265](https://github.com/prefix-dev/pixi/pull/2265)
+
+
+- Pixi global required args by @nichmor in [#2282](https://github.com/prefix-dev/pixi/pull/2282)
+
+
+- Cleanup expose names when package is uninstalled. by @ruben-arts in [#2257](https://github.com/prefix-dev/pixi/pull/2257)
+
+
+- Global remove error message by @Hofer-Julian in [#2280](https://github.com/prefix-dev/pixi/pull/2280)
+
+
+- Slightly improve global update by @Hofer-Julian in [#2283](https://github.com/prefix-dev/pixi/pull/2283)
+
+
+- Skip `test_pixi_install_cleanup` by @Hofer-Julian in [#2285](https://github.com/prefix-dev/pixi/pull/2285)
+
+
+
+### [0.33.0rc1] - 2024-10-11
+#### ✨ Highlights
+
+
+
+#### Added
+
+- Add `global sync` by @Hofer-Julian in [#1835](https://github.com/prefix-dev/pixi/pull/1835)
+
+
+- Add migration path for new pixi global by @Hofer-Julian in [#1975](https://github.com/prefix-dev/pixi/pull/1975)
+
+
+- Add pixi global expose command by @nichmor in [#2030](https://github.com/prefix-dev/pixi/pull/2030)
+
+
+- Add `pixi global install` by @Hofer-Julian in [#2110](https://github.com/prefix-dev/pixi/pull/2110)
+
+
+- Add `global uninstall` by @ruben-arts in [#2179](https://github.com/prefix-dev/pixi/pull/2179)
+
+
+- Add inline tables for `exposed` and `dependencies` by @Hofer-Julian in [#2170](https://github.com/prefix-dev/pixi/pull/2170)
+
+
+- Add `pixi global update` by @ruben-arts in [#2183](https://github.com/prefix-dev/pixi/pull/2183)
+
+
+- Add version to global manifest by @Hofer-Julian in [#2232](https://github.com/prefix-dev/pixi/pull/2232)
+
+
+- Add `pixi global edit` by @ruben-arts in [#2219](https://github.com/prefix-dev/pixi/pull/2219)
+
+
+#### Changed
+
+- Pixi global manifest by @Hofer-Julian in [#1802](https://github.com/prefix-dev/pixi/pull/1802)
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @nichmor
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Give better info message for `pixi global sync` by @Hofer-Julian in [#2100](https://github.com/prefix-dev/pixi/pull/2100)
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- `fs_err` in `pixi global` by @ruben-arts in [#2130](https://github.com/prefix-dev/pixi/pull/2130)
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Fix integration tests by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Pixi global list by @ruben-arts in [#2138](https://github.com/prefix-dev/pixi/pull/2138)
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Merge branch 'main' into feature/pixi-global by @Hofer-Julian
+
+
+- Linting by @Hofer-Julian
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Always expose the executable with the name of the dependency by @ruben-arts in [#2175](https://github.com/prefix-dev/pixi/pull/2175)
+
+
+- Pixi global add by @ruben-arts
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Allow `add_channel` to be unused by @Hofer-Julian
+
+
+- Improve sync reporting by @Hofer-Julian in [#2202](https://github.com/prefix-dev/pixi/pull/2202)
+
+
+- Improve expose by @Hofer-Julian in [#2240](https://github.com/prefix-dev/pixi/pull/2240)
+
+
+- Merge branch 'main' into feature/pixi-global by @ruben-arts
+
+
+- Improve global install by @Hofer-Julian in [#2244](https://github.com/prefix-dev/pixi/pull/2244)
+
+
+- `pixi global remove` by @ruben-arts in [#2226](https://github.com/prefix-dev/pixi/pull/2226)
+
+
+- Improve debugablity global by @ruben-arts in [#2241](https://github.com/prefix-dev/pixi/pull/2241)
+
+
+#### Documentation
+
+- First iteration on the documentation of the global feature by @ruben-arts in [#2169](https://github.com/prefix-dev/pixi/pull/2169)
+
+
+#### Fixed
+
+- Integration tests for pixi global by @Hofer-Julian in [#1972](https://github.com/prefix-dev/pixi/pull/1972)
+
+
+- Remove `allow(unused` and fix resulting warnings by @Hofer-Julian in [#2091](https://github.com/prefix-dev/pixi/pull/2091)
+
+
+- For `local_environment_matches_spec` by @Hofer-Julian in [#2093](https://github.com/prefix-dev/pixi/pull/2093)
+
+
+- Cleanup initial manifest creation by @ruben-arts in [#2124](https://github.com/prefix-dev/pixi/pull/2124)
+
+
+- Executable name from path by @ruben-arts in [#2136](https://github.com/prefix-dev/pixi/pull/2136)
+
+
+- Executable parsing on windows by @ruben-arts in [#2142](https://github.com/prefix-dev/pixi/pull/2142)
+
+
+- `pixi global install` needs to adapt the manifest by @Hofer-Julian
+
+
+- Install multiple packages at once by @ruben-arts
+
+
+- Global ensure manifest dir exists by @Hofer-Julian in [#2163](https://github.com/prefix-dev/pixi/pull/2163)
+
+
+- Also remove binaries of pruned environments by @ruben-arts in [#2176](https://github.com/prefix-dev/pixi/pull/2176)
+
+
+- Going from matchspec to pixispec and into toml value by @ruben-arts in [#2173](https://github.com/prefix-dev/pixi/pull/2173)
+
+
+- Only revert environments we actually modified by @Hofer-Julian in [#2182](https://github.com/prefix-dev/pixi/pull/2182)
+
+
+- Update expose cli by @Hofer-Julian in [#2201](https://github.com/prefix-dev/pixi/pull/2201)
+
+
+- Channels creation on migrate by @ruben-arts in [#2215](https://github.com/prefix-dev/pixi/pull/2215)
+
+
+- Doc comments by @Hofer-Julian
+
+
+- Improve global migration by @Hofer-Julian in [#2234](https://github.com/prefix-dev/pixi/pull/2234)
+
+
+- Only uninstall single specified environments, only cleanup on sync by @ruben-arts in [#2246](https://github.com/prefix-dev/pixi/pull/2246)
+
+
+#### Refactor
+
+- Remove error messages that aren't needed anymore by @Hofer-Julian
+
+
+- Split package_from_conda_meta for easier reuse by @ruben-arts in [#2140](https://github.com/prefix-dev/pixi/pull/2140)
+
+
+- Remove `tokio-stream` dependency by @Hofer-Julian in [#2154](https://github.com/prefix-dev/pixi/pull/2154)
+
+
+- Use sync environment logic for `pixi g expose` by @ruben-arts in [#2156](https://github.com/prefix-dev/pixi/pull/2156)
+
+
+- Only update one channel in `update_channel.nu` by @Hofer-Julian in [#2178](https://github.com/prefix-dev/pixi/pull/2178)
+
+
+- `pixi global add` follow up by @Hofer-Julian in [#2200](https://github.com/prefix-dev/pixi/pull/2200)
+
+
+#### Removed
+
+- Remove broken exec by @Hofer-Julian in [#2248](https://github.com/prefix-dev/pixi/pull/2248)
+
+
+
 ### [0.32.2] - 2024-10-16
 #### ✨ Highlights
 
