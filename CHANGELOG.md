@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.33.0] - 2024-10-16
+#### ✨ Highlights
+
+This is the first release with the new `pixi global` implementation. It's a full reimplementation of `pixi global` where it now uses a manifest file just like `pixi` projects. This way you can declare your environments and save them to a VCS.
+
+It also brings features like, adding dependencies to a global environment, and exposing multiple binaries from the same environment that are not part of the main installed packages.
+
+Test it out with:
+```shell
+# Normal feature
+pixi global install ipython
+
+# New features
+pixi global install \
+    --environment science \           # Defined the environment name
+    --expose scipython=ipython \      # Expose binaries under custom names
+    ipython scipy                     # Define multiple dependencies for one environment
+```
+
+This should result in a manifest in `$HOME/.pixi/manifests/pixi-global.toml`:
+```toml
+version = 1
+
+[envs.ipython]
+channels = ["conda-forge"]
+dependencies = { ipython = "*" }
+exposed = { ipython = "ipython", ipython3 = "ipython3" }
+
+[envs.science]
+channels = ["conda-forge"]
+dependencies = { ipython = "*", scipy = "*" }
+exposed = { scipython = "ipython" }
+```
+
+#### 📖 Documentation
+Checkout the updated documentation on this new feature:
+- Main documentation on this tag: https://pixi.sh/v0.33.0/
+- Global CLI documentation: https://pixi.sh/v0.33.0/reference/cli/#global
+- The implementation documentation: https://pixi.sh/v0.33.0/features/global_tools/
+- The initial design proposal: https://pixi.sh/v0.33.0/design_proposals/pixi_global_manifest/
+
 ### [0.32.2] - 2024-10-16
 #### ✨ Highlights
 
