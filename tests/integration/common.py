@@ -24,7 +24,7 @@ class Output:
         self.stderr = stderr
         self.returncode = returncode
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"command: {self.command}"
 
 
