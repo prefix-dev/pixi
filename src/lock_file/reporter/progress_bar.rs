@@ -1,6 +1,7 @@
 use std::{borrow::Cow, fmt::Write, sync::Arc, time::Duration};
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use pixi_build_frontend::CondaMetadataReporter;
 use pixi_consts::consts;
 use pypi_mapping::Reporter;
 use rattler_conda_types::Platform;
@@ -102,5 +103,46 @@ impl SolveProgressBar {
 
     pub(crate) fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn Reporter> {
         Arc::new(PurlAmendReporter::new(self.clone()))
+    }
+}
+
+pub(crate) struct CondaMetadataProgress {
+    progress_bar: ProgressBar,
+}
+
+impl CondaMetadataProgress {
+    pub(crate) fn new(original_progress: &ProgressBar, num_packages: u64) -> Self {
+        // Create a new progress bar.
+        let pb = ProgressBar::new(num_packages);
+        pb.set_style(pixi_progress::default_progress_style());
+        let progress = pixi_progress::global_multi_progress().insert_after(original_progress, pb);
+        // Building the package
+        progress.set_prefix("retrieving metadata");
+        progress.enable_steady_tick(Duration::from_millis(100));
+
+        Self {
+            progress_bar: progress,
+        }
+    }
+}
+
+impl CondaMetadataReporter for CondaMetadataProgress {
+    fn on_metadata_start(&self, identifier: &str) -> usize {
+        self.progress_bar
+            .set_message(format!("rendering {}", identifier));
+        0
+    }
+
+    fn on_metadata_end(&self, _operation: usize) {
+        self.progress_bar.inc(1);
+        self.progress_bar.set_message("");
+        if self.progress_bar.position()
+            == self
+                .progress_bar
+                .length()
+                .expect("expected length to be set for progress")
+        {
+            self.progress_bar.finish_and_clear();
+        }
     }
 }

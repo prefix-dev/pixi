@@ -3,5 +3,6 @@ mod progress_bar;
 mod purl_amend;
 
 pub(crate) use gateway_reporter::GatewayProgressReporter;
+pub(crate) use progress_bar::CondaMetadataProgress;
 pub(crate) use progress_bar::SolveProgressBar;
 pub(crate) use purl_amend::PurlAmendReporter;

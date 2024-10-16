@@ -108,7 +108,7 @@ impl Protocol {
                 let mut process = tokio::process::Command::from(tool.command())
                     .stdout(std::process::Stdio::piped())
                     .stdin(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::inherit()) // TODO: Capture this?
+                    .stderr(std::process::Stdio::null()) // TODO: Capture this?
                     .spawn()?;
 
                 let backend_identifier = tool

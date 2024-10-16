@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
+use indicatif::{MultiProgress, ProgressBar};
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{NoopCondaBuildReporter, SetupRequest};
+use parking_lot::Mutex;
+use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -34,6 +36,53 @@ pub struct Args {
     pub output_dir: PathBuf,
 }
 
+struct ProgressReporter {
+    multi_progress: MultiProgress,
+    progress_bars: Mutex<Vec<indicatif::ProgressBar>>,
+}
+
+impl ProgressReporter {
+    fn new() -> Self {
+        let progress = pixi_progress::global_multi_progress();
+        Self {
+            multi_progress: progress,
+            progress_bars: Default::default(),
+        }
+    }
+}
+
+impl CondaBuildReporter for ProgressReporter {
+    /// Starts a progress bar that should currently be
+    ///  [spinner] message
+    fn on_build_start(&self, identifier: &str) -> usize {
+        // Create a new progress bar.
+        let style = indicatif::ProgressStyle::default_bar()
+            .template("{spinner:.dim} {wide_msg:.dim} {elapsed}")
+            .unwrap();
+        let pb = ProgressBar::new(0);
+        pb.set_style(style);
+        let progress = self.multi_progress.add(pb);
+        // Building the package
+        progress.set_message(format!("Building '{}' as a conda package", identifier));
+        progress.enable_steady_tick(Duration::from_millis(100));
+        progress.println("Blaa");
+        progress.println("Blaa2");
+
+        // Associate the progress bar with the operation.
+        let mut lock = self.progress_bars.lock();
+        lock.push(progress.clone());
+        lock.len() - 1
+    }
+
+    fn on_build_end(&self, operation: usize) {
+        // Finish the progress bar.
+        let lock = self.progress_bars.lock();
+        if let Some(progress) = lock.get(operation) {
+            progress.finish_with_message("build complete");
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config_cli);
@@ -52,7 +101,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
-    let conda_build_noop = NoopCondaBuildReporter::new();
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
     let work_dir = tempfile::Builder::new()
@@ -61,6 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .context("failed to create temporary working directory in the .pixi directory")?;
 
+    let progress = Arc::new(ProgressReporter::new());
     // Build the individual packages.
     let result = protocol
         .conda_build(
@@ -85,7 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 outputs: None,
                 work_directory: work_dir.path().to_path_buf(),
             },
-            conda_build_noop.clone(),
+            progress.clone(),
         )
         .await
         .wrap_err("during the building of the project the following error occurred")?;

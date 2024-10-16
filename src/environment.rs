@@ -10,9 +10,10 @@ use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
 use futures::{stream, StreamExt, TryStreamExt};
+use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
-use pixi_build_frontend::NoopCondaBuildReporter;
+use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
@@ -25,6 +26,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform, PrefixRecord, RepoDat
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -488,6 +490,49 @@ impl PythonStatus {
     }
 }
 
+struct CondaBuildProgress {
+    progress_bar: ProgressBar,
+}
+
+impl CondaBuildProgress {
+    fn new(num_packages: u64) -> Self {
+        // Create a new progress bar.
+        let pb = ProgressBar::new(num_packages);
+        pb.set_style(pixi_progress::default_progress_style());
+        let progress = pixi_progress::global_multi_progress().add(pb);
+        // Building the package
+        progress.set_prefix("building records");
+        progress.enable_steady_tick(Duration::from_millis(100));
+
+        Self {
+            progress_bar: progress,
+        }
+    }
+}
+
+impl CondaBuildReporter for CondaBuildProgress {
+    /// Starts a progress bar that should currently be
+    ///  [spinner] message
+    fn on_build_start(&self, identifier: &str) -> usize {
+        self.progress_bar
+            .set_message(format!("building {}", identifier));
+        0
+    }
+
+    fn on_build_end(&self, _operation: usize) {
+        self.progress_bar.inc(1);
+        self.progress_bar.set_message("");
+        if self.progress_bar.position()
+            == self
+                .progress_bar
+                .length()
+                .expect("expected length to be set for progress")
+        {
+            self.progress_bar.finish();
+        }
+    }
+}
+
 /// Updates the environment to contain the packages from the specified lock-file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
@@ -514,11 +559,12 @@ pub async fn update_prefix_conda(
             PixiRecord::Source(record) => Either::Right(record),
         });
 
+    let progress_reporter = Arc::new(CondaBuildProgress::new(source_records.len() as u64));
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
         .map(Ok)
         .and_then(|record| {
-            let noop_build_reporter = NoopCondaBuildReporter::new();
+            let progress = progress_reporter.clone();
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
@@ -530,7 +576,7 @@ pub async fn update_prefix_conda(
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
-                        noop_build_reporter.clone(),
+                        progress.clone(),
                     )
                     .await
             }
