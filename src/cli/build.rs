@@ -1,9 +1,8 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
-use indicatif::{MultiProgress, ProgressBar};
+use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
@@ -37,16 +36,21 @@ pub struct Args {
 }
 
 struct ProgressReporter {
-    multi_progress: MultiProgress,
-    progress_bars: Mutex<Vec<indicatif::ProgressBar>>,
+    progress_bar: indicatif::ProgressBar,
 }
 
 impl ProgressReporter {
     fn new() -> Self {
-        let progress = pixi_progress::global_multi_progress();
+        let style = indicatif::ProgressStyle::default_bar()
+            .template("{spinner:.dim} {wide_msg:.dim} {elapsed}")
+            .unwrap();
+        let pb = ProgressBar::new(0);
+        pb.set_style(style);
+        let progress = pixi_progress::global_multi_progress().add(pb);
+        progress.enable_steady_tick(Duration::from_millis(100));
+
         Self {
-            multi_progress: progress,
-            progress_bars: Default::default(),
+            progress_bar: progress,
         }
     }
 }
@@ -56,30 +60,15 @@ impl CondaBuildReporter for ProgressReporter {
     ///  [spinner] message
     fn on_build_start(&self, identifier: &str) -> usize {
         // Create a new progress bar.
-        let style = indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.dim} {wide_msg:.dim} {elapsed}")
-            .unwrap();
-        let pb = ProgressBar::new(0);
-        pb.set_style(style);
-        let progress = self.multi_progress.add(pb);
         // Building the package
-        progress.set_message(format!("Building '{}' as a conda package", identifier));
-        progress.enable_steady_tick(Duration::from_millis(100));
-        progress.println("Blaa");
-        progress.println("Blaa2");
-
-        // Associate the progress bar with the operation.
-        let mut lock = self.progress_bars.lock();
-        lock.push(progress.clone());
-        lock.len() - 1
+        self.progress_bar
+            .set_message(format!("Building '{}' as a conda package", identifier));
+        0
     }
 
-    fn on_build_end(&self, operation: usize) {
+    fn on_build_end(&self, _operation: usize) {
         // Finish the progress bar.
-        let lock = self.progress_bars.lock();
-        if let Some(progress) = lock.get(operation) {
-            progress.finish_with_message("build complete");
-        }
+        self.progress_bar.finish_with_message("build completed");
     }
 }
 
