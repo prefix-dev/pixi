@@ -29,7 +29,7 @@ impl HasSpecs for Args {
 
 pub async fn execute(_args: Args) -> miette::Result<()> {
     Err(
-        miette::miette!("You can use `pixi global update` for most use cases").wrap_err(
+        miette::miette!("You can call `pixi global update` for most use cases").wrap_err(
             "`pixi global upgrade` has been removed, and will be re-added in future releases",
         ),
     )
