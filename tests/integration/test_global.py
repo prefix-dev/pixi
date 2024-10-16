@@ -540,7 +540,8 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
             "dummy-b",
         ],
         env=env,
-        stderr_contains="The environment dummy-b was already up-to-date",
+        stderr_contains="Environment dummy-b is already up to date.",
+        stdout_contains="dummy-b: 0.1.0",
     )
     assert dummy_b.is_file()
 
@@ -586,7 +587,8 @@ def test_install_twice_with_force_reinstall(
             "dummy-b",
         ],
         env=env,
-        stderr_contains="The environment dummy-b was already up-to-date",
+        stderr_contains="Environment dummy-b is already up to date.",
+        stdout_contains="dummy-b: 0.1.0",
     )
 
     # Install dummy-b again, but with force-reinstall
