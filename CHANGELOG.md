@@ -39,7 +39,7 @@ dependencies = { ipython = "*", scipy = "*" }
 exposed = { scipython = "ipython" }
 ```
 
-#### :book: Documentation
+#### 📖 Documentation
 Checkout the updated documentation on this new feature:
 - Main documentation on this tag: https://pixi.sh/v0.33.0/
 - Global CLI documentation: https://pixi.sh/v0.33.0/reference/cli/#global
