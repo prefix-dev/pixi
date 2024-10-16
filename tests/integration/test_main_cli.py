@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from .common import verify_cli_command, ExitCode, PIXI_VERSION
 
 
@@ -10,7 +9,7 @@ def test_pixi(pixi: Path) -> None:
     verify_cli_command([pixi, "--version"], ExitCode.SUCCESS, stdout_contains=PIXI_VERSION)
 
 
-def test_project_commands(tmp_path: Path, pixi: Path) -> None:
+def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
@@ -164,48 +163,6 @@ def test_project_commands(tmp_path: Path, pixi: Path) -> None:
     )
 
 
-def test_global_install(pixi: Path) -> None:
-    # Install
-    verify_cli_command(
-        [pixi, "global", "install", "rattler-build"],
-        ExitCode.SUCCESS,
-        stdout_excludes="rattler-build",
-    )
-
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "rattler-build",
-            "-c",
-            "https://fast.prefix.dev/conda-forge",
-        ],
-        ExitCode.SUCCESS,
-        stdout_excludes="rattler-build",
-    )
-
-    # Install with --no-activation
-    verify_cli_command(
-        [pixi, "global", "install", "rattler-build", "--no-activation"],
-        ExitCode.SUCCESS,
-        stdout_excludes="rattler-build",
-    )
-
-    # Upgrade
-    verify_cli_command([pixi, "global", "upgrade", "rattler-build"], ExitCode.SUCCESS)
-
-    # Upgrade all
-    verify_cli_command([pixi, "global", "upgrade-all"], ExitCode.SUCCESS)
-
-    # List
-    verify_cli_command([pixi, "global", "list"], ExitCode.SUCCESS, stderr_contains="rattler-build")
-
-    # Remove
-    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.SUCCESS)
-    verify_cli_command([pixi, "global", "remove", "rattler-build"], ExitCode.FAILURE)
-
-
 def test_search(pixi: Path) -> None:
     verify_cli_command(
         [pixi, "search", "rattler-build", "-c", "conda-forge"],
@@ -219,7 +176,7 @@ def test_search(pixi: Path) -> None:
     )
 
 
-def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
+def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
@@ -321,7 +278,7 @@ def test_simple_project_setup(tmp_path: Path, pixi: Path) -> None:
     )
 
 
-def test_pixi_init_pyproject(tmp_path: Path, pixi: Path) -> None:
+def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pyproject.toml"
     # Create a new project
     verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)

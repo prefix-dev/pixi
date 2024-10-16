@@ -1,42 +1,34 @@
 use clap::Parser;
-use indexmap::IndexMap;
+use rattler_conda_types::Platform;
 
-use rattler_conda_types::{MatchSpec, Platform};
+use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 
-use pixi_config::{Config, ConfigCli};
-
-use crate::cli::cli_config::ChannelsConfig;
-
-use super::{list::list_global_packages, upgrade::upgrade_packages};
-
-/// Upgrade all globally installed packages
+/// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct Args {
+    /// Specifies the packages to upgrade.
+    //#[arg(required = true)]
+    pub specs: Vec<String>,
+
     #[clap(flatten)]
     channels: ChannelsConfig,
-
-    #[clap(flatten)]
-    config: ConfigCli,
 
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
     platform: Platform,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
-
-    let names = list_global_packages().await?;
-    let mut specs = IndexMap::with_capacity(names.len());
-    for name in names {
-        specs.insert(
-            name.clone(),
-            MatchSpec {
-                name: Some(name),
-                ..Default::default()
-            },
-        );
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.specs.iter().map(AsRef::as_ref).collect()
     }
+}
 
-    upgrade_packages(specs, config, args.channels, args.platform).await
+pub async fn execute(_args: Args) -> miette::Result<()> {
+    Err(
+        miette::miette!("You can use `pixi global update` for most use cases").wrap_err(
+            "`pixi global upgrade-all` has been removed, and will be re-added in future releases",
+        ),
+    )
 }

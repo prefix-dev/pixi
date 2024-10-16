@@ -36,6 +36,7 @@ use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{

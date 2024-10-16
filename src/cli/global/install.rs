@@ -1,58 +1,61 @@
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use std::str::FromStr;
 
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
-use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
-};
-use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
-    shell::{Shell, ShellEnum},
-};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
-use super::common::{channel_name_from_prefix, find_designated_package, BinDir, BinEnvDir};
 use crate::{
-    cli::{cli_config::ChannelsConfig, has_specs::HasSpecs},
+    cli::{global::revert_environment_after_error, has_specs::HasSpecs},
+    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
     prefix::Prefix,
-    rlimit::try_increase_rlimit_to_sensible,
 };
+use pixi_config::{self, Config, ConfigCli};
 
-/// Installs the defined package in a global accessible location.
-#[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
+/// Installs the defined packages in a globally accessible location and exposes their command line applications.
+///
+/// Example:
+/// - pixi global install starship nushell ripgrep bat
+/// - pixi global install --environment science jupyter polars
+/// - pixi global install --expose python3.8=python python=3.8
+#[derive(Parser, Debug, Clone)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be installed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
-    #[clap(flatten)]
-    channels: ChannelsConfig,
+    /// The channels to consider as a name or a url.
+    /// Multiple channels can be specified by using this field multiple times.
+    ///
+    /// When specifying a channel, it is common that the selected channel also
+    /// depends on the `conda-forge` channel.
+    ///
+    /// By default, if no channel is provided, `conda-forge` is used.
+    #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
+    channels: Vec<NamedChannelOrUrl>,
 
-    #[clap(short, long, default_value_t = Platform::current())]
-    platform: Platform,
+    #[clap(short, long)]
+    platform: Option<Platform>,
+
+    /// Ensures that all packages will be installed in the same environment
+    #[clap(short, long)]
+    environment: Option<EnvironmentName>,
+
+    /// Add one or more mapping which describe which executables are exposed.
+    /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
+    /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
+    #[arg(long)]
+    expose: Vec<Mapping>,
 
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// Do not insert `CONDA_PREFIX`, `PATH` modifications into the installed executable script.
-    #[clap(long)]
-    no_activation: bool,
+    /// Specifies that the packages should be reinstalled even if they are already installed.
+    #[arg(action, long)]
+    force_reinstall: bool,
 }
 
 impl HasSpecs for Args {
@@ -61,466 +64,181 @@ impl HasSpecs for Args {
     }
 }
 
-/// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
-    let activator =
-        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
-    let result = activator
-        .activation(ActivationVariables {
-            conda_prefix: None,
-            path: None,
-            path_modification_behavior: PathModificationBehavior::Prepend,
-        })
-        .into_diagnostic()?;
-
-    // Add a shebang on unix based platforms
-    let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
-    } else {
-        result.script.contents().into_diagnostic()?
-    };
-
-    Ok(script)
-}
-
-fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
-    // Check if the file is in a known executable directory.
-    let binary_folders = if cfg!(windows) {
-        &([
-            "",
-            "Library/mingw-w64/bin/",
-            "Library/usr/bin/",
-            "Library/bin/",
-            "Scripts/",
-            "bin/",
-        ][..])
-    } else {
-        &(["bin"][..])
-    };
-
-    let parent_folder = match relative_path.parent() {
-        Some(dir) => dir,
-        None => return false,
-    };
-
-    if !binary_folders
-        .iter()
-        .any(|bin_path| Path::new(bin_path) == parent_folder)
-    {
-        return false;
-    }
-
-    // Check if the file is executable
-    let absolute_path = prefix.root().join(relative_path);
-    is_executable::is_executable(absolute_path)
-}
-
-/// Find the executable scripts within the specified package installed in this
-/// conda prefix.
-fn find_executables<'a>(prefix: &Prefix, prefix_package: &'a PrefixRecord) -> Vec<&'a Path> {
-    prefix_package
-        .files
-        .iter()
-        .filter(|relative_path| is_executable(prefix, relative_path))
-        .map(|buf| buf.as_ref())
-        .collect()
-}
-
-/// Mapping from an executable in a package environment to its global binary
-/// script location.
-#[derive(Debug)]
-pub struct BinScriptMapping<'a> {
-    pub original_executable: &'a Path,
-    pub global_binary_path: PathBuf,
-}
-
-/// For each executable provided, map it to the installation path for its global
-/// binary script.
-async fn map_executables_to_global_bin_scripts<'a>(
-    package_executables: &[&'a Path],
-    bin_dir: &BinDir,
-) -> miette::Result<Vec<BinScriptMapping<'a>>> {
-    #[cfg(target_family = "windows")]
-    let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
-        pathext.split(';').map(|s| s.to_lowercase()).collect()
-    } else {
-        tracing::debug!("Could not find 'PATHEXT' variable, using a default list");
-        [
-            ".COM", ".EXE", ".BAT", ".CMD", ".VBS", ".VBE", ".JS", ".JSE", ".WSF", ".WSH", ".MSC",
-            ".CPL",
-        ]
-        .iter()
-        .map(|&s| s.to_lowercase())
-        .collect()
-    };
-
-    #[cfg(target_family = "unix")]
-    // TODO: Find if there are more relevant cases, these cases are generated by our big friend
-    // GPT-4
-    let extensions_list: Vec<String> = vec![
-        ".sh", ".bash", ".zsh", ".csh", ".tcsh", ".ksh", ".fish", ".py", ".pl", ".rb", ".lua",
-        ".php", ".tcl", ".awk", ".sed",
-    ]
-    .iter()
-    .map(|&s| s.to_owned())
-    .collect();
-
-    let BinDir(bin_dir) = bin_dir;
-    let mut mappings = vec![];
-
-    for exec in package_executables.iter() {
-        // Remove the extension of a file if it is in the list of known extensions.
-        let Some(file_name) = exec
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(str::to_lowercase)
-        else {
-            continue;
-        };
-        let file_name = extensions_list
-            .iter()
-            .find_map(|ext| file_name.strip_suffix(ext))
-            .unwrap_or(file_name.as_str());
-
-        let mut executable_script_path = bin_dir.join(file_name);
-
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        };
-        mappings.push(BinScriptMapping {
-            original_executable: exec,
-            global_binary_path: executable_script_path,
-        });
-    }
-    Ok(mappings)
-}
-
-/// Find all executable scripts in a package and map them to their global
-/// install paths.
-///
-/// (Convenience wrapper around `find_executables` and
-/// `map_executables_to_global_bin_scripts` which are generally used together.)
-pub(super) async fn find_and_map_executable_scripts<'a>(
-    prefix: &Prefix,
-    prefix_package: &'a PrefixRecord,
-    bin_dir: &BinDir,
-) -> miette::Result<Vec<BinScriptMapping<'a>>> {
-    let executables = find_executables(prefix, prefix_package);
-    map_executables_to_global_bin_scripts(&executables, bin_dir).await
-}
-
-/// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable.
-pub(super) async fn create_executable_scripts(
-    mapped_executables: &[BinScriptMapping<'_>],
-    prefix: &Prefix,
-    shell: &ShellEnum,
-    activation_script: String,
-    no_activation: bool,
-) -> miette::Result<()> {
-    for BinScriptMapping {
-        original_executable: exec,
-        global_binary_path: executable_script_path,
-    } in mapped_executables
-    {
-        let mut script = if no_activation {
-            if cfg!(unix) {
-                "#!/bin/sh\n".to_string()
-            } else {
-                String::new()
-            }
-        } else {
-            activation_script.clone()
-        };
-
-        shell
-            .run_command(
-                &mut script,
-                [
-                    format!("\"{}\"", prefix.root().join(exec).to_string_lossy()).as_str(),
-                    get_catch_all_arg(shell),
-                ],
-            )
-            .expect("should never fail");
-
-        if matches!(shell, ShellEnum::CmdExe(_)) {
-            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the
-            // script and to prevent leaking environment variables into the
-            // parent shell (e.g. PATH would grow longer and longer)
-            script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
-        }
-
-        tokio::fs::write(&executable_script_path, script)
-            .await
-            .into_diagnostic()?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                executable_script_path,
-                std::fs::Permissions::from_mode(0o755),
-            )
-            .into_diagnostic()?;
-        }
-    }
-    Ok(())
-}
-
-/// Warn user on dangerous package installations, interactive yes no prompt
-pub(crate) fn prompt_user_to_continue(
-    packages: &IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<bool> {
-    let dangerous_packages = HashMap::from([
-        ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
-        ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
-    ]);
-
-    // Check if any of the packages are dangerous, and prompt the user to ask if
-    // they want to continue, including the advice.
-    for (name, _spec) in packages {
-        if let Some(advice) = dangerous_packages.get(&name.as_normalized()) {
-            let prompt = format!(
-                "{}\nDo you want to continue?",
-                console::style(advice).yellow()
-            );
-            if !dialoguer::Confirm::new()
-                .with_prompt(prompt)
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?
-            {
-                return Ok(false);
-            }
-        }
-    }
-
-    Ok(true)
-}
-
-/// Install a global command
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Figure out what channels we are using
     let config = Config::with_cli_config(&args.config);
-    let channels = args.channels.resolve_from_config(&config)?;
+    let project_original = global::Project::discover_or_create()
+        .await?
+        .with_cli_config(config.clone());
 
+    let env_names = match &args.environment {
+        Some(env_name) => Vec::from([env_name.clone()]),
+        None => args
+            .specs()?
+            .iter()
+            .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
+            .collect::<miette::Result<Vec<_>>>()?,
+    };
+
+    let multiple_envs = env_names.len() > 1;
+
+    if !args.expose.is_empty() && env_names.len() != 1 {
+        miette::bail!("Can't add exposed mappings for more than one environment");
+    }
+
+    let mut state_changes = StateChanges::default();
+    let mut last_updated_project = project_original;
     let specs = args.specs()?;
-
-    // Warn user on dangerous package installations, interactive yes no prompt
-    if !prompt_user_to_continue(&specs)? {
-        return Ok(());
-    }
-
-    // Fetch the repodata
-    let (_, auth_client) = build_reqwest_clients(Some(&config));
-
-    let gateway = config.gateway(auth_client.clone());
-
-    let repodata = gateway
-        .query(
-            channels,
-            [args.platform, Platform::NoArch],
-            specs.values().cloned().collect_vec(),
-        )
-        .recursive(true)
-        .await
-        .into_diagnostic()?;
-
-    // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
-        .into_diagnostic()
-        .context("failed to determine virtual packages")?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
-    // Solve the environment
-    let solver_specs = specs.clone();
-    let solved_records = wrap_in_progress("solving environment", move || {
-        Solver.solve(SolverTask {
-            specs: solver_specs.values().cloned().collect_vec(),
-            virtual_packages,
-            ..SolverTask::from_iter(&repodata)
-        })
-    })
-    .into_diagnostic()
-    .context("failed to solve environment")?;
-
-    // Install the package(s)
-    let mut executables = vec![];
-    for (package_name, _) in specs {
-        let (prefix_package, scripts, _) = globally_install_package(
-            &package_name,
-            solved_records.clone(),
-            auth_client.clone(),
-            args.platform,
-            args.no_activation,
-        )
-        .await?;
-        let channel_name =
-            channel_name_from_prefix(&prefix_package, config.global_channel_config());
-        let record = &prefix_package.repodata_record.package_record;
-
-        // Warn if no executables were created for the package
-        if scripts.is_empty() {
-            eprintln!(
-                "{}No executable entrypoint found in package {}, are you sure it exists?",
-                console::style(console::Emoji("⚠️", "")).yellow().bold(),
-                console::style(record.name.as_source()).bold()
-            );
+    for env_name in &env_names {
+        let specs = if multiple_envs {
+            specs
+                .clone()
+                .into_iter()
+                .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
+                .collect()
+        } else {
+            specs.clone()
+        };
+        let mut project = last_updated_project.clone();
+        match setup_environment(env_name, &args, specs, &mut project)
+            .await
+            .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
+        {
+            Ok(sc) => {
+                state_changes |= sc;
+            }
+            Err(err) => {
+                state_changes.report();
+                revert_environment_after_error(env_name, &last_updated_project)
+                    .await
+                    .wrap_err("Couldn't install packages. Reverting also failed.")?;
+                return Err(err);
+            }
         }
-
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(record.name.as_source()).bold(),
-            console::style(record.version.version()).bold(),
-            console::style(record.build.as_str()).bold(),
-            channel_name,
-        );
-
-        executables.extend(scripts);
+        last_updated_project = project;
     }
-
-    if !executables.is_empty() {
-        print_executables_available(executables).await?;
-    }
+    state_changes.report();
 
     Ok(())
 }
 
-async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Result<()> {
-    let BinDir(bin_dir) = BinDir::from_existing().await?;
-    let whitespace = console::Emoji("  ", "").to_string();
-    let executable = executables
-        .into_iter()
-        .map(|path| {
-            path.strip_prefix(&bin_dir)
-                .expect("script paths were constructed by joining onto BinDir")
-                .to_string_lossy()
-                .to_string()
-        })
-        .join(&format!("\n{whitespace} -  "));
+async fn setup_environment(
+    env_name: &EnvironmentName,
+    args: &Args,
+    specs: IndexMap<PackageName, MatchSpec>,
+    project: &mut Project,
+) -> miette::Result<StateChanges> {
+    let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-    if is_bin_folder_on_path().await {
-        eprintln!(
-            "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
-        )
+    let channels = if args.channels.is_empty() {
+        project.config().default_channels()
     } else {
-        eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
-                  console::style(&bin_dir.display()).bold(),
-                  console::style("!").yellow().bold(),
-                  console::style(&bin_dir.display()).bold()
-        )
+        args.channels.clone()
+    };
+
+    // Modify the project to include the new environment
+    if !project.manifest.parsed.envs.contains_key(env_name) {
+        project.manifest.add_environment(env_name, Some(channels))?;
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }
 
-    Ok(())
+    if let Some(platform) = args.platform {
+        project.manifest.set_platform(env_name, platform)?;
+    }
+
+    // Add the dependencies to the environment
+    for (_package_name, spec) in &specs {
+        project.manifest.add_dependency(
+            env_name,
+            spec,
+            project.clone().config().global_channel_config(),
+        )?;
+    }
+
+    if !args.expose.is_empty() {
+        project.manifest.remove_all_exposed_mappings(env_name)?;
+        // Only add the exposed mappings that were requested
+        for mapping in &args.expose {
+            project.manifest.add_exposed_mapping(env_name, mapping)?;
+        }
+    }
+
+    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
+        return Ok(StateChanges::new_with_env(env_name.clone()));
+    }
+
+    // Installing the environment to be able to find the bin paths later
+    project.install_environment(env_name).await?;
+
+    // Cleanup removed executables
+    state_changes |= project.remove_broken_expose_names(env_name).await?;
+
+    if args.expose.is_empty() {
+        // Add the expose binaries for all the packages that were requested to the manifest
+        for (package_name, _spec) in &specs {
+            let prefix = project.environment_prefix(env_name).await?;
+            let prefix_package = prefix.find_designated_package(package_name).await?;
+            let package_executables = prefix.find_executables(&[prefix_package]);
+            for (executable_name, _) in &package_executables {
+                let mapping = Mapping::new(
+                    ExposedName::from_str(executable_name)?,
+                    executable_name.clone(),
+                );
+                project.manifest.add_exposed_mapping(env_name, &mapping)?;
+            }
+            // If no executables were found, automatically expose the package name itself from the other packages.
+            // This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+            if !package_executables
+                .iter()
+                .any(|(name, _)| name.as_str() == package_name.as_normalized())
+            {
+                if let Some((mapping, source_package_name)) =
+                    find_binary_by_name(&prefix, package_name).await?
+                {
+                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
+                    tracing::warn!(
+                        "Automatically exposed `{}` from `{}`",
+                        console::style(mapping.exposed_name()).yellow(),
+                        console::style(source_package_name.as_normalized()).green()
+                    );
+                }
+            }
+        }
+    }
+
+    // Figure out added packages and their corresponding versions
+    let specs = specs.values().cloned().collect_vec();
+    state_changes |= project.added_packages(specs.as_slice(), env_name).await?;
+
+    // Expose executables of the new environment
+    state_changes |= project
+        .expose_executables_from_environment(env_name)
+        .await?;
+
+    project.manifest.save().await?;
+    Ok(state_changes)
 }
 
-/// Install given package globally, with all its dependencies
-pub(super) async fn globally_install_package(
+/// Finds the package name in the prefix and automatically exposes it if an executable is found.
+/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+/// This function will return the mapping and the package name of the package in which the binary was found.
+async fn find_binary_by_name(
+    prefix: &Prefix,
     package_name: &PackageName,
-    records: Vec<RepoDataRecord>,
-    authenticated_client: ClientWithMiddleware,
-    platform: Platform,
-    no_activation: bool,
-) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
-    try_increase_rlimit_to_sensible();
+) -> miette::Result<Option<(Mapping, PackageName)>> {
+    let installed_packages = prefix.find_installed_packages(None).await?;
+    for package in &installed_packages {
+        let executables = prefix.find_executables(&[package.clone()]);
 
-    // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
-    let prefix = Prefix::new(bin_prefix);
-
-    // Install the environment
-    let package_cache = PackageCache::new(
-        pixi_config::get_cache_dir()?.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-    );
-
-    let result = await_in_progress("creating virtual environment", |pb| {
-        Installer::new()
-            .with_download_client(authenticated_client)
-            .with_io_concurrency_limit(100)
-            .with_execute_link_scripts(false)
-            .with_package_cache(package_cache)
-            .with_target_platform(platform)
-            .with_reporter(
-                IndicatifReporter::builder()
-                    .with_multi_progress(global_multi_progress())
-                    .with_placement(rattler::install::Placement::After(pb))
-                    .with_formatter(DefaultProgressFormatter::default().with_prefix("  "))
-                    .clear_when_done(true)
-                    .finish(),
-            )
-            .install(prefix.root(), records)
-    })
-    .await
-    .into_diagnostic()?;
-
-    // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, package_name).await?;
-
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-
-    // Construct the reusable activation script for the shell and generate an
-    // invocation script for each executable added by the package to the
-    // environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
-
-    let bin_dir = BinDir::create().await?;
-    let script_mapping =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
-    create_executable_scripts(
-        &script_mapping,
-        &prefix,
-        &shell,
-        activation_script,
-        no_activation,
-    )
-    .await?;
-
-    let scripts: Vec<_> = script_mapping
-        .into_iter()
-        .map(
-            |BinScriptMapping {
-                 global_binary_path: path,
-                 ..
-             }| path,
-        )
-        .collect();
-
-    Ok((
-        prefix_package,
-        scripts,
-        result.transaction.operations.is_empty(),
-    ))
-}
-
-/// Returns the string to add for all arguments passed to the script
-fn get_catch_all_arg(shell: &ShellEnum) -> &str {
-    match shell {
-        ShellEnum::CmdExe(_) => "%*",
-        ShellEnum::PowerShell(_) => "@args",
-        _ => "\"$@\"",
+        // Check if any of the executables match the package name
+        if let Some(executable) = executables
+            .iter()
+            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+        {
+            return Ok(Some((
+                Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone()),
+                package.repodata_record.package_record.name.clone(),
+            )));
+        }
     }
-}
-
-/// Returns true if the bin folder is available on the PATH.
-async fn is_bin_folder_on_path() -> bool {
-    let bin_path = match BinDir::from_existing().await.ok() {
-        Some(BinDir(bin_dir)) => bin_dir,
-        None => return false,
-    };
-
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect_vec())
-        .unwrap_or_default()
-        .into_iter()
-        .contains(&bin_path)
+    Ok(None)
 }

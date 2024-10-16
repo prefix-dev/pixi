@@ -66,6 +66,10 @@ struct CommonArgs {
 struct EditArgs {
     #[clap(flatten)]
     common: CommonArgs,
+
+    /// The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
+    #[arg(env = "EDITOR")]
+    pub editor: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -132,22 +136,29 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.subcommand {
         Subcommand::Edit(args) => {
-            let editor = std::env::var("EDITOR").unwrap_or_else(|_| {
-                #[cfg(not(target_os = "windows"))]
-                {
-                    "nano".to_string()
-                }
-                #[cfg(target_os = "windows")]
-                {
+            let config_path = determine_config_write_path(&args.common)?;
+
+            let editor = args.editor.unwrap_or_else(|| {
+                if cfg!(windows) {
                     "notepad".to_string()
+                } else {
+                    "nano".to_string()
                 }
             });
 
-            let config_path = determine_config_write_path(&args.common)?;
-            let mut child = std::process::Command::new(editor.as_str())
-                .arg(config_path)
-                .spawn()
-                .into_diagnostic()?;
+            let mut child = if cfg!(windows) {
+                std::process::Command::new("cmd")
+                    .arg("/C")
+                    .arg(editor.as_str())
+                    .arg(&config_path)
+                    .spawn()
+                    .into_diagnostic()?
+            } else {
+                std::process::Command::new(editor.as_str())
+                    .arg(&config_path)
+                    .spawn()
+                    .into_diagnostic()?
+            };
             child.wait().into_diagnostic()?;
         }
         Subcommand::List(args) => {

@@ -1,0 +1,21 @@
+---
+source: src/global/project/parsed_manifest.rs
+expression: "examples.into_iter().map(|example|\nParsedManifest::from_toml_str(example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+TOML parse error at line 1, column 2
+  |
+1 | [invalid]
+  |  ^^^^^^^
+unknown field `invalid`, expected `version` or `envs`
+
+TOML parse error at line 1, column 15
+  |
+1 | [envs.ipython.invalid]
+  |               ^^^^^^^
+unknown field `invalid`, expected one of `channels`, `platform`, `dependencies`, `exposed`
+
+TOML parse error at line 1, column 7
+  |
+1 | [envs."python;3".dependencies]
+  |       ^^^^^^^^^^
+Failed to parse environment name 'python;3', please use only lowercase letters, numbers, dashes and underscores
