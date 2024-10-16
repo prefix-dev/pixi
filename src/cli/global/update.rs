@@ -28,49 +28,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
-        // Reinstall the environment
+        let prefix = project.environment_prefix(env_name).await?;
+
+        // Find all records before the update
+        let prefix_records_before = &prefix.find_installed_packages(None).await?;
+
+        // Update the environment
         project.install_environment(env_name).await?;
 
-        // Remove the outdated exposed binaries from the manifest
-        if let Some(environment) = project.environment(env_name) {
-            // Find all installed records and executables
-            let prefix = project.environment_prefix(env_name).await?;
-            let prefix_records = &prefix.find_installed_packages(None).await?;
-            let all_executables = &prefix.find_executables(prefix_records.as_slice());
+        // Find all records after the update
+        let prefix_records_after = &prefix.find_installed_packages(None).await?;
 
-            // Find the exposed names that are no longer installed in the environment
-            let to_remove = environment
-                .exposed
-                .iter()
-                .filter_map(|mapping| {
-                    // If the executable is still requested, do not remove the mapping
-                    if all_executables
-                        .iter()
-                        .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
-                    {
-                        tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
-                        return None;
-                    }
-                    // Else do remove the mapping
-                    Some(mapping.exposed_name().clone())
-                })
-                .collect_vec();
-
-            // Removed the removable exposed names from the manifest
-            for exposed_name in &to_remove {
-                project
-                    .manifest
-                    .remove_exposed_name(env_name, exposed_name)?;
-            }
-        }
-
-        // Remove outdated binaries
-        state_changes |= project.prune_exposed(env_name).await?;
-        eprintln!(
-            "{}Updated environment: {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
+        state_changes |=
+            remove_invalid_exposed_mappings(prefix, prefix_records_after, project, env_name)
+                .await?;
 
         Ok(state_changes)
     }
@@ -98,4 +69,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     last_updated_project.manifest.save().await?;
     state_changes.report();
     Ok(())
+}
+
+async fn remove_invalid_exposed_mappings(
+    prefix: crate::prefix::Prefix,
+    prefix_records: &Vec<rattler_conda_types::PrefixRecord>,
+    project: &mut Project,
+    env_name: &EnvironmentName,
+) -> Result<StateChanges, miette::Error> {
+    // Remove exposed executables from the manifest that are not valid anymore
+    let all_executables = &prefix.find_executables(prefix_records.as_slice());
+    let parsed_environment = project
+        .environment(env_name)
+        .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+    let to_remove = parsed_environment
+        .exposed
+        .iter()
+        .filter_map(|mapping| {
+            // If the executable is still requested, do not remove the mapping
+            if all_executables
+                .iter()
+                .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
+            {
+                tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
+                return None;
+            }
+            // Else do remove the mapping
+            Some(mapping.exposed_name().clone())
+        })
+        .collect_vec();
+    for exposed_name in &to_remove {
+        project
+            .manifest
+            .remove_exposed_name(env_name, exposed_name)?;
+    }
+
+    // Remove all exposed executables from the file system that are not mentioned in the manifest
+    project.prune_exposed(env_name).await
 }
