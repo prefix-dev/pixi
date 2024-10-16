@@ -1,7 +1,10 @@
 use crate::cli::global::revert_environment_after_error;
+use crate::global::project::ExposedType;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
+use fancy_display::FancyDisplay;
+use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 
 /// Updates environments in the global environment.
@@ -25,11 +28,45 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
+
+        // See what executables were installed prior to update
+        let env_binaries = project.executables(env_name).await?;
+
+        let parsed_env = project
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        // Get the exposed binaries from mapping
+        let exposed_mapping_binaries = parsed_env.exposed();
+
+        // Check if they were all auto-exposed, or if the user manually exposed a subset of them
+        let env_binaries_names = env_binaries
+            .values()
+            .flatten()
+            .map(|(name, _)| name)
+            .collect_vec();
+
+        let exposed_binaries_names = exposed_mapping_binaries
+            .iter()
+            .map(|mapping| mapping.executable_name())
+            .collect_vec();
+
+        let auto_exposed = env_binaries_names
+            .iter()
+            .all(|name| exposed_binaries_names.contains(&name.as_str()));
+
+        let expose_type = ExposedType::new(auto_exposed);
+
         // Reinstall the environment
         project.install_environment(env_name).await?;
 
-        // Remove broken executables
-        state_changes |= project.remove_broken_expose_names(env_name).await?;
+        // Sync executables exposed names with the manifest
+        project.sync_exposed_names(env_name, expose_type).await?;
+
+        // Expose or prune executables of the new environment
+        state_changes |= project
+            .expose_executables_from_environment(env_name)
+            .await?;
 
         state_changes.insert_change(env_name, global::StateChange::UpdatedEnvironment);
 

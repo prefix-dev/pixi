@@ -468,6 +468,31 @@ impl FromStr for Mapping {
     }
 }
 
+#[derive(Default)]
+pub enum ExposedType {
+    #[default]
+    All,
+    Subset,
+}
+
+impl ExposedType {
+    pub fn new(input: bool) -> Self {
+        match input {
+            true => Self::All,
+            false => Self::Subset,
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        matches!(self, Self::All)
+    }
+}
+
+// pub struct PackageBinariesExposed {
+//     exposed: IndexMap<PackageName, ExposedType>,
+
+// }
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
