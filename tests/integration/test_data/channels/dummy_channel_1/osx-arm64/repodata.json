@@ -1,0 +1,83 @@
+{
+  "info": {
+    "subdir": "osx-arm64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "b80edffcb7728032a13c03c1b7818e14",
+      "name": "dummy-a",
+      "platform": "osx",
+      "sha256": "7559a2bac20fb206e813b68453efb81170f46eae2bda82f0a7bd95775b2106bb",
+      "size": 2500,
+      "subdir": "osx-arm64",
+      "timestamp": 1729178223781,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "bdf994866192d80bd4e6573bb40352c3",
+      "name": "dummy-b",
+      "platform": "osx",
+      "sha256": "0b268b7396a8221ab7947fc88436a4abbb7530fb6a65f889678f7ddf6a34e177",
+      "size": 2408,
+      "subdir": "osx-arm64",
+      "timestamp": 1729178223781,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "ba4e3779a273e62ead6dc2d22de32906",
+      "name": "dummy-c",
+      "platform": "osx",
+      "sha256": "8b8126a175904c86cd34139658e6c5c052d078fa6d4fe78367fb261936673c4f",
+      "size": 2388,
+      "subdir": "osx-arm64",
+      "timestamp": 1729178223781,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "d1b1d17bee12674c7534f320c479b318",
+      "name": "dummy-d",
+      "platform": "osx",
+      "sha256": "5cf5660f664e1ff3bb096cc16446a55577055ec29cd8cfd43884512de9e12aeb",
+      "size": 2432,
+      "subdir": "osx-arm64",
+      "timestamp": 1729178223781,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "88ff766b28e400c2e430194e2952be5d",
+      "name": "dummy_e",
+      "platform": "osx",
+      "sha256": "bbd7ca46d398107af5ecc5a7fd59085e9fa4572806c772e64cb05bfbf586b02f",
+      "size": 2411,
+      "subdir": "osx-arm64",
+      "timestamp": 1729178223781,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
