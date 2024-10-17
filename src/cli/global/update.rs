@@ -25,7 +25,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
-        let prefix = project.environment_prefix(env_name).await?;
 
         // Update the environment
         project.install_environment(env_name).await?;
