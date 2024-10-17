@@ -1,10 +1,10 @@
 use crate::cli::global::revert_environment_after_error;
+use crate::global::common::check_auto_exposed;
 use crate::global::project::ExposedType;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 
 /// Updates environments in the global environment.
@@ -32,30 +32,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // See what executables were installed prior to update
         let env_binaries = project.executables(env_name).await?;
 
-        let parsed_env = project
-            .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
         // Get the exposed binaries from mapping
-        let exposed_mapping_binaries = parsed_env.exposed();
+        let exposed_mapping_binaries = project
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
+            .exposed();
 
         // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-        let env_binaries_names = env_binaries
-            .values()
-            .flatten()
-            .map(|(name, _)| name)
-            .collect_vec();
-
-        let exposed_binaries_names = exposed_mapping_binaries
-            .iter()
-            .map(|mapping| mapping.executable_name())
-            .collect_vec();
-
-        let auto_exposed = env_binaries_names
-            .iter()
-            .all(|name| exposed_binaries_names.contains(&name.as_str()));
-
-        let expose_type = ExposedType::from_bool(auto_exposed);
+        let expose_type =
+            ExposedType::from_bool(check_auto_exposed(&env_binaries, exposed_mapping_binaries));
 
         // Reinstall the environment
         project.install_environment(env_name).await?;

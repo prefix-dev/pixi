@@ -2,14 +2,16 @@ use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mappin
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
+use rattler_conda_types::{
+    Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
+};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
@@ -476,6 +478,29 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect::<IndexSet<ExposedName>>();
 
     Ok((to_remove, to_add))
+}
+
+/// Check if they were all auto-exposed, or if the user manually exposed a subset of them
+pub fn check_auto_exposed(
+    env_binaries: &IndexMap<PackageName, Vec<(String, PathBuf)>>,
+    exposed_mapping_binaries: &IndexSet<Mapping>,
+) -> bool {
+    let env_binaries_names = env_binaries
+        .values()
+        .flatten()
+        .map(|(name, _)| name)
+        .collect_vec();
+
+    let exposed_binaries_names = exposed_mapping_binaries
+        .iter()
+        .map(|mapping| mapping.executable_name())
+        .collect_vec();
+
+    let auto_exposed = env_binaries_names
+        .iter()
+        .all(|name| exposed_binaries_names.contains(&name.as_str()));
+
+    auto_exposed
 }
 
 #[cfg(test)]
