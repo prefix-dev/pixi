@@ -16,8 +16,7 @@ use serde_with::{serde_as, SerializeDisplay};
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
     consts,
-    parsed_manifest::deserialize_opt_package_map,
-    parsed_manifest::deserialize_package_map,
+    parsed_manifest::{deserialize_opt_package_map, deserialize_package_map},
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
@@ -184,6 +183,48 @@ impl Feature {
         self.channels.get_or_insert_with(Default::default)
     }
 
+    /// Returns the run dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn run_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Run, platform)
+    }
+
+    /// Returns the host dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn host_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Host, platform)
+    }
+
+    /// Returns the run dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn build_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Build, platform)
+    }
+
     /// Returns the dependencies of the feature for a given `spec_type` and
     /// `platform`.
     ///
@@ -193,17 +234,55 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target that has any
     /// of the requested dependencies.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
     pub fn dependencies(
         &self,
-        spec_type: Option<SpecType>,
+        spec_type: SpecType,
         platform: Option<Platform>,
     ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extend function will overwrite existing keys.
+            // This is required because the extent function will overwrite existing keys.
             .rev()
             .filter_map(|t| t.dependencies(spec_type))
+            .filter(|deps| !deps.is_empty())
+            .fold(None, |acc, deps| match acc {
+                None => Some(Cow::Borrowed(deps)),
+                Some(mut acc) => {
+                    let deps_iter = deps.iter().map(|(name, spec)| (name.clone(), spec.clone()));
+                    acc.to_mut().extend(deps_iter);
+                    Some(acc)
+                }
+            })
+    }
+
+    /// Returns the combined dependencies of the feature and `platform`.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
+    ///
+    /// This function returns a [`Cow`]. If the dependencies are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal dependencies.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// of the requested dependencies.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    pub fn combined_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because the extent function will overwrite existing keys.
+            .rev()
+            .filter_map(|t| t.combined_dependencies())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(deps),
@@ -214,7 +293,6 @@ impl Feature {
                         ),
                         Cow::Owned(deps) => Either::Right(deps.into_iter()),
                     };
-
                     acc.to_mut().extend(deps_iter);
                     Some(acc)
                 }
@@ -407,7 +485,7 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Host), None)
+                .dependencies(SpecType::Host, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[host-dependencies] should be borrowed"
@@ -416,14 +494,17 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Run), None)
+                .dependencies(SpecType::Run, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[dependencies] should be borrowed"
         );
 
         assert_matches!(
-            manifest.default_feature().dependencies(None, None).unwrap(),
+            manifest
+                .default_feature()
+                .combined_dependencies(None)
+                .unwrap(),
             Cow::Owned(_),
             "combined dependencies should be owned"
         );
@@ -434,13 +515,13 @@ mod tests {
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
         assert_matches!(
-            bla_feature.dependencies(Some(SpecType::Run), None).unwrap(),
+            bla_feature.dependencies(SpecType::Run, None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla.dependencies] should be borrowed"
         );
 
         assert_matches!(
-            bla_feature.dependencies(None, None).unwrap(),
+            bla_feature.combined_dependencies(None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla] combined dependencies should also be borrowed"
         );

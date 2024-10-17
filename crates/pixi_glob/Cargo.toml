@@ -1,0 +1,24 @@
+[package]
+authors.workspace = true
+description = "A crate to deal with globs in pixi"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_glob"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dashmap = { workspace = true }
+itertools = { workspace = true }
+memchr = { workspace = true }
+rattler_digest = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt"] }
+wax = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }

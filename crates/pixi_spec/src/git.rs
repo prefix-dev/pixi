@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use url::Url;
 
 /// A specification of a package from a git repository.
@@ -24,4 +26,14 @@ pub enum GitReference {
 
     /// A specific commit.
     Rev(String),
+}
+
+impl Display for GitReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GitReference::Branch(branch) => write!(f, "{}", branch),
+            GitReference::Tag(tag) => write!(f, "{}", tag),
+            GitReference::Rev(rev) => write!(f, "{}", rev),
+        }
+    }
 }

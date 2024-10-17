@@ -63,13 +63,13 @@ async fn try_fetch_single_mapping(
 }
 
 /// Downloads and caches the conda-forge conda-to-pypi name mapping.
-pub async fn conda_pypi_name_mapping(
+pub async fn conda_pypi_name_mapping<'r>(
     client: &ClientWithMiddleware,
-    conda_packages: &[RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &'r RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<HashMap<Sha256Hash, Package>> {
     let filtered_packages = conda_packages
-        .iter()
+        .into_iter()
         // because we later skip adding purls for packages
         // that have purls
         // here we only filter packages that don't them
@@ -157,13 +157,15 @@ pub async fn conda_pypi_name_compressed_mapping(
 /// Amend the records with pypi purls if they are not present yet.
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
+    let conda_packages = conda_packages.into_iter().collect_vec();
+    let conda_mapping =
+        conda_pypi_name_mapping(client, conda_packages.iter().map(|p| *p as &_), reporter).await?;
     let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
 
-    for record in conda_packages.iter_mut() {
+    for record in conda_packages {
         amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
     }
 
@@ -248,7 +250,8 @@ pub fn amend_pypi_purls_for_record(
     Ok(())
 }
 
-/// Try to assume that the conda-forge package is a PyPI package and return a purl.
+/// Try to assume that the conda-forge package is a PyPI package and return a
+/// purl.
 pub fn assume_conda_is_pypi(
     purls: Option<&Vec<PackageUrl>>,
     record: &RepoDataRecord,
