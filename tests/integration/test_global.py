@@ -1164,7 +1164,7 @@ def test_global_update_single_package(
     # After update be left with only the binary that was in both versions.
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # pixi global update should add new exposed mappings, as they initially were auto-exposed
+    # pixi global update should add new exposed mappings, as all of them were exposed before
     assert package0_2_0.is_file()
 
 
