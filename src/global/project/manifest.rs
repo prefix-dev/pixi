@@ -472,26 +472,24 @@ impl FromStr for Mapping {
 pub enum ExposedType {
     #[default]
     All,
-    Subset,
+    Subset(Vec<Mapping>),
 }
 
 impl ExposedType {
-    pub fn new(input: bool) -> Self {
-        match input {
+    pub fn from_mapping(mapping: Vec<Mapping>) -> Self {
+        match mapping.is_empty() {
             true => Self::All,
-            false => Self::Subset,
+            false => Self::Subset(mapping),
         }
     }
 
-    pub fn is_all(&self) -> bool {
-        matches!(self, Self::All)
+    pub fn from_bool(auto_exposed: bool) -> Self {
+        match auto_exposed {
+            true => Self::All,
+            false => Self::Subset(Default::default()),
+        }
     }
 }
-
-// pub struct PackageBinariesExposed {
-//     exposed: IndexMap<PackageName, ExposedType>,
-
-// }
 
 #[cfg(test)]
 mod tests {

@@ -1164,8 +1164,8 @@ def test_global_update_single_package(
     # After update be left with only the binary that was in both versions.
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # pixi global update doesn't add new exposed mappings
-    assert not package0_2_0.is_file()
+    # pixi global update should add new exposed mappings, as they initially were auto-exposed
+    assert package0_2_0.is_file()
 
 
 def test_global_update_all_packages(
@@ -1206,13 +1206,13 @@ def test_global_update_all_packages(
     assert package2.is_file()
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # After update be left with only the binary that was in both versions.
-    assert not package0_2_0.is_file()
+    # After update be left we auto expose new binary, as they initially were auto-exposed
+    assert package0_2_0.is_file()
 
     # Check the manifest for removed binaries
     manifest_content = manifest.read_text()
     assert "package0.1.0" not in manifest_content
-    assert "package0.2.0" not in manifest_content
+    assert "package0.2.0" in manifest_content
     assert "package2" in manifest_content
     assert "package" in manifest_content
 
@@ -1248,13 +1248,56 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1
     # Update the environment
     # The package should now have the version `0.2.0` and expose a different executable
     # The old executable should be removed
-    # The new executable will also not be there, since `pixi global update` doesn't add new exposed mappings to the manifest.
+    # The new executable should be there, since user initially auto-exposed all binaries and `pixi global update` should add new binary to the manifest.
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert package0_2_0.is_file()
+
+
+def test_pixi_update_subset_expose(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+
+    # We change the matchspec to '*'
+    # So we expect to new binary to not be exposed,
+    # since we exposed only a small subset
+    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
+    parsed_toml["envs"]["package"]["exposed"] = {"package": "package0.1.0"}
+
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+
+    # Update the environment
+    # The package should now have the version `0.2.0` and expose a different executable
+    # The old executable should be removed
+    # The new executable should be there, since user initially auto-exposed all binaries and `pixi global update` should add new binary to the manifest.
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
     )
     assert not package0_1_0.is_file()
     assert not package0_2_0.is_file()
+
+    # parse the manifest again
+    # and check that we don't have any new binary exposed
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert "exposed" not in parsed_toml["envs"]["package"]
 
 
 def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:

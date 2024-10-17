@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .iter()
             .all(|name| exposed_binaries_names.contains(&name.as_str()));
 
-        let expose_type = ExposedType::new(auto_exposed);
+        let expose_type = ExposedType::from_bool(auto_exposed);
 
         // Reinstall the environment
         project.install_environment(env_name).await?;

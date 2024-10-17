@@ -683,14 +683,22 @@ impl Project {
         }
 
         // auto-expose the executables if necessary
-        if expose_type.is_all() {
-            // Add new binaries that are not exposed
-            for (executable_name, _) in env_executables.values().flatten() {
-                let mapping = Mapping::new(
-                    ExposedName::from_str(executable_name)?,
-                    executable_name.to_string(),
-                );
-                self.manifest.add_exposed_mapping(env_name, &mapping)?;
+        match expose_type {
+            ExposedType::All => {
+                // Add new binaries that are not exposed
+                for (executable_name, _) in env_executables.values().flatten() {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            ExposedType::Subset(mapping) => {
+                // Expose only the requested binaries
+                for mapping in mapping {
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
             }
         }
 

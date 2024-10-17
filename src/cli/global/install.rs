@@ -169,7 +169,7 @@ async fn setup_environment(
     project.install_environment(env_name).await?;
 
     // Sync exposed binaries
-    let expose_type = ExposedType::new(args.expose.is_empty());
+    let expose_type = ExposedType::from_mapping(args.expose.clone());
 
     project.sync_exposed_names(env_name, expose_type).await?;
 
