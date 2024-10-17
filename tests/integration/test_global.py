@@ -1206,7 +1206,7 @@ def test_global_update_all_packages(
     assert package2.is_file()
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # After update be left we auto expose new binary, as they initially were auto-exposed
+    # After update be left we auto expose new binary, as all of them were exposed before
     assert package0_2_0.is_file()
 
     # Check the manifest for removed binaries
