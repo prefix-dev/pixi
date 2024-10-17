@@ -10,6 +10,8 @@ use std::str::FromStr;
 
 /// Removes dependencies from an environment
 ///
+/// Use `pixi global uninstall` to remove the whole environment
+///
 /// Example:
 /// - pixi global remove --environment python numpy
 #[derive(Parser, Debug)]
@@ -20,8 +22,8 @@ pub struct Args {
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be removed from.
-    #[clap(short, long, required = true)]
-    environment: EnvironmentName,
+    #[clap(short, long)]
+    environment: Option<EnvironmentName>,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -34,13 +36,16 @@ impl HasSpecs for Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let Some(env_name) = &args.environment else {
+        miette::bail!("`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments", args.packages.join(" "));
+    };
     let config = Config::with_cli_config(&args.config);
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
-    if project_original.environment(&args.environment).is_none() {
-        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", &args.environment);
+    if project_original.environment(env_name).is_none() {
+        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", env_name);
     }
 
     async fn apply_changes(
@@ -88,17 +93,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|(_, specs)| specs)
         .collect_vec();
 
-    match apply_changes(&args.environment, specs.as_slice(), &mut project)
+    match apply_changes(env_name, specs.as_slice(), &mut project)
         .await
-        .wrap_err(format!(
-            "Couldn't remove packages from {}",
-            &args.environment
-        )) {
+        .wrap_err(format!("Couldn't remove packages from {}", env_name))
+    {
         Ok(ref mut state_changes) => {
             state_changes.report();
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
+            revert_environment_after_error(env_name, &project_original)
                 .await
                 .wrap_err(format!(
                     "Could not remove {:?}. Reverting also failed.",
