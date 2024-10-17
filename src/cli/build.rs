@@ -9,7 +9,7 @@ use pixi_build_types::{
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::{
     cli::cli_config::ProjectConfig,
@@ -92,6 +92,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err("unable to setup the build-backend to build the project")?;
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
+    let pixi_dir = &project.pixi_dir();
+    tokio::fs::create_dir_all(pixi_dir)
+        .await
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to create the .pixi directory at '{}'",
+                pixi_dir.display()
+            )
+        })?;
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
         .tempdir_in(project.pixi_dir())
@@ -99,14 +109,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .context("failed to create temporary working directory in the .pixi directory")?;
 
     let progress = Arc::new(ProgressReporter::new(project.name()));
+    // Build platform virtual packages
+    let build_platform_virtual_packages: Vec<GenericVirtualPackage> = project
+        .default_environment()
+        .virtual_packages(Platform::current())
+        .into_iter()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
+    // Host platform virtual packages
+    let host_platform_virtual_packages: Vec<GenericVirtualPackage> = project
+        .default_environment()
+        .virtual_packages(args.target_platform)
+        .into_iter()
+        .map(GenericVirtualPackage::from)
+        .collect();
+
     // Build the individual packages.
     let result = protocol
         .conda_build(
             &CondaBuildParams {
-                build_platform_virtual_packages: None,
+                build_platform_virtual_packages: Some(build_platform_virtual_packages),
                 host_platform: Some(PlatformAndVirtualPackages {
                     platform: args.target_platform,
-                    virtual_packages: None,
+                    virtual_packages: Some(host_platform_virtual_packages),
                 }),
                 channel_base_urls: Some(
                     project

@@ -1,15 +1,11 @@
 use clap::Parser;
-use indexmap::IndexMap;
-
-use rattler_conda_types::{MatchSpec, Platform};
-
-use pixi_config::{Config, ConfigCli};
+use pixi_config::ConfigCli;
+use rattler_conda_types::Platform;
 
 use crate::cli::cli_config::ChannelsConfig;
 
-use super::{list::list_global_packages, upgrade::upgrade_packages};
-
 /// Upgrade all globally installed packages
+/// This command has been removed, please use `pixi global update` instead
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -23,20 +19,9 @@ pub struct Args {
     platform: Platform,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
-
-    let names = list_global_packages().await?;
-    let mut specs = IndexMap::with_capacity(names.len());
-    for name in names {
-        specs.insert(
-            name.clone(),
-            MatchSpec {
-                name: Some(name),
-                ..Default::default()
-            },
-        );
-    }
-
-    upgrade_packages(specs, config, args.channels, args.platform).await
+pub async fn execute(_args: Args) -> miette::Result<()> {
+    Err(
+        miette::miette!("You can call `pixi global update` for most use cases")
+            .wrap_err("`pixi global upgrade-all` has been removed"),
+    )
 }
