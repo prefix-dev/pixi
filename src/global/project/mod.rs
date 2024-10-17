@@ -21,7 +21,6 @@ use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-// use manifest::PackageBinariesExposed;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
