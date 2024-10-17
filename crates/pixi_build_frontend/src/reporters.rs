@@ -30,6 +30,8 @@ pub trait CondaBuildReporter: Send + Sync {
     fn on_build_start(&self, build_id: usize) -> usize;
     /// Reports the end of the build_conda operation.
     fn on_build_end(&self, operation: usize);
+
+    fn on_build_output(&self, operation: usize, line: String);
 }
 
 /// A no-op implementation of the CondaBuildReporter trait.
@@ -40,6 +42,10 @@ impl CondaBuildReporter for NoopCondaBuildReporter {
         0
     }
     fn on_build_end(&self, _operation: usize) {}
+
+    fn on_build_output(&self, operation: usize, line: String) {
+        todo!()
+    }
 }
 
 impl NoopCondaBuildReporter {

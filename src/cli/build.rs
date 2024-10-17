@@ -69,6 +69,10 @@ impl CondaBuildReporter for ProgressReporter {
         // Finish the progress bar.
         self.progress_bar.finish_with_message("build completed");
     }
+
+    fn on_build_output(&self, _operation: usize, line: String) {
+        self.progress_bar.suspend(|| eprintln!("{}", line))
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

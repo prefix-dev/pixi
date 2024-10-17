@@ -582,6 +582,10 @@ impl CondaBuildReporter for CondaBuildProgress {
     fn on_build_end(&self, operation: usize) {
         self.end_progress_for(operation, None);
     }
+
+    fn on_build_output(&self, operation: usize, line: String) {
+        self.main_progress.suspend(|| eprintln!("{}", line));
+    }
 }
 
 impl BuildReporter for CondaBuildProgress {
