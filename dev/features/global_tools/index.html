@@ -1017,6 +1017,15 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#manifest-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest locations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       Channels
@@ -1631,6 +1640,15 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#manifest-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest locations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       Channels
@@ -1715,13 +1733,8 @@
 <h1 id="pixi-global-tool-environment-installation">Pixi Global Tool Environment Installation<a class="headerlink" href="#pixi-global-tool-environment-installation" title="Permanent link">#</a></h1>
 <p>With <code>pixi global</code>, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system <code>PATH</code>, allowing you to run them from the command line.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The design for global tools is still in progress, and the commands and behavior may change in future releases.
-The proposal for the global tools feature can be found <a href="../../design_proposals/pixi_global_manifest/">here</a>.</p>
-</div>
 <h2 id="the-global-manifest">The Global Manifest<a class="headerlink" href="#the-global-manifest" title="Permanent link">#</a></h2>
-<p>Since <code>v0.33.0</code> pixi has a new manifest file that will be created in the global directory (default: <code>$HOME/.pixi/manifests/pixi-global.toml</code>).
+<p>Since <code>v0.33.0</code> pixi has a new manifest file that will be created in the global directory.
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.</p>
 <p>A simple version looks like this:
@@ -1745,6 +1758,85 @@ The manifest can be edited, synced, checked in to a version control system, and 
 <li>The exposed binaries are the ones that will be available in the system path. <code>vim</code> has multiple and all of them are exposed.</li>
 <li>Here python is exposed as <code>python310</code> to avoid conflicts with other python installations. You can give it any name you want.</li>
 </ol>
+<h3 id="manifest-locations">Manifest locations<a class="headerlink" href="#manifest-locations" title="Permanent link">#</a></h3>
+<p>The manifest can be found at the following locations depending on your operation system.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
+<td>User-specific manifest</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$PIXI_HOME/manifests/pixi-global.toml</code></td>
+<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
+<td>User-specific manifest</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$PIXI_HOME/manifests/pixi-global.toml</code></td>
+<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>%USERPROFILE%\.pixi\manifests\pixi-global.toml</code></td>
+<td>User-specific manifest</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$PIXI_HOME\manifests/pixi-global.toml</code></td>
+<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>%USERPROFILE%/.pixi</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If multiple locations exist, the manifest with the highest priority will be used.</p>
+</div>
 <h3 id="channels">Channels<a class="headerlink" href="#channels" title="Permanent link">#</a></h3>
 <p>The channels are the conda channels that will be used to search for the packages.
 There is a priority to these, so the first one will have the highest priority, if a package is not found in that channel the next one will be used.
