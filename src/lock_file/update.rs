@@ -1648,7 +1648,7 @@ async fn spawn_solve_conda_environment_task(
             ));
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
-            for (name, source_spec) in source_specs.iter() {
+            for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
                 source_futures.push(
                     build_context
                         .extract_source_metadata(
@@ -1659,6 +1659,7 @@ async fn spawn_solve_conda_environment_task(
                             platform,
                             virtual_packages.clone(),
                             metadata_progress.clone(),
+                            build_id,
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(

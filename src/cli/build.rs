@@ -40,13 +40,14 @@ struct ProgressReporter {
 }
 
 impl ProgressReporter {
-    fn new() -> Self {
+    fn new(source: &str) -> Self {
         let style = indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.dim} {wide_msg:.dim} {elapsed}")
+            .template("{spinner:.dim} {elapsed} {prefix} {wide_msg:.dim}")
             .unwrap();
         let pb = ProgressBar::new(0);
         pb.set_style(style);
         let progress = pixi_progress::global_multi_progress().add(pb);
+        progress.set_prefix(format!("building package: {}", source));
         progress.enable_steady_tick(Duration::from_millis(100));
 
         Self {
@@ -58,11 +59,9 @@ impl ProgressReporter {
 impl CondaBuildReporter for ProgressReporter {
     /// Starts a progress bar that should currently be
     ///  [spinner] message
-    fn on_build_start(&self, identifier: &str) -> usize {
+    fn on_build_start(&self, _build_id: usize) -> usize {
         // Create a new progress bar.
         // Building the package
-        self.progress_bar
-            .set_message(format!("Building '{}' as a conda package", identifier));
         0
     }
 
@@ -86,6 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .into_diagnostic()
@@ -98,7 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .context("failed to create temporary working directory in the .pixi directory")?;
 
-    let progress = Arc::new(ProgressReporter::new());
+    let progress = Arc::new(ProgressReporter::new(project.name()));
     // Build the individual packages.
     let result = protocol
         .conda_build(

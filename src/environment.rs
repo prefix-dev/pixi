@@ -13,6 +13,7 @@ use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
+use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
@@ -31,7 +32,7 @@ use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
-    build::BuildContext,
+    build::{BuildContext, BuildReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
@@ -491,45 +492,105 @@ impl PythonStatus {
 }
 
 struct CondaBuildProgress {
-    progress_bar: ProgressBar,
+    main_progress: ProgressBar,
+    build_progress: Mutex<Vec<(String, ProgressBar)>>,
 }
 
 impl CondaBuildProgress {
     fn new(num_packages: u64) -> Self {
         // Create a new progress bar.
-        let pb = ProgressBar::new(num_packages);
+        let pb = ProgressBar::hidden();
+        pb.set_length(num_packages);
+        let pb = pixi_progress::global_multi_progress().add(pb);
         pb.set_style(pixi_progress::default_progress_style());
-        let progress = pixi_progress::global_multi_progress().add(pb);
         // Building the package
-        progress.set_prefix("building records");
-        progress.enable_steady_tick(Duration::from_millis(100));
+        pb.set_prefix("building packages");
+        pb.enable_steady_tick(Duration::from_millis(100));
 
         Self {
-            progress_bar: progress,
+            main_progress: pb,
+            build_progress: Mutex::new(Vec::default()),
         }
     }
 }
 
-impl CondaBuildReporter for CondaBuildProgress {
-    /// Starts a progress bar that should currently be
-    ///  [spinner] message
-    fn on_build_start(&self, identifier: &str) -> usize {
-        self.progress_bar
-            .set_message(format!("building {}", identifier));
-        0
+impl CondaBuildProgress {
+    /// Associate a progress bar with a build identifier, and get a build id back
+    pub fn associate(&self, identifier: &str) -> usize {
+        let mut locked = self.build_progress.lock();
+        let after = if locked.is_empty() {
+            &self.main_progress
+        } else {
+            &locked.last().unwrap().1
+        };
+
+        let pb = pixi_progress::global_multi_progress().insert_after(after, ProgressBar::hidden());
+
+        locked.push((identifier.to_owned(), pb));
+        locked.len() - 1
     }
 
-    fn on_build_end(&self, _operation: usize) {
-        self.progress_bar.inc(1);
-        self.progress_bar.set_message("");
-        if self.progress_bar.position()
+    pub fn end_progress_for(&self, build_id: usize, alternative_message: Option<String>) {
+        self.main_progress.inc(1);
+        if self.main_progress.position()
             == self
-                .progress_bar
+                .main_progress
                 .length()
                 .expect("expected length to be set for progress")
         {
-            self.progress_bar.finish();
+            self.main_progress.finish_and_clear();
+            // Clear all the build progress bars
+            for (_, pb) in self.build_progress.lock().iter() {
+                pb.finish_and_clear();
+            }
+            return;
         }
+        let locked = self.build_progress.lock();
+
+        // Finish the build progress bar
+        let (identifier, pb) = locked.get(build_id).unwrap();
+        // If there is an alternative message, use that
+        let msg = if let Some(msg) = alternative_message {
+            pb.set_style(indicatif::ProgressStyle::with_template("    {msg}").unwrap());
+            msg
+        } else {
+            // Otherwise show the default message
+            pb.set_style(
+                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}").unwrap(),
+            );
+            "built".to_string()
+        };
+        pb.finish_with_message(format!("✔ {msg}: {identifier}"));
+    }
+}
+
+impl CondaBuildReporter for CondaBuildProgress {
+    fn on_build_start(&self, build_id: usize) -> usize {
+        // Actually show the progress
+        let locked = self.build_progress.lock();
+        let (identifier, pb) = locked.get(build_id).unwrap();
+        let template =
+            indicatif::ProgressStyle::with_template("    {spinner:.green} {msg} {elapsed}")
+                .unwrap();
+        pb.set_style(template);
+        pb.set_message(format!("building {identifier}"));
+        pb.enable_steady_tick(Duration::from_millis(100));
+        // We keep operation and build id the same
+        build_id
+    }
+
+    fn on_build_end(&self, operation: usize) {
+        self.end_progress_for(operation, None);
+    }
+}
+
+impl BuildReporter for CondaBuildProgress {
+    fn on_build_cached(&self, build_id: usize) {
+        self.end_progress_for(build_id, Some("cached".to_string()));
+    }
+
+    fn as_conda_build_reporter(self: Arc<Self>) -> Arc<dyn CondaBuildReporter> {
+        self.clone()
     }
 }
 
@@ -565,6 +626,7 @@ pub async fn update_prefix_conda(
         .map(Ok)
         .and_then(|record| {
             let progress = progress_reporter.clone();
+            let build_id = progress.associate(&record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
@@ -577,6 +639,7 @@ pub async fn update_prefix_conda(
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress.clone(),
+                        build_id,
                     )
                     .await
             }

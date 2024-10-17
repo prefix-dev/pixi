@@ -87,17 +87,17 @@ pub struct Protocol {
     /// The path to the manifest relative to the source directory.
     relative_manifest_path: PathBuf,
 
-    /// Name of the project taken from the manifest
-    project_name: Option<String>,
-
     _backend_capabilities: BackendCapabilities,
+
+    /// The build identifier
+    build_id: usize,
 }
 
 impl Protocol {
     pub(crate) async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
-        project_name: Option<String>,
+        build_id: usize,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         tool: Tool,
@@ -132,7 +132,7 @@ impl Protocol {
                     backend_identifier,
                     source_dir,
                     manifest_path,
-                    project_name,
+                    build_id,
                     cache_dir,
                     channel_config,
                     tx,
@@ -145,7 +145,7 @@ impl Protocol {
                     "<IPC>".to_string(),
                     source_dir,
                     manifest_path,
-                    project_name,
+                    build_id,
                     cache_dir,
                     channel_config,
                     Sender::from(ipc.rpc_out),
@@ -161,7 +161,7 @@ impl Protocol {
         backend_identifier: String,
         source_dir: PathBuf,
         manifest_path: PathBuf,
-        project_name: Option<String>,
+        build_id: usize,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
@@ -199,10 +199,10 @@ impl Protocol {
         Ok(Self {
             backend_identifier,
             _channel_config: channel_config,
-            project_name,
             client,
             _backend_capabilities: result.capabilities,
             relative_manifest_path,
+            build_id,
         })
     }
 
@@ -221,7 +221,7 @@ impl Protocol {
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
     ) -> miette::Result<CondaMetadataResult> {
-        let operation = reporter.on_metadata_start(self.project_name.as_deref().unwrap_or(""));
+        let operation = reporter.on_metadata_start(self.build_id);
         let result = self
             .client
             .request(
@@ -247,7 +247,7 @@ impl Protocol {
         request: &CondaBuildParams,
         reporter: &dyn CondaBuildReporter,
     ) -> miette::Result<CondaBuildResult> {
-        let operation = reporter.on_build_start(self.project_name.as_deref().unwrap_or(""));
+        let operation = reporter.on_build_start(self.build_id);
         let result = self
             .client
             .request(
