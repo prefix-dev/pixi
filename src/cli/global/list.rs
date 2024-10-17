@@ -54,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if !project.environments_in_sync().await? {
             tracing::warn!("The environments are not in sync with the manifest, to sync run\n\tpixi global sync");
         }
-        list_global_environments(&project, None, args.regex).await?;
+        list_global_environments(&project, None, None, args.regex).await?;
     }
 
     Ok(())

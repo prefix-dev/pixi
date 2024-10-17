@@ -30,9 +30,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut state_changes = StateChanges::default();
         let prefix = project.environment_prefix(env_name).await?;
 
-        // Find all records before the update
-        let prefix_records_before = &prefix.find_installed_packages(None).await?;
-
         // Update the environment
         project.install_environment(env_name).await?;
 

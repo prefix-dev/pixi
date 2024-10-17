@@ -14,7 +14,7 @@ use miette::{miette, IntoDiagnostic};
 
 use crate::global::common::find_package_records;
 
-use super::{project::ParsedEnvironment, EnvironmentName, Mapping, Project};
+use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -215,7 +215,8 @@ pub async fn list_environment(
 /// List all environments in the global environment
 pub async fn list_global_environments(
     project: &Project,
-    envs: Option<&Vec<EnvironmentName>>,
+    envs: Option<Vec<EnvironmentName>>,
+    envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
@@ -253,11 +254,26 @@ pub async fn list_global_environments(
             if let Some(env_package) = records.iter().find(|rec| {
                 rec.repodata_record.package_record.name.as_normalized() == env_name.as_str()
             }) {
+                // output the environment name and version
+                // and also it's state if present
+                let state = envs_changes
+                    .and_then(|env_changes| env_changes.changes.get(env_name))
+                    .map(|state| match state {
+                        EnvState::Installed => {
+                            format!("({})", console::style("installed".to_string()).green())
+                        }
+                        EnvState::NotChanged(ref reason) => {
+                            format!("({})", reason.fancy_display())
+                        }
+                    })
+                    .unwrap_or("".to_string());
+
                 message.push_str(&format!(
-                    " {}: {}",
+                    " {}: {} {}",
                     env_name.fancy_display(),
                     console::style(env_package.repodata_record.package_record.version.clone())
-                        .blue()
+                        .blue(),
+                    state
                 ));
             } else {
                 message.push_str(&format!(" {}", env_name.fancy_display()));

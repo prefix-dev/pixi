@@ -99,7 +99,7 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
-pub(crate) async fn create_executable_scripts<'a>(
+pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
