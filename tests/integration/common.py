@@ -12,6 +12,22 @@ class ExitCode(IntEnum):
     INCORRECT_USAGE = 2
 
 
+class Output:
+    command: list[Path | str]
+    stdout: str
+    stderr: str
+    returncode: int
+
+    def __init__(self, command: list[Path | str], stdout: str, stderr: str, returncode: int):
+        self.command = command
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+    def __str__(self) -> str:
+        return f"command: {self.command}"
+
+
 def verify_cli_command(
     command: list[Path | str],
     expected_exit_code: ExitCode = ExitCode.SUCCESS,
@@ -20,7 +36,7 @@ def verify_cli_command(
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
     env: dict[str, str] | None = None,
-) -> None:
+) -> Output:
     # Setup the environment type safe.
     base_env = dict(os.environ)
     if env is not None:
@@ -32,6 +48,7 @@ def verify_cli_command(
 
     process = subprocess.run(command, capture_output=True, text=True, env=complete_env)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
+    output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     if expected_exit_code is not None:
         assert (
@@ -61,3 +78,5 @@ def verify_cli_command(
             stderr_excludes = [stderr_excludes]
         for substring in stderr_excludes:
             assert substring not in stderr, f"'{substring}' unexpectedly found in stderr: {stderr}"
+
+    return output
