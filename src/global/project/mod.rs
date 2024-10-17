@@ -678,8 +678,7 @@ impl Project {
             })
             .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
 
-        let env_dir =
-            EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
+        let env_dir = EnvDir::from_path(self.env_root.path().join(env_name.as_str()));
 
         let specs_in_sync =
             environment_specs_in_sync(&env_dir, &specs, environment.platform).await?;
