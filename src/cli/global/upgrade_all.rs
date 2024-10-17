@@ -1,34 +1,27 @@
 use clap::Parser;
+use pixi_config::ConfigCli;
 use rattler_conda_types::Platform;
 
-use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
+use crate::cli::cli_config::ChannelsConfig;
 
-/// Upgrade specific package which is installed globally.
+/// Upgrade all globally installed packages
+/// This command has been removed, please use `pixi global update` instead
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the packages to upgrade.
-    //#[arg(required = true)]
-    pub specs: Vec<String>,
-
     #[clap(flatten)]
     channels: ChannelsConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     /// The platform to install the package for.
     #[clap(long, default_value_t = Platform::current())]
     platform: Platform,
 }
 
-impl HasSpecs for Args {
-    fn packages(&self) -> Vec<&str> {
-        self.specs.iter().map(AsRef::as_ref).collect()
-    }
-}
-
 pub async fn execute(_args: Args) -> miette::Result<()> {
     Err(
-        miette::miette!("You can use `pixi global update` for most use cases").wrap_err(
-            "`pixi global upgrade-all` has been removed, and will be re-added in future releases",
-        ),
+        miette::miette!("You can call `pixi global update` for most use cases")
+            .wrap_err("`pixi global upgrade-all` has been removed"),
     )
 }
