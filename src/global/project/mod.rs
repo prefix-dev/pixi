@@ -1,3 +1,4 @@
+use super::install::find_binary_by_name;
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
@@ -20,7 +21,7 @@ use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-pub(crate) use manifest::{Manifest, Mapping};
+pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
@@ -605,18 +606,55 @@ impl Project {
         Ok(state_changes)
     }
 
-    /// Find the exposed names that are no longer installed in the environment
-    /// and remove them.
-    /// This needs to happen after a different version of a package was installed
-    /// which doesn't have the same executables anymore.
-    pub async fn remove_broken_expose_names(
+    /// Get all installed executables for specific environment.
+    pub async fn executables(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<IndexMap<PackageName, Vec<(String, PathBuf)>>> {
+        let parsed_env = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        let package_names: Vec<_> = parsed_env.dependencies().keys().cloned().collect();
+
+        let mut executables_for_package = IndexMap::new();
+
+        for package_name in &package_names {
+            let prefix = self.environment_prefix(env_name).await?;
+            let prefix_package = prefix.find_designated_package(package_name).await?;
+            let mut package_executables = prefix.find_executables(&[prefix_package]);
+
+            // Sometimes the package don't ship executables on their own.
+            // We need to search for it in different packages.
+            if !package_executables
+                .iter()
+                .any(|(exec_name, _)| exec_name.as_str() == package_name.as_normalized())
+            {
+                if let Some(exec) = find_binary_by_name(&prefix, package_name).await? {
+                    package_executables.push(exec);
+                }
+            }
+
+            executables_for_package.insert(package_name.clone(), package_executables);
+        }
+        Ok(executables_for_package)
+    }
+
+    /// Sync the `exposed` field in manifest based on the executables in the environment and the expose type.
+    /// Expose type can be either:
+    /// * If the user initially chooses to auto-exposed everything,
+    ///   we will add new binaries that are not exposed in the `exposed` field.
+    ///
+    /// * If the use chose to expose only a subset of binaries,
+    ///   we will remove the binaries that are not anymore present in the environment
+    ///   and will not expose the new ones
+    pub async fn sync_exposed_names(
         &mut self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
-        // Figure out which package the exposed binaries belong to
-        let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = &prefix.find_installed_packages(None).await?;
-        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+        expose_type: ExposedType,
+    ) -> miette::Result<()> {
+        // Get env executables
+        let env_executables = self.executables(env_name).await?;
 
         // Get the parsed environment
         let environment = self
@@ -629,8 +667,9 @@ impl Project {
             .iter()
             .filter_map(|mapping| {
                 // If the executable is still requested, do not remove the mapping
-                if all_executables
-                    .iter()
+                if env_executables
+                    .values()
+                    .flatten()
                     .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
                 {
                     tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
@@ -646,8 +685,27 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
-        // Remove outdated binaries
-        self.prune_exposed(env_name).await
+        // auto-expose the executables if necessary
+        match expose_type {
+            ExposedType::All => {
+                // Add new binaries that are not exposed
+                for (executable_name, _) in env_executables.values().flatten() {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            ExposedType::Subset(mapping) => {
+                // Expose only the requested binaries
+                for mapping in mapping {
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Check if the environment is in sync with the manifest

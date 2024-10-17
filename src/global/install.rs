@@ -346,6 +346,28 @@ pub(crate) fn local_environment_matches_spec(
     }
 }
 
+/// Finds the package name in the prefix and automatically exposes it if an executable is found.
+/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
+/// This function will return the mapping and the package name of the package in which the binary was found.
+pub async fn find_binary_by_name(
+    prefix: &Prefix,
+    package_name: &PackageName,
+) -> miette::Result<Option<(String, PathBuf)>> {
+    let installed_packages = prefix.find_installed_packages(None).await?;
+    for package in &installed_packages {
+        let executables = prefix.find_executables(&[package.clone()]);
+
+        // Check if any of the executables match the package name
+        if let Some(executable) = executables
+            .iter()
+            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+        {
+            return Ok(Some(executable.clone()));
+        }
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use fs_err as fs;
