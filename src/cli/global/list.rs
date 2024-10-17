@@ -395,7 +395,7 @@ fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -> Op
 }
 
 /// If the exposed name is the same as the executable name, only return the executable name
-/// otherwise return what is the exposed name and what is the executable name.
+/// otherwise return "{exposed name} -> {executable name}".
 fn format_mapping(mapping: &Mapping) -> String {
     let exp = mapping.exposed_name().to_string();
     if exp == mapping.executable_name() {
