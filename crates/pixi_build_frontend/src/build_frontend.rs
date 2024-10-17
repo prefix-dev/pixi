@@ -89,7 +89,7 @@ impl BuildFrontend {
 
         protocol
             .with_backend_override(request.build_tool_override)
-            .finish(&self.tool_cache)
+            .finish(&self.tool_cache, request.build_id)
             .await
     }
 }

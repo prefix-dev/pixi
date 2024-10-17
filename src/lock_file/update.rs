@@ -16,7 +16,6 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
-use pixi_build_frontend::NoopCondaMetadataReporter;
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -49,7 +48,8 @@ use crate::{
         self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
-    load_lock_file, lock_file,
+    load_lock_file,
+    lock_file::{self, reporter::CondaMetadataProgress},
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -1643,10 +1643,13 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
-            let noop_conda_metadata_reporter = NoopCondaMetadataReporter::new();
+            let metadata_progress = Arc::new(CondaMetadataProgress::new(
+                &pb.pb,
+                source_specs.len() as u64,
+            ));
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
-            for (name, source_spec) in source_specs.iter() {
+            for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
                 source_futures.push(
                     build_context
                         .extract_source_metadata(
@@ -1656,7 +1659,8 @@ async fn spawn_solve_conda_environment_task(
                             virtual_packages.clone(),
                             platform,
                             virtual_packages.clone(),
-                            noop_conda_metadata_reporter.clone(),
+                            metadata_progress.clone(),
+                            build_id,
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(
