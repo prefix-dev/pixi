@@ -1,5 +1,5 @@
 use crate::cli::global::revert_environment_after_error;
-use crate::global::common::check_auto_exposed;
+use crate::global::common::check_all_exposed;
 use crate::global::project::ExposedType;
 use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
@@ -39,8 +39,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .exposed();
 
         // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-        let expose_type =
-            ExposedType::from_bool(check_auto_exposed(&env_binaries, exposed_mapping_binaries));
+        let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
+            ExposedType::default()
+        } else {
+            ExposedType::subset()
+        };
 
         // Reinstall the environment
         project.install_environment(env_name).await?;

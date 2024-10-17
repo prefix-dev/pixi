@@ -641,10 +641,14 @@ impl Project {
         Ok(executables_for_package)
     }
 
-    /// Find the exposed names that are no longer installed in the environment
-    /// and remove them.
-    /// This needs to happen after a different version of a package was installed
-    /// which doesn't have the same executables anymore.
+    /// Sync the `exposed` field in manifest based on the executables in the environment and the expose type.
+    /// Expose type can be either:
+    /// * If the user initially chooses to auto-exposed everything,
+    /// we will add new binaries that are not exposed in the `exposed` field.
+    ///
+    /// * If the use chose to expose only a subset of binaries,
+    /// we will remove the binaries that are not anymore present in the environment
+    /// and will not expose the new ones
     pub async fn sync_exposed_names(
         &mut self,
         env_name: &EnvironmentName,

@@ -476,18 +476,15 @@ pub enum ExposedType {
 }
 
 impl ExposedType {
-    pub fn from_mapping(mapping: Vec<Mapping>) -> Self {
-        match mapping.is_empty() {
+    pub fn from_mappings(mappings: Vec<Mapping>) -> Self {
+        match mappings.is_empty() {
             true => Self::All,
-            false => Self::Subset(mapping),
+            false => Self::Subset(mappings),
         }
     }
 
-    pub fn from_bool(auto_exposed: bool) -> Self {
-        match auto_exposed {
-            true => Self::All,
-            false => Self::Subset(Default::default()),
-        }
+    pub fn subset() -> Self {
+        Self::Subset(Default::default())
     }
 }
 
