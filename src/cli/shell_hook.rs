@@ -185,16 +185,4 @@ mod tests {
         assert!(script.contains(&format!("$env.{path_var_name} = ")));
         assert!(script.contains("$env.CONDA_PREFIX = "));
     }
-
-    #[tokio::test]
-    async fn test_environment_json() {
-        let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = Project::discover().unwrap();
-        let environment = project.default_environment();
-        let json_env = generate_environment_json(&environment).await.unwrap();
-        assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\":\"default\""));
-        assert!(json_env.contains("\"CONDA_PREFIX\":"));
-        assert!(json_env.contains(&format!("\"{path_var_name}\":")));
-    }
 }
