@@ -352,11 +352,11 @@ impl PixiControl {
         }
     }
 
-    pub fn project_environment_add(&self, name: &str) -> ProjectEnvironmentAddBuilder {
+    pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::environment::add::Args {
-                name: name.to_string(),
+                name,
                 features: None,
                 solve_group: None,
                 no_default_feature: false,

@@ -1,0 +1,86 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: dummy-a
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-c
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-a on windows" > $PREFIX/bin/dummy-a.bat
+            - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
+          else:
+            - echo "dummy-a on unix" > $PREFIX/bin/dummy-a
+            - echo "dummy-aa on unix" > $PREFIX/bin/dummy-aa
+            - chmod +x $PREFIX/bin/dummy-a
+            - chmod +x $PREFIX/bin/dummy-aa
+
+  - package:
+      name: dummy-b
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
+          else:
+            - echo "dummy-b on unix" > $PREFIX/bin/dummy-b
+            - chmod +x $PREFIX/bin/dummy-b
+
+  - package:
+      name: dummy-c
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-c on windows" > $PREFIX/bin/dummy-c.bat
+          else:
+            - echo "dummy-c on unix" > $PREFIX/bin/dummy-c
+            - chmod +x $PREFIX/bin/dummy-c
+
+  - package:
+      name: dummy-d
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-x # This comes from dummy_channel_2
+
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-d on windows" > $PREFIX/bin/dummy-d.bat
+          else:
+            - echo "dummy-d on unix" > $PREFIX/bin/dummy-d
+            - chmod +x $PREFIX/bin/dummy-d
+
+  - package:
+      name: dummy_e
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy_e on windows" > $PREFIX/bin/dummy_e.bat
+          else:
+            - echo "dummy_e on unix" > $PREFIX/bin/dummy_e
+            - chmod +x $PREFIX/bin/dummy_e

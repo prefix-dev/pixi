@@ -41,8 +41,11 @@ test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/whee
 test-common-wheels-dev = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", depends-on = [
   "build",
 ] }
-test-integration-ci = "pytest --numprocesses=auto --verbose tests/integration"
-test-integration-dev = { cmd = "pytest --numprocesses=auto tests/integration", depends-on = [
+test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose tests/integration"
+test-integration-dev = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration", depends-on = [
+  "build",
+] }
+test-integration-global = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration/test_global.py", depends-on = [
   "build",
 ] }
 typecheck-integration = "mypy --strict tests/integration"

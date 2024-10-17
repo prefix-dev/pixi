@@ -41,6 +41,7 @@ use super::{
     utils::IoConcurrencyLimit,
     OutdatedEnvironments, PypiRecord, PypiRecordsByName, UvResolutionContext,
 };
+use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
     build::{BuildContext, GlobHashCache},

@@ -66,7 +66,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
 
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if environment.is_default() {
+    let explicit_environment = if args.environment.is_none() && environment.is_default() {
         None
     } else {
         Some(environment.clone())

@@ -122,6 +122,7 @@ nav:
       - Multi Environment: features/multi_environment.md
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
+      - Global Tools: features/global_tools.md
   - Design Proposals:
       - Pixi Global Manifest: design_proposals/pixi_global_manifest.md
   - Advanced:
@@ -138,6 +139,7 @@ nav:
       - CLI: reference/cli.md
   - Misc:
       - Pixi vision: vision.md
+      - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
 

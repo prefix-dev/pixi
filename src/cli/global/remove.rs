@@ -1,27 +1,32 @@
-use std::collections::HashSet;
-
-use clap::Parser;
-use clap_verbosity_flag::{Level, Verbosity};
-use itertools::Itertools;
-use miette::IntoDiagnostic;
-use rattler_conda_types::PackageName;
-
+use crate::cli::global::revert_environment_after_error;
 use crate::cli::has_specs::HasSpecs;
-use crate::prefix::Prefix;
+use crate::global::{EnvironmentName, ExposedName, Project, StateChanges};
+use clap::Parser;
+use itertools::Itertools;
+use miette::Context;
+use pixi_config::{Config, ConfigCli};
+use rattler_conda_types::MatchSpec;
+use std::str::FromStr;
 
-use super::common::{find_designated_package, BinDir, BinEnvDir};
-use super::install::{find_and_map_executable_scripts, BinScriptMapping};
-
-/// Removes a package previously installed into a globally accessible location via `pixi global install`.
+/// Removes dependencies from an environment
+///
+/// Use `pixi global uninstall` to remove the whole environment
+///
+/// Example:
+/// - pixi global remove --environment python numpy
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be removed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
-    #[command(flatten)]
-    verbose: Verbosity,
+    /// Specifies the environment that the dependencies need to be removed from.
+    #[clap(short, long)]
+    environment: Option<EnvironmentName>,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 impl HasSpecs for Args {
@@ -31,88 +36,79 @@ impl HasSpecs for Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    for (package_name, _) in args.specs()? {
-        remove_global_package(package_name, &args.verbose).await?;
+    let Some(env_name) = &args.environment else {
+        miette::bail!("`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments", args.packages.join(" "));
+    };
+    let config = Config::with_cli_config(&args.config);
+    let project_original = Project::discover_or_create()
+        .await?
+        .with_cli_config(config.clone());
+
+    if project_original.environment(env_name).is_none() {
+        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", env_name);
     }
 
-    Ok(())
-}
-
-async fn remove_global_package(
-    package_name: PackageName,
-    verbose: &Verbosity,
-) -> miette::Result<()> {
-    let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix.clone());
-
-    // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, &package_name).await?;
-
-    // Construct the paths to all the installed package executables, which are what we need to remove.
-    let paths_to_remove: Vec<_> =
-        find_and_map_executable_scripts(&prefix, &prefix_package, &BinDir::from_existing().await?)
-            .await?
-            .into_iter()
-            .map(
-                |BinScriptMapping {
-                     global_binary_path: path,
-                     ..
-                 }| path,
-            )
-            // Collecting to a HashSet first is a workaround for issue #317 and can be removed
-            // once that is fixed.
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-
-    let dirs_to_remove: Vec<_> = vec![bin_prefix];
-
-    if verbose.log_level().unwrap_or(Level::Error) >= Level::Warn {
-        let whitespace = console::Emoji("  ", "").to_string();
-        let names_to_remove = dirs_to_remove
-            .iter()
-            .map(|dir| dir.to_string_lossy())
-            .chain(paths_to_remove.iter().map(|path| path.to_string_lossy()))
-            .join(&format!("\n{whitespace} -  "));
-
-        eprintln!(
-            "{} Removing the following files and directories:\n{whitespace} -  {names_to_remove}",
-            console::style("!").yellow().bold(),
-        )
-    }
-
-    let mut errors = vec![];
-
-    for file in paths_to_remove {
-        if let Err(e) = tokio::fs::remove_file(&file).await.into_diagnostic() {
-            errors.push((file, e))
+    async fn apply_changes(
+        env_name: &EnvironmentName,
+        specs: &[MatchSpec],
+        project: &mut Project,
+    ) -> miette::Result<StateChanges> {
+        // Remove specs from the manifest
+        for spec in specs {
+            project.manifest.remove_dependency(env_name, spec)?;
         }
-    }
 
-    for dir in dirs_to_remove {
-        if let Err(e) = tokio::fs::remove_dir_all(&dir).await.into_diagnostic() {
-            errors.push((dir, e))
+        // Figure out which package the exposed binaries belong to
+        let prefix = project.environment_prefix(env_name).await?;
+
+        for spec in specs {
+            if let Some(name) = spec.clone().name {
+                // If the package is not existent, don't try to remove executables
+                if let Ok(record) = prefix.find_designated_package(&name).await {
+                    prefix
+                        .find_executables(&[record])
+                        .into_iter()
+                        .filter_map(|(name, _path)| ExposedName::from_str(name.as_str()).ok())
+                        .for_each(|exposed_name| {
+                            project
+                                .manifest
+                                .remove_exposed_name(env_name, &exposed_name)
+                                .ok();
+                        });
+                }
+            }
         }
+
+        // Sync environment
+        let state_changes = project.sync_environment(env_name).await?;
+
+        project.manifest.save().await?;
+        Ok(state_changes)
     }
 
-    if errors.is_empty() {
-        eprintln!(
-            "{}Successfully removed global package {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(package_name.as_source()).bold(),
-        );
-    } else {
-        let whitespace = console::Emoji("  ", "").to_string();
-        let error_string = errors
-            .into_iter()
-            .map(|(file, e)| format!("{} (on {})", e, file.to_string_lossy()))
-            .join(&format!("\n{whitespace} -  "));
-        miette::bail!(
-            "got multiple errors trying to remove global package {}:\n{} -  {}",
-            package_name.as_source(),
-            whitespace,
-            error_string,
-        );
+    let mut project = project_original.clone();
+    let specs = args
+        .specs()?
+        .into_iter()
+        .map(|(_, specs)| specs)
+        .collect_vec();
+
+    match apply_changes(env_name, specs.as_slice(), &mut project)
+        .await
+        .wrap_err(format!("Couldn't remove packages from {}", env_name))
+    {
+        Ok(ref mut state_changes) => {
+            state_changes.report();
+        }
+        Err(err) => {
+            revert_environment_after_error(env_name, &project_original)
+                .await
+                .wrap_err(format!(
+                    "Could not remove {:?}. Reverting also failed.",
+                    args.packages
+                ))?;
+            return Err(err);
+        }
     }
 
     Ok(())
