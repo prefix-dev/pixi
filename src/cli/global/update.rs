@@ -26,7 +26,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
 
-        // Update the environment
+        // Reinstall the environment
         project.install_environment(env_name).await?;
 
         // Remove broken executables
