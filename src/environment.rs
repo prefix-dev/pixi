@@ -624,13 +624,20 @@ pub async fn update_prefix_conda(
             PixiRecord::Source(record) => Either::Right(record),
         });
 
-    let progress_reporter = Arc::new(CondaBuildProgress::new(source_records.len() as u64));
+    let mut progress_reporter = None;
+    let source_records_length = source_records.len();
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
         .map(Ok)
         .and_then(|record| {
-            let progress = progress_reporter.clone();
-            let build_id = progress.associate(&record.package_record.name.as_source());
+            // If we don't have a progress reporter, create one
+            // This is done so that the progress bars are not displayed if there are no source packages
+            let progress_reporter = progress_reporter
+                .get_or_insert_with(|| {
+                    Arc::new(CondaBuildProgress::new(source_records_length as u64))
+                })
+                .clone();
+            let build_id = progress_reporter.associate(record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
@@ -642,7 +649,7 @@ pub async fn update_prefix_conda(
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
-                        progress.clone(),
+                        progress_reporter.clone(),
                         build_id,
                     )
                     .await

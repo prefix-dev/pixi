@@ -15,7 +15,7 @@ pub(crate) async fn stderr_null(
     tokio::select! {
         // Please stop
         _ = cancel => {
-            return Ok(());
+            Ok(())
         }
         // Please keep reading
         result = async {
@@ -37,7 +37,7 @@ pub(crate) async fn stderr_stream(
 ) -> Result<(), std::io::Error> {
     tokio::select! {
         _ = cancel => {
-            return Ok(());
+            Ok(())
         }
         result = async {
             let mut lines = buffer.lock().await;
