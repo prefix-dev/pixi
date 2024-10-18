@@ -55,4 +55,8 @@ fn main() {
 
     // Tell cargo to re-run this build script if the trampoline binary code changes
     println!("cargo:rerun-if-changed=crates/pixi_trampoline");
+    println!(
+        "cargo:rustc-env=TRAMPOLINE_PATH={}",
+        dest_path.display().to_string()
+    );
 }
