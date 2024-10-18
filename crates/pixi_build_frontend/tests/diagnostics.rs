@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
 
@@ -55,7 +57,7 @@ async fn test_source_dir_is_empty() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
 
@@ -76,9 +78,16 @@ async fn test_invalid_manifest() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
 
     insta::assert_snapshot!(snapshot);
+}
+
+fn replace_source_dir(snapshot: &str, source_dir: &Path) -> String {
+    snapshot.replace(
+        &(source_dir.display().to_string() + std::path::MAIN_SEPARATOR_STR),
+        "[SOURCE_DIR]/",
+    )
 }
 
 #[tokio::test]
@@ -114,7 +123,7 @@ async fn test_missing_backend() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
 
@@ -158,6 +167,6 @@ async fn test_invalid_backend() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
