@@ -4,7 +4,7 @@ import shutil
 import tomllib
 
 
-def main():
+def main() -> None:
     platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
     mappings = tomllib.loads(Path("mappings.toml").read_text())
     channels_dir = Path("channels")
