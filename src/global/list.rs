@@ -31,7 +31,7 @@ pub fn format_asciiart_section(label: &str, content: String, last: bool, more: b
     format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
 }
 
-pub fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
+pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
@@ -39,10 +39,7 @@ pub fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -
             last,
             false,
         ))
-    } else if exposed
-        .iter()
-        .any(|mapping| mapping.exposed_name().to_string() != env_name)
-    {
+    } else {
         let formatted_exposed = exposed.iter().map(format_mapping).join(", ");
         Some(format_asciiart_section(
             "exposes",
@@ -50,8 +47,6 @@ pub fn format_exposed(env_name: &str, exposed: &IndexSet<Mapping>, last: bool) -
             last,
             false,
         ))
-    } else {
-        None
     }
 }
 
@@ -246,6 +241,20 @@ pub async fn list_global_environments(
             message.push_str("├──");
         }
 
+        // get the state of the environment if available
+        // and also it's state if present
+        let state = envs_changes
+            .and_then(|env_changes| env_changes.changes.get(env_name))
+            .map(|state| match state {
+                EnvState::Installed => {
+                    format!("({})", console::style("installed".to_string()).green())
+                }
+                EnvState::NotChanged(ref reason) => {
+                    format!("({})", reason.fancy_display())
+                }
+            })
+            .unwrap_or("".to_string());
+
         if !env
             .dependencies()
             .iter()
@@ -255,19 +264,6 @@ pub async fn list_global_environments(
                 rec.repodata_record.package_record.name.as_normalized() == env_name.as_str()
             }) {
                 // output the environment name and version
-                // and also it's state if present
-                let state = envs_changes
-                    .and_then(|env_changes| env_changes.changes.get(env_name))
-                    .map(|state| match state {
-                        EnvState::Installed => {
-                            format!("({})", console::style("installed".to_string()).green())
-                        }
-                        EnvState::NotChanged(ref reason) => {
-                            format!("({})", reason.fancy_display())
-                        }
-                    })
-                    .unwrap_or("".to_string());
-
                 message.push_str(&format!(
                     " {}: {} {}",
                     env_name.fancy_display(),
@@ -276,10 +272,10 @@ pub async fn list_global_environments(
                     state
                 ));
             } else {
-                message.push_str(&format!(" {}", env_name.fancy_display()));
+                message.push_str(&format!(" {} {}", env_name.fancy_display(), state));
             }
         } else {
-            message.push_str(&format!(" {}", env_name.fancy_display()));
+            message.push_str(&format!(" {} {}", env_name.fancy_display(), state));
         }
 
         // Write dependencies
@@ -294,7 +290,7 @@ pub async fn list_global_environments(
         }
 
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(env_name.as_str(), env.exposed(), last) {
+        if let Some(exp_message) = format_exposed(env.exposed(), last) {
             message.push_str(&exp_message);
         }
 
