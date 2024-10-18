@@ -10,7 +10,7 @@ import sys
 
 
 @pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))
-def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.Path):
+def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.Path) -> None:
     """
     Create a temporary directory and install the wheel in it.
     The `testrun_uid` is a unique identifier for the test run
@@ -31,7 +31,7 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
         run([pixi, "add", "--no-progress", "--manifest-path", manifest_path, "python==3.12.*"])
 
         # Add the wheel to the project
-        run_args = [
+        run_args: list[str | os.PathLike[str]] = [
             pixi,
             "-vvv",
             "add",
@@ -44,6 +44,7 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
 
         # Add for another platform, if specified
         for platform in package.spec.target_iter():
+            assert isinstance(package.spec.target, str)
             run_args.extend(["--platform", package.spec.target])
 
         run(run_args)
@@ -60,7 +61,7 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
         raise e
 
 
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """
     This generates the test for the wheels by reading the wheels from the toml specification
     creates a test for each entry in the toml file
@@ -71,10 +72,10 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture(scope="session")
-def pixi(pytestconfig):
+def pixi(pytestconfig: pytest.Config) -> pathlib.Path:
     # The command line argument overrides the default path
     if pytestconfig.getoption("pixi_exec"):
-        return pytestconfig.getoption("pixi_exec")
+        return pathlib.Path(pytestconfig.getoption("pixi_exec"))
 
     # Check pixi environment variable
     project_root = os.environ.get("PIXI_PROJECT_ROOT")
@@ -84,8 +85,7 @@ def pixi(pytestconfig):
     # Check if the target directory exists
     # This assertion is for the type checker
     assert project_root
-    project_root = pathlib.Path(project_root)
-    target_dir = project_root.joinpath(".pixi/target/release")
+    target_dir = pathlib.Path(project_root).joinpath(".pixi/target/release")
     if not target_dir.exists():
         pytest.exit("pixi executable not found, run `pixi r build` first")
 

@@ -52,7 +52,7 @@ test-integration-global = { cmd = "pytest --numprocesses=auto --durations=10 tes
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
 test-specific-test = { cmd = "pytest", depends-on = ["build"] }
-typecheck-integration = "mypy --strict tests/integration"
+typecheck-tests = "mypy --strict tests --exclude pypi-indexes"
 update-integration-test-data = { cmd = "python update-channels.py", cwd = "tests/integration/test_data" }
 
 [feature.dev.dependencies]
