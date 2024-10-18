@@ -1,4 +1,5 @@
 mod protocol;
+mod stderr;
 
 use std::{
     fmt,
@@ -11,6 +12,7 @@ use pixi_consts::consts;
 use pixi_manifest::Manifest;
 pub use protocol::{InitializeError, Protocol};
 use rattler_conda_types::ChannelConfig;
+pub(crate) use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use which::Error;
 
@@ -116,7 +118,7 @@ impl ProtocolBuilder {
         Ok(None)
     }
 
-    pub async fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
+    pub async fn finish(self, tool: &ToolCache, build_id: usize) -> Result<Protocol, FinishError> {
         let tool_spec = self
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
@@ -124,7 +126,7 @@ impl ProtocolBuilder {
         Ok(Protocol::setup(
             self.source_dir,
             self.manifest.path,
-            self.manifest.parsed.project.name,
+            build_id,
             self.cache_dir,
             self.channel_config,
             tool,

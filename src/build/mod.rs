@@ -1,4 +1,5 @@
 mod cache;
+mod reporters;
 
 use std::{
     ffi::OsStr,
@@ -13,7 +14,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter, SetupRequest};
+use pixi_build_frontend::SetupRequest;
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -39,6 +40,8 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+
+pub use reporters::{BuildMetadataReporter, BuildReporter};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
@@ -133,7 +136,8 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
-        metadata_reporter: Arc<dyn CondaMetadataReporter>,
+        metadata_reporter: Arc<dyn BuildMetadataReporter>,
+        build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
@@ -145,6 +149,7 @@ impl BuildContext {
                 build_platform,
                 build_virtual_packages,
                 metadata_reporter.clone(),
+                build_id,
             )
             .await?;
 
@@ -161,7 +166,8 @@ impl BuildContext {
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
-        build_reporter: Arc<dyn CondaBuildReporter>,
+        build_reporter: Arc<dyn BuildReporter>,
+        build_id: usize,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -207,6 +213,7 @@ impl BuildContext {
                             .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
                             .unwrap_or(false)
                         {
+                            build_reporter.on_build_cached(build_id);
                             tracing::debug!("found an up-to-date cached build.");
                             return Ok(build.record);
                         } else {
@@ -226,6 +233,7 @@ impl BuildContext {
                 }
             } else {
                 tracing::debug!("found a cached build");
+                build_reporter.on_build_cached(build_id);
 
                 // If there is no source info in the cache we assume its still valid.
                 return Ok(build.record);
@@ -239,6 +247,7 @@ impl BuildContext {
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
                 build_tool_override: Default::default(),
+                build_id,
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -271,7 +280,7 @@ impl BuildContext {
                         .key(),
                     ),
                 },
-                build_reporter.clone(),
+                build_reporter.as_conda_build_reporter(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -422,7 +431,8 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
-        metadata_reporter: Arc<dyn CondaMetadataReporter>,
+        metadata_reporter: Arc<dyn BuildMetadataReporter>,
+        build_id: usize,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -459,7 +469,7 @@ impl BuildContext {
                 }
             } else {
                 tracing::debug!("found cached metadata.");
-
+                metadata_reporter.on_metadata_cached(build_id);
                 // No input hash so just assume it is still valid.
                 return Ok(source_metadata_to_records(
                     source,
@@ -475,6 +485,7 @@ impl BuildContext {
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
                 build_tool_override: Default::default(),
+                build_id,
             })
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
@@ -504,7 +515,7 @@ impl BuildContext {
                         .key(),
                     ),
                 },
-                metadata_reporter.clone(),
+                metadata_reporter.as_conda_metadata_reporter().clone(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;

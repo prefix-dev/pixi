@@ -92,11 +92,15 @@ impl ProtocolBuilder {
     }
 
     /// Finish the construction of the protocol and return the protocol object
-    pub async fn finish(self, tool_cache: &ToolCache) -> Result<Protocol, BuildFrontendError> {
+    pub async fn finish(
+        self,
+        tool_cache: &ToolCache,
+        build_id: usize,
+    ) -> Result<Protocol, BuildFrontendError> {
         match self {
             Self::Pixi(protocol) => Ok(Protocol::Pixi(
                 protocol
-                    .finish(tool_cache)
+                    .finish(tool_cache, build_id)
                     .await
                     .map_err(FinishError::Pixi)?,
             )),

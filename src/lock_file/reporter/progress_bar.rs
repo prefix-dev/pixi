@@ -1,12 +1,13 @@
 use std::{borrow::Cow, fmt::Write, sync::Arc, time::Duration};
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use pixi_build_frontend::CondaMetadataReporter;
 use pixi_consts::consts;
 use pypi_mapping::Reporter;
 use rattler_conda_types::Platform;
 
 use super::PurlAmendReporter;
-use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::{build::BuildMetadataReporter, project::grouped_environment::GroupedEnvironmentName};
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
@@ -102,5 +103,72 @@ impl SolveProgressBar {
 
     pub(crate) fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn Reporter> {
         Arc::new(PurlAmendReporter::new(self.clone()))
+    }
+}
+
+/// Struct that manages the progress for getting source metadata.
+pub(crate) struct CondaMetadataProgress {
+    progress_bar: ProgressBar,
+}
+
+impl CondaMetadataProgress {
+    /// Creates a new progress bar for the metadata, and activates it
+    pub(crate) fn new(original_progress: &ProgressBar, num_packages: u64) -> Self {
+        // Create a new progress bar.
+        let pb = pixi_progress::global_multi_progress()
+            .insert_after(original_progress, ProgressBar::hidden());
+        pb.set_length(num_packages);
+        pb.set_style(pixi_progress::default_progress_style());
+        // Building the package
+        pb.set_prefix("retrieving metadata");
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Self { progress_bar: pb }
+    }
+}
+
+impl CondaMetadataProgress {
+    /// Use this method to increment the progress bar
+    /// It will also check if the progress bar is finished
+    pub fn increment(&self) {
+        self.progress_bar.inc(1);
+        self.check_finish();
+    }
+
+    /// Check if the progress bar is finished
+    /// and clears it
+    fn check_finish(&self) {
+        if self.progress_bar.position()
+            == self
+                .progress_bar
+                .length()
+                .expect("expected length to be set for progress")
+        {
+            self.progress_bar.set_message("");
+            self.progress_bar.finish_and_clear();
+        }
+    }
+}
+
+impl CondaMetadataReporter for CondaMetadataProgress {
+    fn on_metadata_start(&self, _build_id: usize) -> usize {
+        // Started metadata extraction
+        self.progress_bar.set_message("extracting");
+        0
+    }
+
+    fn on_metadata_end(&self, _operation: usize) {
+        // Finished metadata extraction
+        self.increment();
+    }
+}
+
+// This is the same but for the cached variants
+impl BuildMetadataReporter for CondaMetadataProgress {
+    fn on_metadata_cached(&self, _build_id: usize) {
+        self.increment();
+    }
+
+    fn as_conda_metadata_reporter(self: Arc<Self>) -> Arc<dyn CondaMetadataReporter> {
+        self.clone()
     }
 }

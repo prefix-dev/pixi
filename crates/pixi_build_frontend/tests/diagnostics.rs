@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
 
@@ -17,6 +19,7 @@ async fn test_non_existing_discovery() {
         .setup_protocol(SetupRequest {
             source_dir: "non/existing/path".into(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
@@ -31,6 +34,7 @@ async fn test_source_dir_is_file() {
         .setup_protocol(SetupRequest {
             source_dir: source_file.path().to_path_buf(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
@@ -47,12 +51,13 @@ async fn test_source_dir_is_empty() {
         .setup_protocol(SetupRequest {
             source_dir: source_dir.path().to_path_buf(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
 
@@ -67,16 +72,22 @@ async fn test_invalid_manifest() {
         .setup_protocol(SetupRequest {
             source_dir: source_dir.path().to_path_buf(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot
-        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
-        .replace('\\', "/");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
 
     insta::assert_snapshot!(snapshot);
+}
+
+fn replace_source_dir(snapshot: &str, source_dir: &Path) -> String {
+    snapshot.replace(
+        &(source_dir.display().to_string() + std::path::MAIN_SEPARATOR_STR),
+        "[SOURCE_DIR]/",
+    )
 }
 
 #[tokio::test]
@@ -106,14 +117,13 @@ async fn test_missing_backend() {
         .setup_protocol(SetupRequest {
             source_dir: source_dir.path().to_path_buf(),
             build_tool_override: Default::default(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot
-        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
-        .replace('\\', "/");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
 
@@ -151,13 +161,12 @@ async fn test_invalid_backend() {
         .setup_protocol(SetupRequest {
             source_dir: source_dir.path().to_path_buf(),
             build_tool_override: ipc.into(),
+            build_id: 0,
         })
         .await
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot
-        .replace(&source_dir.path().display().to_string(), "[SOURCE_DIR]")
-        .replace('\\', "/");
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }

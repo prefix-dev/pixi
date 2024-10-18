@@ -1,11 +1,12 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::{ffi::OsStr, path::PathBuf, sync::Arc};
 
+use futures::TryFutureExt;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
     types::ErrorCode,
 };
-use miette::{diagnostic, Diagnostic, IntoDiagnostic};
+use miette::{diagnostic, Diagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{
@@ -17,7 +18,13 @@ use pixi_build_types::{
 };
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
+use tokio::{
+    io::{AsyncBufReadExt, BufReader, Lines},
+    process::ChildStderr,
+    sync::{oneshot, Mutex},
+};
 
+use super::{stderr_null, stderr_stream};
 use crate::{
     jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
     protocols::error::BackendError,
@@ -72,6 +79,9 @@ pub enum ProtocolError {
         "This is often caused by the build backend incorrectly reporting certain capabilities. Consider contacting the build backend maintainers for a fix."
     ))]
     MethodNotImplemented(String, String),
+
+    #[error("pipe of stderr stopped earlier than expected")]
+    StdErrPipeStopped,
 }
 
 /// A protocol that uses a pixi manifest to invoke a build backend.
@@ -87,17 +97,20 @@ pub struct Protocol {
     /// The path to the manifest relative to the source directory.
     relative_manifest_path: PathBuf,
 
-    /// Name of the project taken from the manifest
-    project_name: Option<String>,
-
     _backend_capabilities: BackendCapabilities,
+
+    /// The build identifier
+    build_id: usize,
+
+    /// The handle to the stderr of the backend process.
+    stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
 }
 
 impl Protocol {
     pub(crate) async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
-        project_name: Option<String>,
+        build_id: usize,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         tool: Tool,
@@ -108,7 +121,7 @@ impl Protocol {
                 let mut process = tokio::process::Command::from(tool.command())
                     .stdout(std::process::Stdio::piped())
                     .stdin(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::inherit()) // TODO: Capture this?
+                    .stderr(std::process::Stdio::piped()) // TODO: Capture this?
                     .spawn()?;
 
                 let backend_identifier = tool
@@ -125,6 +138,10 @@ impl Protocol {
                 let stdout = process
                     .stdout
                     .expect("since we piped stdout we expect a valid value here");
+                let stderr = process
+                    .stderr
+                    .map(|stderr| BufReader::new(stderr).lines())
+                    .expect("since we piped stderr we expect a valid value here");
 
                 // Construct a JSON-RPC client to communicate with the backend process.
                 let (tx, rx) = stdio_transport(stdin, stdout);
@@ -132,11 +149,12 @@ impl Protocol {
                     backend_identifier,
                     source_dir,
                     manifest_path,
-                    project_name,
+                    build_id,
                     cache_dir,
                     channel_config,
                     tx,
                     rx,
+                    Some(stderr),
                 )
                 .await
             }
@@ -145,11 +163,12 @@ impl Protocol {
                     "<IPC>".to_string(),
                     source_dir,
                     manifest_path,
-                    project_name,
+                    build_id,
                     cache_dir,
                     channel_config,
                     Sender::from(ipc.rpc_out),
                     Receiver::from(ipc.rpc_in),
+                    None,
                 )
                 .await
             }
@@ -161,11 +180,12 @@ impl Protocol {
         backend_identifier: String,
         source_dir: PathBuf,
         manifest_path: PathBuf,
-        project_name: Option<String>,
+        build_id: usize,
         cache_dir: Option<PathBuf>,
         channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
+        stderr: Option<Lines<BufReader<ChildStderr>>>,
     ) -> Result<Self, InitializeError> {
         let relative_manifest_path = manifest_path
             .strip_prefix(source_dir)
@@ -199,10 +219,11 @@ impl Protocol {
         Ok(Self {
             backend_identifier,
             _channel_config: channel_config,
-            project_name,
             client,
             _backend_capabilities: result.capabilities,
             relative_manifest_path,
+            build_id,
+            stderr: stderr.map(Mutex::new).map(Arc::new),
         })
     }
 
@@ -220,8 +241,19 @@ impl Protocol {
         &self,
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
-    ) -> miette::Result<CondaMetadataResult> {
-        let operation = reporter.on_metadata_start(self.project_name.as_deref().unwrap_or(""));
+    ) -> Result<CondaMetadataResult, ProtocolError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stderr_null(stderr.clone(), cancel_rx));
+            (cancel_tx, handle)
+        });
+
+        // Start the metadata operation
+        let operation = reporter.on_metadata_start(self.build_id);
+
         let result = self
             .client
             .request(
@@ -235,8 +267,23 @@ impl Protocol {
                     err,
                     procedures::conda_metadata::METHOD_NAME,
                 )
-            })
-            .into_diagnostic();
+            });
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding
+            if cancel_tx.send(()).is_err() {
+                return Err(ProtocolError::StdErrPipeStopped);
+            }
+            handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(ProtocolError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
+            )?;
+        }
+
         reporter.on_metadata_end(operation);
         result
     }
@@ -246,23 +293,76 @@ impl Protocol {
         &self,
         request: &CondaBuildParams,
         reporter: &dyn CondaBuildReporter,
-    ) -> miette::Result<CondaBuildResult> {
-        let operation = reporter.on_build_start(self.project_name.as_deref().unwrap_or(""));
-        let result = self
+    ) -> Result<CondaBuildResult, ProtocolError> {
+        // Captures stderr output
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            let (sender, receiver) = tokio::sync::mpsc::channel(100);
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            let handle = tokio::spawn(stderr_stream(stderr.clone(), sender, cancel_rx));
+            (cancel_tx, receiver, handle)
+        });
+
+        let operation = reporter.on_build_start(self.build_id);
+        let request = self
             .client
             .request(
                 procedures::conda_build::METHOD_NAME,
                 RpcParams::from(request),
             )
-            .await
             .map_err(|err| {
                 ProtocolError::from_client_error(
                     self.backend_identifier.clone(),
                     err,
                     procedures::conda_build::METHOD_NAME,
                 )
-            })
-            .into_diagnostic();
+            });
+
+        // There can be two cases, the stderr is captured or is not captured
+        // In the case of capturing we need to select between the request and the stderr
+        // forwarding to drive these two futures concurrently
+        //
+        // In the other case we can just wait for the request to finish
+        let result = if let Some((cancel_tx, receiver, handle)) = stderr {
+            // This is the case where we capture stderr
+
+            // Create a future that will forward stderr to the reporter
+            let send_stderr = async {
+                let mut receiver = receiver;
+                while let Some(line) = receiver.recv().await {
+                    reporter.on_build_output(operation, line);
+                }
+            };
+
+            // Select between the request and the stderr forwarding
+            let result = tokio::select! {
+                result = request => result,
+                _ = send_stderr => {
+                    Err(ProtocolError::StdErrPipeStopped)
+                }
+            };
+
+            // Cancel the stderr forwarding
+            if cancel_tx.send(()).is_err() {
+                return Err(ProtocolError::StdErrPipeStopped);
+            }
+
+            // Wait for the stderr forwarding to finish, it should because we cancelled
+            handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(ProtocolError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
+            )?;
+
+            // Return the result
+            result
+        } else {
+            // This is the case where we don't capture stderr
+            request.await
+        };
+
+        // Build has completed
         reporter.on_build_end(operation);
         result
     }

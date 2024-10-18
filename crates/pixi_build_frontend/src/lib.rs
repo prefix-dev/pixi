@@ -66,6 +66,10 @@ pub struct SetupRequest {
 
     /// Overrides for the build tool.
     pub build_tool_override: Option<BackendOverride>,
+
+    /// Identifier for the rest of the requests
+    /// This is used to identify the requests that belong to the same build.
+    pub build_id: usize,
 }
 
 #[derive(Debug)]
