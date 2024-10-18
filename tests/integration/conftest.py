@@ -15,19 +15,19 @@ def test_data() -> Path:
 
 @pytest.fixture
 def dummy_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("dummy_channel_1/output").as_uri()
+    return test_data.joinpath("channels", "dummy_channel_1").as_uri()
 
 
 @pytest.fixture
 def dummy_channel_2(test_data: Path) -> str:
-    return test_data.joinpath("dummy_channel_2/output").as_uri()
+    return test_data.joinpath("channels", "dummy_channel_2").as_uri()
 
 
 @pytest.fixture
 def global_update_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("global_update_channel_1/output").as_uri()
+    return test_data.joinpath("channels", "global_update_channel_1").as_uri()
 
 
 @pytest.fixture
 def non_self_expose_channel(test_data: Path) -> str:
-    return test_data.joinpath("non_self_expose_channel/output").as_uri()
+    return test_data.joinpath("channels", "non_self_expose_channel").as_uri()

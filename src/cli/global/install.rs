@@ -8,7 +8,8 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self, project::ExposedType, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+        self, common::NotChangedReason, list::list_global_environments, project::ExposedType,
+        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -85,6 +86,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut state_changes = StateChanges::default();
+    let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
@@ -103,6 +105,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
             Ok(sc) => {
+                match sc.has_changed() {
+                    true => env_changes
+                        .changes
+                        .insert(env_name.clone(), EnvState::Installed),
+                    false => env_changes.changes.insert(
+                        env_name.clone(),
+                        EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
+                    ),
+                };
                 state_changes |= sc;
             }
             Err(err) => {
@@ -115,7 +126,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
+
+    // After installing, we always want to list the changed environments
+    list_global_environments(
+        &last_updated_project,
+        Some(env_names),
+        Some(&env_changes),
+        None,
+    )
+    .await?;
 
     Ok(())
 }
