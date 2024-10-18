@@ -1,9 +1,8 @@
-use std::{env, io::IsTerminal};
-
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
@@ -79,9 +78,19 @@ struct Args {
     #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
 
-    /// Hide all progress bars
+    /// Hide all progress bars, always turned on if stderr is not a terminal.
     #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
     no_progress: bool,
+}
+impl Args {
+    /// Whether to show progress bars or not, based on the terminal and the user's preference.
+    fn no_progress(&self) -> bool {
+        if !std::io::stderr().is_terminal() {
+            true
+        } else {
+            self.no_progress
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -183,7 +192,7 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled_stderr(use_colors);
 
     // Hide all progress bars if the user requested it.
-    if args.no_progress {
+    if args.no_progress() {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
