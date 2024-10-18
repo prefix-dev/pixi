@@ -20,15 +20,25 @@ fn main() {
     // we always use --release profile for this
     Command::new("cargo")
         .current_dir(&trampoline_crate)
-        .args(&["build", "--release", "--target", target_triplet.as_str()])
+        .args(&[
+            "build",
+            "--release",
+            "--target",
+            target_triplet.as_str(),
+            "--target-dir",
+            ".pixi/target",
+        ])
         .status()
         .expect("Failed to build trampoline crate");
 
     // Create trampolines directory if it doesn't exist
     fs::create_dir_all(&trampolines_dir).expect("Failed to create trampolines directory");
 
-    let cargo_target_dir =
-        env::var("CARGO_TARGET_DIR").expect("CARGO_TARGET_DIR should be set by cargo");
+    // let cargo_target_dir =
+    //     env::var("CARGO_TARGET_DIR").expect("CARGO_TARGET_DIR should be set by cargo");
+
+    let cargo_target_dir = format!(".pixi/target");
+
     // Construct the path to the built binary
     let target_path = PathBuf::from_iter([
         cargo_target_dir.as_str(),
@@ -44,5 +54,5 @@ fn main() {
     fs::copy(&built_binary_path, &dest_path).expect("Failed to copy second crate binary");
 
     // Tell cargo to re-run this build script if the trampoline binary code changes
-    println!("cargo:rerun-if-changed=crates/pixi_trampoline/src");
+    println!("cargo:rerun-if-changed=crates/pixi_trampoline");
 }
