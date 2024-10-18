@@ -134,6 +134,9 @@ pub enum PlatformUnsat {
     #[error("required source package '{0}' is locked as binary (required by '{1}')")]
     RequiredSourceIsBinary(String, String),
 
+    #[error("package '{0}' is locked as source, but is only required as binary")]
+    RequiredBinaryIsSource(String),
+
     #[error("the locked source package '{0}' does not match the requested source package, {1}")]
     SourcePackageMismatch(String, SourceMismatchError),
 
@@ -723,17 +726,21 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let mut conda_queue = environment_dependencies;
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
+    let mut expected_conda_source_dependencies = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
                 match spec.into_source_or_binary(&channel_config) {
-                    Ok(Either::Left(source_spec)) => find_matching_source_package(
-                        locked_pixi_records,
-                        name,
-                        source_spec,
-                        source,
-                    )?,
+                    Ok(Either::Left(source_spec)) => {
+                        expected_conda_source_dependencies.insert(name.clone());
+                        find_matching_source_package(
+                            locked_pixi_records,
+                            name,
+                            source_spec,
+                            source,
+                        )?
+                    }
                     Ok(Either::Right(spec)) => {
                         match find_matching_package(
                             locked_pixi_records,
@@ -987,6 +994,21 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
             },
         )));
+    }
+
+    // Check if all records that are source records should actually be source
+    // records. If there are no source specs in the environment for a particular
+    // package than the package must be a binary package.
+    for record in locked_pixi_records
+        .records
+        .iter()
+        .filter_map(PixiRecord::as_source)
+    {
+        if !expected_conda_source_dependencies.contains(&record.package_record.name) {
+            return Err(Box::new(PlatformUnsat::RequiredBinaryIsSource(
+                record.package_record.name.as_source().to_string(),
+            )));
+        }
     }
 
     // Check if all source packages are still up-to-date.
