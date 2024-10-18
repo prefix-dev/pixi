@@ -85,7 +85,7 @@ def pixi(pytestconfig):
     # This assertion is for the type checker
     assert project_root
     project_root = pathlib.Path(project_root)
-    target_dir = project_root.joinpath(".pixi/target/release")
+    target_dir = project_root.joinpath("target-pixi/release")
     if not target_dir.exists():
         pytest.exit("pixi executable not found, run `pixi r build` first")
 
