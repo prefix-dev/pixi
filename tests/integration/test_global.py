@@ -547,6 +547,55 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
     assert dummy_b.is_file()
 
 
+def test_install_twice_with_same_env_name_as_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    # This test is to ensure that when the environment name is the same as the expose name, exposes are printed correctly
+    # and we also ensure that when custom name for environment is used,
+    # we output state for it
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("customdummyb")
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+            "--environment",
+            "customdummyb",
+            "--expose",
+            "customdummyb=dummy-b",
+        ],
+        env=env,
+        stdout_contains=["customdummyb (installed)", "exposes: customdummyb -> dummy-b"],
+    )
+    assert dummy_b.is_file()
+
+    # Install dummy-b again, there should be nothing to do
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+            "--environment",
+            "customdummyb",
+            "--expose",
+            "customdummyb=dummy-b",
+        ],
+        env=env,
+        stdout_contains=["customdummyb (already installed)", "exposes: customdummyb -> dummy-b"],
+    )
+    assert dummy_b.is_file()
+
+
 def test_install_twice_with_force_reinstall(
     pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
