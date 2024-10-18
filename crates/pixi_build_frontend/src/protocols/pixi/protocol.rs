@@ -1,11 +1,12 @@
 use std::{ffi::OsStr, path::PathBuf, sync::Arc};
 
+use futures::TryFutureExt;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::client::{ClientT, Error, Error as ClientError, TransportReceiverT, TransportSenderT},
     types::ErrorCode,
 };
-use miette::{diagnostic, Diagnostic, IntoDiagnostic};
+use miette::{diagnostic, Diagnostic};
 use pixi_build_types::{
     procedures,
     procedures::{
@@ -23,14 +24,13 @@ use tokio::{
     sync::{oneshot, Mutex},
 };
 
+use super::{stderr_null, stderr_stream};
 use crate::{
     jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
     protocols::error::BackendError,
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
-
-use super::{stderr_null, stderr_stream};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
@@ -241,7 +241,7 @@ impl Protocol {
         &self,
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
-    ) -> miette::Result<CondaMetadataResult> {
+    ) -> Result<CondaMetadataResult, ProtocolError> {
         // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
@@ -267,16 +267,21 @@ impl Protocol {
                     err,
                     procedures::conda_metadata::METHOD_NAME,
                 )
-            })
-            .into_diagnostic();
+            });
 
         // Wait for the stderr sink to finish, by signaling it to stop
         if let Some((cancel_tx, handle)) = stderr {
             // Cancel the stderr forwarding
             if cancel_tx.send(()).is_err() {
-                return Err(ProtocolError::StdErrPipeStopped).into_diagnostic();
+                return Err(ProtocolError::StdErrPipeStopped);
             }
-            handle.await.into_diagnostic()?.into_diagnostic()?;
+            handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(ProtocolError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
+            )?;
         }
 
         reporter.on_metadata_end(operation);
@@ -288,7 +293,7 @@ impl Protocol {
         &self,
         request: &CondaBuildParams,
         reporter: &dyn CondaBuildReporter,
-    ) -> miette::Result<CondaBuildResult> {
+    ) -> Result<CondaBuildResult, ProtocolError> {
         // Captures stderr output
         let stderr = self.stderr.as_ref().map(|stderr| {
             let (sender, receiver) = tokio::sync::mpsc::channel(100);
@@ -298,14 +303,23 @@ impl Protocol {
         });
 
         let operation = reporter.on_build_start(self.build_id);
-        let request = self.client.request(
-            procedures::conda_build::METHOD_NAME,
-            RpcParams::from(request),
-        );
+        let request = self
+            .client
+            .request(
+                procedures::conda_build::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .map_err(|err| {
+                ProtocolError::from_client_error(
+                    self.backend_identifier.clone(),
+                    err,
+                    procedures::conda_build::METHOD_NAME,
+                )
+            });
 
         // There can be two cases, the stderr is captured or is not captured
-        // In the case of capturing we need to select between the request and the stderr forwarding
-        // to drive these two futures concurrently
+        // In the case of capturing we need to select between the request and the stderr
+        // forwarding to drive these two futures concurrently
         //
         // In the other case we can just wait for the request to finish
         let result = if let Some((cancel_tx, receiver, handle)) = stderr {
@@ -321,40 +335,31 @@ impl Protocol {
 
             // Select between the request and the stderr forwarding
             let result = tokio::select! {
-                result = request => {
-                    result.map_err(|err| {
-                        ProtocolError::from_client_error(
-                            self.backend_identifier.clone(),
-                            err,
-                            procedures::conda_build::METHOD_NAME,
-                        )
-                    })
-                    .into_diagnostic()
-                },
+                result = request => result,
                 _ = send_stderr => {
-                    Err(ProtocolError::StdErrPipeStopped).into_diagnostic()
+                    Err(ProtocolError::StdErrPipeStopped)
                 }
             };
 
             // Cancel the stderr forwarding
             if cancel_tx.send(()).is_err() {
-                return Err(ProtocolError::StdErrPipeStopped).into_diagnostic();
+                return Err(ProtocolError::StdErrPipeStopped);
             }
+
             // Wait for the stderr forwarding to finish, it should because we cancelled
-            handle.await.into_diagnostic()?.into_diagnostic()?;
+            handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(ProtocolError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
+            )?;
+
+            // Return the result
             result
         } else {
             // This is the case where we don't capture stderr
-            request
-                .await
-                .map_err(|err| {
-                    ProtocolError::from_client_error(
-                        self.backend_identifier.clone(),
-                        err,
-                        procedures::conda_build::METHOD_NAME,
-                    )
-                })
-                .into_diagnostic()
+            request.await
         };
 
         // Build has completed

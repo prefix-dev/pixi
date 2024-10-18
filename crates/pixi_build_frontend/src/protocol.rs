@@ -1,10 +1,10 @@
-use miette::Diagnostic;
+use std::{path::PathBuf, sync::Arc};
+
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_types::procedures::{
     conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
-use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::{conda_build_protocol, pixi_protocol, CondaBuildReporter, CondaMetadataReporter};
 
@@ -100,11 +100,10 @@ impl Protocol {
         reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
-            Self::Pixi(protocol) => {
-                protocol
-                    .get_conda_metadata(request, reporter.as_ref())
-                    .await
-            }
+            Self::Pixi(protocol) => protocol
+                .get_conda_metadata(request, reporter.as_ref())
+                .await
+                .into_diagnostic(),
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
         }
     }
@@ -115,7 +114,10 @@ impl Protocol {
         reporter: Arc<dyn CondaBuildReporter>,
     ) -> miette::Result<CondaBuildResult> {
         match self {
-            Self::Pixi(protocol) => protocol.conda_build(request, reporter.as_ref()).await,
+            Self::Pixi(protocol) => protocol
+                .conda_build(request, reporter.as_ref())
+                .await
+                .into_diagnostic(),
             Self::CondaBuild(_) => unreachable!(),
         }
     }
