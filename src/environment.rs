@@ -583,7 +583,7 @@ impl CondaBuildReporter for CondaBuildProgress {
         self.end_progress_for(operation, None);
     }
 
-    fn on_build_output(&self, operation: usize, line: String) {
+    fn on_build_output(&self, _operation: usize, line: String) {
         self.main_progress.suspend(|| eprintln!("{}", line));
     }
 }

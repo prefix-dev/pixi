@@ -1,4 +1,5 @@
 mod cache;
+mod reporters;
 
 use std::{
     ffi::OsStr,
@@ -13,7 +14,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter, SetupRequest};
+use pixi_build_frontend::SetupRequest;
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -39,6 +40,8 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+
+pub use reporters::{BuildMetadataReporter, BuildReporter};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
@@ -101,22 +104,6 @@ pub struct SourceMetadata {
 
     /// All the records that can be extracted from the source.
     pub records: Vec<SourceRecord>,
-}
-
-pub trait BuildMetadataReporter: CondaMetadataReporter {
-    /// Reporters that the metadata has been cached.
-    fn on_metadata_cached(&self, build_id: usize);
-
-    /// Cast upwards
-    fn as_conda_metadata_reporter(self: Arc<Self>) -> Arc<dyn CondaMetadataReporter>;
-}
-
-pub trait BuildReporter: CondaBuildReporter {
-    /// Reports that the build has been cached.
-    fn on_build_cached(&self, build_id: usize);
-
-    /// Cast upwards
-    fn as_conda_build_reporter(self: Arc<Self>) -> Arc<dyn CondaBuildReporter>;
 }
 
 impl BuildContext {

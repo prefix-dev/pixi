@@ -106,11 +106,13 @@ impl SolveProgressBar {
     }
 }
 
+/// Struct that manages the progress for getting source metadata.
 pub(crate) struct CondaMetadataProgress {
     progress_bar: ProgressBar,
 }
 
 impl CondaMetadataProgress {
+    /// Creates a new progress bar for the metadata, and activates it
     pub(crate) fn new(original_progress: &ProgressBar, num_packages: u64) -> Self {
         // Create a new progress bar.
         let pb = pixi_progress::global_multi_progress()
@@ -125,12 +127,15 @@ impl CondaMetadataProgress {
 }
 
 impl CondaMetadataProgress {
-    /// Use this method to increment the progress bar, when the result is cachec
+    /// Use this method to increment the progress bar
+    /// It will also check if the progress bar is finished
     pub fn increment(&self) {
         self.progress_bar.inc(1);
         self.check_finish();
     }
 
+    /// Check if the progress bar is finished
+    /// and clears it
     fn check_finish(&self) {
         if self.progress_bar.position()
             == self
@@ -146,15 +151,18 @@ impl CondaMetadataProgress {
 
 impl CondaMetadataReporter for CondaMetadataProgress {
     fn on_metadata_start(&self, _build_id: usize) -> usize {
+        // Started metadata extraction
         self.progress_bar.set_message("extracting");
         0
     }
 
     fn on_metadata_end(&self, _operation: usize) {
+        // Finished metadata extraction
         self.increment();
     }
 }
 
+// This is the same but for the cached variants
 impl BuildMetadataReporter for CondaMetadataProgress {
     fn on_metadata_cached(&self, _build_id: usize) {
         self.increment();

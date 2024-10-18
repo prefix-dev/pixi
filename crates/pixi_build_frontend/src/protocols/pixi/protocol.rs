@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, ops::DerefMut, path::PathBuf, sync::Arc};
+use std::{ffi::OsStr, path::PathBuf, sync::Arc};
 
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
@@ -18,11 +18,10 @@ use pixi_build_types::{
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader, Lines},
+    io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
-    sync::{mpsc, oneshot, Mutex},
+    sync::{oneshot, Mutex},
 };
-use tokio_util::bytes::{Bytes, BytesMut};
 
 use crate::{
     jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
@@ -30,6 +29,8 @@ use crate::{
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
+
+use super::{stderr_null, stderr_stream};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
@@ -103,59 +104,6 @@ pub struct Protocol {
 
     /// The handle to the stderr of the backend process.
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
-}
-
-/// Stderr sink that captures the stderr output of the backend
-/// but does not do anything with it.
-pub async fn stderr_null(
-    buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
-    cancel: oneshot::Receiver<()>,
-) -> Result<(), std::io::Error> {
-    tokio::select! {
-        _ = cancel => {
-            return Ok(());
-        }
-        result = async {
-            let mut lines = buffer.lock().await;
-            while let Some(line) = lines.next_line().await? {
-            }
-            Ok(())
-        } => {
-            result
-        }
-    }
-}
-
-/// Stderr stream that captures the stderr output of the backend
-/// and sends it to the reporter.
-pub async fn stderr_stream(
-    buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
-    sender: mpsc::Sender<String>,
-    cancel: oneshot::Receiver<()>,
-) -> Result<(), std::io::Error> {
-    tokio::select! {
-        _ = cancel => {
-            return Ok(());
-        }
-        result = async {
-            let mut lines = buffer.lock().await;
-            while let Some(line) = lines.next_line().await? {
-                if let Err(err) = sender.send(line).await {
-                    return Err(std::io::Error::new(std::io::ErrorKind::Other, err));
-                }
-            }
-            Ok(())
-            // loop {
-            //     let mut buf = BytesMut::with_capacity(1024);
-            //     buffer.read_buf(&mut buf).await?;
-            //     if let Err(err) = sender.send(buf.freeze()).await {
-            //         return Err(std::io::Error::new(std::io::ErrorKind::Other, err));
-            //     }
-            // }
-        } => {
-            result
-        }
-    }
 }
 
 impl Protocol {
@@ -294,13 +242,16 @@ impl Protocol {
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
     ) -> miette::Result<CondaMetadataResult> {
-        // Capture all of stderr
+        // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
             let handle = tokio::spawn(stderr_null(stderr.clone(), cancel_rx));
             (cancel_tx, handle)
         });
 
+        // Start the metadata operation
         let operation = reporter.on_metadata_start(self.build_id);
 
         let result = self
@@ -319,7 +270,7 @@ impl Protocol {
             })
             .into_diagnostic();
 
-        // Wait for the stderr sink to finish
+        // Wait for the stderr sink to finish, by signaling it to stop
         if let Some((cancel_tx, handle)) = stderr {
             // Cancel the stderr forwarding
             if cancel_tx.send(()).is_err() {
@@ -352,7 +303,14 @@ impl Protocol {
             RpcParams::from(request),
         );
 
+        // There can be two cases, the stderr is captured or is not captured
+        // In the case of capturing we need to select between the request and the stderr forwarding
+        // to drive these two futures concurrently
+        //
+        // In the other case we can just wait for the request to finish
         let result = if let Some((cancel_tx, receiver, handle)) = stderr {
+            // This is the case where we capture stderr
+
             // Create a future that will forward stderr to the reporter
             let send_stderr = async {
                 let mut receiver = receiver;
@@ -360,6 +318,7 @@ impl Protocol {
                     reporter.on_build_output(operation, line);
                 }
             };
+
             // Select between the request and the stderr forwarding
             let result = tokio::select! {
                 result = request => {
@@ -376,13 +335,16 @@ impl Protocol {
                     Err(ProtocolError::StdErrPipeStopped).into_diagnostic()
                 }
             };
+
             // Cancel the stderr forwarding
             if cancel_tx.send(()).is_err() {
                 return Err(ProtocolError::StdErrPipeStopped).into_diagnostic();
             }
+            // Wait for the stderr forwarding to finish, it should because we cancelled
             handle.await.into_diagnostic()?.into_diagnostic()?;
             result
         } else {
+            // This is the case where we don't capture stderr
             request
                 .await
                 .map_err(|err| {
@@ -395,6 +357,7 @@ impl Protocol {
                 .into_diagnostic()
         };
 
+        // Build has completed
         reporter.on_build_end(operation);
         result
     }
