@@ -131,7 +131,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.1
         with:
           cache: true
-
+      - uses: Swatinem/rust-cache@v2
       - name: "Cargo nextest"
         run: pixi run test-all
 
