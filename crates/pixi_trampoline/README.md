@@ -15,3 +15,6 @@ This is the configuration used by trampoline to set the env variables, and run t
     }
 }
 ```
+
+# How to build it?
+It will be built automatically when you run `cargo build`  on pixi by using `build.rs`.
