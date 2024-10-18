@@ -11,11 +11,11 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use pixi_uv_conversions::pypi_options_to_index_locations;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{Package, UrlOrPath};
+use rattler_lock::Package;
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -163,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the explicit project dependencies
     let mut project_dependency_names = environment
-        .dependencies(None, Some(platform))
+        .environment_dependencies(Some(platform))
         .names()
         .map(|p| p.as_source().to_string())
         .collect_vec();
@@ -318,7 +318,7 @@ fn create_package_to_output<'a, 'b>(
     let size_bytes = match p {
         Package::Conda(pkg) => pkg.package_record().size,
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index.as_mut().and_then(|registry| {
                 let version = registry.get_version(&package_data.name, &package_data.version)?;
                 get_dir_size(&version.path).ok()
@@ -327,9 +327,9 @@ fn create_package_to_output<'a, 'b>(
     };
 
     let source = match p {
-        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
+        Package::Conda(pkg) => pkg.location().file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
-            let package_data = p.data().package;
+            let package_data = p.package_data();
             registry_index
                 .as_mut()
                 .and_then(|registry| {
@@ -337,17 +337,14 @@ fn create_package_to_output<'a, 'b>(
                         registry.get_version(&package_data.name, &package_data.version)?;
                     Some(version.filename.to_string())
                 })
-                .or_else(|| match &package_data.url_or_path {
-                    UrlOrPath::Url(url) => Some(url.to_string()),
-                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
-                })
+                .or_else(|| Some(package_data.location.to_string()))
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
     let is_editable = match p {
         Package::Conda(_) => false,
-        Package::Pypi(p) => p.data().package.editable,
+        Package::Pypi(p) => p.package_data().editable,
     };
 
     PackageToOutput {

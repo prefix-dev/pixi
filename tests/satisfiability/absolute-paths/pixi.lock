@@ -65,7 +65,7 @@ packages:
   name: foo
   version: 0.1.0
   path: ./projects/foo
-  sha256: 4c7329c4617e93d0bb49490a455a924edbb83b61807cf74183d67c13cb80b2b8
+  sha256: c0313922ab478848f74a8d51c223f0bd2749d43fd2001f318f65938381b847c5
   requires_dist:
   - requests @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl
   requires_python: '>=3.11'

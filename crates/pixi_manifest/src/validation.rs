@@ -132,6 +132,16 @@ impl ParsedManifest {
             }
         }
 
+        // If there is a build section, make sure the build-string is not empty
+        if let Some(build) = &self.build {
+            if build.build_backend.is_empty() {
+                return Err(miette::miette!(
+                    help = "the build-backend must contain at least one command. e.g `pixi-build-python`",
+                    "the build-backend is empty"
+                ));
+            }
+        }
+
         Ok(())
     }
 

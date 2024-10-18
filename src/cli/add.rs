@@ -12,14 +12,14 @@ use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
     SpecType,
 };
+use pixi_record::PixiRecord;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
-use crate::environment::LockFileUsage;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
-    environment::verify_prefix_location_unchanged,
+    environment::{verify_prefix_location_unchanged, LockFileUsage},
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
@@ -28,9 +28,9 @@ use crate::{
 /// Adds dependencies to the project
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
-/// requirement for the `--pypi` dependencies. If no specific version is provided,
-/// the latest version compatible with your project will be chosen automatically
-/// or a * will be used.
+/// requirement for the `--pypi` dependencies. If no specific version is
+/// provided, the latest version compatible with your project will be chosen
+/// automatically or a * will be used.
 ///
 /// Example usage:
 ///
@@ -222,10 +222,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_conda_prefixes,
         updated_pypi_prefixes,
         io_concurrency_limit,
+        build_context,
+        glob_hash_cache,
     } = UpdateContext::builder(&project)
         .with_lock_file(unlocked_lock_file)
         .with_no_install(prefix_update_config.no_install())
-        .finish()?
+        .finish()
+        .await?
         .update()
         .await?;
 
@@ -266,6 +269,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_pypi_prefixes,
         uv_context,
         io_concurrency_limit,
+        build_context,
+        glob_hash_cache,
     };
     if !prefix_update_config.no_lockfile_update {
         updated_lock_file.write_to_disk()?;
@@ -308,11 +313,18 @@ fn update_pypi_specs_from_lock_file(
         .into_iter()
         // Get all the conda and pypi records for the combination of environments and
         // platforms
-        .filter_map(|(env, platform)| {
-            let locked_env = updated_lock_file.environment(&env)?;
-            locked_env.pypi_packages_for_platform(platform)
+        .flat_map(|(env, platform)| {
+            updated_lock_file
+                .environment(&env)
+                .into_iter()
+                .flat_map(move |env| {
+                    env.pypi_packages_for_platform(platform)
+                        .into_iter()
+                        .flatten()
+                        .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                        .collect_vec()
+                })
         })
-        .flatten()
         .collect_vec();
 
     let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
@@ -373,9 +385,12 @@ fn update_conda_specs_from_lock_file(
         // platforms
         .filter_map(|(env, platform)| {
             let locked_env = updated_lock_file.environment(&env)?;
-            locked_env
-                .conda_repodata_records_for_platform(platform)
-                .ok()?
+            let packages = locked_env.conda_packages_for_platform(platform)?;
+            packages
+                .cloned()
+                .map(PixiRecord::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .ok()
         })
         .flatten()
         .collect_vec();
@@ -385,8 +400,8 @@ fn update_conda_specs_from_lock_file(
     for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
         let version_constraint = pinning_strategy.determine_version_constraint(
             conda_records.iter().filter_map(|record| {
-                if record.package_record.name == name {
-                    Some(record.package_record.version.version())
+                if record.package_record().name == name {
+                    Some(record.package_record().version.version())
                 } else {
                     None
                 }
@@ -426,7 +441,7 @@ fn unlock_packages(
         if affected_environments.contains(&(env.name().as_str(), platform)) {
             match package {
                 Package::Conda(package) => !conda_packages.contains(&package.package_record().name),
-                Package::Pypi(package) => !pypi_packages.contains(&package.data().package.name),
+                Package::Pypi(package) => !pypi_packages.contains(&package.package_data().name),
             }
         } else {
             true

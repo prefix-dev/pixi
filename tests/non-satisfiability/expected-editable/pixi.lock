@@ -54,7 +54,7 @@ packages:
   name: foo
   version: 0.1.0
   path: ./foo
-  sha256: 82242d45e33bf66048a9f4c19ee5e217c27ea0245cc7a1df22fa15ba75737beb
+  sha256: 52abd6609b8936ca84feba7f23519d94cd578acbda172c903df6927f012d310f
 - kind: conda
   name: libexpat
   version: 2.6.2
