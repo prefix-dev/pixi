@@ -1,2 +1,2 @@
 @echo off
-set CARGO_TARGET_DIR=.pixi\target
+set CARGO_TARGET_DIR=target-pixi
