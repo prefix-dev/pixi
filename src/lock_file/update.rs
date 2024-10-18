@@ -24,7 +24,9 @@ use pixi_record::{ParseLockFileError, PixiRecord};
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
+use rattler_conda_types::{
+    Arch, GenericVirtualPackage, MatchSpec, PackageName, ParseStrictness, Platform,
+};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
@@ -40,7 +42,6 @@ use super::{
     utils::IoConcurrencyLimit,
     OutdatedEnvironments, PypiRecord, PypiRecordsByName, UvResolutionContext,
 };
-use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
     build::{BuildContext, GlobHashCache},
@@ -49,12 +50,13 @@ use crate::{
         PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
-    lock_file::{self, reporter::CondaMetadataProgress},
+    lock_file::{self, records_by_name::HasNameVersion, reporter::CondaMetadataProgress},
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         Environment, HasProjectRef,
     },
+    repodata::Repodata,
     Project,
 };
 
@@ -1725,10 +1727,30 @@ async fn spawn_solve_conda_environment_task(
             let mut all_specs = match_specs;
             all_specs.extend(source_match_specs);
 
+            // Update the locked records by filtering out any source records. These will be
+            // locked again every time.
+            let source_package_records: HashSet<PackageName> = source_repodata
+                .iter()
+                .flat_map(|record| record.records.iter())
+                .map(|record| record.package_record.name.clone())
+                .collect();
+            let locked_records = existing_repodata_records
+                .records
+                .iter()
+                .filter_map(|record| {
+                    let record = record.as_binary()?;
+                    if source_package_records.contains(record.name()) {
+                        None
+                    } else {
+                        Some(record.clone())
+                    }
+                })
+                .collect();
+
             let mut records = lock_file::resolve_conda(
                 all_specs,
                 virtual_packages,
-                existing_repodata_records.records.clone(),
+                locked_records,
                 available_packages,
                 source_repodata,
                 channel_priority,
