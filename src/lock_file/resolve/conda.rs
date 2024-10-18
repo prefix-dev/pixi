@@ -18,19 +18,12 @@ use crate::{
 pub async fn resolve_conda(
     specs: Vec<MatchSpec>,
     virtual_packages: Vec<GenericVirtualPackage>,
-    locked_packages: Vec<PixiRecord>,
+    locked_packages: Vec<RepoDataRecord>,
     available_repodata: Vec<RepoData>,
     available_source_packages: Vec<SourceMetadata>,
     channel_priority: ChannelPriority,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
-        // Only use the binary packages as locked packages. Source records should be
-        // resolved again.
-        let locked_packages = locked_packages
-            .into_iter()
-            .filter_map(PixiRecord::into_binary)
-            .collect();
-
         // Combine the repodata from the source packages and from registry channels.
         let mut url_to_source_package = HashMap::default();
         for source_metadata in available_source_packages {
