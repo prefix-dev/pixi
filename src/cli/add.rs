@@ -387,6 +387,7 @@ fn update_conda_specs_from_lock_file(
         // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
         // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
         if name.as_normalized() == "python" && pinning_strategy.is_none() {
+            tracing::debug!("Pinning python to minor version by default");
             pinning_strategy = Some(PinningStrategy::Minor);
         }
 
