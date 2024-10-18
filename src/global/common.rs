@@ -1,4 +1,5 @@
 use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
+use console::StyledObject;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
@@ -195,6 +196,63 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NotChangedReason {
+    AlreadyInstalled,
+}
+
+impl std::fmt::Display for NotChangedReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NotChangedReason::AlreadyInstalled => write!(f, "already installed"),
+        }
+    }
+}
+
+impl NotChangedReason {
+    /// Returns the name of the environment.
+    pub fn as_str(&self) -> &str {
+        match self {
+            NotChangedReason::AlreadyInstalled => "already installed",
+        }
+    }
+}
+
+impl FancyDisplay for NotChangedReason {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        console::style(self.as_str()).cyan()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EnvState {
+    Installed,
+    NotChanged(NotChangedReason),
+}
+
+impl EnvState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            EnvState::Installed => "installed",
+            EnvState::NotChanged(reason) => reason.as_str(),
+        }
+    }
+}
+
+impl FancyDisplay for EnvState {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        match self {
+            EnvState::Installed => console::style(self.as_str()).green(),
+            EnvState::NotChanged(ref reason) => reason.fancy_display(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct EnvChanges {
+    pub changes: HashMap<EnvironmentName, EnvState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
     AddedExposed(ExposedName),
@@ -220,6 +278,7 @@ impl StateChanges {
         }
     }
 
+    /// Checks if there are any changes in the state.
     pub(crate) fn has_changed(&self) -> bool {
         !self.changes.values().all(Vec::is_empty)
     }
@@ -273,12 +332,9 @@ impl StateChanges {
         self.prune();
 
         for (env_name, changes_for_env) in &self.changes {
+            // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
-                eprintln!(
-                    "{}The environment {} was already up-to-date",
-                    console::style(console::Emoji("✔ ", "")).green(),
-                    env_name.fancy_display()
-                );
+                continue;
             }
 
             let mut iter = changes_for_env.iter().peekable();
