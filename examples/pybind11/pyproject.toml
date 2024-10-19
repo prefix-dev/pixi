@@ -1,0 +1,36 @@
+[build-system]
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "mysum"
+version = "0.1.0"
+description = "A simple pybind11 example"
+
+[tool.scikit-build]
+cmake.args = ["-DCMAKE_BUILD_TYPE=Release"]
+cmake.source-dir = "."
+wheel.packages = ["mysum"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+pybind11 = ">=2.13.6,<3"
+
+[tool.pixi.feature.build.dependencies]
+cmake = ">=3.30.5,<4"
+make = ">=4.4.1,<5"
+ninja = ">=1.12.1,<2"
+cxx-compiler = ">=1.8.0,<2"
+scikit-build-core = ">=0.10.7,<0.11"
+
+[tool.pixi.feature.build.pypi-dependencies]
+build = ">=1.2.2.post1,<2"
+
+[tool.pixi.feature.build.tasks.build]
+cmd = ["python", "-m", "build"]
+
+[tool.pixi.environments]
+build = ["build"]
