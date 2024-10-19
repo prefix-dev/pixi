@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -10,10 +8,9 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self, common::NotChangedReason, list::list_global_environments, EnvChanges, EnvState,
-        EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges,
+        self, common::NotChangedReason, list::list_global_environments, project::ExposedType,
+        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
-    prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
 
@@ -190,41 +187,10 @@ async fn setup_environment(
     // Installing the environment to be able to find the bin paths later
     project.install_environment(env_name).await?;
 
-    // Cleanup removed executables
-    state_changes |= project.remove_broken_expose_names(env_name).await?;
+    // Sync exposed binaries
+    let expose_type = ExposedType::from_mappings(args.expose.clone());
 
-    if args.expose.is_empty() {
-        // Add the expose binaries for all the packages that were requested to the manifest
-        for (package_name, _spec) in &specs {
-            let prefix = project.environment_prefix(env_name).await?;
-            let prefix_package = prefix.find_designated_package(package_name).await?;
-            let package_executables = prefix.find_executables(&[prefix_package]);
-            for (executable_name, _) in &package_executables {
-                let mapping = Mapping::new(
-                    ExposedName::from_str(executable_name)?,
-                    executable_name.clone(),
-                );
-                project.manifest.add_exposed_mapping(env_name, &mapping)?;
-            }
-            // If no executables were found, automatically expose the package name itself from the other packages.
-            // This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
-            if !package_executables
-                .iter()
-                .any(|(name, _)| name.as_str() == package_name.as_normalized())
-            {
-                if let Some((mapping, source_package_name)) =
-                    find_binary_by_name(&prefix, package_name).await?
-                {
-                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
-                    tracing::warn!(
-                        "Automatically exposed `{}` from `{}`",
-                        console::style(mapping.exposed_name()).yellow(),
-                        console::style(source_package_name.as_normalized()).green()
-                    );
-                }
-            }
-        }
-    }
+    project.sync_exposed_names(env_name, expose_type).await?;
 
     // Figure out added packages and their corresponding versions
     let specs = specs.values().cloned().collect_vec();
@@ -237,29 +203,4 @@ async fn setup_environment(
 
     project.manifest.save().await?;
     Ok(state_changes)
-}
-
-/// Finds the package name in the prefix and automatically exposes it if an executable is found.
-/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
-/// This function will return the mapping and the package name of the package in which the binary was found.
-async fn find_binary_by_name(
-    prefix: &Prefix,
-    package_name: &PackageName,
-) -> miette::Result<Option<(Mapping, PackageName)>> {
-    let installed_packages = prefix.find_installed_packages(None).await?;
-    for package in &installed_packages {
-        let executables = prefix.find_executables(&[package.clone()]);
-
-        // Check if any of the executables match the package name
-        if let Some(executable) = executables
-            .iter()
-            .find(|(name, _)| name.as_str() == package_name.as_normalized())
-        {
-            return Ok(Some((
-                Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone()),
-                package.repodata_record.package_record.name.clone(),
-            )));
-        }
-    }
-    Ok(None)
 }

@@ -468,6 +468,26 @@ impl FromStr for Mapping {
     }
 }
 
+#[derive(Default)]
+pub enum ExposedType {
+    #[default]
+    All,
+    Subset(Vec<Mapping>),
+}
+
+impl ExposedType {
+    pub fn from_mappings(mappings: Vec<Mapping>) -> Self {
+        match mappings.is_empty() {
+            true => Self::All,
+            false => Self::Subset(mappings),
+        }
+    }
+
+    pub fn subset() -> Self {
+        Self::Subset(Default::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
