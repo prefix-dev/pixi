@@ -153,9 +153,10 @@ jobs:
   # pixi interface
   test-integration:
     name: ${{ matrix.arch.name }} - Integration Tests
+    timeout-minutes: 30
     runs-on: ${{ matrix.arch.os }}
     env:
-      TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
+      TARGET_RELEASE: "${{ github.workspace }}/target-pixi/release"
     strategy:
       fail-fast: false
       matrix:
