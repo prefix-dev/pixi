@@ -12,13 +12,18 @@ use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
-    shell::{Shell, ShellEnum},
-};
+use rattler_shell::shell::{Shell, ShellEnum, ShellScript};
 use regex::Regex;
-use std::path::Path;
+use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{fs, path::Path};
+
+#[derive(Serialize, Debug)]
+struct ManifestMetadata {
+    pub exe: PathBuf,
+    pub path: String,
+    pub env: HashMap<String, String>,
+}
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -55,31 +60,6 @@ pub(crate) fn script_exec_mapping<'a>(
         })
 }
 
-/// Create the environment activation script
-pub(crate) fn create_activation_script(
-    prefix: &Prefix,
-    shell: ShellEnum,
-) -> miette::Result<String> {
-    let activator =
-        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
-    let result = activator
-        .activation(ActivationVariables {
-            conda_prefix: None,
-            path: None,
-            path_modification_behavior: PathModificationBehavior::Prepend,
-        })
-        .into_diagnostic()?;
-
-    // Add a shebang on unix based platforms
-    let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
-    } else {
-        result.script.contents().into_diagnostic()?
-    };
-
-    Ok(script)
-}
-
 /// Mapping from the global script location to an executable in a package
 /// environment .
 #[derive(Debug)]
@@ -103,7 +83,6 @@ pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     shell: &ShellEnum,
-    activation_script: String,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
     enum AddedOrChanged {
@@ -114,12 +93,39 @@ pub(crate) async fn create_executable_scripts(
 
     let mut state_changes = StateChanges::default();
 
+    let activation_variables = prefix.run_activation().await?;
+
     for ScriptExecMapping {
         global_script_path,
         original_executable,
     } in mapped_executables
     {
-        let mut script = activation_script.clone();
+        let metadata = ManifestMetadata {
+            exe: prefix.root().join(original_executable),
+            path: prefix
+                .root()
+                .join(original_executable.parent().unwrap())
+                .to_string_lossy()
+                .to_string(),
+            env: activation_variables.clone(),
+        };
+
+        let json_path = global_script_path.with_extension("json");
+        let file = fs_err::File::create(json_path).into_diagnostic()?;
+
+        serde_json::to_writer(file, &metadata).into_diagnostic()?;
+
+        fs::hard_link(
+            "/Users/wolfv/Programs/trampoline/target/release/trampoline",
+            global_script_path.with_extension("exe"),
+        )
+        .into_diagnostic()?;
+
+        let mut script = ShellScript::new(shell.clone(), Platform::current());
+        for (key, value) in activation_variables.iter() {
+            script.set_env_var(key, value).into_diagnostic()?;
+        }
+        let mut script = script.contents().into_diagnostic()?;
         shell
             .run_command(
                 &mut script,

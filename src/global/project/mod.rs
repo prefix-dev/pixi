@@ -3,9 +3,7 @@ use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateC
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
-use crate::global::install::{
-    create_activation_script, create_executable_scripts, script_exec_mapping,
-};
+use crate::global::install::{create_executable_scripts, script_exec_mapping};
 use crate::global::project::environment::environment_specs_in_sync;
 use crate::prefix::Executable;
 use crate::repodata::Repodata;
@@ -826,11 +824,6 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        // Construct the reusable activation script for the shell and generate an
-        // invocation script for each executable added by the package to the
-        // environment.
-        let activation_script = create_activation_script(&prefix, shell.clone())?;
-
         let prefix_records = &prefix.find_installed_packages(None).await?;
 
         let all_executables = &prefix.find_executables(prefix_records.as_slice());
@@ -869,14 +862,9 @@ impl Project {
             "Exposing executables for environment {}",
             env_name.fancy_display()
         );
-        state_changes |= create_executable_scripts(
-            &script_mapping,
-            &prefix,
-            &shell,
-            activation_script,
-            env_name,
-        )
-        .await?;
+
+        state_changes |=
+            create_executable_scripts(&script_mapping, &prefix, &shell, env_name).await?;
 
         Ok(state_changes)
     }
