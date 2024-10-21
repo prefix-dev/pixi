@@ -6,8 +6,8 @@ on:
       - 'crates/pixi_trampoline/**'
   workflow_dispatch:
   pull_request:
-    # paths:
-    #   - 'crates/pixi_trampoline/**'
+    paths:
+      - 'crates/pixi_trampoline/**'
 
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
@@ -20,11 +20,11 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}" }
+          - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: ubuntu-latest  }
           - { name: "Linux-aarch64", target: aarch64-unknown-linux-musl, os: ubuntu-latest }
           - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
-          - { name: "Windows", target: x86_64-pc-windows-msvc, os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}" }
+          - { name: "Windows", target: x86_64-pc-windows-msvc, os: windows-latest }
           - { name: "Windows-arm", target: aarch64-pc-windows-msvc, os: windows-latest }
 
     steps:
@@ -99,6 +99,5 @@ jobs:
           git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
           # Push changes to the branch that triggered the workflow
-          REPO_URL="https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
-          git push "$REPO_URL" HEAD:$BRANCH
+          git push origin HEAD:$BRANCH
