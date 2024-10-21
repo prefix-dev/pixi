@@ -1,4 +1,36 @@
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(env!("TRAMPOLINE_PATH"));
+#[cfg(target_arch = "aarch64")]
+#[cfg(target_os = "macos")]
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin");
+
+#[cfg(target_arch = "aarch64")]
+#[cfg(target_os = "windows")]
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-pc-windows-msvc.exe"
+);
+
+#[cfg(target_arch = "aarch64")]
+#[cfg(target_os = "linux")]
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-unknown-linux-musl"
+);
+
+#[cfg(target_arch = "x86_64")]
+#[cfg(target_os = "macos")]
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-apple-darwin");
+
+#[cfg(target_arch = "x86_64")]
+#[cfg(target_os = "windows")]
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe"
+);
+
+#[cfg(target_arch = "x86_64")]
+#[cfg(target_os = "linux")]
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
+);
 
 #[allow(dead_code)]
 pub struct Trampoline {
