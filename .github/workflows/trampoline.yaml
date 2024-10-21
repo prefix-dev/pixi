@@ -76,7 +76,7 @@ jobs:
         run: |
           mkdir -p trampolines
           # Iterate through all files in trampolines directory and its subdirectories
-          find trampolines-binaries -type f -executable -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
+          find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
 
       - name: Commit and push updated binaries
         run: |
