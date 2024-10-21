@@ -10,6 +10,8 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "*.md"
+permissions:
+  contents: write  # Allow write permissions for contents (like pushing to the repo)
 
 jobs:
   build:
