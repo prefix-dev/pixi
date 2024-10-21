@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: trampoline-${{ matrix.target }}
-          path: trampolines/
+          path: trampolines-binaries/
 
   aggregate:
     runs-on: ubuntu-latest
