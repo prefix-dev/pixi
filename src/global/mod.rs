@@ -2,7 +2,6 @@ pub(crate) mod common;
 pub(crate) mod install;
 pub(crate) mod list;
 pub(crate) mod project;
-pub(crate) mod trampoline;
 
 pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
 pub(crate) use install::extract_executable_from_script;
