@@ -1,3 +1,4 @@
+use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::serde_as;
@@ -47,6 +48,25 @@ impl UrlSpec {
             Err(self)
         } else {
             Ok(UrlSourceSpec {
+                url: self.url,
+                md5: self.md5,
+                sha256: self.sha256,
+            })
+        }
+    }
+
+    /// Converts this instance into a [`UrlSourceSpec`] if the URL points to a
+    /// source package. Or to a [`NamelessMatchSpec`] otherwise.
+    pub fn into_source_or_binary(self) -> Either<UrlSourceSpec, NamelessMatchSpec> {
+        if self.is_binary() {
+            Either::Right(NamelessMatchSpec {
+                url: Some(self.url),
+                md5: self.md5,
+                sha256: self.sha256,
+                ..NamelessMatchSpec::default()
+            })
+        } else {
+            Either::Left(UrlSourceSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,

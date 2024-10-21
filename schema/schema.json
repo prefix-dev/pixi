@@ -20,6 +20,10 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
+    "build": {
+      "$ref": "#/$defs/BuildSection",
+      "description": "The build section of the project"
+    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",
@@ -222,6 +226,35 @@
             "activate.sh",
             "activate.bat"
           ]
+        }
+      }
+    },
+    "BuildSection": {
+      "title": "BuildSection",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-backend": {
+          "title": "Build-Backend",
+          "description": "The build executable to call",
+          "type": "string",
+          "minLength": 1
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "The dependencies for the build backend",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
         }
       }
     },

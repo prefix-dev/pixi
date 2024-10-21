@@ -9,21 +9,30 @@ use std::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use futures::{stream, StreamExt, TryStreamExt};
+use indicatif::ProgressBar;
+use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, WrapErr};
+use parking_lot::Mutex;
+use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_record::PixiRecord;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tokio::sync::Semaphore;
+use url::Url;
 
 use crate::{
+    build::{BuildContext, BuildReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},
     prefix::Prefix,
@@ -293,7 +302,7 @@ pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
     _platform: Platform,
-    conda_records: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
@@ -359,7 +368,7 @@ pub async fn update_prefix_pypi(
             install_pypi::update_python_distributions(
                 lock_file_dir,
                 prefix,
-                conda_records,
+                pixi_records,
                 pypi_records,
                 &python_info.path,
                 system_requirements,
@@ -482,6 +491,113 @@ impl PythonStatus {
     }
 }
 
+struct CondaBuildProgress {
+    main_progress: ProgressBar,
+    build_progress: Mutex<Vec<(String, ProgressBar)>>,
+}
+
+impl CondaBuildProgress {
+    fn new(num_packages: u64) -> Self {
+        // Create a new progress bar.
+        let pb = ProgressBar::hidden();
+        pb.set_length(num_packages);
+        let pb = pixi_progress::global_multi_progress().add(pb);
+        pb.set_style(pixi_progress::default_progress_style());
+        // Building the package
+        pb.set_prefix("building packages");
+        pb.enable_steady_tick(Duration::from_millis(100));
+
+        Self {
+            main_progress: pb,
+            build_progress: Mutex::new(Vec::default()),
+        }
+    }
+}
+
+impl CondaBuildProgress {
+    /// Associate a progress bar with a build identifier, and get a build id back
+    pub fn associate(&self, identifier: &str) -> usize {
+        let mut locked = self.build_progress.lock();
+        let after = if locked.is_empty() {
+            &self.main_progress
+        } else {
+            &locked.last().unwrap().1
+        };
+
+        let pb = pixi_progress::global_multi_progress().insert_after(after, ProgressBar::hidden());
+
+        locked.push((identifier.to_owned(), pb));
+        locked.len() - 1
+    }
+
+    pub fn end_progress_for(&self, build_id: usize, alternative_message: Option<String>) {
+        self.main_progress.inc(1);
+        if self.main_progress.position()
+            == self
+                .main_progress
+                .length()
+                .expect("expected length to be set for progress")
+        {
+            self.main_progress.finish_and_clear();
+            // Clear all the build progress bars
+            for (_, pb) in self.build_progress.lock().iter() {
+                pb.finish_and_clear();
+            }
+            return;
+        }
+        let locked = self.build_progress.lock();
+
+        // Finish the build progress bar
+        let (identifier, pb) = locked.get(build_id).unwrap();
+        // If there is an alternative message, use that
+        let msg = if let Some(msg) = alternative_message {
+            pb.set_style(indicatif::ProgressStyle::with_template("    {msg}").unwrap());
+            msg
+        } else {
+            // Otherwise show the default message
+            pb.set_style(
+                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}").unwrap(),
+            );
+            "built".to_string()
+        };
+        pb.finish_with_message(format!("✔ {msg}: {identifier}"));
+    }
+}
+
+impl CondaBuildReporter for CondaBuildProgress {
+    fn on_build_start(&self, build_id: usize) -> usize {
+        // Actually show the progress
+        let locked = self.build_progress.lock();
+        let (identifier, pb) = locked.get(build_id).unwrap();
+        let template =
+            indicatif::ProgressStyle::with_template("    {spinner:.green} {msg} {elapsed}")
+                .unwrap();
+        pb.set_style(template);
+        pb.set_message(format!("building {identifier}"));
+        pb.enable_steady_tick(Duration::from_millis(100));
+        // We keep operation and build id the same
+        build_id
+    }
+
+    fn on_build_end(&self, operation: usize) {
+        self.end_progress_for(operation, None);
+    }
+
+    fn on_build_output(&self, _operation: usize, line: String) {
+        self.main_progress.suspend(|| eprintln!("{}", line));
+    }
+}
+
+impl BuildReporter for CondaBuildProgress {
+    fn on_build_cached(&self, build_id: usize) {
+        self.end_progress_for(build_id, Some("cached".to_string()));
+    }
+
+    fn as_conda_build_reporter(self: Arc<Self>) -> Arc<dyn CondaBuildReporter> {
+        self.clone()
+    }
+}
+
 /// Updates the environment to contain the packages from the specified lock-file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
@@ -489,14 +605,61 @@ pub async fn update_prefix_conda(
     package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
-    repodata_records: Vec<RepoDataRecord>,
+    pixi_records: Vec<PixiRecord>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    channels: Vec<Url>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
+    build_context: BuildContext,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
+
+    let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
+        .into_iter()
+        .partition_map(|record| match record {
+            PixiRecord::Binary(record) => Either::Left(record),
+            PixiRecord::Source(record) => Either::Right(record),
+        });
+
+    let mut progress_reporter = None;
+    let source_records_length = source_records.len();
+    // Build conda packages out of the source records
+    let mut processed_source_packages = stream::iter(source_records)
+        .map(Ok)
+        .and_then(|record| {
+            // If we don't have a progress reporter, create one
+            // This is done so that the progress bars are not displayed if there are no source packages
+            let progress_reporter = progress_reporter
+                .get_or_insert_with(|| {
+                    Arc::new(CondaBuildProgress::new(source_records_length as u64))
+                })
+                .clone();
+            let build_id = progress_reporter.associate(record.package_record.name.as_source());
+            let build_context = &build_context;
+            let channels = &channels;
+            let virtual_packages = &virtual_packages;
+            async move {
+                build_context
+                    .build_source_record(
+                        &record,
+                        channels,
+                        platform,
+                        virtual_packages.clone(),
+                        virtual_packages.clone(),
+                        progress_reporter.clone(),
+                        build_id,
+                    )
+                    .await
+            }
+        })
+        .try_collect::<Vec<RepoDataRecord>>()
+        .await?;
+
+    // Extend the repodata records with the built packages
+    repodata_records.append(&mut processed_source_packages);
 
     // Execute the operations that are returned by the solver.
     let result = await_in_progress(

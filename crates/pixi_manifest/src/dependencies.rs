@@ -72,6 +72,16 @@ where
     }
 }
 
+impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> FromIterator<(N, D)> for Dependencies<N, D> {
+    fn from_iter<T: IntoIterator<Item = (N, D)>>(iter: T) -> Self {
+        let mut deps = Dependencies::default();
+        for (name, spec) in iter {
+            deps.insert(name, spec);
+        }
+        deps
+    }
+}
+
 impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
     /// Adds a requirement to the list of dependencies.
     pub fn insert(&mut self, name: N, spec: D) {

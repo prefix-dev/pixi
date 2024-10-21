@@ -6,6 +6,9 @@ use std::{
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, Config, ConfigCli};
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -15,12 +18,8 @@ use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::prefix::Prefix;
-use pixi_config::{self, Config, ConfigCli};
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
-
 use super::cli_config::ChannelsConfig;
+use crate::prefix::Prefix;
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug, Default)]
@@ -181,9 +180,9 @@ pub async fn create_exec_prefix(
             .recursive(true)
             .execute()
             .await
+            .into_diagnostic()
     })
     .await
-    .into_diagnostic()
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform

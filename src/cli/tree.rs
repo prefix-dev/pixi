@@ -1,5 +1,7 @@
-use std::collections::HashMap;
-use std::io::{StdoutLock, Write};
+use std::{
+    collections::HashMap,
+    io::{StdoutLock, Write},
+};
 
 use ahash::{HashSet, HashSetExt};
 use clap::Parser;
@@ -7,7 +9,7 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use rattler_conda_types::Platform;
 use regex::Regex;
 
@@ -421,7 +423,7 @@ fn direct_dependencies(
     dep_map: &HashMap<String, Package>,
 ) -> HashSet<String> {
     let mut project_dependency_names = environment
-        .dependencies(None, Some(*platform))
+        .environment_dependencies(Some(*platform))
         .names()
         .filter(|p| {
             if let Some(value) = dep_map.get(p.as_source()) {
@@ -500,16 +502,14 @@ fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> 
     } else if let Some(pypi_package) = package.as_pypi() {
         // Extract name
         let name = pypi_package
-            .data()
-            .package
+            .package_data()
             .name
             .as_dist_info_name()
             .into_owned();
 
         // Extract dependencies
         let dependencies = pypi_package
-            .data()
-            .package
+            .package_data()
             .requires_dist
             .iter()
             .filter_map(|p| {

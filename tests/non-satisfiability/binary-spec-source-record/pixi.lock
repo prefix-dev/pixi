@@ -1,0 +1,60 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/vc-14.3-ha32ba9b_22.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.40.33810-hcc2c482_22.conda
+      - conda: source
+packages:
+- conda: source
+  name: source
+  version: 0.1.0
+  build: hbf21a9e_0
+  subdir: win-64
+  depends:
+  - vc >=14.1,<15
+  - vc14_runtime >=14.16.27033
+  input:
+    hash: a3c04eab345d02c20c544f694526f0ed92e07d7b0ebfe0f55ad5e6b752259223
+    globs:
+    - pixi.toml
+- conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
+  sha256: db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450
+  md5: 6797b005cd0f439c4c5c9ac565783700
+  constrains:
+  - vs2015_runtime >=14.29.30037
+  arch: x86_64
+  platform: win
+  license: LicenseRef-MicrosoftWindowsSDK10
+  size: 559710
+  timestamp: 1728377334097
+- conda: https://conda.anaconda.org/conda-forge/win-64/vc-14.3-ha32ba9b_22.conda
+  sha256: 2a47c5bd8bec045959afada7063feacd074ad66b170c1ea92dd139b389fcf8fd
+  md5: 311c9ba1dfdd2895a8cb08346ff26259
+  depends:
+  - vc14_runtime >=14.38.33135
+  arch: x86_64
+  platform: win
+  track_features:
+  - vc14
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 17447
+  timestamp: 1728400826998
+- conda: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.40.33810-hcc2c482_22.conda
+  sha256: 4c669c65007f88a7cdd560192f7e6d5679d191ac71610db724e18b2410964d64
+  md5: ce23a4b980ee0556a118ed96550ff3f3
+  depends:
+  - ucrt >=10.0.20348.0
+  constrains:
+  - vs2015_runtime 14.40.33810.* *_22
+  arch: x86_64
+  platform: win
+  license: LicenseRef-MicrosoftVisualCpp2015-2022Runtime
+  license_family: Proprietary
+  size: 750719
+  timestamp: 1728401055788

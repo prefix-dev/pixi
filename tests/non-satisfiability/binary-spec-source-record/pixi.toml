@@ -1,0 +1,7 @@
+[project]
+channels = ["conda-forge"]
+name = "binary-spec-source-record"
+platforms = ["win-64"]
+
+[dependencies]
+source = "*"

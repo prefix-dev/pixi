@@ -51,7 +51,7 @@ impl EnvironmentHash {
         if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
             if let Some(packages) = env.packages(run_environment.best_platform()) {
                 for package in packages {
-                    urls.push(package.url_or_path().into_owned().to_string())
+                    urls.push(package.location().to_string())
                 }
             }
         }

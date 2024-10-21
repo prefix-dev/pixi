@@ -1,0 +1,8 @@
+[project]
+channels = ["conda-forge"]
+name = "child-package"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[dependencies]
+extra-dependency = "*"
