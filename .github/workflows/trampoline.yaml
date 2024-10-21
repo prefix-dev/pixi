@@ -6,8 +6,8 @@ on:
       - 'crates/pixi_trampoline/**'
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'crates/pixi_trampoline/**'
+    # paths:
+    #   - 'crates/pixi_trampoline/**'
 
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
@@ -91,7 +91,7 @@ jobs:
 
       - name: Commit and push updated binaries
         # Don't run on forks
-        if: github.repository == 'prefix-dev/pixi'
+        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'reaf/heads')
         run: |
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
