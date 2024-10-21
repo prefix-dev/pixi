@@ -1,7 +1,7 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{BinDir, StateChange},
-    prefix::Prefix,
+    prefix::{Executable, Prefix},
 };
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
@@ -36,21 +36,21 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 pub(crate) fn script_exec_mapping<'a>(
     exposed_name: &ExposedName,
     entry_point: &str,
-    mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
+    mut executables: impl Iterator<Item = &'a Executable>,
     bin_dir: &BinDir,
     env_dir: &EnvDir,
 ) -> miette::Result<ScriptExecMapping> {
     executables
-        .find(|(executable_name, _)| *executable_name == entry_point)
-        .map(|(_, executable_path)| ScriptExecMapping {
+        .find(|executable| executable.name == entry_point)
+        .map(|executable| ScriptExecMapping {
             global_script_path: bin_dir.executable_script_path(exposed_name),
-            original_executable: executable_path.clone(),
+            original_executable: executable.path.clone(),
         })
         .ok_or_else(|| {
             miette::miette!(
                 "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
                 env_dir.path().display(),
-                executables.map(|(name, _)| name).collect_vec()
+                executables.map(|exec| exec.name.clone()).collect_vec()
             )
         })
 }
@@ -352,7 +352,7 @@ pub(crate) fn local_environment_matches_spec(
 pub async fn find_binary_by_name(
     prefix: &Prefix,
     package_name: &PackageName,
-) -> miette::Result<Option<(String, PathBuf)>> {
+) -> miette::Result<Option<Executable>> {
     let installed_packages = prefix.find_installed_packages(None).await?;
     for package in &installed_packages {
         let executables = prefix.find_executables(&[package.clone()]);
@@ -360,7 +360,7 @@ pub async fn find_binary_by_name(
         // Check if any of the executables match the package name
         if let Some(executable) = executables
             .iter()
-            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+            .find(|executable| executable.name.as_str() == package_name.as_normalized())
         {
             return Ok(Some(executable.clone()));
         }

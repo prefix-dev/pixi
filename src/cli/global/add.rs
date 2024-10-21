@@ -75,7 +75,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         state_changes |= project.sync_environment(env_name).await?;
 
         // Figure out added packages and their corresponding versions
-        state_changes |= project.added_packages(specs, env_name).await?;
+        state_changes |= project.added_packages(specs.as_ref(), env_name).await?;
 
         project.manifest.save().await?;
 

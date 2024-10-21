@@ -807,7 +807,7 @@ def test_install_expose_multiple_packages(pixi: Path, tmp_path: Path, dummy_chan
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Can't add exposed mappings for more than one environment",
+        stderr_contains="Can't add exposed mappings with `--exposed` for more than one environment",
     )
 
     # But it does work with multiple packages and a single environment
