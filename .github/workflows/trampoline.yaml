@@ -12,6 +12,7 @@ on:
       - "*.md"
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
+  pull-requests: write
 
 jobs:
   build:
