@@ -39,7 +39,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Build trampoline binary
-        run: cd crates/pixi_trampoline && cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --package pixi_trampoline
 
       - name: Move trampoline binary on windows
         if: startsWith(matrix.name, 'Windows')
