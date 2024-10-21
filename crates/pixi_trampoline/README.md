@@ -17,4 +17,6 @@ This is the configuration used by trampoline to set the env variables, and run t
 ```
 
 # How to build it?
-It will be built automatically when you run `cargo build`  on pixi by using `build.rs`.
+You can use `trampoline.yaml` workflow to build the binary for all the platforms and architectures supported by pixi.
+If running it manually from forked repo, you can download and commit artifacts to your branch.
+If running it manually or triggered by changes in `crates/pixi_trampoline` from the main repo, they will be automatically committed to the branch.
