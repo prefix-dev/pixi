@@ -66,10 +66,10 @@ fn main() -> () {
 
     #[cfg(target_os = "windows")]
     {
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().expect("process spawn should succeed");
 
         // Wait for the child process to complete
-        let status = child.wait()?;
+        let status = child.wait().expect("failed to wait on child");
 
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
