@@ -1,0 +1,29 @@
+[package]
+authors.workspace = true
+description = "Trampoline binary that is used to run binaries instaled by pixi global"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_trampoline"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[profile.release]
+# Enable Link Time Optimization.
+lto = true
+# Reduce number of codegen units to increase optimizations.
+codegen-units = 1
+# Optimize for size.
+opt-level = "z"
+# Abort on panic.
+panic = "abort"
+# Automatically strip symbols from the binary.
+debug = false
+strip = true
+
+
+[dependencies]
+ctrlc = "3.4"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
