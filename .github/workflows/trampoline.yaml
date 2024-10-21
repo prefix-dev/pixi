@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
 
@@ -64,7 +64,7 @@ jobs:
     needs: build  # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Download all binaries
         uses: actions/download-artifact@v3
@@ -99,7 +99,6 @@ jobs:
           git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
           # Push changes to the branch that triggered the workflow
-          echo $GITHUB_REF
           REPO_URL="https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
           git push "$REPO_URL" HEAD:$BRANCH
