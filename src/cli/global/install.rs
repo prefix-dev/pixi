@@ -177,7 +177,7 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for spec in specs {
+    for spec in specs.iter().chain(&args.with) {
         project.manifest.add_dependency(
             env_name,
             spec,

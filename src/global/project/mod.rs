@@ -701,14 +701,14 @@ impl Project {
                 }
             }
             ExposedType::Filter(filter) => {
-                // Add new binaries that are not yet exposed and that come from one of the packages we filter on
+                // Add new binaries that are not yet exposed and that don't come from one of the packages we filter on
                 let executable_names = env_executables
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
                         if filter.contains(&package_name) {
-                            Some(executable)
-                        } else {
                             None
+                        } else {
+                            Some(executable)
                         }
                     })
                     .flatten()
