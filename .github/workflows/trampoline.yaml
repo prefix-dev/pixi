@@ -6,10 +6,9 @@ on:
       - 'crates/pixi_trampoline/**'
   workflow_dispatch:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "*.md"
+    paths:
+      - 'crates/pixi_trampoline/**'
+
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
   pull-requests: write
