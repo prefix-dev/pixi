@@ -1196,15 +1196,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#azure-devops" class="md-nav__link">
-    <span class="md-ellipsis">
-      Azure DevOps
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#netrc-file" class="md-nav__link">
     <span class="md-ellipsis">
       .netrc file
@@ -1681,15 +1672,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#azure-devops" class="md-nav__link">
-    <span class="md-ellipsis">
-      Azure DevOps
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#netrc-file" class="md-nav__link">
     <span class="md-ellipsis">
       .netrc file
@@ -1802,78 +1784,64 @@ When this environment variable is set, it provides the only source of authentica
 </ol>
 <p>We want to add more methods in the future, so if you have a specific method you would like to see, please let us know.</p>
 <h3 id="keyring-authentication">Keyring authentication<a class="headerlink" href="#keyring-authentication" title="Permanent link">#</a></h3>
-<p>Currently, pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.
-To enable this use the CLI flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># From an existing pixi project</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
-</span></code></pre></div>
-<p>This option can also be set in the global configuration file under <a href="../../reference/pixi_configuration/#pypi-configuration">pypi-config</a>.</p>
+<p>Currently, pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.</p>
 <h4 id="installing-keyring">Installing keyring<a class="headerlink" href="#installing-keyring" title="Permanent link">#</a></h4>
 <p>To install keyring you can use pixi global install:</p>
-<p>Either use:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Basic Auth</label><label for="__tabbed_1_2">Google Artifact Registry</label><label for="__tabbed_1_3">Azure DevOps Artifacts</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
 </span></code></pre></div>
-<details class="warning">
-<summary>GCP and other backends</summary>
-<p>The downside of this method is currently, because you cannot inject into a pixi global environment just yet, that installing different keyring backends is not possible. This allows only the default keyring backend to be used.
-Give the <a href="https://github.com/prefix-dev/pixi/issues/342">issue</a> a 👍 up if you would like to see inject as a feature.</p>
-</details>
-<p>Or alternatively, you can install keyring using pipx:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Install pipx if you haven&#39;t already</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pipx
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>pipx<span class="w"> </span>install<span class="w"> </span>keyring
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># For Google Artifact Registry, also install and initialize its keyring backend.</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Inject this into the pipx environment</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>pipx<span class="w"> </span>inject<span class="w"> </span>keyring<span class="w"> </span>keyrings.google-artifactregistry-auth<span class="w"> </span>--index-url<span class="w"> </span>https://pypi.org/simple
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>gcloud<span class="w"> </span>auth<span class="w"> </span>login
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>keyring<span class="w"> </span>keyring<span class="w"> </span>keyrings.google-artifactregistry-auth
 </span></code></pre></div>
-<h4 id="using-keyring-with-basic-auth">Using keyring with Basic Auth<a class="headerlink" href="#using-keyring-with-basic-auth" title="Permanent link">#</a></h4>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>keyring<span class="w"> </span>keyring<span class="w"> </span>keyring.artifacts
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>For other registries, you will need to adapt these instructions to add the right keyring backend.</p>
+<h4 id="configuring-your-project-to-use-keyring">Configuring your project to use keyring<a class="headerlink" href="#configuring-your-project-to-use-keyring" title="Permanent link">#</a></h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Basic Auth</label><label for="__tabbed_2_2">Google Artifact Registry</label><label for="__tabbed_2_3">Azure DevOps Artifacts</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
 <p>Use keyring to store your credentials e.g:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># prompt will appear for your password</span>
 </span></code></pre></div>
-<h5 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">#</a></h5>
-<p>Make sure to include <code>username@</code> in the URL of the registry.
-An example of this would be:</p>
+<p>Add the following configuration to your pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://username@custom-registry.com/simple&quot;</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
 </span></code></pre></div>
-<h4 id="gcp">GCP<a class="headerlink" href="#gcp" title="Permanent link">#</a></h4>
-<p>For Google Artifact Registry, you can use the Google Cloud SDK to authenticate.
-Make sure to have run <code>gcloud auth login</code> before using pixi.
-Another thing to note is that you need to add <code>oauth2accesstoken</code> to the URL of the registry.
-An example of this would be:</p>
-<h5 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">#</a></h5>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># rest of the pixi.toml</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1">#</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Add&#39;s the following options to the default feature</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
+</div>
+<div class="tabbed-block">
+<p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your pixi manifest:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Include the <code>/simple</code> at the end, replace the <code>&lt;location&gt;</code> etc. with your project and repository and location.</p>
-</div>
 <p>To find this URL more easily, you can use the <code>gcloud</code> command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
 </span></code></pre></div>
-<h3 id="azure-devops">Azure DevOps<a class="headerlink" href="#azure-devops" title="Permanent link">#</a></h3>
-<p>Similarly for Azure DevOps, you can use the Azure keyring backend for authentication.
-The backend, along with installation instructions can be found at <a href="https://github.com/jslorrma/keyrings.artifacts">keyring.artifacts</a>.</p>
-<p>After following the instructions and making sure that keyring works correctly, you can use the following configuration:</p>
-<h5 id="configuration_2">Configuration<a class="headerlink" href="#configuration_2" title="Permanent link">#</a></h5>
-<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># rest of the pixi.toml</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1">#</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Adds the following options to the default feature</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
+</div>
+</div>
+<div class="tabbed-block">
+<p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyring.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your pixi manifest:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-This should allow for getting packages from the Azure DevOps artifact registry.</p>
+</div>
+</div>
+</div>
 <h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
-<p>To actually install either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
-</span></code></pre></div></p>
+<p>Either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># From an existing pixi project</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
+</span></code></pre></div>
 <h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
 <p><code>pixi</code> allows you to access private registries securely by authenticating with credentials stored in a <code>.netrc</code> file.</p>
 <ul>
