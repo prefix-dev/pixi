@@ -64,15 +64,11 @@ search = "Version: v{current_version}"
 src = "install/install.ps1"
 
 [[file]]
-search = "version {current_version}"
-src = "src/cli/mod.rs"
-
-[[file]]
 search = "PIXI_VERSION = \"{current_version}\""
 src = "tests/integration/common.py"
 
 [[file]]
-search = "pub const PIXI_VERSION: &str = \"{current_version}\";"
+search = "None => \"{current_version}\","
 src = "crates/pixi_consts/src/consts.rs"
 
 [[field]]
