@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # Fetch full history so we have branch information
 
       - name: Set up Rust
         uses: taiki-e/setup-cross-toolchain-action@v1
@@ -44,17 +46,7 @@ jobs:
           path: target/${{ matrix.target }}/release/pixi_trampoline
 
   aggregate:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}" }
-          - { name: "Linux-aarch64", target: aarch64-unknown-linux-musl, os: ubuntu-latest }
-          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
-          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
-          - { name: "Windows", target: x86_64-pc-windows-msvc, os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}" }
-          - { name: "Windows-arm", target: aarch64-pc-windows-msvc, os: windows-latest }
+    runs-on: ubuntu-latest
     needs: build  # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
@@ -63,8 +55,11 @@ jobs:
       - name: Download all binaries
         uses: actions/download-artifact@v3
         with:
-          name: trampoline-${{ matrix.target }}
+          name: '**'  # Download all artifacts, this works if each artifact has a unique name
           path: trampolines/
+
+      - name: List downloaded files
+        run: ls -R trampolines/
 
       - name: Commit and push updated binaries
         run: |
@@ -72,4 +67,6 @@ jobs:
           git config user.email "actions@github.com"
           git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
-          git push
+          # Push changes to the branch that triggered the workflow
+          BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
+          git push origin HEAD:$BRANCH
