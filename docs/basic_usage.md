@@ -86,7 +86,7 @@ pixi global install fish
 pixi global install rattler-build
 
 # Install a multi package environment
-pixi global install python jupyter numpy pandas --environment data-science-env --expose python --expose jupyter
+pixi global install --environment data-science-env --expose python --expose jupyter python jupyter numpy pandas
 ```
 
 ## Use pixi in GitHub Actions

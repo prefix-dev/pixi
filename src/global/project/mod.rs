@@ -7,6 +7,7 @@ use crate::global::install::{
     create_activation_script, create_executable_scripts, script_exec_mapping,
 };
 use crate::global::project::environment::environment_specs_in_sync;
+use crate::prefix::Executable;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
 use crate::{
@@ -610,7 +611,7 @@ impl Project {
     pub async fn executables(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<IndexMap<PackageName, Vec<(String, PathBuf)>>> {
+    ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
         let parsed_env = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -628,7 +629,7 @@ impl Project {
             // We need to search for it in different packages.
             if !package_executables
                 .iter()
-                .any(|(exec_name, _)| exec_name.as_str() == package_name.as_normalized())
+                .any(|executable| executable.name.as_str() == package_name.as_normalized())
             {
                 if let Some(exec) = find_binary_by_name(&prefix, package_name).await? {
                     package_executables.push(exec);
@@ -661,17 +662,15 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        // Find the exposed names that are no longer and remove them
+        // Find the exposed names that are no longer there and remove them
         let to_remove = environment
             .exposed
             .iter()
             .filter_map(|mapping| {
                 // If the executable is still requested, do not remove the mapping
-                if env_executables
-                    .values()
-                    .flatten()
-                    .any(|(_, path)| executable_from_path(path) == mapping.executable_name())
-                {
+                if env_executables.values().flatten().any(|executable| {
+                    executable_from_path(&executable.path) == mapping.executable_name()
+                }) {
                     tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
                     return None;
                 }
@@ -688,16 +687,42 @@ impl Project {
         // auto-expose the executables if necessary
         match expose_type {
             ExposedType::All => {
-                // Add new binaries that are not exposed
-                for (executable_name, _) in env_executables.values().flatten() {
+                // Add new binaries that are not yet exposed
+                let executable_names = env_executables
+                    .into_iter()
+                    .flat_map(|(_, executables)| executables)
+                    .map(|executable| executable.name);
+                for executable_name in executable_names {
                     let mapping = Mapping::new(
-                        ExposedName::from_str(executable_name)?,
+                        ExposedName::from_str(&executable_name)?,
                         executable_name.to_string(),
                     );
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
                 }
             }
-            ExposedType::Subset(mapping) => {
+            ExposedType::Filter(filter) => {
+                // Add new binaries that are not yet exposed and that don't come from one of the packages we filter on
+                let executable_names = env_executables
+                    .into_iter()
+                    .filter_map(|(package_name, executable)| {
+                        if filter.contains(&package_name) {
+                            None
+                        } else {
+                            Some(executable)
+                        }
+                    })
+                    .flatten()
+                    .map(|executable| executable.name);
+
+                for executable_name in executable_names {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(&executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            ExposedType::Mappings(mapping) => {
                 // Expose only the requested binaries
                 for mapping in mapping {
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
@@ -818,7 +843,7 @@ impl Project {
 
         let exposed_executables: Vec<_> = all_executables
             .iter()
-            .filter(|(name, _)| exposed.contains(name.as_str()))
+            .filter(|executable| exposed.contains(executable.name.as_str()))
             .cloned()
             .collect();
 

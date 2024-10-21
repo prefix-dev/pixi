@@ -1,3 +1,5 @@
+use crate::prefix::Executable;
+
 use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
 use ahash::HashSet;
 use console::StyledObject;
@@ -539,10 +541,13 @@ pub(crate) async fn get_expose_scripts_sync_status(
 
 /// Check if all binaries were exposed, or if the user selected a subset of them.
 pub fn check_all_exposed(
-    env_binaries: &IndexMap<PackageName, Vec<(String, PathBuf)>>,
+    env_binaries: &IndexMap<PackageName, Vec<Executable>>,
     exposed_mapping_binaries: &IndexSet<Mapping>,
 ) -> bool {
-    let mut env_binaries_names_iter = env_binaries.values().flatten().map(|(name, _)| name);
+    let mut env_binaries_names_iter = env_binaries
+        .values()
+        .flatten()
+        .map(|executable| executable.name.clone());
 
     let exposed_binaries_names: HashSet<&str> = exposed_mapping_binaries
         .iter()

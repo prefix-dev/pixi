@@ -12,7 +12,7 @@ use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
@@ -472,19 +472,25 @@ impl FromStr for Mapping {
 pub enum ExposedType {
     #[default]
     All,
-    Subset(Vec<Mapping>),
+    Filter(Vec<PackageName>),
+    Mappings(Vec<Mapping>),
 }
 
 impl ExposedType {
-    pub fn from_mappings(mappings: Vec<Mapping>) -> Self {
-        match mappings.is_empty() {
-            true => Self::All,
-            false => Self::Subset(mappings),
+    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
+        if !mappings.is_empty() {
+            return Self::Mappings(mappings);
+        }
+
+        if filter.is_empty() {
+            Self::All
+        } else {
+            Self::Filter(filter)
         }
     }
 
     pub fn subset() -> Self {
-        Self::Subset(Default::default())
+        Self::Mappings(Default::default())
     }
 }
 
