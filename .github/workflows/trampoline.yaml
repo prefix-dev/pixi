@@ -30,9 +30,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Set up Rust
-        uses: actions-rs/toolchain@v1
+        uses: taiki-e/setup-cross-toolchain-action@v1
         with:
-          toolchain: stable
+          target: ${{ matrix.target }}
 
       - name: Build trampoline binary
         run: cargo build --release --target ${{ matrix.target }} --package pixi_trampoline
