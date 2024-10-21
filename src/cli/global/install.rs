@@ -17,8 +17,9 @@ use pixi_config::{self, Config, ConfigCli};
 ///
 /// Example:
 /// - pixi global install starship nushell ripgrep bat
-/// - pixi global install --environment science jupyter polars
+/// - pixi global install jupyter --with polars
 /// - pixi global install --expose python3.8=python python=3.8
+/// - pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {

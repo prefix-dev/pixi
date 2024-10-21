@@ -172,7 +172,7 @@ Creating two separate non-interfering environments, while exposing only the mini
 ### Example: Creating a Data Science Sandbox Environment
 You can create an environment with multiple tools using the following command:
 ```shell
-pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
+pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
 ```
 This command generates the following entry in the manifest:
 ```toml

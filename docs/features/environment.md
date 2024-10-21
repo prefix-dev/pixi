@@ -116,7 +116,8 @@ $ (default) which python
     Of course you can use `pixi` to install `direnv` globally. We recommend to run
 
     ```
-    pixi global install direnv```
+    pixi global install direnv
+    ```
 
     to install the latest version of `direnv` on your computer.
 

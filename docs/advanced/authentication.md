@@ -125,11 +125,11 @@ To install keyring you can use pixi global install:
     ```
 === "Google Artifact Registry"
     ```shell
-    pixi global install --environment keyring keyring keyrings.google-artifactregistry-auth
+    pixi global install keyring --with keyrings.google-artifactregistry-auth
     ```
 === "Azure DevOps Artifacts"
     ```shell
-    pixi global install --environment keyring keyring keyring.artifacts
+    pixi global install keyring --with keyring.artifacts
     ```
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
