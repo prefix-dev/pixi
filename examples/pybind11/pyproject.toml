@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "A simple pybind11 example"
 
 [tool.scikit-build]
-cmake.args = ["-DCMAKE_BUILD_TYPE=Release"]
 cmake.source-dir = "."
 wheel.packages = ["mysum"]
 
