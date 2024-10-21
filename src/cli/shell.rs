@@ -145,6 +145,9 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
+    const DONE_STR: &str = "=== DONE ===";
+    shell_script.echo(DONE_STR).into_diagnostic()?;
+
     temp_file
         .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
@@ -170,7 +173,7 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     let mut process = PtySession::new(command).into_diagnostic()?;
     process.send_line(source_command).into_diagnostic()?;
 
-    process.interact().into_diagnostic()
+    process.interact(Some(DONE_STR)).into_diagnostic()
 }
 
 /// Starts a nu shell.
