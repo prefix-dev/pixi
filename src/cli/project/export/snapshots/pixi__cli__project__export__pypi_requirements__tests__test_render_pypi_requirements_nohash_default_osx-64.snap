@@ -1,0 +1,7 @@
+---
+source: src/cli/project/export/pypi_requirements.rs
+expression: "fs::read_to_string(file_path).unwrap()"
+---
+https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl
+git+https://github.com/pallets/flask@2fec0b206c6e83ea813ab26597e15c96fab08be7
+git+https://github.com/psf/requests.git@0106aced5faa299e6ede89d1230bd6784f2c3660
