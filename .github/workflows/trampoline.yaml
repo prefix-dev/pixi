@@ -39,11 +39,16 @@ jobs:
       - name: Build trampoline binary
         run: cargo build --release --target ${{ matrix.target }} --package pixi_trampoline
 
+      - name: Move trampoline binary
+        run: |
+          mkdir -p trampolines
+          mv target/${{ matrix.target }}/release/pixi_trampoline trampolines/pixi-trampoline-${{ matrix.target }}
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v3
         with:
           name: trampoline-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/pixi_trampoline
+          path: trampolines/
 
   aggregate:
     runs-on: ubuntu-latest
@@ -55,11 +60,16 @@ jobs:
       - name: Download all binaries
         uses: actions/download-artifact@v3
         with:
-          name: '**'  # Download all artifacts, this works if each artifact has a unique name
           path: trampolines/
 
       - name: List downloaded files
         run: ls -R trampolines/
+
+      - name: Move trampolines
+        run: |
+          for artifact in trampolines/trampoline-*; do
+            mv "$artifact" trampolines/
+          done
 
       - name: Commit and push updated binaries
         run: |
