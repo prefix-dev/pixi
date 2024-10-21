@@ -58,7 +58,7 @@ jobs:
           path: trampolines/
 
   aggregate:
-    runs-on: ubuntu-latests
+    runs-on: ubuntu-latest
     needs: build  # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
