@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.34.0] - 2024-10-21
+#### ✨ Highlights
+
+- `pixi global install` now takes a flag `--with`, inspired by `uv tool install`. If you only want to add dependencies without exposing them, you can now run `pixi global install ipython --with numpy --with matplotlib`
+- Improved the output of `pixi global` subcommands
+- Many bug fixes
+
+#### Added
+
+- Add timeouts by @Hofer-Julian in [#2311](https://github.com/prefix-dev/pixi/pull/2311)
+
+
+#### Changed
+
+- Global update should add new executables by @nichmor in [#2298](https://github.com/prefix-dev/pixi/pull/2298)
+
+
+- Add `pixi global install --with` by @Hofer-Julian in [#2332](https://github.com/prefix-dev/pixi/pull/2332)
+
+
+#### Documentation
+
+- Document where `pixi-global.toml` can be found by @Hofer-Julian in [#2304](https://github.com/prefix-dev/pixi/pull/2304)
+
+
+- Add ros noetic example by @ruben-arts in [#2271](https://github.com/prefix-dev/pixi/pull/2271)
+
+
+- Add nichita and julian to CITATION.cff by @Hofer-Julian in [#2327](https://github.com/prefix-dev/pixi/pull/2327)
+
+
+- Improve keyring documentation to use pixi global by @olivier-lacroix in [#2318](https://github.com/prefix-dev/pixi/pull/2318)
+
+
+#### Fixed
+
+- `pixi global upgrade-all` error message by @Hofer-Julian in [#2296](https://github.com/prefix-dev/pixi/pull/2296)
+
+
+- Select correct run environment by @ruben-arts in [#2301](https://github.com/prefix-dev/pixi/pull/2301)
+
+
+- Adapt channels to work with newest rattler-build version by @Hofer-Julian in [#2306](https://github.com/prefix-dev/pixi/pull/2306)
+
+
+- Hide obsolete commands in help page of `pixi global` by @chawyehsu in [#2320](https://github.com/prefix-dev/pixi/pull/2320)
+
+
+- Typecheck all tests by @Hofer-Julian in [#2328](https://github.com/prefix-dev/pixi/pull/2328)
+
+
+#### Refactor
+
+- Improve upload errors by @ruben-arts in [#2303](https://github.com/prefix-dev/pixi/pull/2303)
+
+
+#### New Contributors
+* @gerlero made their first contribution in [#2300](https://github.com/prefix-dev/pixi/pull/2300)
+
 ### [0.33.0] - 2024-10-16
 #### ✨ Highlights
 

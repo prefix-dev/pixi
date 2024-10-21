@@ -89,15 +89,15 @@ typed-path = "0.9.1"
 
 # Rattler crates
 file_url = "0.1.4"
-rattler = { version = "0.27.15", default-features = false }
-rattler_cache = { version = "0.2.6", default-features = false }
-rattler_conda_types = { version = "0.28.2", default-features = false }
-rattler_digest = { version = "1.0.1", default-features = false }
-rattler_lock = { version = "0.22.27", default-features = false }
+rattler = { version = "0.27.16", default-features = false }
+rattler_cache = { version = "0.2.7", default-features = false }
+rattler_conda_types = { version = "0.28.3", default-features = false }
+rattler_digest = { version = "1.0.2", default-features = false }
+rattler_lock = { version = "0.22.28", default-features = false }
 rattler_networking = { version = "0.21.4", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.21.17", default-features = false }
+rattler_repodata_gateway = { version = "0.21.18", default-features = false }
 rattler_shell = { version = "0.22.4", default-features = false }
 rattler_solve = { version = "1.1.0", default-features = false }
 rattler_virtual_packages = { version = "1.1.7", default-features = false }
@@ -143,7 +143,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.33.0"
+version = "0.34.0"
 
 [features]
 default = ["rustls-tls"]
