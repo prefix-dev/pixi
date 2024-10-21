@@ -84,10 +84,12 @@ jobs:
 
       - name: Commit and push updated binaries
         run: |
+          # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
           # Push changes to the branch that triggered the workflow
+          REPO_URL="https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
-          git push origin HEAD:$BRANCH
+          git push "$REPO_URL" HEAD:$BRANCH
