@@ -75,7 +75,7 @@ jobs:
       - name: Move trampolines
         run: |
           for artifact in trampolines/trampoline-*; do
-            mv "$artifact" trampolines/
+            mv -f "$artifact" trampolines/
           done
 
       - name: Commit and push updated binaries
