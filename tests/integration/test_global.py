@@ -521,6 +521,24 @@ def test_install_with_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) ->
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
+    # Should fail, since two environments are created
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-b",
+            "--with",
+            "dummy-c",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Can't add packages with `--with` for more than one environment",
+    )
+
     verify_cli_command(
         [
             pixi,
