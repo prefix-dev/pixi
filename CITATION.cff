@@ -24,6 +24,12 @@ authors:
     name-particle: de
     family-names: Jager
     email: tdejager89@gmail.com
+  - given-names: Nichita
+    family-names: Morcotilo
+    email: nmorkotilo@gmail.com
+  - given-names: Julian
+    family-names: Hofer
+    email: julian.hofer@protonmail.com
 repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.33.0'
 url: 'https://pixi.sh/v0.33.0'
 abstract: >-
