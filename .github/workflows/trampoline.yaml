@@ -82,7 +82,17 @@ jobs:
           find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
           ls -R trampolines
 
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trampolines
+          path: trampolines/
+
+
+
       - name: Commit and push updated binaries
+        # Don't run on forks
+        if: github.repository == 'prefix-dev/pixi'
         run: |
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
