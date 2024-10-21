@@ -42,7 +42,7 @@ jobs:
       - name: Move trampoline binary on windows
         if: startsWith(matrix.name, 'Windows')
         run: |
-          mkdir -p trampolines
+          mkdir -p trampolines-binaries
           mv target/${{ matrix.target }}/release/pixi_trampoline.exe trampolines-binaries/pixi-trampoline-${{ matrix.target }}.exe
 
       - name: Move trampoline binary on unix
