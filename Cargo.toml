@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["crates/pixi_trampoline"]
 members = ["crates/*"]
 
 [workspace.package]

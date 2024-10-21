@@ -1,5 +1,6 @@
 [package]
 authors.workspace = true
+description = "Trampoline binary that is used to run binaries instaled by pixi global"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
