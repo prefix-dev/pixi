@@ -1,3 +1,4 @@
+use super::common::{get_install_changes, InstallChanges};
 use super::install::find_binary_by_name;
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
@@ -430,7 +431,7 @@ impl Project {
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<InstallChanges> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -512,7 +513,7 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
-        await_in_progress(
+        let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
                 env_name.fancy_display()
@@ -538,7 +539,7 @@ impl Project {
         .await
         .into_diagnostic()?;
 
-        Ok(())
+        Ok(get_install_changes(result.transaction))
     }
 
     /// Remove an environment from the manifest and the global installation.

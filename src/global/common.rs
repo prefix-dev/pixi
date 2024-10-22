@@ -13,8 +13,10 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
+use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
+    RepoDataRecord,
 };
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -255,6 +257,90 @@ impl FancyDisplay for EnvState {
 #[derive(Debug, Default)]
 pub(crate) struct EnvChanges {
     pub changes: HashMap<EnvironmentName, EnvState>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct InstallChanges {
+    pub changes: HashMap<PackageName, InstallChange>,
+}
+
+impl InstallChanges {
+    pub(crate) fn report_update_changes(
+        &self,
+        env_name: &EnvironmentName,
+        dependencies: Vec<PackageName>,
+    ) {
+        // Check if there are any changes
+        if self.changes.is_empty() {
+            eprintln!(
+                "{} Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display(),
+            );
+            return;
+        }
+
+        // Separate top-level and transitive changes
+        let mut top_level_changes = Vec::new();
+        let mut transitive_changes = Vec::new();
+
+        for (package_name, change) in &self.changes {
+            if dependencies.contains(package_name) && !change.is_transitive() {
+                top_level_changes.push(package_name);
+            } else if change.is_transitive() {
+                transitive_changes.push(package_name);
+            }
+        }
+
+        // Output messages based on the type of changes
+        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
+            eprintln!(
+                "{} Updated environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
+            eprintln!(
+                "{} Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() == 1 {
+            eprintln!(
+                "{} Updated package {} in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(top_level_changes[0].as_normalized()).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() > 1 {
+            eprintln!(
+                "{} Updated packages in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+            for package in top_level_changes {
+                println!("    - {}", console::style(package.as_normalized()).green());
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum InstallChange {
+    Installed,
+    Upgraded,
+    TransitiveUpgraded,
+    Reinstalled,
+    Removed,
+}
+
+impl InstallChange {
+    pub fn is_transitive(&self) -> bool {
+        match self {
+            InstallChange::TransitiveUpgraded => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -558,6 +644,54 @@ pub fn check_all_exposed(
         env_binaries_names_iter.all(|name| exposed_binaries_names.contains(&name.as_str()));
 
     auto_exposed
+}
+
+pub(crate) fn get_install_changes(
+    install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
+) -> InstallChanges {
+    let mut install_changes = InstallChanges::default();
+
+    for transaction in install_transaction.operations {
+        match transaction {
+            TransactionOperation::Install(package) => {
+                let pkg_name = package.package_record.name;
+
+                install_changes
+                    .changes
+                    .insert(pkg_name, InstallChange::Installed);
+            }
+            TransactionOperation::Change { old, new } => {
+                let old_pkg_version = old.repodata_record.package_record.version;
+                let new_pkg_version = new.package_record.version;
+
+                let pkg_name = new.package_record.name;
+
+                let same_base_version = old_pkg_version == new_pkg_version;
+
+                let change = if same_base_version {
+                    InstallChange::TransitiveUpgraded
+                } else {
+                    InstallChange::Upgraded
+                };
+
+                install_changes.changes.insert(pkg_name, change);
+            }
+            TransactionOperation::Reinstall(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                install_changes
+                    .changes
+                    .insert(pkg_name, InstallChange::Reinstalled);
+            }
+            TransactionOperation::Remove(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                install_changes
+                    .changes
+                    .insert(pkg_name, InstallChange::Removed);
+            }
+        }
+    }
+
+    install_changes
 }
 
 #[cfg(test)]
