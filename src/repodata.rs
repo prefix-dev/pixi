@@ -1,3 +1,4 @@
+use rattler::package_cache::PackageCache;
 use rattler_repodata_gateway::{ChannelConfig, Gateway};
 use std::path::PathBuf;
 
@@ -13,10 +14,13 @@ pub(crate) trait Repodata {
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
         });
 
+        let package_cache = PackageCache::new(cache_dir.join("pkgs"));
+
         // Construct the gateway
         Gateway::builder()
             .with_client(authenticated_client)
             .with_cache_dir(cache_dir.join(pixi_consts::consts::CONDA_REPODATA_CACHE_DIR))
+            .with_package_cache(package_cache)
             .with_channel_config(channel_config)
             .finish()
     }
