@@ -28,8 +28,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<InstallChanges> {
-        // let mut state_changes = StateChanges::default();
-
         // See what executables were installed prior to update
         let env_binaries = project.executables(env_name).await?;
 
@@ -70,7 +68,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Apply changes to each environment, only revert changes if an error occurs
     let mut last_updated_project = project_original;
-    // let mut state_changes = StateChanges::default();
+
     for env_name in env_names {
         let mut project = last_updated_project.clone();
         let dependencies = project
@@ -82,7 +80,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect_vec();
 
         match apply_changes(&env_name, &mut project).await {
-            Ok(ic) => ic.report_update_changes(&env_name, dependencies),
+            Ok(ic) => ic.report_update_changes(&env_name, &dependencies),
             Err(err) => {
                 revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);

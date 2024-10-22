@@ -268,7 +268,7 @@ impl InstallChanges {
     pub(crate) fn report_update_changes(
         &self,
         env_name: &EnvironmentName,
-        dependencies: Vec<PackageName>,
+        dependencies: &[PackageName],
     ) {
         // Check if there are any changes
         if self.changes.is_empty() {
@@ -285,7 +285,7 @@ impl InstallChanges {
         let mut transitive_changes = Vec::new();
 
         for (package_name, change) in &self.changes {
-            if dependencies.contains(package_name) && !change.is_transitive() {
+            if dependencies.contains(&package_name) && !change.is_transitive() {
                 top_level_changes.push(package_name);
             } else if change.is_transitive() {
                 transitive_changes.push(package_name);
