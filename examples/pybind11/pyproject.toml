@@ -37,10 +37,10 @@ ninja = ">=1.12.1,<2"
 scikit-build-core = ">=0.10.7,<0.11"
 
 [tool.pixi.feature.build.pypi-dependencies]
-build = ">=1.2.2.post1,<2"
+uv = ">=0.4.25,<0.5"
 
 [tool.pixi.feature.build.tasks.build]
-cmd = ["python", "-m", "build"]
+cmd = ["python", "-m", "uv", "build"]
 
 [tool.pixi.environments]
 build = ["build"]
