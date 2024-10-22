@@ -82,7 +82,7 @@ def run_test_in_subfolders(
     return results
 
 
-def print_summary(results: Results, pixi_exec: Path):
+def print_summary(results: Results, pixi_exec: Path) -> None:
     summary_text = f"║ ✅ {len(results.succeeded):<10} 🚀 {len(results.installed):<10} ❌ {len(results.failed):<10} 🤷 {len(results.skipped):<10} ║"
 
     # Calculate the actual length of the line, considering the emojis as single characters

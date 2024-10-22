@@ -32,6 +32,13 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # Typecheck python tests
+      - id: typecheck-tests
+        name: typecheck-tests
+        entry: pixi run typecheck-tests
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
       # typos
       - id: typos
         name: typos

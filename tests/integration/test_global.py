@@ -511,6 +511,160 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
     assert actual_manifest == expected_manifest
 
 
+def test_install_with_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
+
+    # Should fail, since two environments are created
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-b",
+            "--with",
+            "dummy-c",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Can't add packages with `--with` for more than one environment",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "--with",
+            "dummy-b",
+            "--with",
+            "dummy-c",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*", dummy-c = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert not dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+
+def test_install_with_environment_no_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "dummy-a",
+            "--with",
+            "dummy-b",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert not dummy_b.is_file()
+
+
+def test_install_with_environment_and_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "--expose=dummy-b",
+            "dummy-a",
+            "--with",
+            "dummy-b",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert dummy_b.is_file()
+
+
 def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
@@ -807,7 +961,7 @@ def test_install_expose_multiple_packages(pixi: Path, tmp_path: Path, dummy_chan
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Can't add exposed mappings for more than one environment",
+        stderr_contains="Can't add exposed mappings with `--exposed` for more than one environment",
     )
 
     # But it does work with multiple packages and a single environment
