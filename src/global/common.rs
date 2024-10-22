@@ -16,7 +16,7 @@ use pixi_utils::executable_from_path;
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
-    RepoDataRecord,
+    RepoDataRecord, Version,
 };
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -285,10 +285,10 @@ impl InstallChanges {
         let mut transitive_changes = Vec::new();
 
         for (package_name, change) in &self.changes {
-            if dependencies.contains(&package_name) && !change.is_transitive() {
-                top_level_changes.push(package_name);
+            if dependencies.contains(package_name) && !change.is_transitive() {
+                top_level_changes.push((package_name, change));
             } else if change.is_transitive() {
-                transitive_changes.push(package_name);
+                transitive_changes.push((package_name, change));
             }
         }
 
@@ -307,9 +307,10 @@ impl InstallChanges {
             );
         } else if top_level_changes.len() == 1 {
             eprintln!(
-                "{} Updated package {} in environment {}.",
+                "{} Updated package {} {} in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
-                console::style(top_level_changes[0].as_normalized()).green(),
+                console::style(top_level_changes[0].0.as_normalized()).green(),
+                console::style(top_level_changes[0].1.version_display()).green(),
                 env_name.fancy_display()
             );
         } else if top_level_changes.len() > 1 {
@@ -318,8 +319,12 @@ impl InstallChanges {
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display()
             );
-            for package in top_level_changes {
-                println!("    - {}", console::style(package.as_normalized()).green());
+            for (package, install_change) in top_level_changes {
+                eprintln!(
+                    "    - {} {}",
+                    console::style(package.as_normalized()).green(),
+                    console::style(install_change.version_display()).green(),
+                );
             }
         }
     }
@@ -327,16 +332,28 @@ impl InstallChanges {
 
 #[derive(Debug)]
 pub enum InstallChange {
-    Installed,
-    Upgraded,
-    TransitiveUpgraded,
-    Reinstalled,
+    Installed(Version),
+    Upgraded(Version, Version),
+    TransitiveUpgraded(Version, Version),
+    Reinstalled(Version),
     Removed,
 }
 
 impl InstallChange {
     pub fn is_transitive(&self) -> bool {
-        matches!(self, InstallChange::TransitiveUpgraded)
+        matches!(self, InstallChange::TransitiveUpgraded(_, _))
+    }
+
+    pub fn version_display(&self) -> String {
+        match self {
+            InstallChange::Installed(version) => version.to_string(),
+            InstallChange::Upgraded(old, new) => format!("{} -> {}", old, new).to_string(),
+            InstallChange::TransitiveUpgraded(old, new) => {
+                format!("{} -> {}", old, new).to_string()
+            }
+            InstallChange::Reinstalled(version) => version.to_string(),
+            InstallChange::Removed => "".to_string(),
+        }
     }
 }
 
@@ -653,9 +670,10 @@ pub(crate) fn get_install_changes(
             TransactionOperation::Install(package) => {
                 let pkg_name = package.package_record.name;
 
-                install_changes
-                    .changes
-                    .insert(pkg_name, InstallChange::Installed);
+                install_changes.changes.insert(
+                    pkg_name,
+                    InstallChange::Installed(package.package_record.version.version().clone()),
+                );
             }
             TransactionOperation::Change { old, new } => {
                 let old_pkg_version = old.repodata_record.package_record.version;
@@ -666,18 +684,32 @@ pub(crate) fn get_install_changes(
                 let same_base_version = old_pkg_version == new_pkg_version;
 
                 let change = if same_base_version {
-                    InstallChange::TransitiveUpgraded
+                    InstallChange::TransitiveUpgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
                 } else {
-                    InstallChange::Upgraded
+                    InstallChange::Upgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
                 };
 
                 install_changes.changes.insert(pkg_name, change);
             }
             TransactionOperation::Reinstall(package) => {
                 let pkg_name = package.repodata_record.package_record.name;
-                install_changes
-                    .changes
-                    .insert(pkg_name, InstallChange::Reinstalled);
+                install_changes.changes.insert(
+                    pkg_name,
+                    InstallChange::Reinstalled(
+                        package
+                            .repodata_record
+                            .package_record
+                            .version
+                            .version()
+                            .clone(),
+                    ),
+                );
             }
             TransactionOperation::Remove(package) => {
                 let pkg_name = package.repodata_record.package_record.name;

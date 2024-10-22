@@ -55,8 +55,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expose_executables_from_environment(env_name)
             .await?;
 
-        // state_changes.insert_change(env_name, global::StateChange::UpdatedEnvironment);
-
         Ok(install_changes)
     }
 
