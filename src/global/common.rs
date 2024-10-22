@@ -264,6 +264,11 @@ pub(crate) enum StateChange {
     RemovedExposed(ExposedName),
     UpdatedExposed(ExposedName),
     AddedPackage(PackageRecord),
+    RemovedPackage(PackageName),
+    UpdatedPackage {
+        old_pkg: PackageRecord,
+        new_pkg: PackageRecord,
+    },
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment,
@@ -408,6 +413,24 @@ impl StateChanges {
                             console::style(console::Emoji("✔ ", "")).green(),
                             console::style(pkg.name.as_normalized()).green(),
                             console::style(&pkg.version).blue(),
+                            env_name.fancy_display()
+                        );
+                    }
+                    StateChange::RemovedPackage(pkg_name) => {
+                        eprintln!(
+                            "{}Removed package {} from environment {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            console::style(pkg_name.as_normalized()).green(),
+                            env_name.fancy_display()
+                        );
+                    }
+                    StateChange::UpdatedPackage { old_pkg, new_pkg } => {
+                        eprintln!(
+                            "{}Updated package {} of environment {} from {} to {}.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            console::style(old_pkg.name.as_normalized()).green(),
+                            console::style(&old_pkg.version).blue(),
+                            console::style(&new_pkg.version).blue(),
                             env_name.fancy_display()
                         );
                     }
