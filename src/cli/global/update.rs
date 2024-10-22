@@ -1,7 +1,7 @@
 use crate::cli::global::revert_environment_after_error;
 use crate::global::common::check_all_exposed;
 use crate::global::project::ExposedType;
-use crate::global::{self, InstallChanges, StateChanges};
+use crate::global::{self, InstallChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -49,13 +49,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Reinstall the environment
         let install_changes = project.install_environment(env_name).await?;
 
-        eprintln!("After install this is the status: {:?}", install_changes);
-
         // Sync executables exposed names with the manifest
         project.sync_exposed_names(env_name, expose_type).await?;
 
         // Expose or prune executables of the new environment
-        project
+        let _ = project
             .expose_executables_from_environment(env_name)
             .await?;
 

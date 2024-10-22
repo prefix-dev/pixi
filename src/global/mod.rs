@@ -4,8 +4,7 @@ pub(crate) mod list;
 pub(crate) mod project;
 
 pub(crate) use common::{
-    BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, InstallChange, InstallChanges, StateChange,
-    StateChanges,
+    BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, InstallChanges, StateChange, StateChanges,
 };
 pub(crate) use install::extract_executable_from_script;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};

@@ -336,10 +336,7 @@ pub enum InstallChange {
 
 impl InstallChange {
     pub fn is_transitive(&self) -> bool {
-        match self {
-            InstallChange::TransitiveUpgraded => true,
-            _ => false,
-        }
+        matches!(self, InstallChange::TransitiveUpgraded)
     }
 }
 
