@@ -3,12 +3,23 @@ build-backend = "scikit_build_core.build"
 requires = ["scikit-build-core", "pybind11"]
 
 [project]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
 description = "A simple pybind11 example"
 name = "mysum"
+requires-python = ">=3.7"
 version = "0.1.0"
 
 [tool.scikit-build]
 cmake.source-dir = "."
+sdist.exclude = [".pixi"]
 wheel.packages = ["mysum"]
 
 [tool.pixi.project]
