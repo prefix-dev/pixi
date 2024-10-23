@@ -688,19 +688,17 @@ pub fn check_all_exposed(
 pub(crate) fn get_install_changes(
     install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
 ) -> HashMap<PackageName, InstallChange> {
-    let mut install_changes: HashMap<PackageName, InstallChange> = HashMap::default();
-
     install_transaction
         .operations
         .into_iter()
-        .for_each(|transaction| match transaction {
+        .map(|transaction| match transaction {
             TransactionOperation::Install(package) => {
                 let pkg_name = package.package_record.name;
 
-                install_changes.insert(
+                (
                     pkg_name,
                     InstallChange::Installed(package.package_record.version.version().clone()),
-                );
+                )
             }
             TransactionOperation::Change { old, new } => {
                 let old_pkg_version = old.repodata_record.package_record.version;
@@ -722,11 +720,11 @@ pub(crate) fn get_install_changes(
                     )
                 };
 
-                install_changes.insert(pkg_name, change);
+                (pkg_name, change)
             }
             TransactionOperation::Reinstall(package) => {
                 let pkg_name = package.repodata_record.package_record.name;
-                install_changes.insert(
+                (
                     pkg_name,
                     InstallChange::Reinstalled(
                         package
@@ -736,15 +734,14 @@ pub(crate) fn get_install_changes(
                             .version()
                             .clone(),
                     ),
-                );
+                )
             }
             TransactionOperation::Remove(package) => {
                 let pkg_name = package.repodata_record.package_record.name;
-                install_changes.insert(pkg_name, InstallChange::Removed);
+                (pkg_name, InstallChange::Removed)
             }
-        });
-
-    install_changes
+        })
+        .collect()
 }
 
 #[cfg(test)]
