@@ -136,7 +136,7 @@ jobs:
           workspaces: ". -> target-pixi"
           key: ${{ hashFiles('pixi.lock') }}
       - name: Test pixi
-        run: pixi run test-all
+        run: pixi run test-workspace
 
   build:
     name: Build Binary | ${{ matrix.name }}
