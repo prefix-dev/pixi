@@ -4,6 +4,7 @@ use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
+use pixi_consts::consts;
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
@@ -39,9 +40,9 @@ pub mod upload;
 
 #[derive(Parser, Debug)]
 #[command(
-    version,
-    about = "
-Pixi [version 0.34.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+    version(consts::PIXI_VERSION),
+    about = format!("
+Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -62,7 +63,7 @@ Need Help?
 Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
-"
+", consts::PIXI_VERSION)
 )]
 #[clap(arg_required_else_help = true)]
 struct Args {
