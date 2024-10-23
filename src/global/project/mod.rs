@@ -1,4 +1,5 @@
-use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
+use super::install::extract_executable_from_trampoline_manifest;
+use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
@@ -36,7 +37,6 @@ use rattler_conda_types::{
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_shell::shell::ShellEnum;
 use rattler_solve::resolvo::Solver;
 use rattler_solve::{SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
@@ -113,7 +113,7 @@ impl ExposedData {
         channel_config: &ChannelConfig,
     ) -> miette::Result<Self> {
         let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
-        let executable_path = extract_executable_from_script(path).await?;
+        let executable_path = extract_executable_from_trampoline_manifest(path).await?;
 
         let executable = executable_from_path(&executable_path);
         let env_path = determine_env_path(&executable_path, env_root.path())?;
@@ -301,7 +301,7 @@ impl Project {
         let config = Config::load(env_root.path());
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
-            .files()
+            .trampolines()
             .await?
             .into_iter()
             .map(|path| {
@@ -728,12 +728,6 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
-        // Determine the shell to use for the invocation script
-        let shell: ShellEnum = if cfg!(windows) {
-            rattler_shell::shell::CmdExe.into()
-        } else {
-            rattler_shell::shell::Bash.into()
-        };
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
@@ -780,8 +774,7 @@ impl Project {
             env_name.fancy_display()
         );
 
-        state_changes |=
-            create_executable_scripts(&script_mapping, &prefix, &shell, env_name).await?;
+        state_changes |= create_executable_scripts(&script_mapping, &prefix, env_name).await?;
 
         Ok(state_changes)
     }
@@ -830,8 +823,8 @@ impl Project {
 
     /// Delete scripts in the bin folder that are broken
     pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
-        for exposed_path in self.bin_dir.files().await? {
-            if extract_executable_from_script(&exposed_path)
+        for exposed_path in self.bin_dir.trampolines().await? {
+            if extract_executable_from_trampoline_manifest(&exposed_path)
                 .await
                 .and_then(|path| {
                     if path.is_file() {

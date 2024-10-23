@@ -1,30 +1,22 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
-    global::{trampoline::TRAMPOLINE_BIN, BinDir, StateChange},
+    global::{
+        common::is_binary,
+        trampoline::{ManifestMetadata, TRAMPOLINE_BIN},
+        BinDir, StateChange,
+    },
     prefix::Prefix,
 };
-use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use rattler_shell::shell::{Shell, ShellEnum, ShellScript};
-use regex::Regex;
-use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use std::{fs, path::Path};
 use tokio::{fs::File, io::AsyncWriteExt};
-
-#[derive(Serialize, Debug)]
-struct ManifestMetadata {
-    pub exe: PathBuf,
-    pub path: String,
-    pub env: HashMap<String, String>,
-}
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -69,33 +61,24 @@ pub struct ScriptExecMapping {
     pub original_executable: PathBuf,
 }
 
-/// Returns the string to add for all arguments passed to the script
-fn get_catch_all_arg(shell: &ShellEnum) -> &str {
-    match shell {
-        ShellEnum::CmdExe(_) => "%*",
-        ShellEnum::PowerShell(_) => "@args",
-        _ => "\"$@\"",
-    }
-}
-
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
 pub(crate) async fn create_executable_scripts(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
-    shell: &ShellEnum,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
+    #[derive(Debug)]
     enum AddedOrChanged {
         Unchanged,
         Added,
         Changed,
+        Migrated,
     }
 
     let mut state_changes = StateChanges::default();
 
     let activation_variables = prefix.run_activation().await?;
-
     for ScriptExecMapping {
         global_script_path,
         original_executable,
@@ -112,87 +95,81 @@ pub(crate) async fn create_executable_scripts(
         };
 
         let json_path = global_script_path.with_extension("json");
+
+        let global_script_path = {
+            #[cfg(windows)]
+            {
+                global_script_path.with_extension("exe")
+            }
+            #[cfg(unix)]
+            {
+                global_script_path
+            }
+        };
+
+        // Check if an old bash script is present and remove it if it's binary
+        let mut changed = if global_script_path.exists() && !is_binary(global_script_path)? {
+            tokio::fs::remove_file(global_script_path)
+                .await
+                .into_diagnostic()?;
+            AddedOrChanged::Migrated
+        } else {
+            AddedOrChanged::Unchanged
+        };
+
+        // Read previous metadata if it exists and update `changed` accordingly
+        if matches!(changed, AddedOrChanged::Unchanged) {
+            if json_path.exists() {
+                let file = fs::File::open(&json_path).into_diagnostic()?;
+                let previous_manifest_metadata: ManifestMetadata =
+                    serde_json::from_reader(file).into_diagnostic()?;
+
+                changed = if previous_manifest_metadata == metadata {
+                    AddedOrChanged::Unchanged
+                } else {
+                    AddedOrChanged::Changed
+                };
+            } else {
+                changed = AddedOrChanged::Added;
+            }
+        };
+
         let file = fs_err::File::create(json_path).into_diagnostic()?;
 
         serde_json::to_writer(file, &metadata).into_diagnostic()?;
 
-        // fs::hard_link(
-        //     "/Users/wolfv/Programs/trampoline/target/release/trampoline",
-        //     global_script_path.with_extension("exe"),
-        // )
-        // .into_diagnostic()?;
-
-        let mut file = File::create(global_script_path).await.into_diagnostic()?;
-
-        // Write the content of TRAMPOLINE_BIN to the file
-        file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
-
-        let mut script = ShellScript::new(shell.clone(), Platform::current());
-        for (key, value) in activation_variables.iter() {
-            script.set_env_var(key, value).into_diagnostic()?;
-        }
-        let mut script = script.contents().into_diagnostic()?;
-        shell
-            .run_command(
-                &mut script,
-                [
-                    format!(
-                        "\"{}\"",
-                        prefix.root().join(original_executable).to_string_lossy()
-                    )
-                    .as_str(),
-                    get_catch_all_arg(shell),
-                ],
-            )
-            .expect("should never fail");
-
-        if matches!(shell, ShellEnum::CmdExe(_)) {
-            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the
-            // script and to prevent leaking environment variables into the
-            // parent shell (e.g. PATH would grow longer and longer)
-            script = format!(
-                "@echo off\nsetlocal\n{}\nset exitcode=%ERRORLEVEL%\nendlocal\nexit %exitcode%",
-                script.trim()
-            );
-        }
-
-        let added_or_changed = if global_script_path.exists() {
-            match tokio_fs::read_to_string(global_script_path).await {
-                Ok(previous_script) if previous_script != script => AddedOrChanged::Changed,
-                Ok(_) => AddedOrChanged::Unchanged,
-                Err(_) => AddedOrChanged::Changed,
-            }
-        } else {
-            AddedOrChanged::Added
-        };
-
-        if matches!(
-            added_or_changed,
-            AddedOrChanged::Changed | AddedOrChanged::Added
-        ) {
-            tokio_fs::write(&global_script_path, script)
+        // write the content of trampoline bin to the file
+        #[cfg(windows)]
+        {
+            let mut file = File::create(global_script_path.with_extension("exe"))
                 .await
                 .into_diagnostic()?;
+            file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
         }
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            let mut file = File::create(global_script_path).await.into_diagnostic()?;
+            file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
             std::fs::set_permissions(global_script_path, std::fs::Permissions::from_mode(0o755))
                 .into_diagnostic()?;
         }
 
         let executable_name = executable_from_path(global_script_path);
         let exposed_name = ExposedName::from_str(&executable_name)?;
-        match added_or_changed {
+
+        match changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
                 state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
             }
-            AddedOrChanged::Changed => {
+            AddedOrChanged::Changed | AddedOrChanged::Migrated => {
                 state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
+
+        eprintln!("changed is {:?}", changed);
     }
     Ok(state_changes)
 }
@@ -202,34 +179,17 @@ pub(crate) async fn create_executable_scripts(
 /// This function reads the content of the script file and attempts to extract
 /// the path of the executable it references. It is used to determine
 /// the actual binary path from a wrapper script.
-pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
-    // Read the script file into a string
-    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
+pub(crate) async fn extract_executable_from_trampoline_manifest(
+    script: &Path,
+) -> miette::Result<PathBuf> {
+    // Read the trampoline manifest
+    let manifest_path = script.with_extension("json");
 
-    // Compile the regex pattern
-    #[cfg(unix)]
-    const PATTERN: &str = r#""([^"]+)" "\$@""#;
-    // The pattern includes `"?` to also find old pixi global installations.
-    #[cfg(windows)]
-    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+    let manifest_file = fs::File::open(&manifest_path).into_diagnostic()?;
+    let manifest_metadata: ManifestMetadata =
+        serde_json::from_reader(manifest_file).into_diagnostic()?;
 
-    // Apply the regex to the script content
-    if let Some(caps) = RE.captures(&script_content) {
-        if let Some(matched) = caps.get(1) {
-            return Ok(PathBuf::from(matched.as_str()));
-        }
-    }
-    tracing::debug!(
-        "Failed to extract executable path from script {}",
-        script_content
-    );
-
-    // Return an error if the executable path couldn't be extracted
-    miette::bail!(
-        "Failed to extract executable path from script {}",
-        script.display()
-    )
+    Ok(manifest_metadata.exe)
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt

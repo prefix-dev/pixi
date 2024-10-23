@@ -1,3 +1,7 @@
+use std::{collections::HashMap, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
+
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
 pub const TRAMPOLINE_BIN: &[u8] =
@@ -31,6 +35,13 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
 const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
 );
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ManifestMetadata {
+    pub exe: PathBuf,
+    pub path: String,
+    pub env: HashMap<String, String>,
+}
 
 #[allow(dead_code)]
 pub struct Trampoline {

@@ -1,4 +1,6 @@
-use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
+use crate::global::install::extract_executable_from_trampoline_manifest;
+
+use super::{EnvironmentName, ExposedName, Mapping};
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
@@ -9,7 +11,6 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
-use pixi_utils::executable_from_path;
 use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -49,13 +50,13 @@ impl BinDir {
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the
     /// vector of file paths or an error if the directory can't be read.
-    pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
+    pub(crate) async fn trampolines(&self) -> miette::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() && path.is_executable() && is_text(&path)? {
+            if path.is_file() && path.is_executable() && is_binary(&path)? {
                 files.push(path);
             }
         }
@@ -162,13 +163,8 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     let mut buffer = [0; 1024];
     let bytes_read = file.read(&mut buffer).into_diagnostic()?;
 
+    eprintln!("is binary bytes {:?}", buffer[..bytes_read].contains(&0));
     Ok(buffer[..bytes_read].contains(&0))
-}
-
-/// Checks if given path points to a text file by calling `is_binary`.
-/// If that returns `false`, then it is a text file and vice-versa.
-pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    Ok(!is_binary(file_path)?)
 }
 
 /// Finds the package record from the `conda-meta` directory.
@@ -474,11 +470,11 @@ pub(crate) async fn get_expose_scripts_sync_status(
     mappings: &IndexSet<Mapping>,
 ) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from the scripts in the bin directory.
-    let locally_exposed = bin_dir.files().await?;
+    let locally_exposed = bin_dir.trampolines().await?;
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|path| {
         let path = path.clone();
         async move {
-            extract_executable_from_script(&path)
+            extract_executable_from_trampoline_manifest(&path)
                 .await
                 .ok()
                 .map(|exec| (path, exec))
@@ -496,8 +492,16 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect_vec();
 
     fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
-        executable_from_path(exposed) == mapping.exposed_name().to_string()
-            && executable_from_path(executable) == mapping.executable_name()
+        exposed
+            .file_name()
+            .expect("should have a file_name")
+            .to_string_lossy()
+            == mapping.exposed_name().to_string()
+            && executable
+                .file_name()
+                .expect("should have a file_name")
+                .to_string_lossy()
+                == mapping.executable_name()
     }
 
     // Get all related expose scripts not required by the environment manifest
