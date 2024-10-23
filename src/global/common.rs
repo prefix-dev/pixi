@@ -320,13 +320,6 @@ impl EnvironmentUpdate {
     }
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub(crate) enum PackageChange {
-//     Added(PackageName),
-//     Updated(PackageName, InstallChange),  // Package with details on how it was updated
-//     Removed(PackageName),
-// }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
