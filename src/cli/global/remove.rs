@@ -99,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .wrap_err(format!("Couldn't remove packages from {}", env_name))
     {
-        Ok(ref mut state_changes) => {
+        Ok(state_changes) => {
             state_changes.report();
         }
         Err(err) => {
