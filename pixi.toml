@@ -29,6 +29,7 @@ test-all = "cargo test --all-features"
 
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
+mypy = ">=1.11,<1.12"
 pytest = "*"
 pytest-rerunfailures = ">=14.0,<15"
 pytest-xdist = ">=3.6.1,<4"
@@ -48,6 +49,7 @@ test-integration-dev = { cmd = "pytest --numprocesses=auto --durations=10 tests/
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
 test-specific-test = { cmd = "pytest", depends-on = ["build"] }
+typecheck-tests = "mypy --strict tests --exclude pypi-indexes"
 update-integration-test-data = { cmd = "python update-channels.py", cwd = "tests/integration/test_data" }
 
 [feature.dev.dependencies]
@@ -56,7 +58,6 @@ cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
-mypy = ">=1.11,<1.12"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
 ruff = ">=0.4.8,<0.5"
@@ -70,7 +71,6 @@ pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
-typecheck-tests = "mypy --strict tests --exclude pypi-indexes"
 
 [feature.build.dependencies]
 # Needed for building
