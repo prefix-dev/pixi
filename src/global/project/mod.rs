@@ -1,3 +1,4 @@
+use super::common::{get_install_changes, EnvironmentUpdate};
 use super::install::find_binary_by_name;
 use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
@@ -430,7 +431,7 @@ impl Project {
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -447,7 +448,7 @@ impl Project {
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
 
-        let match_specs = environment
+        let (match_specs, dependencies_names) = environment
             .dependencies
             .clone()
             .into_iter()
@@ -457,12 +458,15 @@ impl Project {
                     .try_into_nameless_match_spec(self.config().global_channel_config())
                     .into_diagnostic()?
                 {
-                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.clone())))
+                    Ok((
+                        MatchSpec::from_nameless(nameless_spec, Some(name.clone())),
+                        name,
+                    ))
                 } else {
                     Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
                 }
             })
-            .collect::<miette::Result<Vec<MatchSpec>>>()?;
+            .collect::<miette::Result<(Vec<MatchSpec>, Vec<PackageName>)>>()?;
 
         let repodata = await_in_progress(
             format!(
@@ -512,7 +516,7 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
-        await_in_progress(
+        let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
                 env_name.fancy_display()
@@ -538,7 +542,9 @@ impl Project {
         .await
         .into_diagnostic()?;
 
-        Ok(())
+        let install_changes = get_install_changes(result.transaction);
+
+        Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -913,8 +919,8 @@ impl Project {
                 "Environment {} specs not up to date with manifest",
                 env_name.fancy_display()
             );
-            self.install_environment(env_name).await?;
-            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment);
+            let install_changes = self.install_environment(env_name).await?;
+            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment(install_changes));
         }
 
         // Expose executables

@@ -27,8 +27,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
-
         // See what executables were installed prior to update
         let env_binaries = project.executables(env_name).await?;
 
@@ -46,7 +44,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        project.install_environment(env_name).await?;
+        let install_changes = project.install_environment(env_name).await?;
+
+        let mut state_changes = StateChanges::default();
+
+        state_changes.insert_change(
+            env_name,
+            global::StateChange::UpdatedEnvironment(install_changes),
+        );
 
         // Sync executables exposed names with the manifest
         project.sync_exposed_names(env_name, expose_type).await?;
@@ -55,8 +60,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         state_changes |= project
             .expose_executables_from_environment(env_name)
             .await?;
-
-        state_changes.insert_change(env_name, global::StateChange::UpdatedEnvironment);
 
         Ok(state_changes)
     }
@@ -69,13 +72,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Apply changes to each environment, only revert changes if an error occurs
     let mut last_updated_project = project_original;
-    let mut state_changes = StateChanges::default();
+
     for env_name in env_names {
         let mut project = last_updated_project.clone();
+
         match apply_changes(&env_name, &mut project).await {
-            Ok(sc) => state_changes |= sc,
+            Ok(state_changes) => state_changes.report(),
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);
             }
@@ -83,6 +86,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         last_updated_project = project;
     }
     last_updated_project.manifest.save().await?;
-    state_changes.report();
     Ok(())
 }

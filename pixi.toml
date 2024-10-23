@@ -136,6 +136,7 @@ docs = { features = [
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
+  "pytest",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
 schema = { features = [

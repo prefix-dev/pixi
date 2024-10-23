@@ -97,7 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await
     {
-        Ok(ref mut state_changes) => {
+        Ok(state_changes) => {
             state_changes.report();
             Ok(())
         }
