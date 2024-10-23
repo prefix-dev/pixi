@@ -291,9 +291,10 @@ impl InstallChange {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Tracks changes made to the environment
 /// after installing packages.
+/// It also contain what packages were in environment before the update.
 pub(crate) struct EnvironmentUpdate {
-    package_changes: HashMap<PackageName, InstallChange>, // Tracks changes to individual packages
-    current_packages: Vec<PackageName>, // List of all packages currently in the environment
+    package_changes: HashMap<PackageName, InstallChange>,
+    current_packages: Vec<PackageName>,
 }
 
 impl EnvironmentUpdate {
