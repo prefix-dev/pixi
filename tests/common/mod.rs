@@ -261,6 +261,7 @@ impl PixiControl {
                 env_file: None,
                 format: None,
                 pyproject_toml: false,
+                scm: Some("github".to_string()),
             },
         }
     }
@@ -278,6 +279,7 @@ impl PixiControl {
                 env_file: None,
                 format: None,
                 pyproject_toml: false,
+                scm: Some("github".to_string()),
             },
         }
     }
