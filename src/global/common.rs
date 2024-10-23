@@ -259,78 +259,7 @@ pub(crate) struct EnvChanges {
     pub changes: HashMap<EnvironmentName, EnvState>,
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct InstallChanges {
-    pub changes: HashMap<PackageName, InstallChange>,
-}
-
-impl InstallChanges {
-    pub(crate) fn report_update_changes(
-        &self,
-        env_name: &EnvironmentName,
-        dependencies: &[PackageName],
-    ) {
-        // Check if there are any changes
-        if self.changes.is_empty() {
-            eprintln!(
-                "{} Environment {} was already up-to-date.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display(),
-            );
-            return;
-        }
-
-        // Separate top-level and transitive changes
-        let mut top_level_changes = Vec::new();
-        let mut transitive_changes = Vec::new();
-
-        for (package_name, change) in &self.changes {
-            if dependencies.contains(package_name) && !change.is_transitive() {
-                top_level_changes.push((package_name, change));
-            } else if change.is_transitive() {
-                transitive_changes.push((package_name, change));
-            }
-        }
-
-        // Output messages based on the type of changes
-        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-            eprintln!(
-                "{} Updated environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display()
-            );
-        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-            eprintln!(
-                "{} Environment {} was already up-to-date.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display()
-            );
-        } else if top_level_changes.len() == 1 {
-            eprintln!(
-                "{} Updated package {} {} in environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                console::style(top_level_changes[0].0.as_normalized()).green(),
-                console::style(top_level_changes[0].1.version_display()).green(),
-                env_name.fancy_display()
-            );
-        } else if top_level_changes.len() > 1 {
-            eprintln!(
-                "{} Updated packages in environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display()
-            );
-            for (package, install_change) in top_level_changes {
-                eprintln!(
-                    "    - {} {}",
-                    console::style(package.as_normalized()).green(),
-                    console::style(install_change.version_display()).green(),
-                );
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallChange {
     Installed(Version),
     Upgraded(Version, Version),
@@ -344,8 +273,8 @@ impl InstallChange {
         matches!(self, InstallChange::TransitiveUpgraded(_, _))
     }
 
-    pub fn version_display(&self) -> String {
-        match self {
+    pub fn version_fancy_display(&self) -> StyledObject<String> {
+        let version = match self {
             InstallChange::Installed(version) => version.to_string(),
             InstallChange::Upgraded(old, new) => format!("{} -> {}", old, new).to_string(),
             InstallChange::TransitiveUpgraded(old, new) => {
@@ -353,9 +282,50 @@ impl InstallChange {
             }
             InstallChange::Reinstalled(version) => version.to_string(),
             InstallChange::Removed => "".to_string(),
-        }
+        };
+
+        console::style(version).blue()
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// Tracks changes made to the environment
+/// after installing packages.
+pub(crate) struct EnvironmentUpdate {
+    package_changes: HashMap<PackageName, InstallChange>, // Tracks changes to individual packages
+    current_packages: Vec<PackageName>, // List of all packages currently in the environment
+}
+
+impl EnvironmentUpdate {
+    pub fn new(
+        package_changes: HashMap<PackageName, InstallChange>,
+        current_packages: Vec<PackageName>,
+    ) -> Self {
+        Self {
+            package_changes,
+            current_packages,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.package_changes.is_empty()
+    }
+
+    pub fn changes(&self) -> &HashMap<PackageName, InstallChange> {
+        &self.package_changes
+    }
+
+    pub fn current_packages(&self) -> &Vec<PackageName> {
+        &self.current_packages
+    }
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub(crate) enum PackageChange {
+//     Added(PackageName),
+//     Updated(PackageName, InstallChange),  // Package with details on how it was updated
+//     Removed(PackageName),
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
@@ -366,7 +336,7 @@ pub(crate) enum StateChange {
     AddedPackage(PackageRecord),
     AddedEnvironment,
     RemovedEnvironment,
-    UpdatedEnvironment,
+    UpdatedEnvironment(EnvironmentUpdate),
 }
 
 #[must_use]
@@ -525,15 +495,76 @@ impl StateChanges {
                             env_name.fancy_display()
                         );
                     }
-                    StateChange::UpdatedEnvironment => {
-                        eprintln!(
-                            "{}Updated environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
+                    StateChange::UpdatedEnvironment(update_change) => {
+                        report_update_changes(env_name, update_change);
                     }
                 }
             }
+        }
+    }
+}
+
+pub(crate) fn report_update_changes(
+    env_name: &EnvironmentName,
+    environment_update: &EnvironmentUpdate,
+) {
+    // Check if there are any changes
+    if environment_update.is_empty() {
+        eprintln!(
+            "{} Environment {} was already up-to-date.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            env_name.fancy_display(),
+        );
+        return;
+    }
+
+    // Separate top-level and transitive changes
+    let mut top_level_changes = Vec::new();
+    let mut transitive_changes = Vec::new();
+
+    let env_dependencies = environment_update.current_packages();
+
+    for (package_name, change) in environment_update.changes() {
+        if env_dependencies.contains(package_name) && !change.is_transitive() {
+            top_level_changes.push((package_name, change));
+        } else if change.is_transitive() {
+            transitive_changes.push((package_name, change));
+        }
+    }
+
+    // Output messages based on the type of changes
+    if top_level_changes.is_empty() && !transitive_changes.is_empty() {
+        eprintln!(
+            "{} Updated environment {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            env_name.fancy_display()
+        );
+    } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
+        eprintln!(
+            "{} Environment {} was already up-to-date.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            env_name.fancy_display()
+        );
+    } else if top_level_changes.len() == 1 {
+        eprintln!(
+            "{} Updated package {} {} in environment {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(top_level_changes[0].0.as_normalized()).green(),
+            top_level_changes[0].1.version_fancy_display(),
+            env_name.fancy_display()
+        );
+    } else if top_level_changes.len() > 1 {
+        eprintln!(
+            "{} Updated packages in environment {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            env_name.fancy_display()
+        );
+        for (package, install_change) in top_level_changes {
+            eprintln!(
+                "    - {} {}",
+                console::style(package.as_normalized()).green(),
+                install_change.version_fancy_display()
+            );
         }
     }
 }
@@ -662,15 +693,15 @@ pub fn check_all_exposed(
 
 pub(crate) fn get_install_changes(
     install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
-) -> InstallChanges {
-    let mut install_changes = InstallChanges::default();
+) -> HashMap<PackageName, InstallChange> {
+    let mut install_changes: HashMap<PackageName, InstallChange> = HashMap::default();
 
     for transaction in install_transaction.operations {
         match transaction {
             TransactionOperation::Install(package) => {
                 let pkg_name = package.package_record.name;
 
-                install_changes.changes.insert(
+                install_changes.insert(
                     pkg_name,
                     InstallChange::Installed(package.package_record.version.version().clone()),
                 );
@@ -695,11 +726,11 @@ pub(crate) fn get_install_changes(
                     )
                 };
 
-                install_changes.changes.insert(pkg_name, change);
+                install_changes.insert(pkg_name, change);
             }
             TransactionOperation::Reinstall(package) => {
                 let pkg_name = package.repodata_record.package_record.name;
-                install_changes.changes.insert(
+                install_changes.insert(
                     pkg_name,
                     InstallChange::Reinstalled(
                         package
@@ -713,9 +744,7 @@ pub(crate) fn get_install_changes(
             }
             TransactionOperation::Remove(package) => {
                 let pkg_name = package.repodata_record.package_record.name;
-                install_changes
-                    .changes
-                    .insert(pkg_name, InstallChange::Removed);
+                install_changes.insert(pkg_name, InstallChange::Removed);
             }
         }
     }

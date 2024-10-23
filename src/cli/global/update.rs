@@ -1,11 +1,10 @@
 use crate::cli::global::revert_environment_after_error;
 use crate::global::common::check_all_exposed;
 use crate::global::project::ExposedType;
-use crate::global::{self, InstallChanges};
+use crate::global::{self, StateChanges};
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 
 /// Updates environments in the global environment.
@@ -27,7 +26,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     async fn apply_changes(
         env_name: &EnvironmentName,
         project: &mut Project,
-    ) -> miette::Result<InstallChanges> {
+    ) -> miette::Result<StateChanges> {
         // See what executables were installed prior to update
         let env_binaries = project.executables(env_name).await?;
 
@@ -47,15 +46,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Reinstall the environment
         let install_changes = project.install_environment(env_name).await?;
 
+        let mut state_changes = StateChanges::default();
+
+        state_changes.insert_change(
+            env_name,
+            global::StateChange::UpdatedEnvironment(install_changes),
+        );
+
         // Sync executables exposed names with the manifest
         project.sync_exposed_names(env_name, expose_type).await?;
 
         // Expose or prune executables of the new environment
-        let _ = project
+        let changes = project
             .expose_executables_from_environment(env_name)
             .await?;
 
-        Ok(install_changes)
+        state_changes |= changes;
+
+        Ok(state_changes)
     }
 
     // Update all environments if the user did not specify any
@@ -69,16 +77,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     for env_name in env_names {
         let mut project = last_updated_project.clone();
-        let dependencies = project
-            .environment(&env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
-            .dependencies()
-            .keys()
-            .cloned()
-            .collect_vec();
 
         match apply_changes(&env_name, &mut project).await {
-            Ok(ic) => ic.report_update_changes(&env_name, &dependencies),
+            Ok(mut ic) => ic.report(),
             Err(err) => {
                 revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);
