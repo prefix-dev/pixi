@@ -314,8 +314,8 @@ pub fn quote(in_str: &str) -> Cow<str> {
         let mut out: String = String::with_capacity(in_str.len() + 2);
         out.push('"');
         for c in in_str.chars() {
-            match c as char {
-                '"' | '\\' => out.push_str("\\"),
+            match c {
+                '"' | '\\' => out.push('\\'),
                 _ => (),
             }
             out.push(c);
