@@ -79,7 +79,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = last_updated_project.clone();
 
         match apply_changes(&env_name, &mut project).await {
-            Ok(mut ic) => ic.report(),
+            Ok(mut state_changes) => state_changes.report(),
             Err(err) => {
                 revert_environment_after_error(&env_name, &last_updated_project).await?;
                 return Err(err);
