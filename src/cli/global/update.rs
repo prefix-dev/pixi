@@ -57,11 +57,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project.sync_exposed_names(env_name, expose_type).await?;
 
         // Expose or prune executables of the new environment
-        let changes = project
+        state_changes |= project
             .expose_executables_from_environment(env_name)
             .await?;
-
-        state_changes |= changes;
 
         Ok(state_changes)
     }
