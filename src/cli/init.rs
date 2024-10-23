@@ -53,6 +53,10 @@ pub struct Args {
     // BREAK (0.27.0): Remove this option from the cli in favor of the `format` option.
     #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
     pub pyproject_toml: bool,
+
+    /// Source Control Management used for this project
+    #[arg(short = 's', long = "scm", default_value = "github")]
+    pub scm: Option<String>,
 }
 
 /// The pixi.toml template
@@ -149,9 +153,42 @@ const GITIGNORE_TEMPLATE: &str = r#"
 *.egg-info
 "#;
 
-const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
+enum GitAttributes {
+    GitHub,
+    GitLab,
+    Codeberg,
+}
+
+impl GitAttributes {
+    fn template(&self) -> &'static str {
+        match self {
+            GitAttributes::GitHub => {
+                r#"# GitHub syntax highlighting
 pixi.lock linguist-language=YAML linguist-generated=true
-"#;
+"#
+            }
+            GitAttributes::GitLab => {
+                r#"# GitLab syntax highlighting
+pixi.lock gitlab-language=yaml gitlab-generated=true
+"#
+            }
+            GitAttributes::Codeberg => {
+                r#"# Codeberg syntax highlighting
+pixi.lock linguist-language=YAML linguist-generated=true
+"#
+            }
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "github" => Some(GitAttributes::GitHub),
+            "gitlab" => Some(GitAttributes::GitLab),
+            "codeberg" => Some(GitAttributes::Codeberg),
+            _ => None,
+        }
+    }
+}
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
@@ -412,8 +449,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    let git_attributes = GitAttributes::from_str(args.scm.unwrap().as_str()).unwrap();
+
     // create a .gitattributes if one is missing
-    if let Err(e) = create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE) {
+    if let Err(e) = create_or_append_file(&gitattributes_path, git_attributes.template()) {
         tracing::warn!(
             "Warning, couldn't update '{}' because of: {}",
             gitattributes_path.to_string_lossy(),
