@@ -1,6 +1,6 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
-    global::{BinDir, StateChange},
+    global::{trampoline::TRAMPOLINE_BIN, BinDir, StateChange},
     prefix::Prefix,
 };
 use fs_err::tokio as tokio_fs;
@@ -17,6 +17,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use std::{fs, path::Path};
+use tokio::{fs::File, io::AsyncWriteExt};
 
 #[derive(Serialize, Debug)]
 struct ManifestMetadata {
@@ -115,11 +116,16 @@ pub(crate) async fn create_executable_scripts(
 
         serde_json::to_writer(file, &metadata).into_diagnostic()?;
 
-        fs::hard_link(
-            "/Users/wolfv/Programs/trampoline/target/release/trampoline",
-            global_script_path.with_extension("exe"),
-        )
-        .into_diagnostic()?;
+        // fs::hard_link(
+        //     "/Users/wolfv/Programs/trampoline/target/release/trampoline",
+        //     global_script_path.with_extension("exe"),
+        // )
+        // .into_diagnostic()?;
+
+        let mut file = File::create(global_script_path).await.into_diagnostic()?;
+
+        // Write the content of TRAMPOLINE_BIN to the file
+        file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
 
         let mut script = ShellScript::new(shell.clone(), Platform::current());
         for (key, value) in activation_variables.iter() {

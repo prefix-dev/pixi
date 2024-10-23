@@ -1,6 +1,6 @@
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
-const TRAMPOLINE_BIN: &[u8] =
+pub const TRAMPOLINE_BIN: &[u8] =
     include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin");
 
 #[cfg(target_arch = "aarch64")]
