@@ -274,17 +274,24 @@ impl InstallChange {
     }
 
     pub fn version_fancy_display(&self) -> StyledObject<String> {
-        let version = match self {
-            InstallChange::Installed(version) => version.to_string(),
-            InstallChange::Upgraded(old, new) => format!("{} -> {}", old, new).to_string(),
-            InstallChange::TransitiveUpgraded(old, new) => {
-                format!("{} -> {}", old, new).to_string()
-            }
-            InstallChange::Reinstalled(version) => version.to_string(),
-            InstallChange::Removed => "".to_string(),
-        };
+        let version_style = console::Style::new().blue();
+        let default_style = console::Style::new();
 
-        console::style(version).blue()
+        match self {
+            InstallChange::Installed(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Upgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::TransitiveUpgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::Reinstalled(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Removed => version_style.apply_to("".to_string()),
+        }
     }
 }
 
