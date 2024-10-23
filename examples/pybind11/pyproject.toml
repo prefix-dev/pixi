@@ -38,7 +38,7 @@ scikit-build-core = ">=0.10.7,<0.11"
 uv = ">=0.4.25,<0.5"
 
 [tool.pixi.feature.build.tasks.build]
-cmd = ["python", "-m", "uv", "build"]
+cmd = ["uv", "build"]
 
 [tool.pixi.environments]
 build = ["build"]
