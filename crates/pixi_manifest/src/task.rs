@@ -310,21 +310,18 @@ impl Display for Task {
 pub fn quote(in_str: &str) -> Cow<str> {
     if in_str.is_empty() {
         "\"\"".into()
-    } else if in_str
-        .bytes()
-        .any(|c| matches!(c as char, '\t' | '\r' | '\n' | ' ' | '[' | ']'))
-    {
-        let mut out: Vec<u8> = Vec::new();
-        out.push(b'"');
-        for c in in_str.bytes() {
+    } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']']) {
+        let mut out: String = String::with_capacity(in_str.len() + 2);
+        out.push('"');
+        for c in in_str.chars() {
             match c as char {
-                '"' | '\\' => out.push(b'\\'),
+                '"' | '\\' => out.push_str("\\"),
                 _ => (),
             }
             out.push(c);
         }
-        out.push(b'"');
-        unsafe { String::from_utf8_unchecked(out) }.into()
+        out.push('"');
+        out.into()
     } else {
         in_str.into()
     }
