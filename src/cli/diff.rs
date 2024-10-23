@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -25,7 +25,9 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let lock = LockFile::from_path(Path::new("pixi.lock")).into_diagnostic()?;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.config);
+    let current_lockfile = LockFile::from_path(&project.lock_file_path()).into_diagnostic()?;
 
     let input: Box<dyn std::io::Read + 'static> = if args.old_lockfile.as_os_str() == "-" {
         Box::new(std::io::stdin())
@@ -33,12 +35,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Box::new(std::fs::File::open(&args.old_lockfile).into_diagnostic()?)
     };
 
-    let old = LockFile::from_reader(input).into_diagnostic()?;
+    let prior_lockfile = LockFile::from_reader(input).into_diagnostic()?;
 
-    let diff = LockFileDiff::from_lock_files(&old, &lock);
-    let config = args.config;
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(config);
+    let diff = LockFileDiff::from_lock_files(&prior_lockfile, &current_lockfile);
     let json_diff = LockFileJsonDiff::new(&project, diff);
     let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
     println!("{}", json);
