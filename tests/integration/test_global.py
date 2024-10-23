@@ -1375,13 +1375,13 @@ def test_global_update_single_package(
 
 
 def test_global_update_single_package_with_transient_dependency(
-    pixi: Path, tmp_path: Path, non_self_expose_channel: str, non_self_expose_channel_2: str
+    pixi: Path, tmp_path: Path, non_self_expose_channel_1: str, non_self_expose_channel_2: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Test update of a single package
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter 0.1.0"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter 0.1.0"],
         env=env,
     )
     # Replace the version with a "*"
@@ -1587,12 +1587,12 @@ def test_pixi_update_subset_expose(
     assert "exposed" not in parsed_toml["envs"]["package"]
 
 
-def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Install jupyter and expose it as 'jupyter'
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter"],
         env=env,
     )
     jupyter = tmp_path / "bin" / exec_extension("jupyter")

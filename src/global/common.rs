@@ -490,75 +490,75 @@ impl StateChanges {
                         );
                     }
                     StateChange::UpdatedEnvironment(update_change) => {
-                        report_update_changes(&env_name, update_change);
+                        StateChanges::report_update_changes(&env_name, update_change);
                     }
                 }
             }
         }
     }
-}
 
-pub(crate) fn report_update_changes(
-    env_name: &EnvironmentName,
-    environment_update: &EnvironmentUpdate,
-) {
-    // Check if there are any changes
-    if environment_update.is_empty() {
-        eprintln!(
-            "{} Environment {} was already up-to-date.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display(),
-        );
-        return;
-    }
-
-    // Separate top-level and transitive changes
-    let mut top_level_changes = Vec::new();
-    let mut transitive_changes = Vec::new();
-
-    let env_dependencies = environment_update.current_packages();
-
-    for (package_name, change) in environment_update.changes() {
-        if env_dependencies.contains(package_name) && !change.is_transitive() {
-            top_level_changes.push((package_name, change));
-        } else if change.is_transitive() {
-            transitive_changes.push((package_name, change));
-        }
-    }
-
-    // Output messages based on the type of changes
-    if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-        eprintln!(
-            "{} Updated environment {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
-    } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-        eprintln!(
-            "{} Environment {} was already up-to-date.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
-    } else if top_level_changes.len() == 1 {
-        eprintln!(
-            "{} Updated package {} {} in environment {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(top_level_changes[0].0.as_normalized()).green(),
-            top_level_changes[0].1.version_fancy_display(),
-            env_name.fancy_display()
-        );
-    } else if top_level_changes.len() > 1 {
-        eprintln!(
-            "{} Updated packages in environment {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            env_name.fancy_display()
-        );
-        for (package, install_change) in top_level_changes {
+    pub(crate) fn report_update_changes(
+        env_name: &EnvironmentName,
+        environment_update: &EnvironmentUpdate,
+    ) {
+        // Check if there are any changes
+        if environment_update.is_empty() {
             eprintln!(
-                "    - {} {}",
-                console::style(package.as_normalized()).green(),
-                install_change.version_fancy_display()
+                "{} Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display(),
             );
+            return;
+        }
+
+        // Separate top-level and transitive changes
+        let mut top_level_changes = Vec::new();
+        let mut transitive_changes = Vec::new();
+
+        let env_dependencies = environment_update.current_packages();
+
+        for (package_name, change) in environment_update.changes() {
+            if env_dependencies.contains(package_name) && !change.is_transitive() {
+                top_level_changes.push((package_name, change));
+            } else if change.is_transitive() {
+                transitive_changes.push((package_name, change));
+            }
+        }
+
+        // Output messages based on the type of changes
+        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
+            eprintln!(
+                "{} Updated environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
+            eprintln!(
+                "{} Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() == 1 {
+            eprintln!(
+                "{} Updated package {} {} in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(top_level_changes[0].0.as_normalized()).green(),
+                top_level_changes[0].1.version_fancy_display(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() > 1 {
+            eprintln!(
+                "{} Updated packages in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+            for (package, install_change) in top_level_changes {
+                eprintln!(
+                    "    - {} {}",
+                    console::style(package.as_normalized()).green(),
+                    install_change.version_fancy_display()
+                );
+            }
         }
     }
 }
@@ -690,8 +690,10 @@ pub(crate) fn get_install_changes(
 ) -> HashMap<PackageName, InstallChange> {
     let mut install_changes: HashMap<PackageName, InstallChange> = HashMap::default();
 
-    for transaction in install_transaction.operations {
-        match transaction {
+    install_transaction
+        .operations
+        .into_iter()
+        .for_each(|transaction| match transaction {
             TransactionOperation::Install(package) => {
                 let pkg_name = package.package_record.name;
 
@@ -740,8 +742,7 @@ pub(crate) fn get_install_changes(
                 let pkg_name = package.repodata_record.package_record.name;
                 install_changes.insert(pkg_name, InstallChange::Removed);
             }
-        }
-    }
+        });
 
     install_changes
 }
