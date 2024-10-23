@@ -108,7 +108,7 @@ jobs:
   cargo-test:
     name: Cargo Test | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -263,6 +263,7 @@ jobs:
           cargo build
           --locked
           --profile $CARGO_PROFILE
+          --features self_update
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Build on Windows
@@ -271,6 +272,7 @@ jobs:
           cargo build
           --locked
           --profile $env:CARGO_PROFILE
+          --features self_update
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path

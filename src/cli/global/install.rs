@@ -9,7 +9,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
+    global::{
+        self, common::NotChangedReason, list::list_global_environments, EnvChanges, EnvState,
+        EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges,
+    },
     prefix::Prefix,
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -24,7 +27,7 @@ use pixi_config::{self, Config, ConfigCli};
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the packages that are to be installed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., required = true)]
     packages: Vec<String>,
 
     /// The channels to consider as a name or a url.
@@ -52,6 +55,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// Specifies that the packages should be reinstalled even if they are already installed.
+    #[arg(action, long)]
+    force_reinstall: bool,
 }
 
 impl HasSpecs for Args {
@@ -82,6 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut state_changes = StateChanges::default();
+    let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
@@ -100,6 +108,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
             Ok(sc) => {
+                match sc.has_changed() {
+                    true => env_changes
+                        .changes
+                        .insert(env_name.clone(), EnvState::Installed),
+                    false => env_changes.changes.insert(
+                        env_name.clone(),
+                        EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
+                    ),
+                };
                 state_changes |= sc;
             }
             Err(err) => {
@@ -112,7 +129,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
+
+    // After installing, we always want to list the changed environments
+    list_global_environments(
+        &last_updated_project,
+        Some(env_names),
+        Some(&env_changes),
+        None,
+    )
+    .await?;
 
     Ok(())
 }
@@ -158,12 +183,15 @@ async fn setup_environment(
         }
     }
 
-    if project.environment_in_sync(env_name).await? {
+    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
     // Installing the environment to be able to find the bin paths later
     project.install_environment(env_name).await?;
+
+    // Cleanup removed executables
+    state_changes |= project.remove_broken_expose_names(env_name).await?;
 
     if args.expose.is_empty() {
         // Add the expose binaries for all the packages that were requested to the manifest

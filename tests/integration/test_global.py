@@ -1,6 +1,7 @@
 from pathlib import Path
 import tomllib
 
+import pytest
 import tomli_w
 from .common import verify_cli_command, ExitCode
 import platform
@@ -526,6 +527,7 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
             "dummy-b",
         ],
         env=env,
+        stdout_contains="dummy-b: 0.1.0 (installed)",
     )
     assert dummy_b.is_file()
 
@@ -540,9 +542,120 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
             "dummy-b",
         ],
         env=env,
-        stderr_contains="The environment dummy-b was already up-to-date",
+        stdout_contains="dummy-b: 0.1.0 (already installed)",
     )
     assert dummy_b.is_file()
+
+
+def test_install_twice_with_same_env_name_as_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    # This test is to ensure that when the environment name is the same as the expose name, exposes are printed correctly
+    # and we also ensure that when custom name for environment is used,
+    # we output state for it
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("customdummyb")
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+            "--environment",
+            "customdummyb",
+            "--expose",
+            "customdummyb=dummy-b",
+        ],
+        env=env,
+        stdout_contains=["customdummyb (installed)", "exposes: customdummyb -> dummy-b"],
+    )
+    assert dummy_b.is_file()
+
+    # Install dummy-b again, there should be nothing to do
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+            "--environment",
+            "customdummyb",
+            "--expose",
+            "customdummyb=dummy-b",
+        ],
+        env=env,
+        stdout_contains=["customdummyb (already installed)", "exposes: customdummyb -> dummy-b"],
+    )
+    assert dummy_b.is_file()
+
+
+def test_install_twice_with_force_reinstall(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b",
+        ],
+        env=env,
+        stdout_contains="dummy-b: 0.1.0 (installed)",
+    )
+    assert dummy_b.is_file()
+
+    # Modify dummy-b channel and try to install it again
+    # Even though we changed the channels, it will claim the environment is up-to-date
+
+    manifests = tmp_path / "manifests" / "pixi-global.toml"
+    parsed_toml = tomllib.loads(manifests.read_text())
+
+    parsed_toml["envs"]["dummy-b"]["channels"] = [dummy_channel_2]
+
+    manifests.write_text(tomli_w.dumps(parsed_toml))
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_2,
+            "dummy-b",
+        ],
+        env=env,
+        stdout_contains="dummy-b: 0.1.0 (already installed)",
+    )
+
+    # Install dummy-b again, but with force-reinstall
+    # It should install it again
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--force-reinstall",
+            "--channel",
+            dummy_channel_2,
+            "dummy-b",
+        ],
+        env=env,
+        stdout_contains="dummy-b: 0.1.0 (installed)",
+    )
 
 
 def test_install_underscore(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -827,6 +940,30 @@ def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: 
         ],
         env=env,
     )
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="Not reliable on Windows")
+def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Install the same package but with a different version
+    # The old version should be removed and the new version should be installed without error.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.2.0"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert package0_2_0.is_file()
 
 
 def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -1133,6 +1270,42 @@ def test_global_update_all_packages(
     # Check content of package2 file to be updated
     bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / exec_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
+
+
+def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+
+    # We change the matchspec to '*'
+    # Syncing shouldn't do anything
+    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Update the environment
+    # The package should now have the version `0.2.0` and expose a different executable
+    # The old executable should be removed
+    # The new executable will also not be there, since `pixi global update` doesn't add new exposed mappings to the manifest.
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert not package0_2_0.is_file()
 
 
 def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:

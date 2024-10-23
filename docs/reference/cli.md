@@ -443,6 +443,10 @@ pixi task list --summary
 
 List project's packages. Highlighted packages are explicit dependencies.
 
+##### Arguments
+
+1. `[REGEX]`: List only packages matching a regular expression (optional).
+
 ##### Options
 
 - `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
@@ -458,6 +462,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 
 ```shell
 pixi list
+pixi list py
 pixi list --json-pretty
 pixi list --explicit
 pixi list --sort-by size
@@ -698,19 +703,16 @@ pixi search -c robostack --platform linux-64 "plotjuggler*"
 
 ## `self-update`
 
-Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
-`~/.pixi/bin/pixi`), pixi won't update to prevent breaking the current installation (Homebrew, etc.). The behaviour can be
-overridden with the `--force` flag
+Update pixi to the latest version or a specific version. If pixi was installed using another package manager this feature might not
+be available and pixi should be updated using the package manager used to install it.
 
 ##### Options
 
 - `--version <VERSION>`: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
-- `--force`: Force the update even if the pixi binary is not found in the default location.
 
 ```shell
 pixi self-update
 pixi self-update --version 0.13.0
-pixi self-update --force
 ```
 
 ## `info`

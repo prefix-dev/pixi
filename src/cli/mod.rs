@@ -41,7 +41,7 @@ pub mod upload;
 #[command(
     version,
     about = "
-Pixi [version 0.32.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.33.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -123,6 +123,7 @@ pub enum Command {
     Info(info::Args),
     Upload(upload::Args),
     Search(search::Args),
+    #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
     SelfUpdate(self_update::Args),
     Clean(clean::Args),
     Completion(completion::Args),
@@ -272,7 +273,10 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
+        #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+        #[cfg(not(feature = "self_update"))]
+        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
