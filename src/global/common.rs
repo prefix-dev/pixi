@@ -163,7 +163,6 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     let mut buffer = [0; 1024];
     let bytes_read = file.read(&mut buffer).into_diagnostic()?;
 
-    eprintln!("is binary bytes {:?}", buffer[..bytes_read].contains(&0));
     Ok(buffer[..bytes_read].contains(&0))
 }
 

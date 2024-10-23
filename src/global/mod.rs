@@ -5,7 +5,6 @@ pub(crate) mod project;
 pub(crate) mod trampoline;
 
 pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
-// pub(crate) use install::extract_executable_from_trampoline_manifest;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 
 use crate::prefix::Prefix;

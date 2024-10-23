@@ -107,7 +107,7 @@ pub(crate) async fn create_executable_scripts(
             }
         };
 
-        // Check if an old bash script is present and remove it if it's binary
+        // Check if an old bash script is present and remove it
         let mut changed = if global_script_path.exists() && !is_binary(global_script_path)? {
             tokio::fs::remove_file(global_script_path)
                 .await
@@ -168,8 +168,6 @@ pub(crate) async fn create_executable_scripts(
                 state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
-
-        eprintln!("changed is {:?}", changed);
     }
     Ok(state_changes)
 }
