@@ -115,101 +115,70 @@ We want to add more methods in the future, so if you have a specific method you 
 ### Keyring authentication
 
 Currently, pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
-To enable this use the CLI flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`.
-
-```shell
-# From an existing pixi project
-pixi install --pypi-keyring-provider subprocess
-```
-
-This option can also be set in the global configuration file under [pypi-config](./../reference/pixi_configuration.md#pypi-configuration).
 
 #### Installing keyring
 To install keyring you can use pixi global install:
 
-Either use:
+=== "Basic Auth"
+    ```shell
+    pixi global install keyring
+    ```
+=== "Google Artifact Registry"
+    ```shell
+    pixi global install keyring --with keyrings.google-artifactregistry-auth
+    ```
+=== "Azure DevOps Artifacts"
+    ```shell
+    pixi global install keyring --with keyring.artifacts
+    ```
 
-```shell
-pixi global install keyring
-```
-??? warning "GCP and other backends"
-    The downside of this method is currently, because you cannot inject into a pixi global environment just yet, that installing different keyring backends is not possible. This allows only the default keyring backend to be used.
-    Give the [issue](https://github.com/prefix-dev/pixi/issues/342) a 👍 up if you would like to see inject as a feature.
+For other registries, you will need to adapt these instructions to add the right keyring backend.
 
-Or alternatively, you can install keyring using pipx:
+#### Configuring your project to use keyring
 
-```shell
-# Install pipx if you haven't already
-pixi global install pipx
-pipx install keyring
+=== "Basic Auth"
+    Use keyring to store your credentials e.g:
 
-# For Google Artifact Registry, also install and initialize its keyring backend.
-# Inject this into the pipx environment
-pipx inject keyring keyrings.google-artifactregistry-auth --index-url https://pypi.org/simple
-gcloud auth login
-```
+    ```shell
+    keyring set https://my-index/simple your_username
+    # prompt will appear for your password
+    ```
 
-#### Using keyring with Basic Auth
-Use keyring to store your credentials e.g:
+    Add the following configuration to your pixi manifest, making sure to include `your_username@` in the URL of the registry:
 
-```shell
-keyring set https://my-index/simple your_username
-# prompt will appear for your password
-```
+    ```toml
+    [pypi-options]
+    index-url = "https://your_username@custom-registry.com/simple"
+    ```
 
-##### Configuration
-Make sure to include `username@` in the URL of the registry.
-An example of this would be:
+=== "Google Artifact Registry"
+    After making sure you are logged in, for instance by running `gcloud auth login`, add the following configuration to your pixi manifest:
 
-```toml
-[pypi-options]
-index-url = "https://username@custom-registry.com/simple"
-```
+    ```toml
+    [pypi-options]
+    extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
+    ```
 
-#### GCP
-For Google Artifact Registry, you can use the Google Cloud SDK to authenticate.
-Make sure to have run `gcloud auth login` before using pixi.
-Another thing to note is that you need to add `oauth2accesstoken` to the URL of the registry.
-An example of this would be:
+    !!!Note
+        To find this URL more easily, you can use the `gcloud` command:
 
-##### Configuration
+        ```shell
+        gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
+        ```
 
-```toml
-# rest of the pixi.toml
-#
-# Add's the following options to the default feature
-[pypi-options]
-extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
-```
+=== "Azure DevOps Artifacts"
+    After following the [`keyring.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your pixi manifest:
 
-!!!Note
-    Include the `/simple` at the end, replace the `<location>` etc. with your project and repository and location.
-To find this URL more easily, you can use the `gcloud` command:
-
-```shell
-gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
-```
-
-### Azure DevOps
-Similarly for Azure DevOps, you can use the Azure keyring backend for authentication.
-The backend, along with installation instructions can be found at [keyring.artifacts](https://github.com/jslorrma/keyrings.artifacts).
-
-After following the instructions and making sure that keyring works correctly, you can use the following configuration:
-
-##### Configuration
-```toml
-# rest of the pixi.toml
-#
-# Adds the following options to the default feature
-[pypi-options]
-extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
-```
-This should allow for getting packages from the Azure DevOps artifact registry.
-
+    ```toml
+    [pypi-options]
+    extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
+    ```
 
 #### Installing your environment
-To actually install either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag:
+Either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
+
 ```shell
+# From an existing pixi project
 pixi install --pypi-keyring-provider subprocess
 ```
 

@@ -1,15 +1,21 @@
+use crate::prefix::Executable;
+
 use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
+use ahash::HashSet;
+use console::StyledObject;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
+use rattler_conda_types::{
+    Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
+};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
@@ -195,6 +201,63 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NotChangedReason {
+    AlreadyInstalled,
+}
+
+impl std::fmt::Display for NotChangedReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NotChangedReason::AlreadyInstalled => write!(f, "already installed"),
+        }
+    }
+}
+
+impl NotChangedReason {
+    /// Returns the name of the environment.
+    pub fn as_str(&self) -> &str {
+        match self {
+            NotChangedReason::AlreadyInstalled => "already installed",
+        }
+    }
+}
+
+impl FancyDisplay for NotChangedReason {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        console::style(self.as_str()).cyan()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EnvState {
+    Installed,
+    NotChanged(NotChangedReason),
+}
+
+impl EnvState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            EnvState::Installed => "installed",
+            EnvState::NotChanged(reason) => reason.as_str(),
+        }
+    }
+}
+
+impl FancyDisplay for EnvState {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        match self {
+            EnvState::Installed => console::style(self.as_str()).green(),
+            EnvState::NotChanged(ref reason) => reason.fancy_display(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct EnvChanges {
+    pub changes: HashMap<EnvironmentName, EnvState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
     AddedExposed(ExposedName),
@@ -220,6 +283,7 @@ impl StateChanges {
         }
     }
 
+    /// Checks if there are any changes in the state.
     pub(crate) fn has_changed(&self) -> bool {
         !self.changes.values().all(Vec::is_empty)
     }
@@ -273,12 +337,9 @@ impl StateChanges {
         self.prune();
 
         for (env_name, changes_for_env) in &self.changes {
+            // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
-                eprintln!(
-                    "{}The environment {} was already up-to-date",
-                    console::style(console::Emoji("✔ ", "")).green(),
-                    env_name.fancy_display()
-                );
+                continue;
             }
 
             let mut iter = changes_for_env.iter().peekable();
@@ -476,6 +537,27 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect::<IndexSet<ExposedName>>();
 
     Ok((to_remove, to_add))
+}
+
+/// Check if all binaries were exposed, or if the user selected a subset of them.
+pub fn check_all_exposed(
+    env_binaries: &IndexMap<PackageName, Vec<Executable>>,
+    exposed_mapping_binaries: &IndexSet<Mapping>,
+) -> bool {
+    let mut env_binaries_names_iter = env_binaries
+        .values()
+        .flatten()
+        .map(|executable| executable.name.clone());
+
+    let exposed_binaries_names: HashSet<&str> = exposed_mapping_binaries
+        .iter()
+        .map(|mapping| mapping.executable_name())
+        .collect();
+
+    let auto_exposed =
+        env_binaries_names_iter.all(|name| exposed_binaries_names.contains(&name.as_str()));
+
+    auto_exposed
 }
 
 #[cfg(test)]
