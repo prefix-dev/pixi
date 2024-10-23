@@ -396,10 +396,10 @@ impl StateChanges {
             .collect()
     }
 
-    pub(crate) fn report(&mut self) {
+    pub(crate) fn report(mut self) {
         self.prune();
 
-        for (env_name, changes_for_env) in &self.changes {
+        for (env_name, changes_for_env) in self.changes {
             // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
                 continue;
@@ -489,7 +489,7 @@ impl StateChanges {
                         );
                     }
                     StateChange::UpdatedEnvironment(update_change) => {
-                        report_update_changes(env_name, update_change);
+                        report_update_changes(&env_name, update_change);
                     }
                 }
             }
