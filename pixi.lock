@@ -18,6 +18,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/c-ares-1.33.1-heb4867d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/c-compiler-1.7.0-hd590300_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cargo-nextest-0.9.78-h6c30b3d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2024.7.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-1.17.0-py312h06ac9bb_1.conda
@@ -147,6 +148,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/c-ares-1.33.1-h44e7173_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ca-certificates-2024.8.30-h8857fd0_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/cargo-nextest-0.9.78-h32f0265_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2024.7.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/osx-64/cffi-1.17.0-py312hf857d28_1.conda
@@ -239,6 +241,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/c-ares-1.33.1-hd74edd7_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ca-certificates-2024.8.30-hf0a4a13_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cargo-nextest-0.9.78-h27c7404_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2024.7.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cffi-1.17.0-py312h0fad829_1.conda
@@ -331,6 +334,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/brotli-python-1.1.0-py312h53d5487_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/bzip2-1.0.8-h2466b09_7.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ca-certificates-2024.8.30-h56e8100_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/cargo-nextest-0.9.78-ha073cba_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2024.7.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/cffi-1.17.0-py312h4389bb4_1.conda
@@ -1972,6 +1976,74 @@ packages:
   license_family: LGPL
   size: 43857
   timestamp: 1691391975709
+- kind: conda
+  name: cargo-nextest
+  version: 0.9.78
+  build: h27c7404_0
+  subdir: osx-arm64
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/cargo-nextest-0.9.78-h27c7404_0.conda
+  sha256: 0401356c5ea47e9351b56e3824863f3415e2401b9d59940620713c1ece2a4339
+  md5: f49aafff221daaf9bfc7ca8a09485ff1
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 4384820
+  timestamp: 1728918162464
+- kind: conda
+  name: cargo-nextest
+  version: 0.9.78
+  build: h32f0265_0
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/cargo-nextest-0.9.78-h32f0265_0.conda
+  sha256: 0df943c68d72828527c4a8a0cf00b54a4f1c58006195812610e6149b3c40fa9b
+  md5: ce7b80bd21e3e9aa35e844f6957360f3
+  depends:
+  - __osx >=10.13
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  license_family: MIT
+  size: 4717530
+  timestamp: 1728918242982
+- kind: conda
+  name: cargo-nextest
+  version: 0.9.78
+  build: h6c30b3d_0
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/cargo-nextest-0.9.78-h6c30b3d_0.conda
+  sha256: 9e232557caeb8bf4e34c5d0175b23ed1a129df78c6aad01bb4792e532b5f5201
+  md5: 013179d01cba10a39c1badaace213143
+  depends:
+  - libgcc >=13
+  - __glibc >=2.17,<3.0.a0
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 4765005
+  timestamp: 1728918162264
+- kind: conda
+  name: cargo-nextest
+  version: 0.9.78
+  build: ha073cba_0
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/cargo-nextest-0.9.78-ha073cba_0.conda
+  sha256: a1759b1734162ec7bf225742fefee8d4b9db39215e0d34be9302a037299aa4ae
+  md5: 0d404f06dbc7968fbf247d7cc9390744
+  depends:
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  license: MIT
+  license_family: MIT
+  size: 4538985
+  timestamp: 1728918279376
 - kind: conda
   name: certifi
   version: 2024.7.4
