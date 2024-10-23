@@ -18,6 +18,7 @@ pub mod clean;
 pub mod cli_config;
 pub mod completion;
 pub mod config;
+pub mod diff;
 mod exec;
 pub mod global;
 pub mod has_specs;
@@ -104,6 +105,7 @@ pub enum Command {
     #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
+    Diff(diff::Args),
 
     // Project modification commands
     Project(project::Args),
@@ -281,6 +283,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
+        Command::Diff(args) => diff::execute(args).await,
     }
 }
 
