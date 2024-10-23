@@ -39,18 +39,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut last_updated_project = project_original;
-    let mut state_changes = StateChanges::default();
     for env_name in &args.environment {
         let mut project = last_updated_project.clone();
         match apply_changes(env_name, &mut project)
             .await
             .wrap_err_with(|| format!("Couldn't remove {}", env_name.fancy_display()))
         {
-            Ok(sc) => {
-                state_changes |= sc;
+            Ok(state_changes) => {
+                state_changes.report();
             }
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(env_name, &last_updated_project)
                     .await
                     .wrap_err_with(|| {
@@ -65,6 +63,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
     Ok(())
 }
