@@ -17,7 +17,6 @@ struct Metadata {
 fn read_metadata(current_exe: &Path) -> Metadata {
     // the metadata file is next to the current executable, under the name of exe + ".json"
     let metadata_path = current_exe.with_extension("json");
-    eprintln!("current exe is {:?}", current_exe);
     let metadata_file = File::open(metadata_path).unwrap();
     let metadata: Metadata = serde_json::from_reader(metadata_file).unwrap();
     metadata

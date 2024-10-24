@@ -310,7 +310,6 @@ insta = { workspace = true, features = ["yaml", "glob"] }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
-which = "*"
 
 
 [patch.crates-io]

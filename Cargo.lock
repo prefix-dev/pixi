@@ -3434,7 +3434,6 @@ dependencies = [
  "uv-python",
  "uv-resolver",
  "uv-types",
- "which",
  "xxhash-rust",
  "zip 2.2.0",
 ]
