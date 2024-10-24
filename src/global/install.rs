@@ -99,7 +99,7 @@ pub(crate) async fn create_executable_scripts(
         let global_script_path = {
             #[cfg(windows)]
             {
-                global_script_path.with_extension("exe")
+                &global_script_path.with_extension("exe")
             }
             #[cfg(unix)]
             {
