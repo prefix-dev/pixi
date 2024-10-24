@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
 pub const TRAMPOLINE_BIN: &[u8] =
-    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi_trampoline_debug");
+    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin");
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "windows")]
