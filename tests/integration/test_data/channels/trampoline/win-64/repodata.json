@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-b-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "1f63c61b4221efd9451e6112ecd41e44",
+      "name": "dummy-b",
+      "platform": "win",
+      "sha256": "ca6599a8f21416208094828ed809d9c6a5159942a4bb415c2e25c6db3515d5d5",
+      "size": 2812,
+      "subdir": "win-64",
+      "timestamp": 1729783596742,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

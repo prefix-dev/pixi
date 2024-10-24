@@ -3,19 +3,12 @@ import tomllib
 
 import pytest
 import tomli_w
-from .common import verify_cli_command, ExitCode
+from .common import verify_cli_command, ExitCode, exec_extension
 import platform
 import os
 import stat
 
 MANIFEST_VERSION = 1
-
-
-def exec_extension(exe_name: str) -> str:
-    if platform.system() == "Windows":
-        return exe_name + ".bat"
-    else:
-        return exe_name
 
 
 def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:

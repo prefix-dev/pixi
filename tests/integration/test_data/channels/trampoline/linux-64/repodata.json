@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-b-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "cf0c4772e384cf4f810aa6c0d358acbe",
+      "name": "dummy-b",
+      "platform": "linux",
+      "sha256": "cc035c8bdb97524017b84b6ede0e117f8911931d61d3f3285ea6d2d9068709f9",
+      "size": 2848,
+      "subdir": "linux-64",
+      "timestamp": 1729783596785,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

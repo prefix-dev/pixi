@@ -476,7 +476,9 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let executable_path = extract_executable_from_trampoline_manifest(&script_path)
+            .await
+            .unwrap();
         assert_eq!(
             executable_path,
             Path::new("/home/user/.pixi/envs/nushell/bin/nu")

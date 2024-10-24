@@ -41,6 +41,8 @@ impl Prefix {
                 .into_diagnostic()
                 .context("failed to constructor environment activator")?;
 
+        eprintln!("activation scripts {:?}", activator.activation_scripts);
+
         activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
             .into_diagnostic()
