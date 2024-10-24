@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "osx-arm64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-b-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "421d7aff5128dcffccba8dfcbef52845",
+      "name": "dummy-b",
+      "platform": "osx",
+      "sha256": "50c8a08475c9c0b3d464313be8ba605fac1580357d64e771e83eb17bff33a6b1",
+      "size": 2835,
+      "subdir": "osx-arm64",
+      "timestamp": 1729783596818,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

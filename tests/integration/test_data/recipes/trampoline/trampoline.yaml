@@ -1,0 +1,26 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: dummy-b
+      version: 0.1.0
+    source:
+      path: .
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "set TRAMPOLINE_TEST_ENV='teapot'" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
+            - mv check_env.bat $PREFIX/bin/dummy-b.bat
+            # - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
+          else:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "export TRAMPOLINE_TEST_ENV='teapot'" > $PREFIX/etc/conda/activate.d/activate-trampoline.sh
+            - mv check_env.sh $PREFIX/bin/dummy-b
+            # - echo "dummy-b on unix" > $PREFIX/bin/dummy-b
+            - chmod +x $PREFIX/bin/dummy-b

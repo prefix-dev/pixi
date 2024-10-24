@@ -1,36 +1,47 @@
+use std::{collections::HashMap, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
+
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
-const TRAMPOLINE_BIN: &[u8] =
+pub const TRAMPOLINE_BIN: &[u8] =
     include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin");
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "windows")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-pc-windows-msvc.exe"
 );
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-unknown-linux-musl"
 );
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "macos")]
-const TRAMPOLINE_BIN: &[u8] =
+pub const TRAMPOLINE_BIN: &[u8] =
     include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-apple-darwin");
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "windows")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe"
 );
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
 );
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ManifestMetadata {
+    pub exe: PathBuf,
+    pub path: String,
+    pub env: HashMap<String, String>,
+}
 
 #[allow(dead_code)]
 pub struct Trampoline {
