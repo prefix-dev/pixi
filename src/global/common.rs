@@ -295,10 +295,11 @@ impl InstallChange {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Tracks changes made to the environment
 /// after installing packages.
 /// It also contain what packages were in environment before the update.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[must_use]
 pub(crate) struct EnvironmentUpdate {
     package_changes: HashMap<PackageName, InstallChange>,
     current_packages: Vec<PackageName>,
@@ -511,7 +512,7 @@ impl StateChanges {
         // Check if there are any changes
         if environment_update.is_empty() {
             eprintln!(
-                "{} Environment {} was already up-to-date.",
+                "{}Environment {} was already up-to-date.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display(),
             );
@@ -535,19 +536,19 @@ impl StateChanges {
         // Output messages based on the type of changes
         if top_level_changes.is_empty() && !transitive_changes.is_empty() {
             eprintln!(
-                "{} Updated environment {}.",
+                "{}Updated environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display()
             );
         } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
             eprintln!(
-                "{} Environment {} was already up-to-date.",
+                "{}Environment {} was already up-to-date.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display()
             );
         } else if top_level_changes.len() == 1 {
             eprintln!(
-                "{} Updated package {} {} in environment {}.",
+                "{}Updated package {} {} in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 console::style(top_level_changes[0].0.as_normalized()).green(),
                 top_level_changes[0].1.version_fancy_display(),
@@ -555,7 +556,7 @@ impl StateChanges {
             );
         } else if top_level_changes.len() > 1 {
             eprintln!(
-                "{} Updated packages in environment {}.",
+                "{}Updated packages in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display()
             );

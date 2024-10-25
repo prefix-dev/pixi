@@ -33,11 +33,17 @@ repos:
         types_or: [python, pyi]
         require_serial: true
       # Typecheck python tests
-      - id: typecheck-tests
-        name: typecheck-tests
-        entry: pixi run typecheck-tests
+      - id: typecheck-python
+        name: typecheck-python
+        entry: pixi run typecheck-python
         language: system
         types_or: [python, pyi]
+        pass_filenames: false
+      - id: check-openssl
+        name: check-openssl
+        entry: pixi run check-openssl
+        language: system
+        types: [file, toml]
         pass_filenames: false
       # typos
       - id: typos
