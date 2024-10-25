@@ -46,7 +46,7 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
-    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"],)]
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"], ignore_case = true)]
     pub format: Option<ManifestFormat>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
@@ -607,7 +607,24 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_scm_formats() {
+    fn test_multiple_format_values() {
+        let test_cases = vec![
+            ("pixi", ManifestFormat::Pixi),
+            ("PiXi", ManifestFormat::Pixi),
+            ("PIXI", ManifestFormat::Pixi),
+            ("pyproject", ManifestFormat::Pyproject),
+            ("PyPrOjEcT", ManifestFormat::Pyproject),
+            ("PYPROJECT", ManifestFormat::Pyproject),
+        ];
+
+        for (input, expected) in test_cases {
+            let args = Args::try_parse_from(&["init", "--format", input]).unwrap();
+            assert_eq!(args.format, Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_multiple_scm_values() {
         let test_cases = vec![
             ("github", GitAttributes::Github),
             ("GiThUb", GitAttributes::Github),
