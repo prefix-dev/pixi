@@ -197,7 +197,7 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    project.install_environment(env_name).await?;
+    let _ = project.install_environment(env_name).await?;
 
     let with_package_names = args
         .with
