@@ -55,8 +55,8 @@ pub struct Args {
     pub pyproject_toml: bool,
 
     /// Source Control Management used for this project
-    #[arg(short = 's', long = "scm", default_value = "github")]
-    pub scm: Option<String>,
+    #[arg(short = 's', long = "scm")]
+    pub scm: Option<GitAttributes>,
 }
 
 /// The pixi.toml template
@@ -153,39 +153,26 @@ const GITIGNORE_TEMPLATE: &str = r#"
 *.egg-info
 "#;
 
-enum GitAttributes {
-    GitHub,
-    GitLab,
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum GitAttributes {
+    Github,
+    Gitlab,
     Codeberg,
 }
 
 impl GitAttributes {
     fn template(&self) -> &'static str {
         match self {
-            GitAttributes::GitHub => {
-                r#"# GitHub syntax highlighting
+            GitAttributes::Github | GitAttributes::Codeberg => {
+                r#"# SCM syntax highlighting
 pixi.lock linguist-language=YAML linguist-generated=true
 "#
             }
-            GitAttributes::GitLab => {
+            GitAttributes::Gitlab => {
                 r#"# GitLab syntax highlighting
 pixi.lock gitlab-language=yaml gitlab-generated=true
 "#
             }
-            GitAttributes::Codeberg => {
-                r#"# Codeberg syntax highlighting
-pixi.lock linguist-language=YAML linguist-generated=true
-"#
-            }
-        }
-    }
-
-    fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "github" => Some(GitAttributes::GitHub),
-            "gitlab" => Some(GitAttributes::GitLab),
-            "codeberg" => Some(GitAttributes::Codeberg),
-            _ => None,
         }
     }
 }
@@ -449,7 +436,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    let git_attributes = GitAttributes::from_str(args.scm.unwrap().as_str()).unwrap();
+    let git_attributes = args.scm.unwrap_or(GitAttributes::Github);
 
     // create a .gitattributes if one is missing
     if let Err(e) = create_or_append_file(&gitattributes_path, git_attributes.template()) {
