@@ -55,7 +55,7 @@ pub struct Args {
     pub pyproject_toml: bool,
 
     /// Source Control Management used for this project
-    #[arg(short = 's', long = "scm")]
+    #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
 }
 
