@@ -28,10 +28,11 @@ It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if 
 
 ##### Options
 
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: Specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: Specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
 - `--format <FORMAT>`: Specify the format of the project file, either `pyproject` or `pixi`. [default: `pixi`]
+- `--scm <SCM>`: Specify the SCM used to manage the project with. Possible values: github, gitlab, codeberg. [default: `github`]
 
 !!! info "Importing an environment.yml"
   When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
@@ -46,7 +47,7 @@ pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
 pixi init --import environment.yml
 pixi init --format pyproject
-pixi init --format pixi
+pixi init --format pixi --scm gitlab
 ```
 
 ## `add`
