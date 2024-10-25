@@ -618,7 +618,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let args = Args::try_parse_from(&["init", "--format", input]).unwrap();
+            let args = Args::try_parse_from(["init", "--format", input]).unwrap();
             assert_eq!(args.format, Some(expected));
         }
     }
@@ -639,7 +639,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let args = Args::try_parse_from(&["init", "--scm", input]).unwrap();
+            let args = Args::try_parse_from(["init", "--scm", input]).unwrap();
             assert_eq!(args.scm, Some(expected));
         }
     }
@@ -649,7 +649,7 @@ mod tests {
         let invalid_values = vec!["invalid", "", "git", "bitbucket", "mercurial", "svn"];
 
         for value in invalid_values {
-            let result = Args::try_parse_from(&["init", "--scm", value]);
+            let result = Args::try_parse_from(["init", "--scm", value]);
             assert!(
                 result.is_err(),
                 "Expected error for invalid SCM value '{}', but got success",
