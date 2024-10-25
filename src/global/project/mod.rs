@@ -919,8 +919,11 @@ impl Project {
                 "Environment {} specs not up to date with manifest",
                 env_name.fancy_display()
             );
-            let install_changes = self.install_environment(env_name).await?;
-            state_changes.insert_change(env_name, StateChange::UpdatedEnvironment(install_changes));
+            let environment_update = self.install_environment(env_name).await?;
+            state_changes.insert_change(
+                env_name,
+                StateChange::UpdatedEnvironment(environment_update),
+            );
         }
 
         // Expose executables
