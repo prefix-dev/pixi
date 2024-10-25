@@ -153,9 +153,10 @@ jobs:
   # pixi interface
   test-integration:
     name: ${{ matrix.arch.name }} - Integration Tests
+    timeout-minutes: 30
     runs-on: ${{ matrix.arch.os }}
     env:
-      TARGET_RELEASE: "${{ github.workspace }}/.pixi/target/release"
+      TARGET_RELEASE: "${{ github.workspace }}/target-pixi/release"
     strategy:
       fail-fast: false
       matrix:
@@ -199,8 +200,5 @@ jobs:
           New-Item -ItemType Directory -Force -Path "${{ env.TARGET_RELEASE }}"
           Move-Item -Path "pixi_bin/pixi-${{ matrix.arch.target }}${{ matrix.arch.extension }}" -Destination "${{ env.TARGET_RELEASE }}/pixi.exe"
         shell: pwsh
-      - name: Typecheck integration tests
-        if: runner.os == 'Linux'
-        run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run typecheck-integration
       - name: Run integration tests
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-integration-ci

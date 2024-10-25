@@ -111,7 +111,7 @@ impl Prefix {
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
     /// to filter and collect executable files.
-    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<(String, PathBuf)> {
+    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
         let executables = prefix_packages
             .iter()
             .flat_map(|record| {
@@ -121,7 +121,10 @@ impl Prefix {
                     .filter(|relative_path| self.is_executable(relative_path))
                     .filter_map(|path| {
                         path.iter().last().and_then(OsStr::to_str).map(|name| {
-                            (strip_executable_extension(name.to_string()), path.clone())
+                            Executable::new(
+                                strip_executable_extension(name.to_string()),
+                                path.clone(),
+                            )
                         })
                     })
             })
@@ -184,5 +187,17 @@ impl Prefix {
             .into_iter()
             .find(|r| r.repodata_record.package_record.name == *package_name)
             .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Executable {
+    pub name: String,
+    pub path: PathBuf,
+}
+
+impl Executable {
+    fn new(name: String, path: PathBuf) -> Self {
+        Self { name, path }
     }
 }
