@@ -29,5 +29,10 @@ def global_update_channel_1(test_data: Path) -> str:
 
 
 @pytest.fixture
-def non_self_expose_channel(test_data: Path) -> str:
-    return test_data.joinpath("channels", "non_self_expose_channel").as_uri()
+def non_self_expose_channel_1(test_data: Path) -> str:
+    return test_data.joinpath("channels", "non_self_expose_channel_1").as_uri()
+
+
+@pytest.fixture
+def non_self_expose_channel_2(test_data: Path) -> str:
+    return test_data.joinpath("channels", "non_self_expose_channel_2").as_uri()

@@ -11,28 +11,28 @@
       "depends": [
         "jupyter-core"
       ],
-      "md5": "99f0334809b3f56cb8307aeb66663b86",
+      "md5": "7a3f1840da2a269342aca11878a5ebdb",
       "name": "jupyter",
       "platform": "linux",
-      "sha256": "25f1b9ad9a37b8c1cb9963ca0f66dbf9a426a9449114103f95a595961c469221",
-      "size": 2216,
+      "sha256": "83ce44aae6def981979ac4f5bdf6881466be3b930bd9dea53d4e68856008575a",
+      "size": 2239,
       "subdir": "linux-64",
-      "timestamp": 1729178224640,
+      "timestamp": 1729670878591,
       "version": "0.1.0"
     },
-    "jupyter-core-0.1.0-hb0f4dca_0.conda": {
+    "jupyter-core-0.2.0-hb0f4dca_0.conda": {
       "arch": "x86_64",
       "build": "hb0f4dca_0",
       "build_number": 0,
       "depends": [],
-      "md5": "26b46e440b91156bdf23fafd41334af2",
+      "md5": "3d5bd253c526824ff0ebc8966263631a",
       "name": "jupyter-core",
       "platform": "linux",
-      "sha256": "61055201e66df430cb88541ebc391523f5dcd15bff484070b17b031f87ae6351",
-      "size": 2421,
+      "sha256": "5caac6909fba2560a5c2f4231565a4ae6e4209c730580c21db4b27f490093a6a",
+      "size": 2445,
       "subdir": "linux-64",
-      "timestamp": 1729178224640,
-      "version": "0.1.0"
+      "timestamp": 1729670878591,
+      "version": "0.2.0"
     }
   },
   "repodata_version": 2

@@ -94,7 +94,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Can't add packages with `--with` for more than one environment");
     }
 
-    let mut state_changes = StateChanges::default();
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
@@ -118,8 +117,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
-            Ok(sc) => {
-                match sc.has_changed() {
+            Ok(state_changes) => {
+                match state_changes.has_changed() {
                     true => env_changes
                         .changes
                         .insert(env_name.clone(), EnvState::Installed),
@@ -128,10 +127,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
                     ),
                 };
-                state_changes |= sc;
+                state_changes.report();
             }
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(env_name, &last_updated_project)
                     .await
                     .wrap_err("Couldn't install packages. Reverting also failed.")?;
