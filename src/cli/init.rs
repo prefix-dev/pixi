@@ -605,4 +605,39 @@ mod tests {
 
         dir.close().unwrap();
     }
+
+    #[test]
+    fn test_multiple_scm_formats() {
+        let test_cases = vec![
+            ("github", GitAttributes::Github),
+            ("GiThUb", GitAttributes::Github),
+            ("GITHUB", GitAttributes::Github),
+            ("Github", GitAttributes::Github),
+            ("gitlab", GitAttributes::Gitlab),
+            ("GiTlAb", GitAttributes::Gitlab),
+            ("GITLAB", GitAttributes::Gitlab),
+            ("codeberg", GitAttributes::Codeberg),
+            ("CoDeBeRg", GitAttributes::Codeberg),
+            ("CODEBERG", GitAttributes::Codeberg),
+        ];
+
+        for (input, expected) in test_cases {
+            let args = Args::try_parse_from(&["init", "--scm", input]).unwrap();
+            assert_eq!(args.scm, Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_invalid_scm_values() {
+        let invalid_values = vec!["invalid", "", "git", "bitbucket", "mercurial", "svn"];
+
+        for value in invalid_values {
+            let result = Args::try_parse_from(&["init", "--scm", value]);
+            assert!(
+                result.is_err(),
+                "Expected error for invalid SCM value '{}', but got success",
+                value
+            );
+        }
+    }
 }
