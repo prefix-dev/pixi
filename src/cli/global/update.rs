@@ -44,13 +44,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        let install_changes = project.install_environment(env_name).await?;
+        let environment_update = project.install_environment(env_name).await?;
 
         let mut state_changes = StateChanges::default();
 
         state_changes.insert_change(
             env_name,
-            global::StateChange::UpdatedEnvironment(install_changes),
+            global::StateChange::UpdatedEnvironment(environment_update),
         );
 
         // Sync executables exposed names with the manifest
