@@ -24,8 +24,10 @@ release = "python scripts/release.py"
 run-all-examples = { cmd = "python ./tests/run_all_examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build",
 ] }
-test = "cargo test"
-test-all = "cargo test --all-features"
+test = "cargo nextest run"
+test-workspace = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
+              --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
+
 
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
@@ -54,6 +56,7 @@ update-integration-test-data = { cmd = "python update-channels.py", cwd = "tests
 
 [feature.dev.dependencies]
 # Needed for the citation
+cargo-nextest = ">=0.9.78,<0.10"
 cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
@@ -65,6 +68,7 @@ taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
+check-openssl = "python scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
 pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
