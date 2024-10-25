@@ -1,16 +1,15 @@
-use std::str::FromStr;
-
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
-    global::{self, EnvironmentName, ExposedName, Mapping, Project, StateChange, StateChanges},
-    prefix::Prefix,
+    global::{
+        self, common::NotChangedReason, list::list_global_environments, project::ExposedType,
+        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+    },
 };
 use pixi_config::{self, Config, ConfigCli};
 
@@ -18,8 +17,9 @@ use pixi_config::{self, Config, ConfigCli};
 ///
 /// Example:
 /// - pixi global install starship nushell ripgrep bat
-/// - pixi global install --environment science jupyter polars
+/// - pixi global install jupyter --with polars
 /// - pixi global install --expose python3.8=python python=3.8
+/// - pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -49,6 +49,11 @@ pub struct Args {
     /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
     #[arg(long)]
     expose: Vec<Mapping>,
+
+    /// Add additional dependencies to the environment.
+    /// Their executables will not be exposed.
+    #[arg(long)]
+    with: Vec<MatchSpec>,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -82,10 +87,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let multiple_envs = env_names.len() > 1;
 
     if !args.expose.is_empty() && env_names.len() != 1 {
-        miette::bail!("Can't add exposed mappings for more than one environment");
+        miette::bail!("Can't add exposed mappings with `--exposed` for more than one environment");
     }
 
-    let mut state_changes = StateChanges::default();
+    if !args.with.is_empty() && env_names.len() != 1 {
+        miette::bail!("Can't add packages with `--with` for more than one environment");
+    }
+
+    let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
@@ -94,20 +103,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .clone()
                 .into_iter()
                 .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                .collect()
+                .map(|(_, spec)| spec)
+                .collect_vec()
         } else {
-            specs.clone()
+            specs
+                .clone()
+                .into_iter()
+                .map(|(_, spec)| spec)
+                .collect_vec()
         };
         let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, specs, &mut project)
+        match setup_environment(env_name, &args, &specs, &mut project)
             .await
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
-            Ok(sc) => {
-                state_changes |= sc;
+            Ok(state_changes) => {
+                match state_changes.has_changed() {
+                    true => env_changes
+                        .changes
+                        .insert(env_name.clone(), EnvState::Installed),
+                    false => env_changes.changes.insert(
+                        env_name.clone(),
+                        EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
+                    ),
+                };
+                state_changes.report();
             }
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(env_name, &last_updated_project)
                     .await
                     .wrap_err("Couldn't install packages. Reverting also failed.")?;
@@ -116,7 +138,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
+
+    // After installing, we always want to list the changed environments
+    list_global_environments(
+        &last_updated_project,
+        Some(env_names),
+        Some(&env_changes),
+        None,
+    )
+    .await?;
 
     Ok(())
 }
@@ -124,7 +154,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: IndexMap<PackageName, MatchSpec>,
+    specs: &[MatchSpec],
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -146,7 +176,7 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for (_package_name, spec) in &specs {
+    for spec in specs.iter().chain(&args.with) {
         project.manifest.add_dependency(
             env_name,
             spec,
@@ -169,45 +199,23 @@ async fn setup_environment(
     // Installing the environment to be able to find the bin paths later
     project.install_environment(env_name).await?;
 
-    // Cleanup removed executables
-    state_changes |= project.remove_broken_expose_names(env_name).await?;
+    let with_package_names = args
+        .with
+        .iter()
+        .map(|spec| {
+            spec.name
+                .clone()
+                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
 
-    if args.expose.is_empty() {
-        // Add the expose binaries for all the packages that were requested to the manifest
-        for (package_name, _spec) in &specs {
-            let prefix = project.environment_prefix(env_name).await?;
-            let prefix_package = prefix.find_designated_package(package_name).await?;
-            let package_executables = prefix.find_executables(&[prefix_package]);
-            for (executable_name, _) in &package_executables {
-                let mapping = Mapping::new(
-                    ExposedName::from_str(executable_name)?,
-                    executable_name.clone(),
-                );
-                project.manifest.add_exposed_mapping(env_name, &mapping)?;
-            }
-            // If no executables were found, automatically expose the package name itself from the other packages.
-            // This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
-            if !package_executables
-                .iter()
-                .any(|(name, _)| name.as_str() == package_name.as_normalized())
-            {
-                if let Some((mapping, source_package_name)) =
-                    find_binary_by_name(&prefix, package_name).await?
-                {
-                    project.manifest.add_exposed_mapping(env_name, &mapping)?;
-                    tracing::warn!(
-                        "Automatically exposed `{}` from `{}`",
-                        console::style(mapping.exposed_name()).yellow(),
-                        console::style(source_package_name.as_normalized()).green()
-                    );
-                }
-            }
-        }
-    }
+    // Sync exposed binaries
+    let expose_type = ExposedType::new(args.expose.clone(), with_package_names);
+
+    project.sync_exposed_names(env_name, expose_type).await?;
 
     // Figure out added packages and their corresponding versions
-    let specs = specs.values().cloned().collect_vec();
-    state_changes |= project.added_packages(specs.as_slice(), env_name).await?;
+    state_changes |= project.added_packages(specs, env_name).await?;
 
     // Expose executables of the new environment
     state_changes |= project
@@ -216,29 +224,4 @@ async fn setup_environment(
 
     project.manifest.save().await?;
     Ok(state_changes)
-}
-
-/// Finds the package name in the prefix and automatically exposes it if an executable is found.
-/// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
-/// This function will return the mapping and the package name of the package in which the binary was found.
-async fn find_binary_by_name(
-    prefix: &Prefix,
-    package_name: &PackageName,
-) -> miette::Result<Option<(Mapping, PackageName)>> {
-    let installed_packages = prefix.find_installed_packages(None).await?;
-    for package in &installed_packages {
-        let executables = prefix.find_executables(&[package.clone()]);
-
-        // Check if any of the executables match the package name
-        if let Some(executable) = executables
-            .iter()
-            .find(|(name, _)| name.as_str() == package_name.as_normalized())
-        {
-            return Ok(Some((
-                Mapping::new(ExposedName::from_str(&executable.0)?, executable.0.clone()),
-                package.repodata_record.package_record.name.clone(),
-            )));
-        }
-    }
-    Ok(None)
 }

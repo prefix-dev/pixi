@@ -1,5 +1,7 @@
+from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
+from typing import Any
 import tomli_w
 from filelock import FileLock
 
@@ -9,7 +11,13 @@ RESULTS_FILE = Path(__file__).parent / ".wheel_test_results.toml"
 LOCK_FILE = RESULTS_FILE.with_suffix(".lock")
 
 
-def record_result(test_id: str, name: str, outcome: str, duration: float, details: str):
+@dataclass
+class Test:
+    id: str
+    results: list[dict[str, Any]] = field(default_factory=list)
+
+
+def record_result(test_id: str, name: str, outcome: str, duration: float, details: str) -> None:
     """
     Collects test status after each test run, compatible with pytest-xdist.
     """
@@ -19,7 +27,7 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
     lock = FileLock(str(LOCK_FILE))
 
     with lock:
-        test = {"id": test_id, "results": []}
+        test = Test(id=test_id)
 
         # Get the existing results
         if RESULTS_FILE.exists():
@@ -27,17 +35,17 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
                 data = tomllib.load(f)
                 # If this doesn't hold, don't use the recorded data
                 if "id" in data and data["id"] == test_id:
-                    test = data
+                    test = Test(id=data["id"], results=data["results"])
 
         # Append the new result
         # if we are in the same session
-        if test["id"] == test_id:
-            test["results"].append(result)
+        if test.id == test_id:
+            test.results.append(result)
         # The data is from a different session
         # so we overwrite the data
         else:
-            test["results"] = [result]
+            test.results = [result]
 
         # Write the results back to the file
         with RESULTS_FILE.open("wb") as f:
-            tomli_w.dump(test, f)
+            tomli_w.dump(test.__dict__, f)

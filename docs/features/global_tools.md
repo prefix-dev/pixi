@@ -3,14 +3,11 @@
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
 
-!!! note
-    The design for global tools is still in progress, and the commands and behavior may change in future releases.
-    The proposal for the global tools feature can be found [here](../design_proposals/pixi_global_manifest.md).
-
 ## The Global Manifest
-Since `v0.33.0` pixi has a new manifest file that will be created in the global directory (default: `$HOME/.pixi/manifests/pixi-global.toml`).
+Since `v0.33.0` pixi has a new manifest file that will be created in the global directory.
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.
+
 
 A simple version looks like this:
 ```toml
@@ -33,6 +30,35 @@ exposed = { python310 = "python" } # (3)!
 1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
 2. The exposed binaries are the ones that will be available in the system path. `vim` has multiple and all of them are exposed.
 3. Here python is exposed as `python310` to avoid conflicts with other python installations. You can give it any name you want.
+
+### Manifest locations
+
+The manifest can be found at the following locations depending on your operation system.
+
+=== "Linux"
+
+    | **Priority** | **Location**                                                           | **Comments**                                                                       |
+    |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
+    | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+
+=== "macOS"
+
+    | **Priority** | **Location**                                                           | **Comments**                                                                       |
+    |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
+    | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+
+=== "Windows"
+
+    | **Priority** | **Location**                                                           | **Comments**                                                                                   |
+    |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+    | 1            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml`                       | User-specific manifest                                                                         |
+    | 2            | `$PIXI_HOME\manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `%USERPROFILE%/.pixi`      |
+
+!!! note
+    If multiple locations exist, the manifest with the highest priority will be used.
+
 
 ### Channels
 The channels are the conda channels that will be used to search for the packages.
@@ -146,7 +172,7 @@ Creating two separate non-interfering environments, while exposing only the mini
 ### Example: Creating a Data Science Sandbox Environment
 You can create an environment with multiple tools using the following command:
 ```shell
-pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
+pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
 ```
 This command generates the following entry in the manifest:
 ```toml

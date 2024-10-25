@@ -9,7 +9,7 @@ PYPI_URL = "https://pypi.org/simple"
 
 
 class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
+    def do_GET(self) -> None:
         # Check for basic authentication
         if self.headers.get("Authorization") is None:
             self.send_response(401)

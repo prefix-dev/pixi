@@ -178,8 +178,9 @@ def test_search(pixi: Path) -> None:
 
 def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
+    conda_forge = "https://fast.prefix.dev/conda-forge"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_path], ExitCode.SUCCESS)
 
     # Add package
     verify_cli_command(
@@ -208,7 +209,7 @@ def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
             manifest_path,
             "--platform",
             "linux-64",
-            "conda-forge::_r-mutex",
+            f"{conda_forge}::_r-mutex",
         ],
         ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge"],
@@ -256,7 +257,7 @@ def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
             manifest_path,
             "--platform",
             "linux-64",
-            "conda-forge::_r-mutex",
+            f"{conda_forge}::_r-mutex",
         ],
         ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge", "Removed"],

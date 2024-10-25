@@ -45,10 +45,12 @@ test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose tests
 test-integration-dev = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration", depends-on = [
   "build",
 ] }
-test-integration-global = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration/test_global.py", depends-on = [
-  "build",
-] }
-typecheck-integration = "mypy --strict tests/integration"
+# pass the file to run as an argument to the task
+# you can also pass a specific test function, like this:
+# /path/to/test.py::test_function
+test-specific-test = { cmd = "pytest", depends-on = ["build"] }
+typecheck-tests = "mypy --strict tests --exclude pypi-indexes"
+update-integration-test-data = { cmd = "python update-channels.py", cwd = "tests/integration/test_data" }
 
 [feature.dev.dependencies]
 # Needed for the citation
@@ -134,6 +136,7 @@ docs = { features = [
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
+  "pytest",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
 schema = { features = [
