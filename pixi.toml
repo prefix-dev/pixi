@@ -68,6 +68,7 @@ taplo = ">=0.9.1,<0.10"
 typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
+check-openssl = "python scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
 pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
