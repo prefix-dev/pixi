@@ -28,6 +28,7 @@ test = "cargo nextest run"
 test-workspace = """cargo nextest run --workspace --retries 2 --no-default-features --features rustls-tls --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
+
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
 mypy = ">=1.11,<1.12"
