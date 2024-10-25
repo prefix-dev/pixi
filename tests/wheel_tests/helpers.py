@@ -19,7 +19,9 @@ def run(args: list[StrPath], cwd: StrPath | None = None) -> None:
     proc.check_returncode()
 
 
-def add_system_requirements(manifest_path: pathlib.Path, system_requirements: dict[str, Any]):
+def add_system_requirements(
+    manifest_path: pathlib.Path, system_requirements: dict[str, Any]
+) -> None:
     """
     Add system requirements to the manifest file
     add something like this:
@@ -34,7 +36,7 @@ def add_system_requirements(manifest_path: pathlib.Path, system_requirements: di
         tomli_w.dump(manifest, f)
 
 
-def setup_stdout_stderr_logging():
+def setup_stdout_stderr_logging() -> None:
     """
     Set up the logging directory
     """
@@ -44,7 +46,9 @@ def setup_stdout_stderr_logging():
         file.unlink()
 
 
-def log_called_process_error(name: str, err: subprocess.CalledProcessError, std_err_only=False):
+def log_called_process_error(
+    name: str, err: subprocess.CalledProcessError, std_err_only: bool = False
+) -> None:
     """
     Log the output of a subprocess that failed
     has the option to log only the stderr

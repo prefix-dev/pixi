@@ -511,6 +511,160 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
     assert actual_manifest == expected_manifest
 
 
+def test_install_with_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
+
+    # Should fail, since two environments are created
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-b",
+            "--with",
+            "dummy-c",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Can't add packages with `--with` for more than one environment",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "--with",
+            "dummy-b",
+            "--with",
+            "dummy-c",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*", dummy-c = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert not dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+
+def test_install_with_environment_no_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "dummy-a",
+            "--with",
+            "dummy-b",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert dummy_a.is_file()
+    assert dummy_aa.is_file()
+    assert not dummy_b.is_file()
+
+
+def test_install_with_environment_and_expose(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "--expose=dummy-b",
+            "dummy-a",
+            "--with",
+            "dummy-b",
+        ],
+        env=env,
+    )
+
+    expected_manifest = f"""\
+version = {MANIFEST_VERSION}
+
+[envs.dummy]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*", dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+"""
+    actual_manifest = manifest.read_text()
+
+    # Ensure that the manifest is correctly adapted
+    assert actual_manifest == expected_manifest
+
+    assert not dummy_a.is_file()
+    assert not dummy_aa.is_file()
+    assert dummy_b.is_file()
+
+
 def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
@@ -807,7 +961,7 @@ def test_install_expose_multiple_packages(pixi: Path, tmp_path: Path, dummy_chan
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Can't add exposed mappings for more than one environment",
+        stderr_contains="Can't add exposed mappings with `--exposed` for more than one environment",
     )
 
     # But it does work with multiple packages and a single environment
@@ -1207,6 +1361,7 @@ def test_global_update_single_package(
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
+        stderr_contains="Updated package package 0.1.0 -> 0.2.0 in environment package.",
     )
     package = tmp_path / "bin" / exec_extension("package")
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
@@ -1215,8 +1370,32 @@ def test_global_update_single_package(
     # After update be left with only the binary that was in both versions.
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # pixi global update doesn't add new exposed mappings
-    assert not package0_2_0.is_file()
+    # pixi global update should add new exposed mappings, as all of them were exposed before
+    assert package0_2_0.is_file()
+
+
+def test_global_update_single_package_with_transient_dependency(
+    pixi: Path, tmp_path: Path, non_self_expose_channel_1: str, non_self_expose_channel_2: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Test update of a single package
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter 0.1.0"],
+        env=env,
+    )
+    # Replace the version with a "*"
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+    manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
+    manifest_dict = tomllib.loads(manifest.read_text())
+    manifest_dict["envs"]["jupyter"]["channels"] = [non_self_expose_channel_2]
+    manifest.write_text(tomli_w.dumps(manifest_dict))
+    # We updated only the transient dependency
+    verify_cli_command(
+        [pixi, "global", "update", "jupyter"],
+        env=env,
+        stderr_contains="Updated environment jupyter.",
+    )
 
 
 def test_global_update_all_packages(
@@ -1257,18 +1436,75 @@ def test_global_update_all_packages(
     assert package2.is_file()
     assert package.is_file()
     assert not package0_1_0.is_file()
-    # After update be left with only the binary that was in both versions.
-    assert not package0_2_0.is_file()
+    # After update be left we auto expose new binary, as all of them were exposed before
+    assert package0_2_0.is_file()
 
     # Check the manifest for removed binaries
     manifest_content = manifest.read_text()
     assert "package0.1.0" not in manifest_content
-    assert "package0.2.0" not in manifest_content
+    assert "package0.2.0" in manifest_content
     assert "package2" in manifest_content
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
     bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / exec_extension("package2")
+    assert "0.2.0" in bin_file_package2.read_text()
+
+
+def test_global_update_multiple_packages_in_one_env(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            global_update_channel_1,
+            "--environment",
+            "my-packages",
+            "package2==0.1.0",
+            "package==0.1.0",
+        ],
+        env=env,
+    )
+
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+    package2 = tmp_path / "bin" / exec_extension("package2")
+    assert package2.is_file()
+    assert package.is_file()
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    # Replace the version with a "*"
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+    manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
+
+    verify_cli_command(
+        [pixi, "global", "update", "my-packages"],
+        env=env,
+        stderr_contains=["- package 0.1.0 -> 0.2.0", "- package2 0.1.0 -> 0.2.0"],
+    )
+
+    assert package2.is_file()
+    assert package.is_file()
+    assert not package0_1_0.is_file()
+    # After update be left we auto expose new binary, as all of them were exposed before
+    assert package0_2_0.is_file()
+
+    # Check the manifest for removed binaries
+    manifest_content = manifest.read_text()
+    assert "package0.1.0" not in manifest_content
+    assert "package0.2.0" in manifest_content
+    assert "package2" in manifest_content
+    assert "package" in manifest_content
+
+    # Check content of package2 file to be updated
+    bin_file_package2 = tmp_path / "envs" / "my-packages" / "bin" / exec_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
@@ -1299,7 +1535,45 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1
     # Update the environment
     # The package should now have the version `0.2.0` and expose a different executable
     # The old executable should be removed
-    # The new executable will also not be there, since `pixi global update` doesn't add new exposed mappings to the manifest.
+    # The new executable should be there, since user initially auto-exposed all binaries and `pixi global update` should add new binary to the manifest.
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        env=env,
+    )
+    assert not package0_1_0.is_file()
+    assert package0_2_0.is_file()
+
+
+def test_pixi_update_subset_expose(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        env=env,
+    )
+    assert package0_1_0.is_file()
+    assert not package0_2_0.is_file()
+
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
+
+    # We change the matchspec to '*'
+    # So we expect to new binary to not be exposed,
+    # since we exposed only a small subset
+    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
+    parsed_toml["envs"]["package"]["exposed"] = {"package": "package0.1.0"}
+
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+
+    # Update the environment
+    # The package should now have the version `0.2.0` and expose a different executable
+    # The old executable should be removed
+    # The new executable should be there, since user initially auto-exposed all binaries and `pixi global update` should add new binary to the manifest.
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
@@ -1307,13 +1581,18 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1
     assert not package0_1_0.is_file()
     assert not package0_2_0.is_file()
 
+    # parse the manifest again
+    # and check that we don't have any new binary exposed
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert "exposed" not in parsed_toml["envs"]["package"]
 
-def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel: str) -> None:
+
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Install jupyter and expose it as 'jupyter'
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel, "jupyter"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter"],
         env=env,
     )
     jupyter = tmp_path / "bin" / exec_extension("jupyter")

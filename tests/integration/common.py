@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import os
 
-PIXI_VERSION = "0.33.0"
+PIXI_VERSION = "0.34.0"
 
 
 class ExitCode(IntEnum):
