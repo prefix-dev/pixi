@@ -1664,9 +1664,13 @@ message can be customized by setting the <code>PIXI_SELF_UPDATE_DISABLED_MESSAGE
 the user to the package manager they should be using to update pixi.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">PIXI_SELF_UPDATE_DISABLED_MESSAGE</span><span class="o">=</span><span class="s2">&quot;`self-update` has been disabled for this build. Run `brew upgrade pixi` instead&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
 </span></code></pre></div></p>
+<h4 id="custom-version">Custom version<a class="headerlink" href="#custom-version" title="Permanent link">#</a></h4>
+<p>You can specify a custom version string to be used in the <code>--version</code> output by setting the <code>PIXI_VERSION</code> environment variable during the build.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">PIXI_VERSION</span><span class="o">=</span><span class="s2">&quot;HEAD-123456&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
+</span></code></pre></div>
 <h2 id="shell-completion">Shell completion<a class="headerlink" href="#shell-completion" title="Permanent link">#</a></h2>
 <p>After building pixi you can generate shell autocompletion scripts by running
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>&lt;SHELL&gt;
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>&lt;SHELL&gt;
 </span></code></pre></div>
 and saving the output to a file.
 Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fish</code>, <code>nushell</code>, <code>powershell</code> and <code>zsh</code>.</p>
