@@ -2,8 +2,8 @@ use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
-use std::{env, io::IsTerminal};
 use pixi_consts::consts;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
