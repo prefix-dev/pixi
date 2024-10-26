@@ -975,54 +975,68 @@ mod tests {
             ExposedName::from_str("test").unwrap(),
             "test".to_string(),
         ));
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("nested_test").unwrap(),
+            Path::new("other_dir")
+                .join("nested_test")
+                .to_str()
+                .unwrap()
+                .to_string(),
+        ));
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
-        assert_eq!(to_add.len(), 1);
+        assert_eq!(to_add.len(), 2);
 
         // Add a legacy script to the bin directory
         // even if it's should be exposed and it's pointing to correct executable
         // it is an old script
         // we need to remove it and replace with trampoline
-        let script_path = if cfg!(windows) {
-            bin_dir.path().join("test.bat")
-        } else {
-            bin_dir.path().join("test")
-        };
+        let script_names = ["test", "nested_test"];
 
         #[cfg(windows)]
         {
-            let script = format!(
-                r#"
+            for script_name in script_names {
+                let script_path = bin_dir.path().join(format!("{}.bat", script_name));
+                let script = format!(
+                    r#"
             @"{}" %*
             "#,
-                env_dir
-                    .path()
-                    .join("bin")
-                    .join("test.exe")
-                    .to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
+                    env_dir
+                        .path()
+                        .join("bin")
+                        .join(format!("{}.exe", script_name))
+                        .to_string_lossy()
+                );
+                tokio_fs::write(&script_path, script).await.unwrap();
+            }
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
 
-            let script = format!(
-                r#"#!/bin/sh
+            for script_name in script_names {
+                let script_path = bin_dir.path().join(script_name);
+                let script = format!(
+                    r#"#!/bin/sh
             "{}" "$@"
             "#,
-                env_dir.path().join("bin").join("test").to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&script_path, permissions)
-                .await
-                .unwrap();
+                    env_dir
+                        .path()
+                        .join("bin")
+                        .join(script_name)
+                        .to_string_lossy()
+                );
+                tokio_fs::write(&script_path, script).await.unwrap();
+                // Set the file permissions to make it executable
+                let metadata = tokio_fs::metadata(&script_path).await.unwrap();
+                let mut permissions = metadata.permissions();
+                permissions.set_mode(0o755); // rwxr-xr-x
+                tokio_fs::set_permissions(&script_path, permissions)
+                    .await
+                    .unwrap();
+            }
         };
 
         let (mut to_remove, mut to_add) =
@@ -1100,6 +1114,7 @@ mod tests {
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
+        assert_eq!(to_remove.len(), 2);
 
         assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
         assert!(to_add.is_empty());

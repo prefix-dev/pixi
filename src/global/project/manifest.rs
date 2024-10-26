@@ -431,14 +431,14 @@ impl Manifest {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct Mapping {
     exposed_name: ExposedName,
-    executable_name: String,
+    executable_relname: String,
 }
 
 impl Mapping {
-    pub fn new(exposed_name: ExposedName, executable_name: String) -> Self {
+    pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
         Self {
             exposed_name,
-            executable_name,
+            executable_relname,
         }
     }
 
@@ -446,14 +446,21 @@ impl Mapping {
         &self.exposed_name
     }
 
+    pub fn executable_relname(&self) -> &str {
+        &self.executable_relname
+    }
+
     pub fn executable_name(&self) -> &str {
-        &self.executable_name
+        if let Some(executable_file_name) = Path::new(&self.executable_relname).file_name() {
+            return executable_file_name.to_str().unwrap_or(&self.executable_relname);
+        };
+        &self.executable_relname
     }
 }
 
 impl fmt::Display for Mapping {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}={}", self.exposed_name, self.executable_name)
+        write!(f, "{}={}", self.exposed_name, self.executable_relname)
     }
 }
 
@@ -461,10 +468,10 @@ impl FromStr for Mapping {
     type Err = miette::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        // If we can't parse exposed_name=executable_name, assume input=input
-        let (exposed_name, executable_name) = input.split_once('=').unwrap_or((input, input));
+        // If we can't parse exposed_name=executable_relname, assume input=input
+        let (exposed_name, executable_relname) = input.split_once('=').unwrap_or((input, input));
         let exposed_name = ExposedName::from_str(exposed_name)?;
-        Ok(Mapping::new(exposed_name, executable_name.to_string()))
+        Ok(Mapping::new(exposed_name, executable_relname.to_string()))
     }
 }
 
