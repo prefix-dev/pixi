@@ -2745,10 +2745,11 @@ It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignor
 </ol>
 <h5 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
-<li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that the project supports. (Allowed to be used more than once)</li>
+<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: Specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
+<li><code>--platform &lt;PLATFORM&gt; (-p)</code>: Specify a platform that the project supports. (Allowed to be used more than once)</li>
 <li><code>--import &lt;ENV_FILE&gt; (-i)</code>: Import an existing conda environment file, e.g. <code>environment.yml</code>.</li>
 <li><code>--format &lt;FORMAT&gt;</code>: Specify the format of the project file, either <code>pyproject</code> or <code>pixi</code>. [default: <code>pixi</code>]</li>
+<li><code>--scm &lt;SCM&gt;</code>: Specify the SCM used to manage the project with. Possible values: github, gitlab, codeberg. [default: <code>github</code>]</li>
 </ul>
 <div class="admonition info">
 <p class="admonition-title">Importing an environment.yml</p>
@@ -2763,7 +2764,7 @@ It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignor
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>pixi<span class="w"> </span>init<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span>myproject
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pyproject
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pixi
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pixi<span class="w"> </span>--scm<span class="w"> </span>gitlab
 </span></code></pre></div>
 <h2 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">#</a></h2>
 <p>Adds dependencies to the <a href="../project_configuration/">manifest file</a>.
