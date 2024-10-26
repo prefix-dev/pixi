@@ -349,7 +349,7 @@ impl Manifest {
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
             &mapping.exposed_name.to_string(),
-            toml_edit::Value::from(mapping.executable_name.clone()),
+            toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 
         tracing::debug!("Added exposed mapping {mapping} to toml document");
@@ -452,7 +452,9 @@ impl Mapping {
 
     pub fn executable_name(&self) -> &str {
         if let Some(executable_file_name) = Path::new(&self.executable_relname).file_name() {
-            return executable_file_name.to_str().unwrap_or(&self.executable_relname);
+            return executable_file_name
+                .to_str()
+                .unwrap_or(&self.executable_relname);
         };
         &self.executable_relname
     }
