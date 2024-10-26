@@ -199,6 +199,7 @@ pub(crate) fn write_environment_file(
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
+///     4. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
@@ -211,6 +212,52 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
             "The `{}` folder is deprecated, please remove it as we now use the `{}` folder",
             old_pixi_env_dir.display(),
             consts::ENVIRONMENTS_DIR
+        );
+    }
+
+    ensure_pixi_directory_and_gitignore(project).await?;
+
+    Ok(())
+}
+
+/// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
+/// If the directory doesn't exist, create it.
+/// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+async fn ensure_pixi_directory_and_gitignore(project: &Project) -> miette::Result<()> {
+    let pixi_dir = project.pixi_dir();
+    let gitignore_path = pixi_dir.join(".gitignore");
+
+    // Create the `.pixi/` directory if it doesn't exist
+    if !pixi_dir.exists() {
+        match tokio::fs::create_dir_all(&pixi_dir).await {
+            Ok(_) => tracing::info!("Created .pixi/ directory at {}", pixi_dir.display()),
+            Err(e) => {
+                return Err(miette::miette!(
+                    "Failed to create .pixi/ directory at {}: {}",
+                    pixi_dir.display(),
+                    e
+                ))
+            }
+        }
+    }
+
+    // Create or check the .gitignore file
+    if !gitignore_path.exists() {
+        match tokio::fs::write(&gitignore_path, "*\n").await {
+            Ok(_) => {
+                tracing::info!("Created .gitignore file at {}", gitignore_path.display());
+            }
+            Err(e) => {
+                return Err(e).into_diagnostic().wrap_err(format!(
+                    "Failed to create .gitignore file at {}",
+                    gitignore_path.display()
+                ));
+            }
+        }
+    } else {
+        tracing::info!(
+            ".gitignore file already exists at {}",
+            gitignore_path.display()
         );
     }
 
