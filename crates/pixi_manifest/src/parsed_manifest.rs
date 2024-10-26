@@ -1,12 +1,5 @@
 use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::PhantomData};
 
-use indexmap::{map::IndexMap, Equivalent};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::PackageName;
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
-use serde_with::{serde_as, serde_derive::Deserialize};
-use toml_edit::DocumentMut;
-
 use crate::{
     activation::Activation,
     consts,
@@ -26,6 +19,12 @@ use crate::{
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
+use indexmap::{map::IndexMap, Equivalent, IndexSet};
+use pixi_config::Config;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde_with::{serde_as, serde_derive::Deserialize};
 
 /// Describes the contents of a parsed project manifest.
 #[derive(Debug, Clone)]
@@ -47,13 +46,6 @@ impl ParsedManifest {
     /// Parses a toml string into a project manifest.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
         let manifest: ParsedManifest = toml_edit::de::from_str(source).map_err(TomlError::from)?;
-
-        // Make sure project.name is defined
-        if manifest.project.name.is_none() {
-            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["project"].span();
-            return Err(TomlError::NoProjectName(span));
-        }
-
         Ok(manifest)
     }
 
@@ -96,6 +88,27 @@ impl ParsedManifest {
     {
         self.environments.find(name)
     }
+
+    /// Fill in the missing values in the manifest with the values from the configuration.
+    pub fn fill_in_missing_values(&mut self, config: Option<Config>) {
+        // Add the default channels to the manifest if there are none.
+        if let Some(config) = config {
+            if self.project.channels.is_empty() {
+                self.project.channels = config
+                    .default_channels()
+                    .iter()
+                    .map(|c| c.clone().into())
+                    .collect();
+            }
+        }
+
+        // Add the current platform to the manifest if there is none.
+        if self.project.platforms.value.is_empty() {
+            let mut set = IndexSet::new();
+            set.insert(Platform::current());
+            self.project.platforms = PixiSpanned::from(set);
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for ParsedManifest {
@@ -107,6 +120,7 @@ impl<'de> Deserialize<'de> for ParsedManifest {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         pub struct TomlProjectManifest {
+            #[serde(default)]
             project: ProjectMetadata,
             #[serde(default)]
             system_requirements: SystemRequirements,

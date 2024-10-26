@@ -40,6 +40,7 @@ rattler_virtual_packages = { workspace = true }
 # TODO: Remove these dependencies
 console = { workspace = true }
 miette = { workspace = true }
+pixi_config.workspace = true
 
 [dev-dependencies]
 assert_matches = { workspace = true }

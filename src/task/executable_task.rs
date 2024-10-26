@@ -410,6 +410,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
 
@@ -434,6 +435,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
 
@@ -465,6 +467,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
 

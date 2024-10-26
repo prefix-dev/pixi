@@ -517,13 +517,14 @@ mod tests {
 
     #[test]
     fn test_build_manifest() {
-        let _manifest = Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_FULL).unwrap();
+        let _manifest =
+            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_FULL, None).unwrap();
     }
 
     #[test]
     fn test_add_pypi_dependency() {
         let mut manifest =
-            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
+            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE, None).unwrap();
 
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
@@ -577,7 +578,7 @@ mod tests {
     #[test]
     fn test_remove_pypi_dependency() {
         let mut manifest =
-            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
+            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE, None).unwrap();
 
         // Remove flask from pyproject
         let name = PyPiPackageName::from_str("flask").unwrap();

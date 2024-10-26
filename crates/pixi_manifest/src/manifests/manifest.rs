@@ -8,13 +8,6 @@ use std::{
     str::FromStr,
 };
 
-use indexmap::{Equivalent, IndexSet};
-use itertools::Itertools;
-use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use toml_edit::{DocumentMut, Value};
-
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
@@ -25,6 +18,13 @@ use crate::{
     GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target, TargetSelector, Task,
     TaskName,
 };
+use indexmap::{Equivalent, IndexSet};
+use itertools::Itertools;
+use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
+use pixi_config::Config;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use toml_edit::{DocumentMut, Value};
 
 #[derive(Debug, Clone)]
 pub enum ManifestKind {
@@ -71,10 +71,10 @@ impl Borrow<ParsedManifest> for Manifest {
 
 impl Manifest {
     /// Create a new manifest from a path
-    pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
+    pub fn from_path(path: impl AsRef<Path>, config: Option<Config>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
         let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
-        Self::from_str(manifest_path.as_ref(), contents)
+        Self::from_str(manifest_path.as_ref(), contents, config)
     }
 
     /// Return the toml manifest file name ('pixi.toml' or 'pyproject.toml')
@@ -86,7 +86,11 @@ impl Manifest {
     }
 
     /// Create a new manifest from a string
-    pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+    pub fn from_str(
+        manifest_path: &Path,
+        contents: impl Into<String>,
+        config: Option<Config>,
+    ) -> miette::Result<Self> {
         let manifest_kind = ManifestKind::try_from_path(manifest_path).ok_or_else(|| {
             miette::miette!("unrecognized manifest file: {}", manifest_path.display())
         })?;
@@ -108,7 +112,7 @@ impl Manifest {
             }
         };
 
-        let (manifest, document) = match parsed.and_then(|manifest| {
+        let (mut manifest, document) = match parsed.and_then(|manifest| {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
@@ -117,6 +121,9 @@ impl Manifest {
             Ok(result) => result,
             Err(e) => e.to_fancy(file_name, &contents)?,
         };
+
+        // Fill in missing values in the manifest
+        manifest.fill_in_missing_values(config);
 
         // Validate the contents of the manifest
         manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
@@ -749,11 +756,11 @@ mod tests {
         let path = dir.path().join("pixi.toml");
         std::fs::write(&path, PROJECT_BOILERPLATE).unwrap();
         // From &PathBuf
-        let _manifest = Manifest::from_path(&path).unwrap();
+        let _manifest = Manifest::from_path(&path, None).unwrap();
         // From &Path
-        let _manifest = Manifest::from_path(path.as_path()).unwrap();
+        let _manifest = Manifest::from_path(path.as_path(), None).unwrap();
         // From PathBuf
-        let manifest = Manifest::from_path(path).unwrap();
+        let manifest = Manifest::from_path(path, None).unwrap();
 
         assert_eq!(manifest.parsed.project.name.unwrap(), "foo");
         assert_eq!(
@@ -780,7 +787,7 @@ mod tests {
             scripts = [".pixi/install/setup.sh", "test"]
             "#;
 
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         let default_activation_scripts = manifest
             .default_feature()
             .targets
@@ -849,7 +856,7 @@ mod tests {
             env = { FOO = "bar-linux-64" }
             "#;
 
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         let default_targets = &manifest.default_feature().targets;
         let default_activation_env = default_targets
             .default()
@@ -944,7 +951,7 @@ mod tests {
         platforms: &[Platform],
         feature_name: &FeatureName,
     ) {
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
@@ -999,7 +1006,7 @@ mod tests {
         platforms: &[Platform],
         feature_name: &FeatureName,
     ) {
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         let package_name = PyPiPackageName::from_str(name).unwrap();
 
@@ -1152,7 +1159,7 @@ feature_target_dep = "*"
             fooz = "*"
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         manifest
             .remove_dependency(
@@ -1202,7 +1209,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(
             manifest.parsed.project.version.as_ref().unwrap().clone(),
@@ -1230,7 +1237,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(
             manifest
@@ -1272,7 +1279,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1352,7 +1359,7 @@ feature_target_dep = "*"
             test = ["test"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1425,7 +1432,7 @@ platforms = ["linux-64", "win-64"]
 [feature.test.dependencies]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
@@ -1600,7 +1607,7 @@ platforms = ["linux-64", "win-64"]
             channels = ["test_channel"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         assert_eq!(
             manifest.parsed.project.channels,
@@ -1681,7 +1688,7 @@ platforms = ["linux-64", "win-64"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
         "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
         let default_env = manifest.default_environment();
         assert_eq!(default_env.name, EnvironmentName::Default);
         assert_eq!(default_env.features, vec!["py39"]);
@@ -1740,7 +1747,7 @@ platforms = ["linux-64", "win-64"]
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
         "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         let cuda_feature = manifest
             .parsed
@@ -1875,6 +1882,7 @@ platforms = ["linux-64", "win-64"]
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -1898,7 +1906,7 @@ test = "test initial"
 
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
 
         manifest
             .add_task(
@@ -1950,7 +1958,7 @@ foo = "*"
 bar = "*"
             "#;
         let channel_config = default_channel_config();
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
         manifest
             .add_dependency(
                 &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap(),
@@ -2068,7 +2076,7 @@ bar = "*"
 
         [environments]
         "#;
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         manifest
             .add_environment(String::from("test"), Some(Vec::new()), None, false)
             .unwrap();
@@ -2087,7 +2095,7 @@ bar = "*"
 
         [environments]
         "#;
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         manifest
             .add_environment(
                 String::from("test"),
@@ -2111,7 +2119,7 @@ bar = "*"
 
         [environments]
         "#;
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         let err = manifest
             .add_environment(
                 String::from("test"),
@@ -2144,7 +2152,7 @@ bar = "*"
         [environments]
         foo = []
         "#;
-        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
     }
@@ -2169,6 +2177,7 @@ bar = "*"
         test-strict = ["strict"]
         test-disabled = ["disabled"]
         "#,
+            None,
         )
         .unwrap();
 
@@ -2199,6 +2208,7 @@ bar = "*"
         channels = []
         channel-priority = "disabled"
         "#,
+            None,
         )
         .unwrap();
 
@@ -2224,6 +2234,7 @@ bar = "*"
         channels = ["conda-forge"]
         platforms = ["win-64"]
         "#,
+            None,
         )
         .unwrap_err();
 
@@ -2250,7 +2261,8 @@ bar = "*"
             match entry {
                 Ok(path) => {
                     let contents = std::fs::read_to_string(path).unwrap();
-                    let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+                    let _manifest =
+                        Manifest::from_str(Path::new("pixi.toml"), contents, None).unwrap();
                 }
                 Err(e) => println!("{:?}", e),
             }

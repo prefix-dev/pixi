@@ -407,7 +407,7 @@ mod tests {
             [dependencies]
             python = "3.9"
            "#;
-        let project = Project::from_str(Path::new("pixi.toml"), toml).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), toml, None).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),

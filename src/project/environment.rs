@@ -326,6 +326,7 @@ mod tests {
         channels = ["foo", "bar"]
         platforms = []
         "#,
+            None,
         )
         .unwrap();
 
@@ -348,6 +349,7 @@ mod tests {
         channels = []
         platforms = ["linux-64", "osx-64"]
         "#,
+            None,
         )
         .unwrap();
 
@@ -374,6 +376,7 @@ mod tests {
         [target.linux-64.tasks]
         foo = "echo linux"
         "#,
+            None,
         )
         .unwrap();
 
@@ -414,6 +417,7 @@ mod tests {
         foo = "echo foo"
         _bar = "echo bar"
         "#,
+            None,
         )
         .unwrap();
 
@@ -459,6 +463,7 @@ mod tests {
         [environments]
         foobar = ["foo", "bar"]
         "#,
+            None,
         )
         .unwrap();
 
@@ -491,6 +496,7 @@ mod tests {
         [environments]
         foo = ["foo"]
                 "#,
+            None,
         )
         .unwrap();
 
@@ -529,6 +535,7 @@ mod tests {
         foobar = ["foo", "bar"]
         barfoo = {features = ["barfoo"], no-default-feature=true}
         "#,
+            None,
         )
         .unwrap();
 
@@ -580,6 +587,7 @@ mod tests {
         channels = ["a", "c", "b"]
 
         "#,
+            None,
         )
         .unwrap();
 
@@ -625,6 +633,7 @@ mod tests {
         bar = ["bar"]
         foobar = ["foo", "bar"]
         "#,
+            None,
         )
         .unwrap();
 
@@ -675,7 +684,7 @@ mod tests {
         foo = ["foo"]
         bar = ["bar"]
         foobar = ["foo", "bar"]
-        "#,
+        "#, None
         )
         .unwrap();
 
@@ -743,7 +752,7 @@ mod tests {
             bar = { features = ["foo"], no-default-feature = true }
             "##;
 
-        let manifest = Project::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let manifest = Project::from_str(Path::new("pixi.toml"), contents, None).unwrap();
         assert_eq!(
             manifest
                 .default_environment()
@@ -771,6 +780,7 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["osx-64", "linux-64", "win-64"]
         "#,
+            None,
         )
         .unwrap();
         let env = manifest.default_environment();
@@ -785,6 +795,7 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["emscripten-wasm32"]
         "#,
+            None,
         )
         .unwrap();
         let env = manifest.default_environment();

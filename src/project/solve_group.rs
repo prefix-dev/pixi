@@ -131,6 +131,7 @@ mod tests {
         bar = { features=["bar"], solve-group="group1" }
         baz = { features=["bar"], solve-group="group2", no-default-feature=true }
         "#,
+            None,
         )
         .unwrap();
 

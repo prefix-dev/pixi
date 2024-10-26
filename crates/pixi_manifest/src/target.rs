@@ -582,6 +582,7 @@ mod tests {
         run = "3.0"
         host = "1.0"
         "#,
+            None,
         )
         .unwrap();
 

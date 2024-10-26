@@ -239,7 +239,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str, None).unwrap();
         let env = project.default_environment();
         let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
@@ -264,7 +264,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str, None).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
@@ -293,7 +293,7 @@ mod tests {
             [system-requirements]
             macos = "10.6"
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str, None).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None)
             .with_ignore_system_requirements(true);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
@@ -329,7 +329,7 @@ mod tests {
             [system-requirements]
             macos = "10.6"
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str, None).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
@@ -362,7 +362,7 @@ mod tests {
             [environments]
             other = ["other"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str, None).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None)
             .with_ignore_system_requirements(true);
         let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);

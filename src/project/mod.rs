@@ -166,8 +166,12 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
-    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
-        let manifest = Manifest::from_str(manifest_path, content)?;
+    pub fn from_str(
+        manifest_path: &Path,
+        content: &str,
+        config: Option<Config>,
+    ) -> miette::Result<Self> {
+        let manifest = Manifest::from_str(manifest_path, content, config)?;
         Ok(Self::from_manifest(manifest))
     }
 
@@ -207,7 +211,13 @@ impl Project {
 
     /// Loads a project from manifest file.
     pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
-        let manifest = Manifest::from_path(manifest_path)?;
+        let config = pixi_config::Config::load(manifest_path.parent().ok_or_else(|| {
+            miette::miette!(
+                "manifest path should always have a parent, got: {:?}",
+                manifest_path
+            )
+        })?);
+        let manifest = Manifest::from_path(manifest_path, Some(config))?;
         Ok(Project::from_manifest(manifest))
     }
 
@@ -256,8 +266,13 @@ impl Project {
             .parsed
             .project
             .name
-            .as_ref()
-            .expect("name should always be defined.")
+            .as_deref()
+            .unwrap_or_else(|| {
+                self.root
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("nameless")
+            })
     }
 
     /// Returns the version of the project
@@ -763,7 +778,7 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content).unwrap();
+            let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content, None).unwrap();
             let project = Project::from_manifest(manifest);
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
@@ -801,6 +816,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -836,6 +852,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -868,6 +885,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -909,6 +927,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            None,
         )
         .unwrap();
 
@@ -937,7 +956,7 @@ mod tests {
             platforms = []
             conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
         let project = Project::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
@@ -956,7 +975,7 @@ mod tests {
             platforms = []
             conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
         let project = Project::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
@@ -988,7 +1007,7 @@ mod tests {
             [feature.a]
             channels = ["custom-feature-channel"]
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents, None).unwrap();
         let project = Project::from_manifest(manifest);
 
         assert!(project.pypi_name_mapping_source().is_ok());
@@ -1000,7 +1019,8 @@ mod tests {
             platforms = []
             conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
+        let manifest =
+            Manifest::from_str(Path::new("pixi.toml"), non_existing_channel, None).unwrap();
         let project = Project::from_manifest(manifest);
 
         // We output error message with bold channel name,

@@ -212,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
         );
-        let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
+        let mut project = Project::from_str(&pixi_manifest_path, &rv, Some(config.clone()))?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
             project.manifest.add_dependency(

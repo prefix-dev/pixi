@@ -12,7 +12,7 @@ use crate::utils::PixiSpanned;
 
 /// Describes the contents of the `[package]` section of the project manifest.
 #[serde_as]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProjectMetadata {
     /// The name of the project
@@ -29,6 +29,7 @@ pub struct ProjectMetadata {
     pub authors: Option<Vec<String>>,
 
     /// The channels used by the project
+    #[serde(default)]
     #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
     pub channels: IndexSet<super::channel::PrioritizedChannel>,
 
@@ -39,6 +40,7 @@ pub struct ProjectMetadata {
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
+    #[serde(default)]
     pub platforms: PixiSpanned<IndexSet<Platform>>,
 
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)

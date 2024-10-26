@@ -401,6 +401,7 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
+            None,
         )
         .unwrap();
 
@@ -462,6 +463,7 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
+            None,
         )
         .unwrap();
 
@@ -496,6 +498,7 @@ mod tests {
         [pypi-options]
         extra-index-urls = ["https://mypypi.org/simple"]
         "#,
+            None,
         )
         .unwrap();
 
