@@ -46,13 +46,17 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
-    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"],)]
+    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"], ignore_case = true)]
     pub format: Option<ManifestFormat>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
     // BREAK (0.27.0): Remove this option from the cli in favor of the `format` option.
     #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
     pub pyproject_toml: bool,
+
+    /// Source Control Management used for this project
+    #[arg(short = 's', long = "scm", ignore_case = true)]
+    pub scm: Option<GitAttributes>,
 }
 
 /// The pixi.toml template
@@ -149,9 +153,29 @@ const GITIGNORE_TEMPLATE: &str = r#"
 *.egg-info
 "#;
 
-const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum GitAttributes {
+    Github,
+    Gitlab,
+    Codeberg,
+}
+
+impl GitAttributes {
+    fn template(&self) -> &'static str {
+        match self {
+            GitAttributes::Github | GitAttributes::Codeberg => {
+                r#"# SCM syntax highlighting
 pixi.lock linguist-language=YAML linguist-generated=true
-"#;
+"#
+            }
+            GitAttributes::Gitlab => {
+                r#"# GitLab syntax highlighting
+pixi.lock gitlab-language=yaml gitlab-generated=true
+"#
+            }
+        }
+    }
+}
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
@@ -412,8 +436,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    let git_attributes = args.scm.unwrap_or(GitAttributes::Github);
+
     // create a .gitattributes if one is missing
-    if let Err(e) = create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE) {
+    if let Err(e) = create_or_append_file(&gitattributes_path, git_attributes.template()) {
         tracing::warn!(
             "Warning, couldn't update '{}' because of: {}",
             gitattributes_path.to_string_lossy(),
@@ -578,5 +604,57 @@ mod tests {
         assert!(create_or_append_file(dir.path(), template).is_err());
 
         dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_multiple_format_values() {
+        let test_cases = vec![
+            ("pixi", ManifestFormat::Pixi),
+            ("PiXi", ManifestFormat::Pixi),
+            ("PIXI", ManifestFormat::Pixi),
+            ("pyproject", ManifestFormat::Pyproject),
+            ("PyPrOjEcT", ManifestFormat::Pyproject),
+            ("PYPROJECT", ManifestFormat::Pyproject),
+        ];
+
+        for (input, expected) in test_cases {
+            let args = Args::try_parse_from(["init", "--format", input]).unwrap();
+            assert_eq!(args.format, Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_multiple_scm_values() {
+        let test_cases = vec![
+            ("github", GitAttributes::Github),
+            ("GiThUb", GitAttributes::Github),
+            ("GITHUB", GitAttributes::Github),
+            ("Github", GitAttributes::Github),
+            ("gitlab", GitAttributes::Gitlab),
+            ("GiTlAb", GitAttributes::Gitlab),
+            ("GITLAB", GitAttributes::Gitlab),
+            ("codeberg", GitAttributes::Codeberg),
+            ("CoDeBeRg", GitAttributes::Codeberg),
+            ("CODEBERG", GitAttributes::Codeberg),
+        ];
+
+        for (input, expected) in test_cases {
+            let args = Args::try_parse_from(["init", "--scm", input]).unwrap();
+            assert_eq!(args.scm, Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_invalid_scm_values() {
+        let invalid_values = vec!["invalid", "", "git", "bitbucket", "mercurial", "svn"];
+
+        for value in invalid_values {
+            let result = Args::try_parse_from(["init", "--scm", value]);
+            assert!(
+                result.is_err(),
+                "Expected error for invalid SCM value '{}', but got success",
+                value
+            );
+        }
     }
 }
