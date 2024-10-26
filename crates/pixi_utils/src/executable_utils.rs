@@ -83,6 +83,7 @@ mod tests {
     #[case::python3_config("python3-config", "python3-config")]
     #[case::x2to3("2to3", "2to3")]
     #[case::x2to3312("2to3-3.12", "2to3-3.12")]
+    #[case::nested_executable("subdir/executable.sh", "subdir/executable")]
     fn test_strip_executable_unix(#[case] path: &str, #[case] expected: &str) {
         let path = Path::new(path);
         let result = strip_unix_executable_extension(path.to_string_lossy().to_string());
@@ -100,6 +101,7 @@ mod tests {
     #[case::python3_config("python3-config", "python3-config")]
     #[case::x2to3("2to3", "2to3")]
     #[case::x2to3312("2to3-3.12", "2to3-3.12")]
+    #[case::nested_executable("subdir\\executable.exe", "subdir\\executable")]
     fn test_strip_executable_windows(#[case] path: &str, #[case] expected: &str) {
         let path = Path::new(path);
         let result = strip_windows_executable_extension(path.to_string_lossy().to_string());
@@ -114,6 +116,7 @@ mod tests {
     #[case::package010("package0.1.0", "package0.1.0")]
     #[case::x2to3("2to3", "2to3")]
     #[case::x2to3312("2to3-3.12", "2to3-3.12")]
+    #[case::nested_executable("subdir/executable", "subdir/executable")]
     fn test_strip_executable_extension(#[case] path: &str, #[case] expected: &str) {
         let result = strip_executable_extension(path.into());
         assert_eq!(result, expected);
