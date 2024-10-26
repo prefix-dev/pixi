@@ -446,10 +446,6 @@ impl Mapping {
         &self.exposed_name
     }
 
-    pub fn executable_relname(&self) -> &str {
-        &self.executable_relname
-    }
-
     pub fn executable_name(&self) -> &str {
         if let Some(executable_file_name) = Path::new(&self.executable_relname).file_name() {
             return executable_file_name
