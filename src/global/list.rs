@@ -52,13 +52,13 @@ pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String>
 
 fn format_mapping(mapping: &Mapping) -> String {
     let exp = mapping.exposed_name().to_string();
-    if exp == mapping.executable_name() {
+    if exp == mapping.executable_relname() {
         console::style(exp).yellow().to_string()
     } else {
         format!(
             "{} -> {}",
             console::style(exp).yellow(),
-            console::style(mapping.executable_name()).yellow()
+            console::style(mapping.executable_relname()).yellow()
         )
     }
 }
