@@ -6,6 +6,7 @@ use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
 use crate::global::install::{create_executable_trampolines, script_exec_mapping};
+use crate::global::find_executables_for_many_records;
 use crate::global::project::environment::environment_specs_in_sync;
 use crate::prefix::Executable;
 use crate::repodata::Repodata;
@@ -819,7 +820,7 @@ impl Project {
 
         let prefix_records = &prefix.find_installed_packages(None).await?;
 
-        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed

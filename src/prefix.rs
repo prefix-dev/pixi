@@ -197,7 +197,7 @@ pub struct Executable {
 }
 
 impl Executable {
-    fn new(name: String, path: PathBuf) -> Self {
+    pub fn new(name: String, path: PathBuf) -> Self {
         Self { name, path }
     }
 }
