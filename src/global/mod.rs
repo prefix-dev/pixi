@@ -13,7 +13,7 @@ use crate::prefix::{Executable, Prefix};
 use rattler_conda_types::PrefixRecord;
 use std::{
     ffi::OsStr,
-    path::{Path, PathBuf}
+    path::{Path, PathBuf},
 };
 
 /// Find the executable scripts within the specified package installed in this
@@ -29,7 +29,10 @@ fn find_executables(prefix: &Prefix, prefix_package: &PrefixRecord) -> Vec<PathB
 
 /// Processes prefix records (that you can get by using `find_installed_packages`)
 /// to filter and collect executable files.
-pub fn find_executables_for_many_records(prefix: &Prefix, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
+pub fn find_executables_for_many_records(
+    prefix: &Prefix,
+    prefix_packages: &[PrefixRecord],
+) -> Vec<Executable> {
     let executables = prefix_packages
         .iter()
         .flat_map(|record| {
@@ -39,10 +42,7 @@ pub fn find_executables_for_many_records(prefix: &Prefix, prefix_packages: &[Pre
                 .filter(|relative_path| is_executable(prefix, relative_path))
                 .filter_map(|path| {
                     path.iter().last().and_then(OsStr::to_str).map(|name| {
-                        Executable::new(
-                            strip_executable_extension(name.to_string()),
-                            path.clone(),
-                        )
+                        Executable::new(strip_executable_extension(name.to_string()), path.clone())
                     })
                 })
         })
