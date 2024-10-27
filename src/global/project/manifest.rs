@@ -438,7 +438,11 @@ impl Mapping {
     pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
         Self {
             exposed_name,
-            executable_relname,
+            executable_relname: Path::new(&executable_relname)
+                .with_extension("")
+                .to_str()
+                .unwrap_or(&executable_relname)
+                .to_string(),
         }
     }
 
@@ -514,7 +518,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mapping_relname() {
+    fn test_mapping_executable_names() {
         let exposed_name = ExposedName::from_str("test_exposed").unwrap();
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
@@ -522,6 +526,11 @@ mod tests {
         assert_eq!("test_executable", mapping.executable_relname());
 
         let executable_name = "nested/test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("nested/test_executable", mapping.executable_relname());
+
+        let executable_name = "nested/test_executable.sh".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         assert_eq!("test_executable", mapping.executable_name());
         assert_eq!("nested/test_executable", mapping.executable_relname());
