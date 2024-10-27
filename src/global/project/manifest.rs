@@ -446,6 +446,9 @@ impl Mapping {
         &self.exposed_name
     }
 
+    pub fn executable_relname(&self) -> &str {
+        &self.executable_relname
+    }
     pub fn executable_name(&self) -> &str {
         if let Some(executable_file_name) = Path::new(&self.executable_relname).file_name() {
             return executable_file_name
@@ -511,6 +514,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_mapping_relname() {
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("test_executable", mapping.executable_relname());
+
+        let executable_name = "nested/test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("nested/test_executable", mapping.executable_relname());
+    }
+
+    #[test]
     fn test_add_exposed_mapping_new_env() {
         let mut manifest = Manifest::default();
         let exposed_name = ExposedName::from_str("test_exposed").unwrap();
@@ -545,7 +562,7 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value, actual_value)
     }
 
@@ -553,16 +570,16 @@ mod tests {
     fn test_add_exposed_mapping_existing_env() {
         let mut manifest = Manifest::default();
         let exposed_name1 = ExposedName::from_str("test_exposed1").unwrap();
-        let executable_name1 = "test_executable1".to_string();
-        let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
+        let executable_relname1 = "test_executable1".to_string();
+        let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         manifest.add_environment(&env_name, None).unwrap();
 
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
         let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
-        let executable_name2 = "test_executable2".to_string();
-        let mapping2 = Mapping::new(exposed_name2.clone(), executable_name2);
+        let executable_relname2 = "nested/test_executable2".to_string();
+        let mapping2 = Mapping::new(exposed_name2.clone(), executable_relname2);
         let result = manifest.add_exposed_mapping(&env_name, &mapping2);
         assert!(result.is_ok());
 
@@ -588,11 +605,11 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name1)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value1, actual_value1);
 
         // Check document for executable2
-        let expected_value2 = "test_executable2";
+        let expected_value2 = "nested/test_executable2";
         let actual_value2 = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
@@ -613,7 +630,7 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name2)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value2, actual_value2);
     }
 
