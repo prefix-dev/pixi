@@ -667,9 +667,9 @@ impl Project {
             .filter_map(|mapping| {
                 // If the executable is still requested, do not remove the mapping
                 if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_name()
+                    executable_from_path(&executable.path) == mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
+                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
                     return None;
                 }
                 // Else do remove the mapping
