@@ -215,7 +215,7 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
         );
     }
 
-    ensure_pixi_directory_and_gitignore(project).await?;
+    ensure_pixi_directory_and_gitignore(project.pixi_dir().as_path()).await?;
 
     Ok(())
 }
@@ -224,40 +224,28 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
 async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
-    let pixi_dir = project.pixi_dir();
     let gitignore_path = pixi_dir.join(".gitignore");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
-        match tokio::fs::create_dir_all(&pixi_dir).await {
-            Ok(_) => tracing::info!("Created .pixi/ directory at {}", pixi_dir.display()),
-            Err(e) => {
-                return Err(e).into_diagnostic().wrap_err(format!(
-                    "Failed to create .pixi/ directory at {}",
-                    gitignore_path.display()
-                ));
-            }
-        }
+        tokio::fs::create_dir_all(&pixi_dir)
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .pixi/ directory at {}",
+                pixi_dir.display()
+            ))?;
     }
 
     // Create or check the .gitignore file
     if !gitignore_path.exists() {
-        match tokio::fs::write(&gitignore_path, "*\n").await {
-            Ok(_) => {
-                tracing::info!("Created .gitignore file at {}", gitignore_path.display());
-            }
-            Err(e) => {
-                return Err(e).into_diagnostic().wrap_err(format!(
-                    "Failed to create .gitignore file at {}",
-                    gitignore_path.display()
-                ));
-            }
-        }
-    } else {
-        tracing::info!(
-            ".gitignore file already exists at {}",
-            gitignore_path.display()
-        );
+        tokio::fs::write(&gitignore_path, "*\n")
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .gitignore file at {}",
+                gitignore_path.display()
+            ))?;
     }
 
     Ok(())
