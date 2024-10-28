@@ -67,7 +67,6 @@ pub(crate) async fn create_executable_scripts(
     prefix: &Prefix,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
-    #[derive(Debug)]
     enum AddedOrChanged {
         Unchanged,
         Added,
@@ -86,7 +85,12 @@ pub(crate) async fn create_executable_scripts(
         let exe = prefix.root().join(original_executable);
         let path = prefix
             .root()
-            .join(original_executable.parent().expect("should have a parent"));
+            .join(original_executable.parent().ok_or_else(|| {
+                miette::miette!(
+                    "Cannot find parent directory of '{}'",
+                    original_executable.display()
+                )
+            })?);
         let metadata = ManifestMetadata::new(exe, path, Some(activation_variables.clone()));
 
         let json_path = global_script_path.with_extension("json");
@@ -132,9 +136,12 @@ pub(crate) async fn create_executable_scripts(
         let executable_name = executable_from_path(global_script_path);
         let exposed_name = ExposedName::from_str(&executable_name)?;
 
-        let global_script_path_parent = global_script_path
-            .parent()
-            .expect("global script should have parent");
+        let global_script_path_parent = global_script_path.parent().ok_or_else(|| {
+            miette::miette!(
+                "Cannot find parent directory of '{}'",
+                original_executable.display()
+            )
+        })?;
 
         let trampoline = Trampoline::new(
             exposed_name.clone(),

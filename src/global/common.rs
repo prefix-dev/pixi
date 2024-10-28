@@ -46,9 +46,9 @@ impl BinDir {
 
     /// Asynchronously retrieves all files in the binary executable directory.
     ///
-    /// This function reads the directory specified by `self.0` and collects all
+    /// This function reads the directory specified by `self.0` and try to collect all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of file paths or an error if the directory can't be read.
+    /// vector of `GlobalBin`or an error if the directory can't be read.
     pub(crate) async fn bins(&self) -> miette::Result<Vec<GlobalBin>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
@@ -485,7 +485,6 @@ pub(crate) async fn get_expose_scripts_sync_status(
                 .map(|exec| (path, exec, global_bin))
         }
     }))
-    // .await
     .await
     .into_iter()
     .flatten()
