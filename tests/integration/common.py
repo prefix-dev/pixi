@@ -51,7 +51,7 @@ def verify_cli_command(
         complete_env = base_env
     # Avoid to have miette splitting up lines
     if inherit_env:
-        complete_env["NO_GRAPHICS"] = 1
+        complete_env["NO_GRAPHICS"] = "1"
     else:
         complete_env = complete_env | {"NO_GRAPHICS": "1"}
 
