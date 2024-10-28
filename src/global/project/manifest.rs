@@ -12,6 +12,7 @@ use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
+use pixi_utils::strip_executable_extension;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
@@ -438,11 +439,7 @@ impl Mapping {
     pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
         Self {
             exposed_name,
-            executable_relname: Path::new(&executable_relname)
-                .with_extension("")
-                .to_str()
-                .unwrap_or(&executable_relname)
-                .to_string(),
+            executable_relname: strip_executable_extension(executable_relname),
         }
     }
 
@@ -530,10 +527,21 @@ mod tests {
         assert_eq!("test_executable", mapping.executable_name());
         assert_eq!("nested/test_executable", mapping.executable_relname());
 
-        let executable_name = "nested/test_executable.sh".to_string();
+        let executable_name: String;
+        let expected_exe_relname: &str;
+        #[cfg(windows)]
+        {
+            executable_name = "nested\\test_executable.exe".to_string();
+            expected_exe_relname = "nested\\test_executable";
+        }
+        #[cfg(unix)]
+        {
+            executable_name = "nested/test_executable.sh".to_string();
+            expected_exe_relname = "nested/test_executable";
+        }
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         assert_eq!("test_executable", mapping.executable_name());
-        assert_eq!("nested/test_executable", mapping.executable_relname());
+        assert_eq!(expected_exe_relname, mapping.executable_relname());
     }
 
     #[test]
