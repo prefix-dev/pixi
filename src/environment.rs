@@ -232,11 +232,10 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
         match tokio::fs::create_dir_all(&pixi_dir).await {
             Ok(_) => tracing::info!("Created .pixi/ directory at {}", pixi_dir.display()),
             Err(e) => {
-                return Err(miette::miette!(
-                    "Failed to create .pixi/ directory at {}: {}",
-                    pixi_dir.display(),
-                    e
-                ))
+                return Err(e).into_diagnostic().wrap_err(format!(
+                    "Failed to create .pixi/ directory at {}",
+                    gitignore_path.display()
+                ));
             }
         }
     }
