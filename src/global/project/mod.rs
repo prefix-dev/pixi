@@ -280,6 +280,7 @@ impl Project {
                 .into_diagnostic()?;
 
             if !env_root.directories().await?.is_empty() {
+                tracing::debug!("Creating global manifest from existing installation");
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
@@ -585,8 +586,6 @@ impl Project {
         let (to_remove, _to_add) =
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
-        eprintln!("to_remove: {:?}", to_remove);
-        eprintln!("to_add: {:?}", _to_add);
         // Remove all removable binaries
         for exposed_path in to_remove {
             state_changes.insert_change(

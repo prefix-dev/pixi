@@ -121,7 +121,7 @@ impl ManifestMetadata {
         exposed_name: &ExposedName,
     ) -> miette::Result<Self> {
         let manifest_path = root_path.join(exposed_name.to_string() + ".json");
-        let manifest_str = tokio::fs::read_to_string(manifest_path)
+        let manifest_str = tokio_fs::read_to_string(manifest_path)
             .await
             .into_diagnostic()?;
         serde_json::from_str(&manifest_str).into_diagnostic()
@@ -189,7 +189,7 @@ impl GlobalBin {
                 manifest_removed.into_diagnostic()?;
             }
             GlobalBin::Script(script) => {
-                std::fs::remove_file(script).into_diagnostic()?;
+                tokio_fs::remove_file(script).await.into_diagnostic()?;
             }
         }
 
@@ -259,14 +259,15 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        tokio::fs::write(self.path(), TRAMPOLINE_BIN)
+        tokio_fs::write(self.path(), TRAMPOLINE_BIN)
             .await
             .into_diagnostic()?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
+            tokio_fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
+                .await
                 .into_diagnostic()?;
         }
 
@@ -276,11 +277,17 @@ impl Trampoline {
     /// Write the manifest file of the trampoline
     async fn write_manifest(&self) -> miette::Result<()> {
         let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
-        tokio::fs::write(self.manifest_path(), manifest_string)
+        tokio_fs::write(self.manifest_path(), manifest_string)
             .await
             .into_diagnostic()?;
 
         Ok(())
+    }
+
+    /// Check if binary is a saved trampoline
+    pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
+        let bytes = tokio_fs::read(path).await.into_diagnostic()?;
+        Ok(bytes == TRAMPOLINE_BIN)
     }
 }
 

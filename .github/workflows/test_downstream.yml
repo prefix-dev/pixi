@@ -203,5 +203,7 @@ jobs:
       - name: Typecheck integration tests
         if: runner.os == 'Linux'
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run typecheck-integration
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
       - name: Run integration tests
         run: ${{ env.TARGET_RELEASE }}/pixi${{ matrix.arch.extension }} run test-integration-ci

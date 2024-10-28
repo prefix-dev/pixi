@@ -15,8 +15,9 @@ use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
 use rattler_shell::{activation::Activator, shell::ShellEnum};
-use std::fs;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
+
+use fs_err::tokio as tokio_fs;
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -117,7 +118,7 @@ pub(crate) async fn create_executable_scripts(
 
         // Check if an old bash script is present and remove it
         let mut changed = if global_script_path.exists() && !is_binary(global_script_path)? {
-            tokio::fs::remove_file(global_script_path)
+            tokio_fs::remove_file(global_script_path)
                 .await
                 .into_diagnostic()?;
             AddedOrChanged::Migrated
@@ -128,9 +129,12 @@ pub(crate) async fn create_executable_scripts(
         // Read previous metadata if it exists and update `changed` accordingly
         if matches!(changed, AddedOrChanged::Unchanged) {
             if json_path.exists() {
-                let file = fs::File::open(&json_path).into_diagnostic()?;
+                let previous_manifest_data_bytes = tokio_fs::read_to_string(&json_path)
+                    .await
+                    .into_diagnostic()?;
+
                 let previous_manifest_metadata: ManifestMetadata =
-                    serde_json::from_reader(file).into_diagnostic()?;
+                    serde_json::from_str(&previous_manifest_data_bytes).into_diagnostic()?;
 
                 changed = if previous_manifest_metadata == metadata {
                     AddedOrChanged::Unchanged
@@ -451,7 +455,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn test_extract_executable_from_script_unix() {
-        use std::path::Path;
+        use std::{fs, path::Path};
 
         use crate::global::trampoline::GlobalBin;
 
