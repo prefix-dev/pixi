@@ -40,6 +40,7 @@ pytest-rerunfailures = ">=14.0,<15"
 pytest-xdist = ">=3.6.1,<4"
 rich = ">=13.7.1,<14"
 tomli-w = ">=1.0,<2"
+rattler-build = "*"
 
 [feature.pytest.tasks]
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }

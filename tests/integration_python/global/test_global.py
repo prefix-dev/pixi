@@ -260,6 +260,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
     dummy3 = tmp_path / "bin" / exec_extension("dummy3")
+    nested_dummy = tmp_path / "bin" / exec_extension("dummy-aaa")
 
     # Add dummy-a with simple syntax
     verify_cli_command(
@@ -293,6 +294,13 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
     assert not dummy1.is_file()
     assert not dummy3.is_file()
+
+    # Add nested dummy1
+    verify_cli_command(
+        [pixi, "global", "expose", "nested_dummy=nested/dummy"],
+        env=env,
+    )
+    assert nested_dummy.is_file()
 
 
 def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
