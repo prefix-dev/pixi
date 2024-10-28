@@ -36,6 +36,7 @@ def verify_cli_command(
     stdout_excludes: str | list[str] | None = None,
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
+    shell: bool = False,
     env: dict[str, str] | None = None,
 ) -> Output:
     # Setup the environment type safe.
@@ -47,7 +48,7 @@ def verify_cli_command(
     # Avoid to have miette splitting up lines
     complete_env = complete_env | {"NO_GRAPHICS": "1"}
 
-    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, shell=True)
+    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, shell=shell)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")

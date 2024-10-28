@@ -12,15 +12,17 @@ def test_trampoline_respect_activation_variables(
     dummy_b = tmp_path / "bin" / "dummy-b"
 
     verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--channel",
-            trampoline_channel,
-            "dummy-b",
-        ],
+        # [
+        #     pixi,
+        #     "global",
+        #     "install",
+        #     "--channel",
+        #     trampoline_channel,
+        #     "dummy-b",
+        # ],
+        [f"{pixi} global install --channel {trampoline_channel} dummy-b"],
         env=env,
+        shell=True,
     )
 
     assert is_binary(dummy_b)
