@@ -37,16 +37,23 @@ def verify_cli_command(
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
     shell: bool = False,
+    inherit_env: bool = False,
     env: dict[str, str] | None = None,
 ) -> Output:
     # Setup the environment type safe.
-    base_env = dict(os.environ)
+    if not inherit_env:
+        base_env = dict(os.environ)
+    else:
+        base_env = os.environ
     if env is not None:
         complete_env = base_env | env
     else:
         complete_env = base_env
     # Avoid to have miette splitting up lines
-    complete_env = complete_env | {"NO_GRAPHICS": "1"}
+    if inherit_env:
+        complete_env["NO_GRAPHICS"] = 1
+    else:
+        complete_env = complete_env | {"NO_GRAPHICS": "1"}
 
     process = subprocess.run(command, capture_output=True, text=True, env=complete_env, shell=shell)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode

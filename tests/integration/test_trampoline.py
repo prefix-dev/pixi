@@ -23,6 +23,7 @@ def test_trampoline_respect_activation_variables(
         [f"{pixi} global install --channel {trampoline_channel} dummy-b"],
         env=env,
         shell=True,
+        inherit_env=True,
     )
 
     assert is_binary(dummy_b)
