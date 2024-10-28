@@ -14,6 +14,7 @@ use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
+use rattler_shell::{activation::Activator, shell::ShellEnum};
 use std::fs;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
@@ -77,6 +78,14 @@ pub(crate) async fn create_executable_scripts(
     let mut state_changes = StateChanges::default();
 
     let activation_variables = prefix.run_activation().await?;
+    eprintln!("run activation scripts are {:?}", activation_variables);
+
+    let activator = Activator::from_path(prefix.root(), ShellEnum::default(), Platform::current())
+        .into_diagnostic()
+        .unwrap();
+
+    eprintln!("Activation scripts are {:?}", activator.activation_scripts);
+
     for ScriptExecMapping {
         global_script_path,
         original_executable,
