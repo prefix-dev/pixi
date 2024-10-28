@@ -59,14 +59,23 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Test if stdout is a terminal before showing progress
+if [[ ! -t 1 ]]; then
+  CURL_OPTIONS="--no-progress-meter"
+  WGET_OPTIONS="--no-verbose"
+else
+  CURL_OPTIONS="--progress-bar"
+  WGET_OPTIONS="--show-progress"
+fi
+
 if hash curl 2> /dev/null; then
-  HTTP_CODE="$(curl -SL --progress-bar "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
+  HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
   if [[ "${HTTP_CODE}" -lt 200 || "${HTTP_CODE}" -gt 299 ]]; then
     echo "error: '${DOWNLOAD_URL}' is not available"
     exit 1
   fi
 elif hash wget 2> /dev/null; then
-  if ! wget -q --show-progress --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
+  if ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
     echo "error: '${DOWNLOAD_URL}' is not available"
     exit 1
   fi
