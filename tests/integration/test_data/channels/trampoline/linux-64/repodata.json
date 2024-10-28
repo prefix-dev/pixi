@@ -9,13 +9,13 @@
       "build": "hb0f4dca_0",
       "build_number": 0,
       "depends": [],
-      "md5": "cf0c4772e384cf4f810aa6c0d358acbe",
+      "md5": "d6150a716a15858a3dc3e7974e11dbfb",
       "name": "dummy-b",
       "platform": "linux",
-      "sha256": "cc035c8bdb97524017b84b6ede0e117f8911931d61d3f3285ea6d2d9068709f9",
-      "size": 2848,
+      "sha256": "7a138360750dd0251bfe829c1e808e351fd7b1be9a6c271021fcea49707f92f8",
+      "size": 2820,
       "subdir": "linux-64",
-      "timestamp": 1729783596785,
+      "timestamp": 1730123648033,
       "version": "0.1.0"
     }
   },
