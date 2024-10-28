@@ -57,7 +57,7 @@ impl BinDir {
             let path = entry.path();
             // TODO: should we add a magic number to ensure that it's our trampoline?
             if path.is_file() && path.is_executable() && is_binary(&path)? {
-                let trampoline = Trampoline::from(path);
+                let trampoline = Trampoline::try_from(path).await?;
                 files.push(GlobalBin::Trampoline(trampoline));
             } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
                 // If the file is not a binary, it's a script
@@ -472,7 +472,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
 ) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
-    // Get all paths to the binaries from the scripts in the bin directory.
+    // Get all paths to the binaries from trampolines or scripts in the bin directory.
     let locally_exposed = bin_dir.bins().await?;
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
         let global_bin = global_bin.clone();

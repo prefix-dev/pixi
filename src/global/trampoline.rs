@@ -9,8 +9,6 @@ use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-// use tokio::fs::File;
-use std::fs::File;
 
 use fs_err::tokio as tokio_fs;
 
@@ -94,14 +92,21 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
     )
 }
 
+/// Manifest data of the original executable.
+/// This is used by trampoline to set the environment variables
+/// prepened the path and execute the original executable.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ManifestMetadata {
+    /// Path to the original executable.
     pub exe: PathBuf,
+    /// Root path of the original executable that should be prepended to the PATH.
     pub path: PathBuf,
+    /// Environment variables to be set before executing the original executable.
     pub env: HashMap<String, String>,
 }
 
 impl ManifestMetadata {
+    /// Create a new manifest metadata.
     pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
         ManifestMetadata {
             exe,
@@ -110,15 +115,21 @@ impl ManifestMetadata {
         }
     }
 
-    pub fn from_root_path(root_path: PathBuf, exposed_name: &ExposedName) -> Self {
+    /// Read existing manifest metadata from the root path.
+    pub async fn from_root_path(
+        root_path: PathBuf,
+        exposed_name: &ExposedName,
+    ) -> miette::Result<Self> {
         let manifest_path = root_path.join(exposed_name.to_string() + ".json");
-        eprintln!("manifest_path: {:?}", manifest_path);
-        let reader_file =
-            std::fs::File::open(&manifest_path).expect("should be able to open manifest file");
-        serde_json::from_reader(reader_file).unwrap()
+        let manifest_str = tokio::fs::read_to_string(manifest_path)
+            .await
+            .into_diagnostic()?;
+        serde_json::from_str(&manifest_str).into_diagnostic()
     }
 }
 
+/// Represent an exposed global binary installed by pixi.
+/// This can be either a trampoline or a old script.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalBin {
     Trampoline(Trampoline),
@@ -126,6 +137,7 @@ pub enum GlobalBin {
 }
 
 impl GlobalBin {
+    /// Return the path to the original executable.
     pub async fn executable(&self) -> miette::Result<PathBuf> {
         Ok(match self {
             GlobalBin::Trampoline(trampoline) => trampoline.original_exe(),
@@ -133,6 +145,7 @@ impl GlobalBin {
         })
     }
 
+    /// Return exposed name
     pub fn exposed_name(&self) -> ExposedName {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.exposed_name.clone(),
@@ -142,6 +155,7 @@ impl GlobalBin {
         }
     }
 
+    /// Return the path to the exposed binary.
     pub fn path(&self) -> PathBuf {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.path(),
@@ -149,10 +163,12 @@ impl GlobalBin {
         }
     }
 
+    /// Return if the exposed global binary is trampoline.
     pub fn is_trampoline(&self) -> bool {
         matches!(self, GlobalBin::Trampoline(_))
     }
 
+    /// Return the inner trampoline.
     pub fn trampoline(&self) -> Option<&Trampoline> {
         match self {
             GlobalBin::Trampoline(trampoline) => Some(trampoline),
@@ -160,19 +176,28 @@ impl GlobalBin {
         }
     }
 
-    pub fn remove(&self) {
+    /// Remove exposed global binary.
+    /// In case if it's trampoline, it will also remove it's manifest.
+    pub async fn remove(&self) -> miette::Result<()> {
         match self {
             GlobalBin::Trampoline(trampoline) => {
-                let _ = std::fs::remove_file(trampoline.path());
-                let _ = std::fs::remove_file(trampoline.manifest_path());
+                let (trampoline_removed, manifest_removed) = tokio::join!(
+                    tokio_fs::remove_file(trampoline.path()),
+                    tokio_fs::remove_file(trampoline.manifest_path())
+                );
+                trampoline_removed.into_diagnostic()?;
+                manifest_removed.into_diagnostic()?;
             }
             GlobalBin::Script(script) => {
-                let _ = std::fs::remove_file(script);
+                std::fs::remove_file(script).into_diagnostic()?;
             }
         }
+
+        Ok(())
     }
 }
 
+/// Represents a trampoline binary installed by pixi.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trampoline {
@@ -185,6 +210,7 @@ pub struct Trampoline {
 }
 
 impl Trampoline {
+    /// Create a new trampoline.
     pub fn new(exposed_name: ExposedName, root_path: PathBuf, metadata: ManifestMetadata) -> Self {
         Trampoline {
             exposed_name,
@@ -193,17 +219,22 @@ impl Trampoline {
         }
     }
 
-    pub fn from(trampoline_path: PathBuf) -> Self {
-        let exposed_name = ExposedName::from_str(&executable_from_path(&trampoline_path))
-            .expect("should have a valid exposed name");
+    /// Try to create a trampoline object from the already existing trampoline.
+    pub async fn try_from(trampoline_path: PathBuf) -> miette::Result<Self> {
+        let exposed_name = ExposedName::from_str(&executable_from_path(&trampoline_path))?;
         let parent_path = trampoline_path
             .parent()
-            .expect("trampoline should have a parent path")
+            .ok_or_else(|| {
+                miette::miette!(
+                    "trampoline {} should have a parent path",
+                    trampoline_path.display()
+                )
+            })?
             .to_path_buf();
 
-        let metadata = ManifestMetadata::from_root_path(parent_path.clone(), &exposed_name);
+        let metadata = ManifestMetadata::from_root_path(parent_path.clone(), &exposed_name).await?;
 
-        Trampoline::new(exposed_name, parent_path, metadata)
+        Ok(Trampoline::new(exposed_name, parent_path, metadata))
     }
 
     // return the path to the trampoline
@@ -221,8 +252,9 @@ impl Trampoline {
     }
 
     pub async fn save(&self) -> miette::Result<()> {
-        self.write_trampoline().await?;
-        self.write_manifest()?;
+        let (trampoline, manifest) = tokio::join!(self.write_trampoline(), self.write_manifest());
+        trampoline?;
+        manifest?;
         Ok(())
     }
 
@@ -241,9 +273,12 @@ impl Trampoline {
         Ok(())
     }
 
-    fn write_manifest(&self) -> miette::Result<()> {
-        let manifest_file = File::create(self.manifest_path()).into_diagnostic()?;
-        serde_json::to_writer_pretty(manifest_file, &self.metadata).into_diagnostic()?;
+    /// Write the manifest file of the trampoline
+    async fn write_manifest(&self) -> miette::Result<()> {
+        let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
+        tokio::fs::write(self.manifest_path(), manifest_string)
+            .await
+            .into_diagnostic()?;
 
         Ok(())
     }

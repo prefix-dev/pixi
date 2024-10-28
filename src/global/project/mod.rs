@@ -561,7 +561,7 @@ impl Project {
 
         // Remove all removable binaries
         for binary_path in to_remove {
-            binary_path.remove();
+            binary_path.remove().await?;
             state_changes.insert_change(
                 env_name,
                 StateChange::RemovedExposed(binary_path.exposed_name()),
@@ -593,7 +593,7 @@ impl Project {
                 env_name,
                 StateChange::RemovedExposed(exposed_path.exposed_name()),
             );
-            exposed_path.remove();
+            exposed_path.remove().await?;
         }
 
         Ok(state_changes)
@@ -883,7 +883,7 @@ impl Project {
 
                     // Remove all removable binaries
                     for binary_path in to_remove {
-                        binary_path.remove();
+                        binary_path.remove().await?;
                     }
                     state_changes.insert_change(&env_name, StateChange::RemovedEnvironment);
                 }
