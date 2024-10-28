@@ -6,15 +6,12 @@ pub(crate) mod trampoline;
 
 pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
 pub(crate) use install::extract_executable_from_script;
-use pixi_utils::strip_executable_extension;
+use pixi_utils::executable_from_path;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 
 use crate::prefix::{Executable, Prefix};
 use rattler_conda_types::PrefixRecord;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 /// Find the executable scripts within the specified package installed in this
 /// conda prefix.
@@ -40,11 +37,7 @@ pub fn find_executables_for_many_records(
                 .files
                 .iter()
                 .filter(|relative_path| is_executable(prefix, relative_path))
-                .filter_map(|path| {
-                    path.iter().last().and_then(OsStr::to_str).map(|name| {
-                        Executable::new(strip_executable_extension(name.to_string()), path.clone())
-                    })
-                })
+                .map(|path| Executable::new(executable_from_path(path), path.clone()))
         })
         .collect();
     executables
