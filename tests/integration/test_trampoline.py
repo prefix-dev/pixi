@@ -29,6 +29,16 @@ def test_trampoline_respect_activation_variables(
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
     print(trampoline_metadata)
+    # debug content of the trampoline metadata
+    etc_path = tmp_path / "envs" / "dummy-b" / "etc" / "conda" / "activate.d"
+
+    import os
+
+    print("inside etc")
+    print(os.listdir(etc_path))
+
+    print("inside the actualt script")
+    print((etc_path / "activate-trampoline.sh").read_text())
 
     # get envs of the trampoline
     trampoline_env = trampoline_metadata["env"]
