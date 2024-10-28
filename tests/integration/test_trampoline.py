@@ -28,6 +28,8 @@ def test_trampoline_respect_activation_variables(
     dummy_b_json = tmp_path / "bin" / "dummy-b.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
+    print(trampoline_metadata)
+
     # get envs of the trampoline
     trampoline_env = trampoline_metadata["env"]
     assert trampoline_env["TRAMPOLINE_TEST_ENV"] == "teapot"
