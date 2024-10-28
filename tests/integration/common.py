@@ -47,7 +47,7 @@ def verify_cli_command(
     # Avoid to have miette splitting up lines
     complete_env = complete_env | {"NO_GRAPHICS": "1"}
 
-    process = subprocess.run(command, capture_output=True, text=True, env=complete_env)
+    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, shell=True)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
