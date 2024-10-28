@@ -474,7 +474,6 @@ pub(crate) async fn get_expose_scripts_sync_status(
 ) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from the scripts in the bin directory.
     let locally_exposed = bin_dir.bins().await?;
-    eprintln!("locally exposed is {:?}", locally_exposed);
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
         let global_bin = global_bin.clone();
         let path = global_bin.path().clone();
@@ -498,11 +497,6 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .filter(|(_, exec, _)| exec.starts_with(env_dir.path()))
         .collect_vec();
 
-    eprintln!("related {:?}", related);
-
-    eprintln!("++++++");
-    eprintln!("{:?}", mappings);
-
     fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
         exposed
             .file_name()
@@ -519,10 +513,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Get all related expose scripts not required by the environment manifest
     let to_remove = related
         .iter()
-        // .filter(|(_, _, bin)| bin.is_script())
         .filter_map(|(exposed, executable, bin_type)| {
-            eprintln!("in filter map {:?} {:?}", exposed, executable);
-
             if mappings
                 .iter()
                 .any(|mapping| match_mapping(mapping, exposed, executable))
@@ -687,7 +678,7 @@ mod tests {
         assert_eq!(to_add.len(), 1);
 
         // Add a legacy script to the bin directory
-        // even if it's should be exposed and it's pointing to correct en
+        // even if it's should be exposed and it's pointing to correct executable
         // it is an old script
         // we need to remove it and replace with trampoline
         let script_path = if cfg!(windows) {

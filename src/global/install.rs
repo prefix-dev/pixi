@@ -399,6 +399,8 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
+        use crate::global::trampoline::GlobalBin;
+        use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
 @SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
@@ -408,7 +410,8 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_without_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let script_global_bin = GlobalBin::Script(script_path);
+        let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
             Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
@@ -422,39 +425,34 @@ mod tests {
         let script_path = Path::new("pydoc.bat");
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_with_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
             Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
         );
     }
 
-    // #[cfg(unix)]
-    // #[tokio::test]
-    // async fn test_extract_executable_from_script_unix() {
-    //     let script_path = Path::new("nu");
-    //     let tempdir = tempfile::tempdir().unwrap();
-    //     let script_path = tempdir.path().join(script_path);
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_extract_executable_from_script_unix() {
+        use std::path::Path;
 
-    //     // create manifest that will contain real exe
-    //     let real_script_exe = PathBuf::from("/home/user/.pixi/envs/nushell/bin/nu");
-    //     let real_script_root = PathBuf::from("/home/user/.pixi/envs/nushell/bin");
+        use crate::global::trampoline::GlobalBin;
 
-    //     let manifest_metadata = ManifestMetadata::new(real_script_exe, real_script_root, None);
-
-    //     // write down manifest
-    //     let manifest_path = script_path.with_extension("json");
-    //     let manifest_file = fs::File::create(&manifest_path).unwrap();
-    //     serde_json::to_writer(manifest_file, &manifest_metadata).unwrap();
-
-    //     // extract executable from script location
-    //     let executable_path = extract_executable_from_trampoline_manifest(&script_path)
-    //         .await
-    //         .unwrap();
-
-    //     assert_eq!(
-    //         executable_path,
-    //         Path::new("/home/user/.pixi/envs/nushell/bin/nu")
-    //     );
-    // }
+        let script = r#"#!/bin/sh
+export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
+export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
+"/home/user/.pixi/envs/nushell/bin/nu" "$@"
+"#;
+        let script_path = Path::new("nu");
+        let tempdir = tempfile::tempdir().unwrap();
+        let script_path = tempdir.path().join(script_path);
+        fs::write(&script_path, script).unwrap();
+        let script_global_bin = GlobalBin::Script(script_path);
+        let executable_path = script_global_bin.executable().await.unwrap();
+        assert_eq!(
+            executable_path,
+            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
+        );
+    }
 }
