@@ -223,7 +223,7 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
-async fn ensure_pixi_directory_and_gitignore(project: &Project) -> miette::Result<()> {
+async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
     let pixi_dir = project.pixi_dir();
     let gitignore_path = pixi_dir.join(".gitignore");
 
