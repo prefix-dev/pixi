@@ -152,11 +152,20 @@ jobs:
               os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
             }
           - {
+            name: "Linux-x86_64-gnu",
+            target: x86_64-unknown-linux-gnu,
+            os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
+          }
+          - {
               name: "Linux-aarch64",
               target: aarch64-unknown-linux-musl,
               os: ubuntu-latest,
             }
-
+          - {
+            name: "Linux-aarch64-gnu",
+            target: aarch64-unknown-linux-gnu,
+            os: ubuntu-latest,
+          }
           - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
 
