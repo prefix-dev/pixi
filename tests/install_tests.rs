@@ -570,9 +570,13 @@ async fn test_old_lock_install() {
         "tests/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();
-    pixi::environment::update_prefix(&project.default_environment(), LockFileUsage::Update, false)
-        .await
-        .unwrap();
+    pixi::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        LockFileUsage::Update,
+        false,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         lock_str,
         std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap()

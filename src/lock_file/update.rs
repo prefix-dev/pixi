@@ -171,7 +171,9 @@ impl<'p> LockFileDerivedData<'p> {
 
         let env_variables = self
             .project
-            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            // Not providing a lock-file as the cache will be invalidated directly anyway,
+            // by it changing the lockfile with pypi records.
+            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude, None)
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
@@ -1088,7 +1090,11 @@ impl<'p> UpdateContext<'p> {
 
             // Get environment variables from the activation
             let env_variables = project
-                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .get_activated_environment_variables(
+                    environment,
+                    CurrentEnvVarBehavior::Exclude,
+                    None,
+                )
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available

@@ -98,6 +98,12 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
+    /// We store a hash of the lockfile and all activation env variables in a file
+    /// in the cache. The current name is `environment_name.json`.
+    pub(crate) fn cache_name(&self) -> String {
+        format!("{}.json", self.name())
+    }
+
     /// Returns the best platform for the current platform & environment.
     pub fn best_platform(&self) -> Platform {
         let current = Platform::current();

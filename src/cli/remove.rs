@@ -1,7 +1,7 @@
 use clap::Parser;
 use miette::Context;
 
-use crate::environment::update_prefix;
+use crate::environment::get_update_lock_file_and_prefix;
 use crate::DependencyType;
 use crate::Project;
 
@@ -78,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
     if !prefix_update_config.no_lockfile_update {
-        update_prefix(
+        get_update_lock_file_and_prefix(
             &project.default_environment(),
             prefix_update_config.lock_file_usage(),
             prefix_update_config.no_install,

@@ -10,6 +10,7 @@ use deno_task_shell::{
 };
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -353,6 +354,7 @@ fn get_export_specific_task_env(task: &Task) -> String {
 pub async fn get_task_env<'p>(
     environment: &Environment<'p>,
     clean_env: bool,
+    lock_file: Option<&LockFile>,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -364,9 +366,11 @@ pub async fn get_task_env<'p>(
         CurrentEnvVarBehavior::Include
     };
     let mut activation_env = await_in_progress("activating environment", |_| {
-        environment
-            .project()
-            .get_activated_environment_variables(environment, env_var_behavior)
+        environment.project().get_activated_environment_variables(
+            environment,
+            env_var_behavior,
+            lock_file,
+        )
     })
     .await
     .wrap_err("failed to activate environment")?
@@ -471,7 +475,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         let environment = project.default_environment();
-        let env = get_task_env(&environment, false).await.unwrap();
+        let env = get_task_env(&environment, false, None).await.unwrap();
         assert_eq!(
             env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()

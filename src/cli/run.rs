@@ -174,6 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
+                    Some(&lock_file.lock_file),
                 )
                 .await?;
                 entry.insert(command_env)

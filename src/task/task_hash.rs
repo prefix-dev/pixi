@@ -33,11 +33,14 @@ pub struct TaskCache {
     pub hash: ComputationHash,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EnvironmentHash(String);
 
 impl EnvironmentHash {
-    fn from_environment(run_environment: &project::Environment<'_>, lock_file: &LockFile) -> Self {
+    pub(crate) fn from_environment(
+        run_environment: &project::Environment<'_>,
+        lock_file: &LockFile,
+    ) -> Self {
         let mut hasher = Xxh3::new();
         let activation_scripts =
             run_environment.activation_scripts(Some(run_environment.best_platform()));
@@ -60,6 +63,12 @@ impl EnvironmentHash {
 
         urls.hash(&mut hasher);
         EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for EnvironmentHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

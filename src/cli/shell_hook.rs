@@ -3,6 +3,7 @@ use std::{collections::HashMap, default::Default};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCliPrompt;
+use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
@@ -14,7 +15,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::project::HasProjectRef;
 use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
-    environment::update_prefix,
+    environment::get_update_lock_file_and_prefix,
     project::Environment,
     Project,
 };
@@ -87,10 +88,17 @@ async fn generate_activation_script(
 
 /// Generates a JSON object describing the changes to the shell environment when
 /// activating the provided pixi environment.
-async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
+async fn generate_environment_json(
+    environment: &Environment<'_>,
+    lock_file: &LockFile,
+) -> miette::Result<String> {
     let environment_variables = environment
         .project()
-        .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(
+            environment,
+            CurrentEnvVarBehavior::Exclude,
+            Some(lock_file),
+        )
         .await?;
 
     let shell_env = ShellEnv {
@@ -109,7 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    update_prefix(
+    let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
@@ -117,7 +125,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     let output = match args.json {
-        true => generate_environment_json(&environment).await?,
+        true => generate_environment_json(&environment, &lock_file_data.lock_file).await?,
+        // Skipping the activated environment caching for the script.
+        // As it can still run scripts.
         false => generate_activation_script(args.shell, &environment).await?,
     };
 
