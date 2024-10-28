@@ -2,7 +2,7 @@ use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
         common::is_binary,
-        trampoline::{ManifestMetadata, TRAMPOLINE_BIN},
+        trampoline::{ManifestMetadata, Trampoline},
         BinDir, StateChange,
     },
     prefix::Prefix,
@@ -14,9 +14,8 @@ use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
+use std::fs;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
-use std::{fs, path::Path};
-use tokio::{fs::File, io::AsyncWriteExt};
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -41,7 +40,7 @@ pub(crate) fn script_exec_mapping<'a>(
     executables
         .find(|(executable_name, _)| *executable_name == entry_point)
         .map(|(_, executable_path)| ScriptExecMapping {
-            global_script_path: bin_dir.executable_script_path(exposed_name),
+            global_script_path: bin_dir.executable_trampoline_path(exposed_name),
             original_executable: executable_path.clone(),
         })
         .ok_or_else(|| {
@@ -84,15 +83,11 @@ pub(crate) async fn create_executable_scripts(
         original_executable,
     } in mapped_executables
     {
-        let metadata = ManifestMetadata {
-            exe: prefix.root().join(original_executable),
-            path: prefix
-                .root()
-                .join(original_executable.parent().unwrap())
-                .to_string_lossy()
-                .to_string(),
-            env: activation_variables.clone(),
-        };
+        let exe = prefix.root().join(original_executable);
+        let path = prefix
+            .root()
+            .join(original_executable.parent().expect("should have a parent"));
+        let metadata = ManifestMetadata::new(exe, path, Some(activation_variables.clone()));
 
         let json_path = global_script_path.with_extension("json");
 
@@ -134,30 +129,19 @@ pub(crate) async fn create_executable_scripts(
             }
         };
 
-        let file = fs_err::File::create(json_path).into_diagnostic()?;
-
-        serde_json::to_writer(file, &metadata).into_diagnostic()?;
-
-        // write the content of trampoline bin to the file
-        #[cfg(windows)]
-        {
-            let mut file = File::create(global_script_path.with_extension("exe"))
-                .await
-                .into_diagnostic()?;
-            file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
-        }
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut file = File::create(global_script_path).await.into_diagnostic()?;
-            file.write_all(TRAMPOLINE_BIN).await.into_diagnostic()?;
-            std::fs::set_permissions(global_script_path, std::fs::Permissions::from_mode(0o755))
-                .into_diagnostic()?;
-        }
-
         let executable_name = executable_from_path(global_script_path);
         let exposed_name = ExposedName::from_str(&executable_name)?;
+
+        let global_script_path_parent = global_script_path
+            .parent()
+            .expect("global script should have parent");
+
+        let trampoline = Trampoline::new(
+            exposed_name.clone(),
+            global_script_path_parent.to_path_buf(),
+            metadata,
+        );
+        trampoline.save().await?;
 
         match changed {
             AddedOrChanged::Unchanged => {}
@@ -170,24 +154,6 @@ pub(crate) async fn create_executable_scripts(
         }
     }
     Ok(state_changes)
-}
-
-/// Extracts the executable path from a script file.
-///
-/// This function reads the content of the script file and attempts to extract
-/// the path of the executable it references. It is used to determine
-/// the actual binary path from a wrapper script.
-pub(crate) async fn extract_executable_from_trampoline_manifest(
-    script: &Path,
-) -> miette::Result<PathBuf> {
-    // Read the trampoline manifest
-    let manifest_path = script.with_extension("json");
-
-    let manifest_file = fs::File::open(&manifest_path).into_diagnostic()?;
-    let manifest_metadata: ManifestMetadata =
-        serde_json::from_reader(manifest_file).into_diagnostic()?;
-
-    Ok(manifest_metadata.exe)
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
@@ -318,7 +284,6 @@ pub(crate) fn local_environment_matches_spec(
 
 #[cfg(test)]
 mod tests {
-    use fs_err as fs;
     use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
@@ -464,24 +429,32 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_extract_executable_from_script_unix() {
-        let script = r#"#!/bin/sh
-export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
-export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
-"/home/user/.pixi/envs/nushell/bin/nu" "$@"
-"#;
-        let script_path = Path::new("nu");
-        let tempdir = tempfile::tempdir().unwrap();
-        let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script).unwrap();
-        let executable_path = extract_executable_from_trampoline_manifest(&script_path)
-            .await
-            .unwrap();
-        assert_eq!(
-            executable_path,
-            Path::new("/home/user/.pixi/envs/nushell/bin/nu")
-        );
-    }
+    // #[cfg(unix)]
+    // #[tokio::test]
+    // async fn test_extract_executable_from_script_unix() {
+    //     let script_path = Path::new("nu");
+    //     let tempdir = tempfile::tempdir().unwrap();
+    //     let script_path = tempdir.path().join(script_path);
+
+    //     // create manifest that will contain real exe
+    //     let real_script_exe = PathBuf::from("/home/user/.pixi/envs/nushell/bin/nu");
+    //     let real_script_root = PathBuf::from("/home/user/.pixi/envs/nushell/bin");
+
+    //     let manifest_metadata = ManifestMetadata::new(real_script_exe, real_script_root, None);
+
+    //     // write down manifest
+    //     let manifest_path = script_path.with_extension("json");
+    //     let manifest_file = fs::File::create(&manifest_path).unwrap();
+    //     serde_json::to_writer(manifest_file, &manifest_metadata).unwrap();
+
+    //     // extract executable from script location
+    //     let executable_path = extract_executable_from_trampoline_manifest(&script_path)
+    //         .await
+    //         .unwrap();
+
+    //     assert_eq!(
+    //         executable_path,
+    //         Path::new("/home/user/.pixi/envs/nushell/bin/nu")
+    //     );
+    // }
 }

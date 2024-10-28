@@ -1,12 +1,12 @@
 [package]
-authors.workspace = true
+authors = ["pixi contributors <hi@prefix.dev>"]
 description = "Trampoline binary that is used to run binaries instaled by pixi global"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
+edition = "2021"
+homepage = "https://github.com/prefix-dev/pixi"
+license = "BSD-3-Clause"
 name = "pixi_trampoline"
-readme.workspace = true
-repository.workspace = true
+readme = "README.md"
+repository = "https://github.com/prefix-dev/pixi"
 version = "0.1.0"
 
 [profile.release]

@@ -1,5 +1,4 @@
-use crate::global::install::extract_executable_from_trampoline_manifest;
-
+use super::trampoline::{GlobalBin, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -50,14 +49,19 @@ impl BinDir {
     /// This function reads the directory specified by `self.0` and collects all
     /// file paths into a vector. It returns a `miette::Result` containing the
     /// vector of file paths or an error if the directory can't be read.
-    pub(crate) async fn trampolines(&self) -> miette::Result<Vec<PathBuf>> {
+    pub(crate) async fn bins(&self) -> miette::Result<Vec<GlobalBin>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
+            // TODO: should we add a magic number to ensure that it's our trampoline?
             if path.is_file() && path.is_executable() && is_binary(&path)? {
-                files.push(path);
+                let trampoline = Trampoline::from(path);
+                files.push(GlobalBin::Trampoline(trampoline));
+            } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
+                // If the file is not a binary, it's a script
+                files.push(GlobalBin::Script(path));
             }
         }
 
@@ -73,12 +77,12 @@ impl BinDir {
     ///
     /// This function constructs the path to the executable script by joining the
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
-    /// Windows, it sets the file extension to `.bat`.
-    pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
+    /// Windows, it sets the file extension to `.exe`.
+    pub(crate) fn executable_trampoline_path(&self, exposed_name: &ExposedName) -> PathBuf {
         // Add .bat to the windows executable
         let exposed_name = if cfg!(windows) {
             // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
-            format!("{}.bat", exposed_name)
+            format!("{}.exe", exposed_name)
         } else {
             exposed_name.to_string()
         };
@@ -467,18 +471,22 @@ pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
-) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
+) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from the scripts in the bin directory.
-    let locally_exposed = bin_dir.trampolines().await?;
-    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|path| {
-        let path = path.clone();
+    let locally_exposed = bin_dir.bins().await?;
+    eprintln!("locally exposed is {:?}", locally_exposed);
+    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
+        let global_bin = global_bin.clone();
+        let path = global_bin.path().clone();
         async move {
-            extract_executable_from_trampoline_manifest(&path)
+            global_bin
+                .executable()
                 .await
                 .ok()
-                .map(|exec| (path, exec))
+                .map(|exec| (path, exec, global_bin))
         }
     }))
+    // .await
     .await
     .into_iter()
     .flatten()
@@ -487,8 +495,13 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Filter out all binaries that are related to the environment
     let related = executable_paths
         .into_iter()
-        .filter(|(_, exec)| exec.starts_with(env_dir.path()))
+        .filter(|(_, exec, _)| exec.starts_with(env_dir.path()))
         .collect_vec();
+
+    eprintln!("related {:?}", related);
+
+    eprintln!("++++++");
+    eprintln!("{:?}", mappings);
 
     fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
         exposed
@@ -506,27 +519,30 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Get all related expose scripts not required by the environment manifest
     let to_remove = related
         .iter()
-        .filter_map(|(exposed, executable)| {
+        // .filter(|(_, _, bin)| bin.is_script())
+        .filter_map(|(exposed, executable, bin_type)| {
+            eprintln!("in filter map {:?} {:?}", exposed, executable);
+
             if mappings
                 .iter()
                 .any(|mapping| match_mapping(mapping, exposed, executable))
+                && bin_type.is_trampoline()
             {
                 None
             } else {
-                Some(exposed)
+                Some(bin_type)
             }
         })
         .cloned()
-        .collect::<IndexSet<PathBuf>>();
+        .collect_vec();
 
     // Get all required exposed binaries that are not yet exposed
     let to_add = mappings
         .iter()
         .filter_map(|mapping| {
-            if related
-                .iter()
-                .any(|(exposed, executable)| match_mapping(mapping, exposed, executable))
-            {
+            if related.iter().any(|(exposed, executable, bin)| {
+                match_mapping(mapping, exposed, executable) && bin.is_trampoline()
+            }) {
                 None
             } else {
                 Some(mapping.exposed_name().clone())
@@ -539,6 +555,8 @@ pub(crate) async fn get_expose_scripts_sync_status(
 
 #[cfg(test)]
 mod tests {
+    use crate::global::trampoline::ManifestMetadata;
+
     use super::*;
     use rstest::rstest;
     use std::str::FromStr;
@@ -629,7 +647,7 @@ mod tests {
         let path = PathBuf::from("/home/user/.pixi/bin");
         let bin_dir = BinDir(path.clone());
         let exposed_name = ExposedName::from_str(exposed_name).unwrap();
-        let executable_script_path = bin_dir.executable_script_path(&exposed_name);
+        let executable_script_path = bin_dir.executable_trampoline_path(&exposed_name);
 
         if cfg!(windows) {
             let expected = format!("{}.bat", exposed_name);
@@ -640,7 +658,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_expose_scripts_sync_status() {
+    async fn test_get_expose_scripts_sync_status_for_legacy_scripts() {
         let tmp_home_dir = tempfile::tempdir().unwrap();
         let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
         let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
@@ -668,7 +686,10 @@ mod tests {
         assert!(to_remove.is_empty());
         assert_eq!(to_add.len(), 1);
 
-        // Add a script to the bin directory
+        // Add a legacy script to the bin directory
+        // even if it's should be exposed and it's pointing to correct en
+        // it is an old script
+        // we need to remove it and replace with trampoline
         let script_path = if cfg!(windows) {
             bin_dir.path().join("test.bat")
         } else {
@@ -709,18 +730,83 @@ mod tests {
                 .unwrap();
         };
 
+        let (mut to_remove, mut to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+                .await
+                .unwrap();
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert!(to_add.pop().unwrap().to_string() == "test");
+
+        // Test to_remove when nothing should be exposed
+        let (mut to_remove, to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+                .await
+                .unwrap();
+
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert!(to_add.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_expose_scripts_sync_status_for_trampolines() {
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        // Test empty
+        let exposed = IndexSet::new();
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
         assert!(to_add.is_empty());
 
-        // Test to_remove
-        let (to_remove, to_add) =
+        // Test with exposed
+        let mut exposed = IndexSet::new();
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("test").unwrap(),
+            "test".to_string(),
+        ));
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert_eq!(to_add.len(), 1);
+
+        // add a trampoline
+        let original_exe = if cfg!(windows) {
+            env_dir.path().join("bin/test.exe")
+        } else {
+            env_dir.path().join("bin/test")
+        };
+
+        let manifest = ManifestMetadata::new(original_exe, bin_dir.path().join("bin"), None);
+        let trampoline = Trampoline::new(
+            ExposedName::from_str("test").unwrap(),
+            bin_dir.path().to_path_buf(),
+            manifest,
+        );
+
+        trampoline.save().await.unwrap();
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test to_remove when nothing should be exposed
+        let (mut to_remove, to_add) =
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
-        assert_eq!(to_remove.len(), 1);
+
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
         assert!(to_add.is_empty());
     }
 }

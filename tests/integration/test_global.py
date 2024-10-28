@@ -955,6 +955,7 @@ def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_
         [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.2.0"],
         env=env,
     )
+
     assert not package0_1_0.is_file()
     assert package0_2_0.is_file()
 
