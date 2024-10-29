@@ -12,7 +12,7 @@ use crate::{
     Project,
 };
 use ahash::HashMap;
-use clap::Parser;
+use clap::{builder::Str, Parser};
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
@@ -43,7 +43,7 @@ pub struct Args {
 #[derive(Parser, Debug, Default)]
 pub struct UpgradeSpecsArgs {
     /// The packages to upgrade
-    pub packages: Option<Vec<PackageName>>,
+    pub packages: Option<Vec<String>>,
 
     /// The feature to update
     #[clap(long = "feature", short = 'f')]
@@ -52,7 +52,7 @@ pub struct UpgradeSpecsArgs {
 
 /// A distilled version of `UpgradeSpecsArgs`.
 struct UpgradeSpecs {
-    packages: Option<HashSet<PackageName>>,
+    packages: Option<HashSet<String>>,
     feature: Option<FeatureName>,
 }
 
@@ -68,40 +68,24 @@ impl From<UpgradeSpecsArgs> for UpgradeSpecs {
 impl UpgradeSpecs {
     /// Returns true if the package should be relaxed according to the user
     /// input.
-    fn should_relax(&self, environment_name: &str, platform: Platform, package: &Package) -> bool {
-        // Check if the platform is in the list of platforms to update.
-        if let Some(platforms) = &self.platforms {
-            if !platforms.contains(&platform) {
-                return false;
-            }
-        }
-
-        // Check if the environmtent is in the list of environments to update.
-        if let Some(environments) = &self.environments {
-            if !environments.contains(environment_name) {
-                return false;
-            }
-        }
-
-        // Check if the package is in the list of packages to update.
-        if let Some(packages) = &self.packages {
-            if !packages.contains(&*package.name()) {
-                return false;
-            }
-        }
-
-        tracing::debug!(
-            "relaxing package: {}, env={}, platform={}",
-            package.name(),
-            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
-            consts::PLATFORM_STYLE.apply_to(platform),
-        );
-
-        true
+    fn should_relax(&self, feature_name: &str, package: &Package) -> bool {
+        todo!()
     }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let config = args.config;
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(config);
+
+    let specs = UpgradeSpecs::from(args.specs);
+
+    // If the user specified a feature name, check to see if it exists.
+    if let Some(feature) = &specs.feature {
+        if project.manifest.feature(feature).is_none() {
+            miette::bail!("could not find a feature named '{feature}'")
+        }
+    }
     todo!()
 }
 
