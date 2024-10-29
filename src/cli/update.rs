@@ -156,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
         for package in packages {
-            check_package_exists(&loaded_lock_file, package, &specs)?
+            ensure_package_exists(&loaded_lock_file, package, &specs)?
         }
     }
 
@@ -199,9 +199,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Checks if the specified package exists and returns a helpful error message
-/// if it doesn't.
-fn check_package_exists(
+/// Ensures the existence of the specified package
+///
+/// # Returns
+///
+/// Returns `miette::Result` with a descriptive message
+/// if the package does not exist.
+fn ensure_package_exists(
     lock_file: &LockFile,
     package_name: &str,
     specs: &UpdateSpecs,
