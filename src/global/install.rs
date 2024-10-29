@@ -14,7 +14,6 @@ use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use rattler_shell::{activation::Activator, shell::ShellEnum};
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
@@ -79,13 +78,6 @@ pub(crate) async fn create_executable_scripts(
     let mut state_changes = StateChanges::default();
 
     let activation_variables = prefix.run_activation().await?;
-    eprintln!("run activation scripts are {:?}", activation_variables);
-
-    let activator = Activator::from_path(prefix.root(), ShellEnum::default(), Platform::current())
-        .into_diagnostic()
-        .unwrap();
-
-    eprintln!("Activation scripts are {:?}", activator.activation_scripts);
 
     for ScriptExecMapping {
         global_script_path,
@@ -420,6 +412,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
         use crate::global::trampoline::GlobalBin;
+        use std::fs;
         use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"

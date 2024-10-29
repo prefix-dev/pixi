@@ -11,6 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use fs_err::tokio as tokio_fs;
+use tokio::io::AsyncReadExt;
 
 use super::ExposedName;
 
@@ -285,22 +286,12 @@ impl Trampoline {
     }
 
     /// Check if binary is a saved trampoline
+    /// by reading only first 1048 bytes of the file
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
-        let bytes = tokio_fs::read(path).await.into_diagnostic()?;
-        Ok(bytes == TRAMPOLINE_BIN)
+        let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
+
+        let mut buf = [0; 1048];
+        bin_file.read_exact(buf.as_mut()).await.into_diagnostic()?;
+        Ok(buf == TRAMPOLINE_BIN[..1048])
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn test_trampoline_creation() {
-//         let trampoline = Trampoline::new();
-//         assert!(
-//             trampoline.get_binary_size() > 0,
-//             "Binary should not be empty"
-//         );
-//     }
-// }

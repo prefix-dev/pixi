@@ -1,4 +1,3 @@
-// use super::install::extract_executable_from_trampoline_manifest;
 use super::trampoline::GlobalBin;
 use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
@@ -280,7 +279,6 @@ impl Project {
                 .into_diagnostic()?;
 
             if !env_root.directories().await?.is_empty() {
-                tracing::debug!("Creating global manifest from existing installation");
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
@@ -1018,7 +1016,6 @@ mod tests {
         let env_name = "test".parse().unwrap();
 
         // Create non-exposed but related binary
-        // let non_exposed_bin_path = project.bin_dir.path().join("test/bin");
         let non_exposed_name = ExposedName::from_str("not-python").unwrap();
 
         let non_exposed_env_path = project.env_root.path().join("test/bin/not-python");
@@ -1038,20 +1035,12 @@ mod tests {
             non_exposed_manifest,
         );
 
-        eprintln!("non exposed trampoline {:?}", non_exposed_trampoline);
-
-        eprintln!(
-            "trmapoline manifest path {:?}",
-            non_exposed_trampoline.manifest_path()
-        );
-
         // write it's trampline and manifest
         non_exposed_trampoline.save().await.unwrap();
 
         // Create exposed binary
         let python = ExposedName::from_str("python").unwrap();
         let python_exposed_env_path = project.env_root.path().join("test/bin/python");
-        eprintln!("python_exposed_env_path: {:?}", python_exposed_env_path);
 
         tokio_fs::create_dir_all(python_exposed_env_path.parent().unwrap())
             .await
