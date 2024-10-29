@@ -203,7 +203,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 ///
 /// # Returns
 ///
-/// Returns `miette::Result` with a descriptive message
+/// Returns `miette::Result` with a descriptive error message
 /// if the package does not exist.
 fn ensure_package_exists(
     lock_file: &LockFile,
