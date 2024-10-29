@@ -9,13 +9,8 @@ use std::{
     sync::Arc,
 };
 
-use distribution_types::{
-    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist,
-};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
-use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
@@ -29,7 +24,6 @@ use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -40,8 +34,14 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBui
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
+use uv_distribution_types::{
+    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
+    Name, Resolution, ResolvedDist, SourceDist,
+};
 use uv_git::GitResolver;
+use uv_install_wheel::linker::LinkMode;
 use uv_normalize::PackageName;
+use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -123,41 +123,25 @@ type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIden
 /// We need this function because we need to convert to the introduced
 /// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
 fn convert_uv_requirements_to_pep508<'req>(
-    requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
+    requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<VerbatimParsedUrl>>,
 ) -> Vec<pep508_rs::Requirement> {
     // Convert back top PEP508 Requirement<VerbatimUrl>
     requires_dist
-        .map(|r| pep508_rs::Requirement {
-            name: r.name.clone(),
-            extras: r.extras.clone(),
-            version_or_url: r.version_or_url.clone().map(|v| match v {
-                VersionOrUrl::VersionSpecifier(v) => VersionOrUrl::VersionSpecifier(v),
-                VersionOrUrl::Url(u) => VersionOrUrl::Url(u.verbatim),
-            }),
-            marker: r.marker.clone(),
-            origin: r.origin.clone(),
+        .map(|r| {
+            let requirement = r.to_string();
+            pep508_rs::Requirement::from_str(&requirement).expect("invalid requirement")
         })
         .collect()
 }
 
 fn uv_pypi_types_requirement_to_pep508<'req>(
-    requirements: impl Iterator<Item = &'req pypi_types::Requirement>,
+    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
 ) -> Vec<pep508_rs::Requirement> {
     requirements
-        .map(|requirement| pep508_rs::Requirement {
-            name: requirement.name.clone(),
-            extras: requirement.extras.clone(),
-            version_or_url: match requirement.source.clone() {
-                RequirementSource::Registry { specifier, .. } => {
-                    Some(VersionOrUrl::VersionSpecifier(specifier))
-                }
-                RequirementSource::Url { url, .. }
-                | RequirementSource::Git { url, .. }
-                | RequirementSource::Directory { url, .. }
-                | RequirementSource::Path { url, .. } => Some(VersionOrUrl::Url(url)),
-            },
-            marker: requirement.marker.clone(),
-            origin: requirement.origin.clone(),
+        .map(|requirement| {
+            let requirement: uv_pep508::Requirement<VerbatimParsedUrl> =
+                uv_pep508::Requirement::from(requirement.clone());
+            pep508_rs::Requirement::from_str(&requirement.to_string()).expect("invalid requirement")
         })
         .collect()
 }
