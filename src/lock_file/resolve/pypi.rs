@@ -31,12 +31,12 @@ use rattler_lock::{
 };
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
+    InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
@@ -47,7 +47,7 @@ use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     lock_file::{
@@ -147,7 +147,7 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
 }
 
 /// Prints the number of overridden uv PyPI package requests
-fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
+fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
     if !package_requests.is_empty() {
         // Print package requests in form of (PackageName, NumRequest)
         let package_requests = package_requests
@@ -259,7 +259,11 @@ pub async fn resolve_pypi(
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &context.cache);
         let entries = client
-            .fetch(index_locations.flat_index())
+            .fetch(
+                index_locations
+                    .flat_indexes()
+                    .map(uv_distribution_types::Index::url),
+            )
             .await
             .into_diagnostic()
             .wrap_err("failed to query find-links locations")?;
@@ -287,6 +291,7 @@ pub async fn resolve_pypi(
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
     tracing::debug!("using build-isolation: {:?}", build_isolation);
 
+    let dependency_metadata = DependencyMetadata::default();
     let options = Options {
         index_strategy,
         ..Options::default()
@@ -295,20 +300,24 @@ pub async fn resolve_pypi(
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
-        &[],
+        Constraints::default(),
         &interpreter,
         &index_locations,
         &flat_index,
+        &dependency_metadata,
+        // TODO: could use this later to add static metadata
         &build_dispatch_in_memory_index,
         &git_resolver,
+        &context.capabilities,
         &context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        // BuildIsolation::Shared(&env),
         build_isolation,
         LinkMode::default(),
         &context.build_options,
+        &HashStrategy::default(),
         None,
+        LowerBound::default(),
         context.source_strategy,
         context.concurrency,
     )
@@ -319,8 +328,11 @@ pub async fn resolve_pypi(
         .values()
         .map(|(_, p)| {
             // Create pep440 version from the conda version
-            let specifier = VersionSpecifier::from_version(Operator::Equal, p.version.clone())
-                .expect("invalid version specifier");
+            let specifier = uv_pep440::VersionSpecifier::from_version(
+                uv_pep440::Operator::Equal,
+                uv_pep440::Version::from_str(&p.version.to_string()).expect("invalid version"),
+            )
+            .expect("invalid version specifier");
 
             // Only one requirement source and we just assume that's a PyPI source
             let source = RequirementSource::Registry {
@@ -328,8 +340,9 @@ pub async fn resolve_pypi(
                 index: None,
             };
 
-            pypi_types::Requirement {
-                name: p.name.as_normalized().clone(),
+            uv_pypi_types::Requirement {
+                name: uv_normalize::PackageName::new(p.name.as_normalized().to_string())
+                    .expect("invalid package name"),
                 extras: vec![],
                 marker: Default::default(),
                 source,
@@ -347,10 +360,13 @@ pub async fn resolve_pypi(
             let (package_data, _) = record;
             // Fake being an InstalledRegistryDist
             let installed = InstalledRegistryDist {
-                name: package_data.name.clone(),
-                version: package_data.version.clone(),
+                name: uv_normalize::PackageName::new(package_data.name.to_string())
+                    .expect("invalid package name"),
+                version: uv_pep440::Version::from_str(&package_data.version.clone().to_string())
+                    .expect("invalid version"),
                 // This is not used, so we can just set it to a random value
                 path: PathBuf::new().join("does_not_exist"),
+                cache_info: None,
             };
             Preference::from_installed(&InstalledDist::Registry(installed))
         })
@@ -372,14 +388,17 @@ pub async fn resolve_pypi(
     );
 
     let interpreter_version = interpreter.python_version();
-    let python_specifier =
-        VersionSpecifier::from_version(Operator::EqualStar, interpreter_version.clone())
-            .into_diagnostic()
-            .context("error creating version specifier for python version")?;
-    let requires_python =
-        uv_resolver::RequiresPython::from_specifiers(&VersionSpecifiers::from(python_specifier))
-            .into_diagnostic()
-            .context("error creating requires-python for solver")?;
+    let python_specifier = uv_pep440::VersionSpecifier::from_version(
+        uv_pep440::Operator::EqualStar,
+        interpreter_version.clone(),
+    )
+    .into_diagnostic()
+    .context("error creating version specifier for python version")?;
+    let requires_python = uv_resolver::RequiresPython::from_specifiers(
+        &uv_pep440::VersionSpecifiers::from(python_specifier),
+    )
+    .into_diagnostic()
+    .context("error creating requires-python for solver")?;
 
     let markers = ResolverMarkers::SpecificEnvironment(marker_environment.into());
 
@@ -391,11 +410,12 @@ pub async fn resolve_pypi(
         ),
         &flat_index,
         Some(&tags),
-        Some(&requires_python),
+        &requires_python,
         AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
         &context.build_options,
+        &context.capabilities,
     );
     let package_requests = Rc::new(RefCell::new(Default::default()));
     let provider = CondaResolverProvider {
@@ -417,6 +437,8 @@ pub async fn resolve_pypi(
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,
+        &context.capabilities,
+        &index_locations,
         provider,
         EmptyInstalledPackages,
     )

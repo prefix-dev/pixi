@@ -3,21 +3,22 @@ use std::{
     collections::{BTreeMap, HashMap},
     future::ready,
     rc::Rc,
+    str::FromStr,
 };
 
-use distribution_filename::SourceDistExtension;
-use distribution_types::{
-    Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
-    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
-};
 use futures::{Future, FutureExt};
-use pep508_rs::{PackageName, VerbatimUrl};
 use pixi_consts::consts;
 use rattler_conda_types::RepoDataRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
+use uv_distribution_filename::SourceDistExtension;
+use uv_distribution_types::{
+    Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
+};
+use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, MetadataResponse, ResolverProvider, VersionMap, VersionsResponse,
-    WheelMetadataResult,
+    DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
+    VersionsResponse, WheelMetadataResult,
 };
 use uv_types::BuildContext;
 
@@ -36,6 +37,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io PackageName,
+        index: Option<&'io IndexUrl>,
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
@@ -66,10 +68,11 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
             };
 
             let source_dist = RegistrySourceDist {
-                name: identifier.name.as_normalized().clone(),
+                name: uv_normalize::PackageName::new(identifier.name.as_normalized().to_string())
+                    .expect("invalid package name"),
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
-                index: IndexUrl::Pypi(VerbatimUrl::from_url(
+                index: IndexUrl::Pypi(uv_pep508::VerbatimUrl::from_url(
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
                 )),
                 wheels: vec![],
@@ -89,15 +92,19 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 .and_modify(|e| *e += 1)
                 .or_insert(1);
 
+            let flat_dists = FlatDistributions::from(BTreeMap::from_iter([(
+                identifier.version.clone(),
+                prioritized_dist,
+            )]));
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
-                BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
+                flat_dists,
             )])))
             .right_future();
         }
 
         // Otherwise use the default implementation
         self.fallback
-            .get_package_versions(package_name)
+            .get_package_versions(package_name, index)
             .left_future()
     }
 
@@ -111,14 +118,19 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
+                //
+                let name = uv_normalize::PackageName::new(iden.name.as_normalized().to_string())
+                    .expect("invalid package name");
+                let version = uv_pep440::Version::from_str(&iden.version.to_string())
+                    .expect("could not convert to pypi version");
                 return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
                     metadata: Metadata {
-                        name: iden.name.as_normalized().clone(),
-                        version: iden.version.clone(),
+                        name,
+                        version,
                         requires_dist: vec![],
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
-                        dev_dependencies: Default::default(),
+                        dependency_groups: Default::default(),
                     },
                     hashes: vec![],
                 })))
@@ -130,10 +142,6 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
         self.fallback
             .get_or_build_wheel_metadata(dist)
             .right_future()
-    }
-
-    fn index_locations(&self) -> &IndexLocations {
-        self.fallback.index_locations()
     }
 
     fn with_reporter(self, reporter: impl uv_distribution::Reporter + 'static) -> Self {
