@@ -177,10 +177,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
+                lock_file.prefix(&executable_task.run_environment).await?;
                 let opt_lock_file = if project.config().no_env_activation_cache.is_none()
                     || project.config().no_env_activation_cache.is_some_and(|x| !x)
                 {
-                    lock_file.prefix(&executable_task.run_environment).await?;
                     Some(&lock_file.lock_file)
                 } else {
                     None
