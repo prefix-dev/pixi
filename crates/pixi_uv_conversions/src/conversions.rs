@@ -1,38 +1,20 @@
 use std::path::{Path, PathBuf};
 
-use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
-use pep508_rs::{
-    InvalidNameError, PackageName, UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError,
-};
 use pixi_manifest::pypi::{
     pypi_options::{IndexStrategy, PypiOptions},
     GitRev,
 };
-use rattler_lock::FindLinksUrlOrPath;
+use uv_distribution_types::{Index, IndexLocations, IndexUrl};
 use uv_git::GitReference;
+use uv_pep508::{
+    InvalidNameError, PackageName, UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError,
+};
 use uv_python::PythonEnvironment;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
     #[error("could not convert path to flat index location {1}")]
     VerbatimUrlError(#[source] VerbatimUrlError, PathBuf),
-}
-
-/// Converts to the [`distribution_types::FlatIndexLocation`]
-pub fn to_flat_index_location(
-    find_links: &FindLinksUrlOrPath,
-    base_path: &Path,
-) -> Result<FlatIndexLocation, ConvertFlatIndexLocationError> {
-    match find_links {
-        FindLinksUrlOrPath::Path(path) => Ok(FlatIndexLocation::Path(
-            VerbatimUrl::parse_path(path.clone(), base_path)
-                .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, path.clone()))?
-                .with_given(path.display().to_string()),
-        )),
-        FindLinksUrlOrPath::Url(url) => {
-            Ok(FlatIndexLocation::Url(VerbatimUrl::from_url(url.clone())))
-        }
-    }
 }
 
 /// Convert the subset of pypi-options to index locations
@@ -90,7 +72,9 @@ pub fn locked_indexes_to_index_locations(
         .first()
         .cloned()
         .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from);
+        .map(IndexUrl::from)
+        .map(Index::from_extra_index_url)
+        .into_iter();
     let extra_indexes = indexes
         .indexes
         .iter()
@@ -98,20 +82,20 @@ pub fn locked_indexes_to_index_locations(
         .cloned()
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
-        .collect::<Vec<_>>();
+        .map(Index::from_extra_index_url);
     let flat_indexes = indexes
         .find_links
         .iter()
-        .map(|find_link| to_flat_index_location(find_link, base_path))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(VerbatimUrl::from_url)
+        .map(IndexUrl::from)
+        .map(Index::from_extra_index_url);
 
     // we don't have support for an explicit `no_index` field in the `PypiIndexes`
     // so we only set it if you want to use flat indexes only
     let no_index = index.is_none() && !flat_indexes.is_empty();
     Ok(IndexLocations::new(
-        index,
-        extra_indexes,
-        flat_indexes,
+        index.chain(extra_indexes).collect(),
+        flat_indexes.collect(),
         no_index,
     ))
 }

@@ -3,17 +3,17 @@ use std::{
     str::FromStr,
 };
 
-use distribution_filename::DistExtension;
-use pep508_rs::VerbatimUrl;
 use pixi_manifest::{
     pypi::{pypi_requirement::ParsedGitUrl, GitRev},
     PyPiRequirement,
 };
-use pypi_types::RequirementSource;
 use thiserror::Error;
 use url::Url;
+use uv_distribution_filename::DistExtension;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep508::VerbatimUrl;
+use uv_pypi_types::RequirementSource;
 
 use super::to_git_reference;
 
@@ -55,9 +55,9 @@ pub enum AsPep508Error {
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
     #[error("error while canonicalizing {0}")]
-    VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
+    VerabatimUrlError(#[from] uv_pep508::VerbatimUrlError),
     #[error("error in extension parsing")]
-    ExtensionError(#[from] distribution_filename::ExtensionError),
+    ExtensionError(#[from] uv_distribution_filename::ExtensionError),
 }
 
 /// Convert into a `pypi_types::Requirement`, which is an uv extended
@@ -66,7 +66,7 @@ pub fn as_uv_req(
     req: &PyPiRequirement,
     name: &str,
     project_root: &Path,
-) -> Result<pypi_types::Requirement, AsPep508Error> {
+) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
     let name = PackageName::new(name.to_owned())?;
     let source = match req {
         PyPiRequirement::Version { version, .. } => {
@@ -166,9 +166,13 @@ pub fn as_uv_req(
         },
     };
 
-    Ok(pypi_types::Requirement {
+    Ok(uv_pypi_types::Requirement {
         name: name.clone(),
-        extras: req.extras().to_vec(),
+        extras: req
+            .extras()
+            .iter()
+            .map(|e| uv_pep508::ExtraName::new(e.to_string()).expect("conversion failed"))
+            .collect(),
         marker: Default::default(),
         source,
         origin: None,
