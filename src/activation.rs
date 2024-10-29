@@ -159,10 +159,7 @@ pub async fn run_activation(
 ) -> miette::Result<HashMap<String, String>> {
     // If a lock file is provided, we can check whether there exists an environment cache.
     if let Some(lock_file) = lock_file {
-        let cache_file = environment
-            .project()
-            .activation_env_cache_folder()
-            .join(environment.cache_name());
+        let cache_file = environment.activation_cache_file_path();
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file)
                 .await
@@ -173,10 +170,15 @@ pub async fn run_activation(
             // If the cache's hash matches the environment hash, we can return the cached
             // environment variables.
             if cache.hash == hash {
+                tracing::debug!(
+                    "Using cached environment variables for {:?}",
+                    environment.name()
+                );
                 return Ok(cache.environment_variables);
             }
         }
     }
+    tracing::debug!("Running activation script for {:?}", environment.name());
 
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -247,7 +249,7 @@ pub async fn run_activation(
         let cache_file = environment
             .project()
             .activation_env_cache_folder()
-            .join(environment.cache_name());
+            .join(environment.activation_cache_name());
         let cache = ActivationCache {
             hash: EnvironmentHash::from_environment(environment, lock_file),
             environment_variables: activator_result.clone(),
@@ -260,6 +262,11 @@ pub async fn run_activation(
         tokio_fs::write(&cache_file, cache)
             .await
             .into_diagnostic()?;
+        tracing::debug!(
+            "Wrote activation cache for {} to {}",
+            environment.name(),
+            cache_file.display()
+        );
     }
 
     Ok(activator_result)
@@ -369,9 +376,9 @@ pub(crate) async fn initialize_env_variables(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
+    use std::path::Path;
+    use std::str::FromStr;
 
     #[test]
     fn test_metadata_env() {
@@ -473,6 +480,143 @@ mod tests {
         assert_eq!(
             env.get("USER").unwrap(),
             std::env::var("USER").as_ref().unwrap()
+        );
+    }
+
+    /// Test that the activation cache is created and used correctly.
+    ///
+    /// This test will validate the cache usages by running the activation script and checking if the cache is created.
+    /// - It will then modify the cache and check if the cache is used.
+    /// - It will then modify the lock file and check if the cache is not used and recreated.
+    /// - It will then modify the cache again and check if the cache is used again.
+    #[tokio::test]
+    async fn test_run_activation_cache() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = []
+
+        [activation.env]
+        TEST = "ACTIVATION123"
+        "#;
+        let project =
+            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+        let default_env = project.default_environment();
+
+        // Don't create cache
+        let env = run_activation(&default_env, &CurrentEnvVarBehavior::Include, None)
+            .await
+            .unwrap();
+        assert!(!project.activation_env_cache_folder().exists());
+        assert!(env.contains_key("CONDA_PREFIX"));
+
+        // Create cache
+        let lock_file = LockFile::default();
+        let _env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&lock_file),
+        )
+        .await
+        .unwrap();
+        assert!(project.activation_env_cache_folder().exists());
+        assert!(project
+            .activation_env_cache_folder()
+            .join(project.default_environment().activation_cache_name())
+            .exists());
+
+        // Verify that the cache is used, by overwriting the cache and checking if that persisted
+        let cache_file = project.default_environment().activation_cache_file_path();
+        let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
+        let modified = contents.replace("ACTIVATION123", "ACTIVATION456");
+        tokio_fs::write(&cache_file, modified).await.unwrap();
+
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&lock_file),
+        )
+        .await
+        .unwrap();
+        assert_eq!(env.get("TEST").unwrap(), "ACTIVATION456");
+
+        // Verify that the cache is not used when the hash is different
+        let mock_lock = r#"
+version: 5
+environments:
+  default:
+    channels:
+    - url: https://fast.prefix.dev/conda-forge/
+    packages:
+      linux-64:
+        - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
+packages:
+- kind: conda
+  name: _libgcc_mutex
+  version: '0.1'
+  build: conda_forge
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
+  sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
+  md5: d7c89558ba9fa0495403155b64376d81
+  license: None
+  size: 2562
+  timestamp: 1578324546067
+                  "#;
+        let lock_file = LockFile::from_str(mock_lock).unwrap();
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&lock_file),
+        )
+        .await
+        .unwrap();
+        assert_eq!(env.get("TEST").unwrap(), "ACTIVATION123");
+
+        // Verify that the cache is used again after the hash is the same
+        let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
+        let modified = contents.replace("ACTIVATION123", "ACTIVATION456");
+        tokio_fs::write(&cache_file, modified).await.unwrap();
+
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&lock_file),
+        );
+        assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
+
+        // Check that the cache is invalidated when the activation.env changes.
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = []
+
+        [activation.env]
+        TEST = "ACTIVATION123"
+        TEST2 = "ACTIVATION1234"
+        "#;
+        let project =
+            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+        let default_env = project.default_environment();
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&lock_file),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            env.get("TEST").unwrap(),
+            "ACTIVATION123",
+            "The old variable should be reset"
+        );
+        assert_eq!(
+            env.get("TEST2").unwrap(),
+            "ACTIVATION1234",
+            "The new variable should be set"
         );
     }
 }

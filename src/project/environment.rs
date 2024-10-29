@@ -99,9 +99,16 @@ impl<'p> Environment<'p> {
     }
 
     /// We store a hash of the lockfile and all activation env variables in a file
-    /// in the cache. The current name is `environment_name.json`.
-    pub(crate) fn cache_name(&self) -> String {
-        format!("{}.json", self.name())
+    /// in the cache. The current name is `activation_environment-name.json`.
+    pub(crate) fn activation_cache_name(&self) -> String {
+        format!("activation_{}.json", self.name())
+    }
+
+    /// Returns the activation cache file path.
+    pub(crate) fn activation_cache_file_path(&self) -> std::path::PathBuf {
+        self.project
+            .activation_env_cache_folder()
+            .join(self.activation_cache_name())
     }
 
     /// Returns the best platform for the current platform & environment.

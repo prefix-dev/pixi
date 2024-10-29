@@ -42,15 +42,27 @@ impl EnvironmentHash {
         lock_file: &LockFile,
     ) -> Self {
         let mut hasher = Xxh3::new();
+
+        // Hash the activation scripts
         let activation_scripts =
             run_environment.activation_scripts(Some(run_environment.best_platform()));
-
         for script in activation_scripts {
             script.hash(&mut hasher);
         }
 
-        let mut urls = Vec::new();
+        // Hash the environment variables
+        let project_activation_env =
+            run_environment.activation_env(Some(run_environment.best_platform()));
+        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
+        env_vars.sort_by_key(|(key, _)| *key);
 
+        for (key, value) in env_vars {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the packages
+        let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
             if let Some(packages) = env.packages(run_environment.best_platform()) {
                 for package in packages {
@@ -58,10 +70,9 @@ impl EnvironmentHash {
                 }
             }
         }
-
         urls.sort();
-
         urls.hash(&mut hasher);
+
         EnvironmentHash(format!("{:x}", hasher.finish()))
     }
 }
