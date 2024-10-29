@@ -69,7 +69,7 @@ def test_trampoline_migrate_previous_script(
     env = {"PIXI_HOME": str(tmp_path)}
 
     # create a dummy script that will act as already installed package
-    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     # now run install again, this time it should migrate the script to the new trampoline
     verify_cli_command(
@@ -79,14 +79,14 @@ def test_trampoline_migrate_previous_script(
             "install",
             "--channel",
             trampoline_channel,
-            "dummy-b",
+            "dummy-trampoline",
         ],
         env=env,
     )
 
-    assert dummy_b.is_file()
-    assert is_binary(dummy_b)
+    assert dummy_trampoline.is_file()
+    assert is_binary(dummy_trampoline)
 
-    dummy_b_json = tmp_path / "bin" / "dummy-b.json"
+    dummy_trampoline_json = tmp_path / "bin" / "dummy-trampoline.json"
 
-    assert dummy_b_json.is_file()
+    assert dummy_trampoline_json.is_file()
