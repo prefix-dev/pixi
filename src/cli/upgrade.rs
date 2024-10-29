@@ -99,8 +99,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     todo!()
 }
 
-/// Ensures that the specified package exists and returns a helpful error
-/// if it doesn't.
+/// Ensures the existence of the specified package
+///
+/// # Returns
+///
+/// Returns `miette::Result` with a descriptive error message
+/// if the package does not exist.
 fn ensure_package_exists(package_name: &str, specs: &UpgradeSpecs) -> miette::Result<()> {
     let environments = lock_file
         .environments()
