@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use pep440_rs::VersionSpecifiers;
+use pep440_rs::{VersionSpecifiers, VersionSpecifiersParseError};
 use pep508_rs::{InvalidNameError, PackageName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -67,6 +67,12 @@ impl PyPiPackageName {
 pub enum VersionOrStar {
     Version(VersionSpecifiers),
     Star,
+}
+
+impl VersionOrStar {
+    pub fn to_uv(&self) -> Result<VersionSpecifiers, VersionSpecifiersParseError> {
+        VersionSpecifiers::from_str(&self.to_string())
+    }
 }
 
 impl FromStr for VersionOrStar {

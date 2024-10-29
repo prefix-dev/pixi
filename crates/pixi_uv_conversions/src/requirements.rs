@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+// use pep440_rs::VersionSpecifiers;
 use pixi_manifest::{
     pypi::{pypi_requirement::ParsedGitUrl, GitRev},
     PyPiRequirement,
@@ -12,6 +13,7 @@ use url::Url;
 use uv_distribution_filename::DistExtension;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
 use uv_pypi_types::RequirementSource;
 
@@ -58,6 +60,8 @@ pub enum AsPep508Error {
     VerabatimUrlError(#[from] uv_pep508::VerbatimUrlError),
     #[error("error in extension parsing")]
     ExtensionError(#[from] uv_distribution_filename::ExtensionError),
+    #[error("error in parsing version specificers")]
+    VersionSpecifiersError(#[from] uv_pep440::VersionSpecifiersParseError),
 }
 
 /// Convert into a `pypi_types::Requirement`, which is an uv extended
@@ -72,7 +76,7 @@ pub fn as_uv_req(
         PyPiRequirement::Version { version, .. } => {
             // TODO: implement index later
             RequirementSource::Registry {
-                specifier: version.clone().into(),
+                specifier: VersionSpecifiers::from_str(&version.to_string())?,
                 index: None,
             }
         }
@@ -161,7 +165,7 @@ pub fn as_uv_req(
             ext: DistExtension::from_path(url.path())?,
         },
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
-            specifier: version.clone().into(),
+            specifier: VersionSpecifiers::from_str(&version.to_string())?,
             index: None,
         },
     };
