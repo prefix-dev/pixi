@@ -1,33 +1,16 @@
-use std::{
-    borrow::Cow,
-    cmp::Ordering,
-    collections::HashSet,
-    io::{stdout, Write},
-};
+use std::{cmp::Ordering, collections::HashSet};
 
 use crate::cli::cli_config::ProjectConfig;
-use crate::{
-    load_lock_file,
-    lock_file::{filter_lock_file, UpdateContext},
-    Project,
-};
-use ahash::HashMap;
-use clap::{builder::Str, Parser};
+use crate::Project;
+use clap::Parser;
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
-use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
-use pep508_rs::PackageName;
+use itertools::Itertools;
+use miette::MietteDiagnostic;
 use pixi_config::ConfigCli;
 
-use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
-use pixi_manifest::{EnvironmentName, FeatureName};
-use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
-use serde::Serialize;
-use serde_json::Value;
-use tabwriter::TabWriter;
+use pixi_manifest::Feature;
+use pixi_manifest::FeatureName;
+use rattler_lock::Package;
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -48,14 +31,14 @@ pub struct UpgradeSpecsArgs {
     pub packages: Option<Vec<String>>,
 
     /// The feature to update
-    #[clap(long = "feature", short = 'f')]
-    pub feature: Option<FeatureName>,
+    #[clap(long = "feature", short = 'f', default_value_t)]
+    pub feature: FeatureName,
 }
 
 /// A distilled version of `UpgradeSpecsArgs`.
 struct UpgradeSpecs {
     packages: Option<HashSet<String>>,
-    feature: Option<FeatureName>,
+    feature: FeatureName,
 }
 
 impl From<UpgradeSpecsArgs> for UpgradeSpecs {
@@ -82,17 +65,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = UpgradeSpecs::from(args.specs);
 
-    // If the user specified a feature name, check to see if it exists.
-    if let Some(feature) = &specs.feature {
-        if project.manifest.feature(feature).is_none() {
-            miette::bail!("could not find a feature named {}", feature.fancy_display())
-        }
-    }
+    // Ensure that the given feature exists
+    let Some(feature) = project.manifest.feature(&specs.feature) else {
+        miette::bail!(
+            "could not find a feature named {}",
+            specs.feature.fancy_display()
+        )
+    };
 
     // If the user specified a package name, check to see if it is even there.
     if let Some(packages) = &specs.packages {
         for package in packages {
-            ensure_package_exists(&package, &specs)?
+            ensure_package_exists(feature, package)?
         }
     }
 
@@ -105,32 +89,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 ///
 /// Returns `miette::Result` with a descriptive error message
 /// if the package does not exist.
-fn ensure_package_exists(package_name: &str, specs: &UpgradeSpecs) -> miette::Result<()> {
-    let environments = lock_file
-        .environments()
-        .filter_map(|(name, env)| {
-            if let Some(envs) = &specs.environments {
-                if !envs.contains(name) {
-                    return None;
-                }
-            }
-            Some(env)
-        })
-        .collect_vec();
-
-    let similar_names = environments
-        .iter()
-        .flat_map(|env| env.packages_by_platform())
-        .filter_map(|(p, packages)| {
-            if let Some(platforms) = &specs.platforms {
-                if !platforms.contains(&p) {
-                    return None;
-                }
-            }
-            Some(packages)
-        })
-        .flatten()
-        .map(|p| p.name().to_string())
+fn ensure_package_exists(feature: &Feature, package_name: &str) -> miette::Result<()> {
+    let similar_names = feature
+        .dependencies(None, None)
+        .into_iter()
+        .flat_map(|deps| deps.into_owned())
+        .map(|(name, _)| name.as_normalized().to_string())
         .unique()
         .filter_map(|name| {
             let distance = strsim::jaro(package_name, &name);
