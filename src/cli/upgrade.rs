@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::cli::cli_config::ProjectConfig;
+use crate::load_lock_file;
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -79,6 +80,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ensure_package_exists(feature, package)?
         }
     }
+
+    // Load the current lock-file, if any. If none is found, a dummy lock-file is
+    // returned.
+    let loaded_lock_file = load_lock_file(&project).await?;
 
     todo!()
 }
