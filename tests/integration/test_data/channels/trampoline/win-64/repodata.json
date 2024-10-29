@@ -4,18 +4,18 @@
   },
   "packages": {},
   "packages.conda": {
-    "dummy-b-0.1.0-h9490d1a_0.conda": {
+    "dummy-trampoline-0.1.0-h9490d1a_0.conda": {
       "arch": "x86_64",
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "ef679f6f1de3d544683bfcf40d70a77d",
-      "name": "dummy-b",
+      "md5": "a365f1e5b27135e54e6a74a5fde8b425",
+      "name": "dummy-trampoline",
       "platform": "win",
-      "sha256": "594118c45d39028cfd850a890c0d3c92e48f50c8b04abc3cdfe64894d5b70eb5",
-      "size": 2787,
+      "sha256": "a6df67ade5a75c19437aa6f120568f753fd9b54f503b2fcb03079df0276cf757",
+      "size": 2825,
       "subdir": "win-64",
-      "timestamp": 1730123647989,
+      "timestamp": 1730207075143,
       "version": "0.1.0"
     }
   },

@@ -4,18 +4,18 @@
   },
   "packages": {},
   "packages.conda": {
-    "dummy-b-0.1.0-h60d57d3_0.conda": {
+    "dummy-trampoline-0.1.0-h60d57d3_0.conda": {
       "arch": "arm64",
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "23672fb54feedba906622106ea44298c",
-      "name": "dummy-b",
+      "md5": "b644c6dc2badc403e5ca49d97b63fa42",
+      "name": "dummy-trampoline",
       "platform": "osx",
-      "sha256": "99f2a0920ae7684738c50e4e77cb9114075990055923a9245ce8496b7ff48bc7",
-      "size": 2807,
+      "sha256": "7a63983d5dbfcc4fc8c23c041261fda8c2d5504ee0723b3d6cdf3923f58b6ab9",
+      "size": 2848,
       "subdir": "osx-arm64",
-      "timestamp": 1730123648069,
+      "timestamp": 1730207075207,
       "version": "0.1.0"
     }
   },

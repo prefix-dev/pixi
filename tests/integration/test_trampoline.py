@@ -4,12 +4,14 @@ from pathlib import Path
 from .common import verify_cli_command, exec_extension, is_binary
 
 
-def test_trampoline_respect_activation_variables(pixi: Path, trampoline_channel: str) -> None:
-    tmp_path = pixi.parent / "new_pixi_home"
+def test_trampoline_respect_activation_variables(
+    pixi: Path, tmp_path: Path, trampoline_channel: str
+) -> None:
+    # tmp_path = pixi.parent / "new_pixi_home"
 
     env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_path / "bin" / "dummy-b"
+    dummy_b = tmp_path / "bin" / "dummy-trampoline"
 
     verify_cli_command(
         # [
@@ -20,7 +22,7 @@ def test_trampoline_respect_activation_variables(pixi: Path, trampoline_channel:
         #     trampoline_channel,
         #     "dummy-b",
         # ],
-        [f"{pixi} global install --channel {trampoline_channel} dummy-b"],
+        [f"{pixi} global install --channel {trampoline_channel} dummy-trampoline"],
         env=env,
         shell=True,
         inherit_env=True,
@@ -28,12 +30,12 @@ def test_trampoline_respect_activation_variables(pixi: Path, trampoline_channel:
 
     assert is_binary(dummy_b)
 
-    dummy_b_json = tmp_path / "bin" / "dummy-b.json"
+    dummy_b_json = tmp_path / "bin" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
     print(trampoline_metadata)
     # debug content of the trampoline metadata
-    etc_path = tmp_path / "envs" / "dummy-b" / "etc" / "conda" / "activate.d"
+    etc_path = tmp_path / "envs" / "dummy-trampoline" / "etc" / "conda" / "activate.d"
 
     import os
 
@@ -50,7 +52,7 @@ def test_trampoline_respect_activation_variables(pixi: Path, trampoline_channel:
     assert "PATH" in trampoline_env
 
     # verify that exe and root folder is correctly set to the original one
-    original_dummy_b = tmp_path / "envs" / "dummy-b" / "bin" / "dummy-b"
+    original_dummy_b = tmp_path / "envs" / "dummy-trampoline" / "bin" / "dummy-trampoline"
     assert trampoline_metadata["exe"] == str(original_dummy_b)
     assert trampoline_metadata["path"] == str(original_dummy_b.parent)
 
