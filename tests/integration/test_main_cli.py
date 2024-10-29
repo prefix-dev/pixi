@@ -1,5 +1,6 @@
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, PIXI_VERSION
+import tomllib
 
 
 def test_pixi(pixi: Path) -> None:
@@ -285,3 +286,49 @@ def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
     verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)
     # Verify that install works
     verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
+
+
+def test_upgrade_package_does_not_exist(
+    pixi: Path, tmp_path: Path, global_update_channel_1: str
+) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", global_update_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package"])
+
+    # Similar package names that don't exist should get suggestions
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "package_similar_name"],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "could not find a package named 'package_similar_name'",
+            "did you mean 'package'",
+        ],
+    )
+
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "different_name"],
+        ExitCode.FAILURE,
+        stderr_contains="could not find a package named 'different_name'",
+        stderr_excludes="did you mean 'package'",
+    )
+
+
+def test_upgrade_package(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", global_update_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package==0.1.0"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
+
+    # Upgrade package, it should now be at 0.2.0, with semver ranges
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == ">0.1.0, <0.2"
