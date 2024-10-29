@@ -19,16 +19,13 @@ outputs:
           then:
             - echo "dummy-a on windows" > $PREFIX/bin/dummy-a.bat
             - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
-            - echo "dummy-aaa on windows" > $PREFIX/bin/dummy-aaa.bat
-            - echo "nested dummy-aaa on windows" > $PREFIX/nested/dummy.exe
+            - echo "nested dummy on windows" > $PREFIX/nested/dummy.exe
           else:
             - echo "dummy-a on unix" > $PREFIX/bin/dummy-a
             - echo "dummy-aa on unix" > $PREFIX/bin/dummy-aa
-            - echo "dummy-aaa on unix" > $PREFIX/bin/dummy-aaa
-            - echo "nested dummy-aaa on unix" > $PREFIX/nested/dummy.sh
+            - echo "nested dummy on unix" > $PREFIX/nested/dummy.sh
             - chmod +x $PREFIX/bin/dummy-a
             - chmod +x $PREFIX/bin/dummy-aa
-            - chmod +x $PREFIX/bin/dummy-aaa
             - chmod +x $PREFIX/nested/dummy.sh
 
   - package:

@@ -260,7 +260,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
     dummy3 = tmp_path / "bin" / exec_extension("dummy3")
-    nested_dummy = tmp_path / "bin" / exec_extension("dummy-aaa")
+    nested_dummy = tmp_path / "bin" / exec_extension("nested_dummy")
 
     # Add dummy-a with simple syntax
     verify_cli_command(
@@ -270,13 +270,15 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
     assert dummy_a.is_file()
 
-    # Add dummy1 and dummy3
+    # Add dummy1 and dummy3 and nested_dummy
     verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy1=dummy-a", "dummy3=dummy-a"],
+        [pixi, "global", "expose", "add", "--environment=test", "dummy1=dummy-a", "dummy3=dummy-a",
+         "nested_dummy=nested/dummy"],
         env=env,
     )
     assert dummy1.is_file()
     assert dummy3.is_file()
+    assert nested_dummy.is_file()
 
     # Remove dummy-a
     verify_cli_command(
@@ -294,13 +296,12 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
     assert not dummy1.is_file()
     assert not dummy3.is_file()
-
-    # Add nested dummy1
-    verify_cli_command(
-        [pixi, "global", "expose", "nested_dummy=nested/dummy"],
-        env=env,
-    )
-    assert nested_dummy.is_file()
+    # extension = "exe" if os.name == "nt" else "sh"
+    # # Add nested dummy1
+    # verify_cli_command(
+    #     [pixi, "global", "expose", f"nested_dummy=nested/dummy.{extension}"],
+    #     env=env,
+    # )
 
 
 def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
