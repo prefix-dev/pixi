@@ -166,30 +166,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - {
-          #     name: "Linux-x86_64",
-          #     target: x86_64-unknown-linux-musl,
-          #     os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
-          #   }
-          # - {
-          #     name: "Linux-aarch64",
-          #     target: aarch64-unknown-linux-musl,
-          #     os: ubuntu-latest,
-          #   }
+          - {
+              name: "Linux-x86_64",
+              target: x86_64-unknown-linux-musl,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
+            }
+          - {
+              name: "Linux-aarch64",
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-latest,
+            }
 
-          # - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
+          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
 
-          # - {
-          #     name: "Windows",
-          #     target: x86_64-pc-windows-msvc,
-          #     os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
-          #   }
-          # - {
-          #     name: "Windows-arm",
-          #     target: aarch64-pc-windows-msvc,
-          #     os: windows-latest,
-          #   }
+          - {
+              name: "Windows",
+              target: x86_64-pc-windows-msvc,
+              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
+            }
+          - {
+              name: "Windows-arm",
+              target: aarch64-pc-windows-msvc,
+              os: windows-latest,
+            }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
