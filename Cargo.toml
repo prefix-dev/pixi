@@ -97,7 +97,7 @@ rattler_conda_types = { version = "0.28.3", default-features = false }
 rattler_digest = { version = "1.0.2", default-features = false }
 rattler_lock = { version = "0.22.28", default-features = false }
 rattler_networking = { version = "0.21.4", default-features = false, features = [
-    "google-cloud-auth",
+  "google-cloud-auth",
 ] }
 rattler_repodata_gateway = { version = "0.21.18", default-features = false }
 rattler_shell = { version = "0.22.4", default-features = false }
@@ -150,18 +150,18 @@ version = "0.34.0"
 [features]
 default = ["rustls-tls"]
 native-tls = [
-    "reqwest/native-tls",
-    "reqwest/native-tls-alpn",
-    "rattler_repodata_gateway/native-tls",
-    "rattler/native-tls",
-    "pixi_utils/native-tls",
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+  "rattler_repodata_gateway/native-tls",
+  "rattler/native-tls",
+  "pixi_utils/native-tls",
 ]
 rustls-tls = [
-    "reqwest/rustls-tls",
-    "reqwest/rustls-tls-native-roots",
-    "rattler_repodata_gateway/rustls-tls",
-    "rattler/rustls-tls",
-    "pixi_utils/rustls-tls",
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+  "rattler_repodata_gateway/rustls-tls",
+  "rattler/rustls-tls",
+  "pixi_utils/rustls-tls",
 ]
 self_update = []
 slow_integration_tests = []
@@ -173,13 +173,13 @@ async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
-    "derive",
-    "usage",
-    "wrap_help",
-    "std",
-    "color",
-    "error-context",
-    "env",
+  "derive",
+  "usage",
+  "wrap_help",
+  "std",
+  "color",
+  "error-context",
+  "env",
 ] }
 clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
@@ -202,12 +202,12 @@ indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = [
-    "fancy",
-    "supports-color",
-    "supports-hyperlinks",
-    "supports-unicode",
-    "terminal_size",
-    "textwrap",
+  "fancy",
+  "supports-color",
+  "supports-hyperlinks",
+  "supports-unicode",
+  "terminal_size",
+  "textwrap",
 ] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
@@ -225,11 +225,13 @@ rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
-    "sparse",
-    "gateway",
+  "sparse",
+  "gateway",
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+uv-pep440 = { workspace = true }
+uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
 fs-err = { workspace = true, features = ["tokio"] }
@@ -246,8 +248,8 @@ pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
-    "http2",
-    "macos-system-configuration",
+  "http2",
+  "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
@@ -321,7 +323,7 @@ tokio = { workspace = true, features = ["rt"] }
 # pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121", features = [
-    "multipart",
+  "multipart",
 ] }
 reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 # deno_task_shell = { path = "../deno_task_shell" }

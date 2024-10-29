@@ -3383,6 +3383,8 @@ dependencies = [
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
+ "uv-pep440",
+ "uv-pep508",
  "uv-pypi-types",
  "uv-python",
  "uv-resolver",
