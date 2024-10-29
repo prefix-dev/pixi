@@ -1,11 +1,37 @@
 from pathlib import Path
+from typing import Sequence
 
 import pytest
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--pixi-build",
+        action="store",
+        default="release",
+        help="Specify the pixi build type (e.g., release or debug)",
+    )
+    parser.addoption("--runslow", action="store_true", default=False, help="run slow tests")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "slow: mark test as slow to run")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: Sequence[pytest.Item]) -> None:
+    if config.getoption("--runslow"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
+
+
 @pytest.fixture
-def pixi() -> Path:
-    return Path(__file__).parent.joinpath("../../target-pixi/release/pixi")
+def pixi(request: pytest.FixtureRequest) -> Path:
+    pixi_build = request.config.getoption("--pixi-build")
+    return Path(__file__).parent.joinpath(f"../../target-pixi/{pixi_build}/pixi")
 
 
 @pytest.fixture
