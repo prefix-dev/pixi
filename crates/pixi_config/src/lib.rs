@@ -123,15 +123,46 @@ pub struct ConfigCliPrompt {
     #[arg(long)]
     change_ps1: Option<bool>,
 }
+impl From<ConfigCliPrompt> for Config {
+    fn from(cli: ConfigCliPrompt) -> Self {
+        Self {
+            change_ps1: cli.change_ps1,
+            ..Default::default()
+        }
+    }
+}
 
 impl ConfigCliPrompt {
-    pub fn merge_with_config(self, config: Config) -> Config {
+    pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
         config.change_ps1 = self.change_ps1.or(config.change_ps1);
         config
     }
 }
 
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCliActivation {
+    /// Do not use the environment activation cache.
+    #[arg(long)]
+    no_env_activation_cache: bool,
+}
+
+impl ConfigCliActivation {
+    pub fn merge_config(self, config: Config) -> Config {
+        let mut config = config;
+        config.no_env_activation_cache = Some(self.no_env_activation_cache);
+        config
+    }
+}
+
+impl From<ConfigCliActivation> for Config {
+    fn from(cli: ConfigCliActivation) -> Self {
+        Self {
+            no_env_activation_cache: Some(cli.no_env_activation_cache),
+            ..Default::default()
+        }
+    }
+}
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataConfig {
@@ -409,6 +440,11 @@ pub struct Config {
     /// it back to the .pixi folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
+
+    /// The option to disable the environment activation cache
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_env_activation_cache: Option<bool>,
 }
 
 impl Default for Config {
@@ -425,6 +461,7 @@ impl Default for Config {
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
+            no_env_activation_cache: None,
         }
     }
 }
@@ -688,6 +725,7 @@ impl Config {
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
+            no_env_activation_cache: other.no_env_activation_cache,
         }
     }
 

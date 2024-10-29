@@ -20,6 +20,7 @@ use crate::task::{
 };
 use crate::Project;
 use fancy_display::FancyDisplay;
+use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
@@ -37,6 +38,9 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub activation_config: ConfigCliActivation,
+
     /// The environment to run the task in.
     #[arg(long, short)]
     pub environment: Option<String>,
@@ -51,9 +55,13 @@ pub struct Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let config = args
+        .activation_config
+        .merge_config(args.prefix_update_config.config.clone().into());
+
     // Load the project
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(config);
 
     // Extract the passed in environment name.
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;

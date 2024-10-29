@@ -112,7 +112,7 @@ async fn generate_environment_json(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .prompt_config
-        .merge_with_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.prefix_update_config.config.clone().into());
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
