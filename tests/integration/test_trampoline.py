@@ -4,9 +4,9 @@ from pathlib import Path
 from .common import verify_cli_command, exec_extension, is_binary
 
 
-def test_trampoline_respect_activation_variables(
-    pixi: Path, tmp_path: Path, trampoline_channel: str
-) -> None:
+def test_trampoline_respect_activation_variables(pixi: Path, trampoline_channel: str) -> None:
+    tmp_path = pixi.parent / "new_pixi_home"
+
     env = {"PIXI_HOME": str(tmp_path)}
 
     dummy_b = tmp_path / "bin" / "dummy-b"
