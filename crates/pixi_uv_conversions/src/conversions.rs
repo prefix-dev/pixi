@@ -6,9 +6,7 @@ use pixi_manifest::pypi::{
 };
 use uv_distribution_types::{Index, IndexLocations, IndexUrl};
 use uv_git::GitReference;
-use uv_pep508::{
-    InvalidNameError, PackageName, UnnamedRequirementUrl, VerbatimUrl, VerbatimUrlError,
-};
+use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 
 #[derive(thiserror::Error, Debug)]
@@ -27,39 +25,50 @@ pub fn pypi_options_to_index_locations(
         .index_url
         .clone()
         .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from);
+        .map(IndexUrl::from)
+        .map(Index::from_index_url)
+        .into_iter();
 
     // Convert to list of extra indexes
     let extra_indexes = options
         .extra_index_urls
         .clone()
-        .map(|urls| {
+        .into_iter()
+        .flat_map(|urls| {
             urls.into_iter()
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+                .map(Index::from_extra_index_url)
+        });
 
     let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
         // Convert to list of flat indexes
         flat_indexes
             .into_iter()
-            .map(|i| to_flat_index_location(&i, base_path))
+            .map(|url| match url {
+                rattler_lock::FindLinksUrlOrPath::Path(path_buf) => {
+                    VerbatimUrl::from_path(base_path, &path_buf)
+                        .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, path_buf))
+                }
+                rattler_lock::FindLinksUrlOrPath::Url(url) => {
+                    Ok(VerbatimUrl::from_url(url.clone()))
+                }
+            })
             .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(IndexUrl::from)
+            .map(Index::from_find_links)
+            .collect()
     } else {
         vec![]
     };
 
-    // we don't have support for an explicit `no_index` field in the `PypiOptions`
+    // we don't have support for an explicit `no_index` field in the `PypiIndexes`
     // so we only set it if you want to use flat indexes only
-    let no_index = index.is_none() && !flat_indexes.is_empty();
-    Ok(IndexLocations::new(
-        index,
-        extra_indexes,
-        flat_indexes,
-        no_index,
-    ))
+    let indexes: Vec<_> = index.chain(extra_indexes).collect();
+    let no_index = indexes.is_empty() && !flat_indexes.is_empty();
+
+    Ok(IndexLocations::new(indexes, flat_indexes, no_index))
 }
 
 /// Convert locked indexes to IndexLocations
@@ -73,7 +82,7 @@ pub fn locked_indexes_to_index_locations(
         .cloned()
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
-        .map(Index::from_extra_index_url)
+        .map(Index::from_index_url)
         .into_iter();
     let extra_indexes = indexes
         .indexes
@@ -86,18 +95,26 @@ pub fn locked_indexes_to_index_locations(
     let flat_indexes = indexes
         .find_links
         .iter()
-        .map(VerbatimUrl::from_url)
+        .map(|url| match url {
+            rattler_lock::FindLinksUrlOrPath::Path(path_buf) => {
+                VerbatimUrl::from_path(base_path, &path_buf).map_err(|e| {
+                    ConvertFlatIndexLocationError::VerbatimUrlError(e, path_buf.clone())
+                })
+            }
+            rattler_lock::FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .map(IndexUrl::from)
-        .map(Index::from_extra_index_url);
+        .map(Index::from_find_links)
+        .collect();
 
     // we don't have support for an explicit `no_index` field in the `PypiIndexes`
     // so we only set it if you want to use flat indexes only
-    let no_index = index.is_none() && !flat_indexes.is_empty();
-    Ok(IndexLocations::new(
-        index.chain(extra_indexes).collect(),
-        flat_indexes.collect(),
-        no_index,
-    ))
+    let indexes: Vec<_> = index.chain(extra_indexes).collect();
+    let flat_index: Vec<_> = flat_indexes;
+    let no_index = indexes.is_empty() && !flat_index.is_empty();
+    Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
 pub fn to_git_reference(rev: &GitRev) -> GitReference {
