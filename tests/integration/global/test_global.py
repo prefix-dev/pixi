@@ -3,7 +3,7 @@ import tomllib
 
 import pytest
 import tomli_w
-from .common import verify_cli_command, ExitCode, exec_extension
+from ..common import verify_cli_command, ExitCode, exec_extension
 import platform
 import os
 import stat

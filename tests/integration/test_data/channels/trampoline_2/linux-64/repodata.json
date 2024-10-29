@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-trampoline-0.2.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "bb5252fef7a7c541d08387e7373b7ffb",
+      "name": "dummy-trampoline",
+      "platform": "linux",
+      "sha256": "8fb459eb1280d77f06c56cf24e018aa23fef85b138d5a60060604dfb84cc4471",
+      "size": 2961,
+      "subdir": "linux-64",
+      "timestamp": 1730214472786,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}

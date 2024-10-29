@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-trampoline-0.2.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "5bb312b9fd28a20515a498947f965a3d",
+      "name": "dummy-trampoline",
+      "platform": "win",
+      "sha256": "ffd78fd06d6fe3c557242fe5e2c728d7ebf1aad1167b8d9738bf212bfe923ad5",
+      "size": 2932,
+      "subdir": "win-64",
+      "timestamp": 1730214472757,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}

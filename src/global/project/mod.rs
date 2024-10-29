@@ -1018,7 +1018,13 @@ mod tests {
         // Create non-exposed but related binary
         let non_exposed_name = ExposedName::from_str("not-python").unwrap();
 
-        let non_exposed_env_path = project.env_root.path().join("test/bin/not-python");
+        let non_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/not-python.exe")
+        } else {
+            project.env_root.path().join("test/bin/not-python")
+        };
+
+        // let non_exposed_env_path = project.env_root.path().join("test/bin/not-python");
         tokio_fs::create_dir_all(non_exposed_env_path.parent().unwrap())
             .await
             .unwrap();
@@ -1040,7 +1046,11 @@ mod tests {
 
         // Create exposed binary
         let python = ExposedName::from_str("python").unwrap();
-        let python_exposed_env_path = project.env_root.path().join("test/bin/python");
+        let python_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/python.exe")
+        } else {
+            project.env_root.path().join("test/bin/python")
+        };
 
         tokio_fs::create_dir_all(python_exposed_env_path.parent().unwrap())
             .await

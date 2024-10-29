@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "osx-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-trampoline-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "09031d2cf1b0226d06edb451254f40d3",
+      "name": "dummy-trampoline",
+      "platform": "osx",
+      "sha256": "1aeb1ed18bf0f10ee3d0f371451fc7c2c9f6ada9a5bee4c4e2937c4cfa7399e4",
+      "size": 2962,
+      "subdir": "osx-64",
+      "timestamp": 1730214472724,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
