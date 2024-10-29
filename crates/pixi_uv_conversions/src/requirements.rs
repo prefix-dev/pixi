@@ -5,7 +5,7 @@ use std::{
 
 // use pep440_rs::VersionSpecifiers;
 use pixi_manifest::{
-    pypi::{pypi_requirement::ParsedGitUrl, GitRev},
+    pypi::{pypi_requirement::ParsedGitUrl, GitRev, VersionOrStar},
     PyPiRequirement,
 };
 use thiserror::Error;
@@ -38,6 +38,15 @@ fn create_uv_url(
         |subdir| format!("{url}#subdirectory={subdir}"),
     );
     url.parse()
+}
+
+fn to_version_specificers(
+    version: &VersionOrStar,
+) -> Result<VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
+    match version {
+        VersionOrStar::Version(v) => VersionSpecifiers::from_str(&v.to_string()),
+        VersionOrStar::Star => Ok(VersionSpecifiers::from_iter(vec![])),
+    }
 }
 
 #[derive(Error, Debug)]
@@ -76,7 +85,7 @@ pub fn as_uv_req(
         PyPiRequirement::Version { version, .. } => {
             // TODO: implement index later
             RequirementSource::Registry {
-                specifier: VersionSpecifiers::from_str(&version.to_string())?,
+                specifier: to_version_specificers(version)?,
                 index: None,
             }
         }
@@ -165,7 +174,7 @@ pub fn as_uv_req(
             ext: DistExtension::from_path(url.path())?,
         },
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
-            specifier: VersionSpecifiers::from_str(&version.to_string())?,
+            specifier: to_version_specificers(version)?,
             index: None,
         },
     };

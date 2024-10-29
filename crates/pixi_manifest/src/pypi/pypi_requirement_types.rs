@@ -69,12 +69,6 @@ pub enum VersionOrStar {
     Star,
 }
 
-impl VersionOrStar {
-    pub fn to_uv(&self) -> Result<VersionSpecifiers, VersionSpecifiersParseError> {
-        VersionSpecifiers::from_str(&self.to_string())
-    }
-}
-
 impl FromStr for VersionOrStar {
     type Err = pep440_rs::VersionSpecifiersParseError;
 
