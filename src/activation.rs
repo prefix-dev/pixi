@@ -161,20 +161,20 @@ pub async fn run_activation(
     if let Some(lock_file) = lock_file {
         let cache_file = environment.activation_cache_file_path();
         if cache_file.exists() {
-            let cache = tokio_fs::read_to_string(&cache_file)
-                .await
-                .into_diagnostic()?;
-            let cache: ActivationCache = serde_json::from_str(&cache).into_diagnostic()?;
-            let hash = EnvironmentHash::from_environment(environment, lock_file);
+            if let Ok(cache) = tokio_fs::read_to_string(&cache_file).await {
+                if let Ok(cache) = serde_json::from_str::<ActivationCache>(&cache) {
+                    let hash = EnvironmentHash::from_environment(environment, lock_file);
 
-            // If the cache's hash matches the environment hash, we can return the cached
-            // environment variables.
-            if cache.hash == hash {
-                tracing::debug!(
-                    "Using cached environment variables for {:?}",
-                    environment.name()
-                );
-                return Ok(cache.environment_variables);
+                    // If the cache's hash matches the environment hash, we can return the cached
+                    // environment variables.
+                    if cache.hash == hash {
+                        tracing::debug!(
+                            "Using cached environment variables for {:?}",
+                            environment.name()
+                        );
+                        return Ok(cache.environment_variables);
+                    }
+                }
             }
         }
     }

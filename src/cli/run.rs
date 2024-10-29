@@ -55,13 +55,13 @@ pub struct Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = args
+    let cli_config = args
         .activation_config
         .merge_config(args.prefix_update_config.config.clone().into());
 
     // Load the project
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(config);
+        .with_cli_config(cli_config);
 
     // Extract the passed in environment name.
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
@@ -177,12 +177,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
-                lock_file.prefix(&executable_task.run_environment).await?;
-
+                let opt_lock_file = if project.config().no_env_activation_cache.is_none()
+                    || project.config().no_env_activation_cache.is_some_and(|x| !x)
+                {
+                    lock_file.prefix(&executable_task.run_environment).await?;
+                    Some(&lock_file.lock_file)
+                } else {
+                    None
+                };
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
-                    Some(&lock_file.lock_file),
+                    opt_lock_file,
                 )
                 .await?;
                 entry.insert(command_env)
