@@ -645,7 +645,7 @@ mod tests {
         let executable_script_path = bin_dir.executable_trampoline_path(&exposed_name);
 
         if cfg!(windows) {
-            let expected = format!("{}.bat", exposed_name);
+            let expected = format!("{}.exe", exposed_name);
             assert_eq!(executable_script_path, path.join(expected));
         } else {
             assert_eq!(executable_script_path, path.join(exposed_name.to_string()));
