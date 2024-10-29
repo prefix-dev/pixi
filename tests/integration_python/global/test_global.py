@@ -272,8 +272,16 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
 
     # Add dummy1 and dummy3 and nested_dummy
     verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy1=dummy-a", "dummy3=dummy-a",
-         "nested_dummy=nested/dummy"],
+        [
+            pixi,
+            "global",
+            "expose",
+            "add",
+            "--environment=test",
+            "dummy1=dummy-a",
+            "dummy3=dummy-a",
+            "nested_dummy=nested/dummy",
+        ],
         env=env,
     )
     assert dummy1.is_file()
