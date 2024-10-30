@@ -178,7 +178,7 @@ impl GlobalBin {
     }
 
     /// Removes exposed global executable.
-    /// In case if it's trampoline, it will also remove it's manifest.
+    /// In case it is a trampoline, it will also remove its manifest.
     pub async fn remove(&self) -> miette::Result<()> {
         match self {
             GlobalBin::Trampoline(trampoline) => {
