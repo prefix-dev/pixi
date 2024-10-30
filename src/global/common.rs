@@ -596,7 +596,7 @@ impl StateChanges {
         }
 
         // Separate top-level and transitive changes
-        let mut top_level_changes = Vec::new();
+        let mut top_level_changes: Vec<(&PackageName, &InstallChange)> = Vec::new();
         let mut transitive_changes = Vec::new();
 
         let env_dependencies = environment_update.current_packages();
@@ -608,6 +608,8 @@ impl StateChanges {
                 transitive_changes.push((package_name, change));
             }
         }
+
+        top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
 
         let was_removed = top_level_changes
             .iter()
