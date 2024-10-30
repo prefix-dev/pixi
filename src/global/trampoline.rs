@@ -211,7 +211,7 @@ pub struct Trampoline {
 }
 
 impl Trampoline {
-    /// Create a new trampoline.
+    /// Creates a new trampoline.
     pub fn new(exposed_name: ExposedName, root_path: PathBuf, metadata: ManifestMetadata) -> Self {
         Trampoline {
             exposed_name,
