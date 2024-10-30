@@ -69,11 +69,27 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     task = "echo $TEST_ENV_VAR"
     """
     manifest.write_text(toml)
+
     # Run the default task
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
+        [pixi, "run", "--manifest-path", manifest, "--experimental", "task"],
         ExitCode.SUCCESS,
         stdout_contains="test123",
+    )
+
+    # Enable the experimental cache config
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest,
+            "--local",
+            "experimental.use-environment-activation-cache",
+            "true",
+        ],
+        ExitCode.SUCCESS,
     )
 
     # Modify the environment variable in cache
@@ -86,7 +102,7 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
         f.truncate()  # Remove any remaining original content
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task", "-vvv"],
+        [pixi, "run", "--manifest-path", manifest, "task"],
         ExitCode.SUCCESS,
         # Contain overwritten value
         stdout_contains="test456",
@@ -95,7 +111,7 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
 
     # Ignore activation cache
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--no-env-activation-cache", "task", "-vvv"],
+        [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
         ExitCode.SUCCESS,
         stdout_contains="test123",
     )
