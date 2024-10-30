@@ -68,7 +68,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prefix
                         .find_executables(&[record])
                         .into_iter()
-                        .filter_map(|(name, _path)| ExposedName::from_str(name.as_str()).ok())
+                        .filter_map(|executable| {
+                            ExposedName::from_str(executable.name.as_str()).ok()
+                        })
                         .for_each(|exposed_name| {
                             project
                                 .manifest
@@ -97,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .wrap_err(format!("Couldn't remove packages from {}", env_name))
     {
-        Ok(ref mut state_changes) => {
+        Ok(state_changes) => {
             state_changes.report();
         }
         Err(err) => {

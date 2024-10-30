@@ -700,3 +700,55 @@ async fn test_many_linux_wheel_tag() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_ensure_gitignore_file_creation() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    let gitignore_path = pixi.project().unwrap().pixi_dir().join(".gitignore");
+    assert!(
+        !gitignore_path.exists(),
+        ".pixi/.gitignore file should not exist"
+    );
+
+    // Check that .gitignore is created after the first install and contains '*'
+    pixi.install().await.unwrap();
+    assert!(
+        gitignore_path.exists(),
+        ".pixi/.gitignore file was not created"
+    );
+    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    assert_eq!(
+        contents, "*\n",
+        ".pixi/.gitignore file does not contain the expected content"
+    );
+
+    // Modify the .gitignore file and check that it is preserved after reinstall
+    tokio::fs::write(&gitignore_path, "*\nsome_file\n")
+        .await
+        .unwrap();
+    pixi.install().await.unwrap();
+    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    assert_eq!(
+        contents, "*\nsome_file\n",
+        ".pixi/.gitignore file does not contain the expected content"
+    );
+
+    // Remove the .gitignore file and check that it is recreated
+    tokio::fs::remove_file(&gitignore_path).await.unwrap();
+    assert!(
+        !gitignore_path.exists(),
+        ".pixi/.gitignore file should not exist"
+    );
+    pixi.install().await.unwrap();
+    assert!(
+        gitignore_path.exists(),
+        ".pixi/.gitignore file was not recreated"
+    );
+    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    assert_eq!(
+        contents, "*\n",
+        ".pixi/.gitignore file does not contain the expected content"
+    );
+}
