@@ -1,28 +1,12 @@
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
-
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_manifest::{
-    pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
-    SpecType,
-};
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, Package};
+use pixi_manifest::FeatureName;
 
 use super::has_specs::HasSpecs;
-use crate::environment::LockFileUsage;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
     environment::verify_prefix_location_unchanged,
-    load_lock_file,
-    lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
-    project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
+    project::{DependencyType, Project},
 };
 
 /// Adds dependencies to the project

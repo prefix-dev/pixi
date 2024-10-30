@@ -675,7 +675,7 @@ impl Project {
             return Ok(HashMap::default());
         }
 
-        let lock_file = load_lock_file(&self).await?;
+        let lock_file = load_lock_file(self).await?;
         let affected_environments = self
             .environments()
             .iter()
@@ -721,7 +721,7 @@ impl Project {
             updated_conda_prefixes,
             updated_pypi_prefixes,
             io_concurrency_limit,
-        } = UpdateContext::builder(&self)
+        } = UpdateContext::builder(self)
             .with_lock_file(unlocked_lock_file)
             .with_no_install(prefix_update_config.no_install())
             .finish()?
@@ -749,7 +749,7 @@ impl Project {
         };
         self.save()?;
         let mut updated_lock_file = LockFileDerivedData {
-            project: &self,
+            project: self,
             lock_file,
             package_cache,
             updated_conda_prefixes,
