@@ -164,7 +164,7 @@ impl GlobalBin {
         }
     }
 
-    /// Return if the exposed global binary is trampoline.
+    /// Returns if the exposed global binary is trampoline.
     pub fn is_trampoline(&self) -> bool {
         matches!(self, GlobalBin::Trampoline(_))
     }
