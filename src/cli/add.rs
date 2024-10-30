@@ -103,7 +103,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .manifest
         .add_platforms(dependency_config.platform.iter(), &FeatureName::Default)?;
 
-    // Add the individual specs to the project.
+    let implicit_constraints = set_dependencies(
+        project,
+        &dependency_config,
+        &prefix_update_config,
+        &project_config,
+        args.editable,
+    )
+    .await?;
+
+    if let Some(implicit_constraints) = implicit_constraints {
+        dependency_config.display_success("Added", implicit_constraints);
+    }
+
+    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
+    Ok(())
+}
+
+/// Sets the dependencies for the given project based on the provided configurations.
+async fn set_dependencies(
+    mut project: Project,
+    dependency_config: &DependencyConfig,
+    prefix_update_config: &PrefixUpdateConfig,
+    project_config: &ProjectConfig,
+    editable: bool,
+) -> Result<Option<HashMap<String, String>>, miette::Error> {
     let mut conda_specs_to_add_constraints_for = IndexMap::new();
     let mut pypi_specs_to_add_constraints_for = IndexMap::new();
     let mut conda_packages = HashSet::new();
@@ -136,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &spec,
                     &dependency_config.platform,
                     &dependency_config.feature_name(),
-                    Some(args.editable),
+                    Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
                 )?;
                 if added {
@@ -149,7 +173,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // If the lock-file should not be updated we only need to save the project.
     if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
         project.save()?;
 
@@ -157,13 +180,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         dependency_config.display_success("Added", HashMap::default());
 
         Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
-        return Ok(());
+        return Ok(None);
     }
 
-    // Load the current lock-file
     let lock_file = load_lock_file(&project).await?;
-
-    // Determine the environments that are affected by the change.
     let feature_name = dependency_config.feature_name();
     let affected_environments = project
         .environments()
@@ -181,14 +201,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect_vec();
     let default_environment_is_affected =
         affected_environments.contains(&project.default_environment());
-
     tracing::debug!(
         "environments affected by the add command: {}",
         affected_environments.iter().map(|e| e.name()).format(", ")
     );
-
-    // Determine the combination of platforms and environments that are affected by
-    // the command
     let affect_environment_and_platforms = affected_environments
         .into_iter()
         // Create an iterator over all environment and platform combinations
@@ -199,9 +215,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .map(|(e, p)| (e.name().to_string(), p))
         .collect_vec();
-
-    // Create an updated lock-file where the dependencies to be added are removed
-    // from the lock-file.
     let unlocked_lock_file = unlock_packages(
         &project,
         &lock_file,
@@ -212,8 +225,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .map(|(e, p)| (e.as_str(), *p))
             .collect(),
     );
-
-    // Solve the updated project.
     let LockFileDerivedData {
         project: _, // We don't need the project here
         lock_file,
@@ -228,9 +239,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish()?
         .update()
         .await?;
-
-    // Update the constraints of specs that didn't have a version constraint based
-    // on the contents of the lock-file.
     let implicit_constraints = if !conda_specs_to_add_constraints_for.is_empty() {
         update_conda_specs_from_lock_file(
             &mut project,
@@ -248,16 +256,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             affect_environment_and_platforms,
             &feature_name,
             &dependency_config.platform,
-            args.editable,
+            editable,
         )?
     } else {
         HashMap::new()
     };
-
-    // Write the lock-file and the project to disk
     project.save()?;
-
-    // Reconstruct the lock-file derived data.
     let mut updated_lock_file = LockFileDerivedData {
         project: &project,
         lock_file,
@@ -270,11 +274,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if !prefix_update_config.no_lockfile_update {
         updated_lock_file.write_to_disk()?;
     }
-
-    // Install/update the default environment if:
-    // - we are not skipping the installation,
-    // - there is only the default environment,
-    // - and the default environment is affected by the changes,
     if !prefix_update_config.no_install()
         && project.environments().len() == 1
         && default_environment_is_affected
@@ -283,12 +282,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .prefix(&project.default_environment())
             .await?;
     }
-
-    // Notify the user we succeeded.
-    dependency_config.display_success("Added", implicit_constraints);
-
-    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
-    Ok(())
+    Ok(Some(implicit_constraints))
 }
 
 /// Update the pypi specs of newly added packages based on the contents of the
