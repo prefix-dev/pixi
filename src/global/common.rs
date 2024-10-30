@@ -440,8 +440,7 @@ impl StateChanges {
                 continue;
             }
 
-            let mut iter: std::iter::Peekable<std::slice::Iter<'_, StateChange>> =
-                changes_for_env.iter().peekable();
+            let mut iter = changes_for_env.iter().peekable();
 
             while let Some(change) = iter.next() {
                 match change {
