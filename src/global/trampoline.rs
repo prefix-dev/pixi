@@ -247,7 +247,7 @@ impl Trampoline {
         self.metadata.exe.clone()
     }
 
-    // return the path to the trampoline manifest
+    /// Returns the path to the trampoline manifest
     pub fn manifest_path(&self) -> PathBuf {
         self.root_path.join(self.exposed_name.to_string() + ".json")
     }
