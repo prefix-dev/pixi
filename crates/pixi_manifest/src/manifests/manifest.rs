@@ -660,7 +660,7 @@ impl Manifest {
         self.parsed.default_feature_mut()
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not
+    /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
     pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
@@ -674,8 +674,7 @@ impl Manifest {
         })
     }
 
-    /// Returns the mutable feature with the given name or `Err` if it does not
-    /// exist.
+    /// Returns the mutable feature with the given name
     pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
         self.parsed
             .features
