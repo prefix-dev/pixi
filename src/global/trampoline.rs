@@ -49,7 +49,7 @@ pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
 );
 
-// return file name of the executable
+/// Returns the file name of the executable
 pub(crate) fn file_name(exposed_name: &ExposedName) -> String {
     if cfg!(target_os = "windows") {
         format!("{}.exe", exposed_name)
