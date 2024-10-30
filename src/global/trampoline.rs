@@ -129,7 +129,7 @@ impl ManifestMetadata {
     }
 }
 
-/// Represent an exposed global binary installed by pixi.
+/// Represents an exposed global executable installed by pixi global.
 /// This can be either a trampoline or a old script.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalBin {
