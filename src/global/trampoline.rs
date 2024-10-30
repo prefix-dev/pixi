@@ -285,7 +285,7 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Check if binary is a saved trampoline
+    /// Checks if executable is a saved trampoline
     /// by reading only first 1048 bytes of the file
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
