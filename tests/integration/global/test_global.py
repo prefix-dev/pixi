@@ -11,6 +11,7 @@ import stat
 MANIFEST_VERSION = 1
 
 
+@pytest.mark.slow
 def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -54,6 +55,7 @@ def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -147,6 +149,7 @@ def test_sync_manually_remove_binary(pixi: Path, tmp_path: Path, dummy_channel_1
     assert dummy_a.is_file()
 
 
+@pytest.mark.slow
 def test_sync_migrate(
     pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
@@ -1000,6 +1003,7 @@ def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_
     assert not dummy_x.is_file()
 
 
+@pytest.mark.slow
 def test_install_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     # Exists on win-64
