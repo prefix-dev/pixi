@@ -138,7 +138,7 @@ pub enum GlobalBin {
 }
 
 impl GlobalBin {
-    /// Return the path to the original executable.
+    /// Returns the path to the original executable.
     pub async fn executable(&self) -> miette::Result<PathBuf> {
         Ok(match self {
             GlobalBin::Trampoline(trampoline) => trampoline.original_exe(),
