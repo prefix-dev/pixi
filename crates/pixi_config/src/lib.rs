@@ -179,6 +179,7 @@ pub enum DetachedEnvironments {
     Boolean(bool),
     Path(PathBuf),
 }
+
 impl DetachedEnvironments {
     pub fn is_false(&self) -> bool {
         matches!(self, DetachedEnvironments::Boolean(false))
@@ -260,6 +261,7 @@ pub enum PinningStrategy {
     // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
     NoPin,
 }
+
 impl FromStr for PinningStrategy {
     type Err = serde::de::value::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -350,6 +352,22 @@ impl PinningStrategy {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+pub struct Concurrency {
+    /// The maximum number of concurrent HTTP requests to make.
+    #[serde(default)]
+    pub network_requests: usize,
+}
+
+impl Default for Concurrency {
+    fn default() -> Self {
+        Self {
+            network_requests: 50,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
     #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
@@ -409,6 +427,9 @@ pub struct Config {
     /// it back to the .pixi folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
+
+    /// Concurrency settings.
+    pub concurrency: Option<Concurrency>,
 }
 
 impl Default for Config {
@@ -425,6 +446,7 @@ impl Default for Config {
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
+            concurrency: None,
         }
     }
 }
@@ -688,6 +710,7 @@ impl Config {
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
+            concurrency: other.concurrency.or(self.concurrency),
         }
     }
 
@@ -743,6 +766,10 @@ impl Config {
     /// Retrieve the value for the target_environments_directory field.
     pub fn detached_environments(&self) -> DetachedEnvironments {
         self.detached_environments.clone().unwrap_or_default()
+    }
+
+    pub fn concurrency(&self) -> Concurrency {
+        self.concurrency.clone().unwrap_or_default()
     }
 
     /// Modify this config with the given key and value

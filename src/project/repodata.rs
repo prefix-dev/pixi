@@ -8,7 +8,8 @@ impl Repodata for Project {
         self.repodata_gateway.get_or_init(|| {
             Self::repodata_gateway_init(
                 self.authenticated_client().clone(),
-                self.config(),
+                self.config().into(),
+                self.config().concurrency().network_requests,
             )
         })
     }
