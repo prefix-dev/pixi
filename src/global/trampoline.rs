@@ -146,7 +146,7 @@ impl GlobalBin {
         })
     }
 
-    /// Return exposed name
+    /// Returns exposed name
     pub fn exposed_name(&self) -> ExposedName {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.exposed_name.clone(),
