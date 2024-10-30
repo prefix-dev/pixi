@@ -3,6 +3,7 @@ use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDir
 use miette::Diagnostic;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use thiserror::Error;
@@ -39,9 +40,16 @@ pub struct EnvironmentHash(String);
 impl EnvironmentHash {
     pub(crate) fn from_environment(
         run_environment: &project::Environment<'_>,
+        input_environment_variables: &HashMap<String, String>,
         lock_file: &LockFile,
     ) -> Self {
         let mut hasher = Xxh3::new();
+
+        // Hash the environment variables
+        for (key, value) in input_environment_variables {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
 
         // Hash the activation scripts
         let activation_scripts =
@@ -110,7 +118,12 @@ impl TaskHash {
             command: task.full_command(),
             outputs: output_hashes,
             inputs: input_hashes,
-            environment: EnvironmentHash::from_environment(&task.run_environment, lock_file),
+            // Skipping environment variables used for caching the task
+            environment: EnvironmentHash::from_environment(
+                &task.run_environment,
+                &HashMap::new(),
+                lock_file,
+            ),
         }))
     }
 

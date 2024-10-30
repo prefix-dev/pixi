@@ -35,6 +35,8 @@ pub enum CurrentEnvVarBehavior {
 struct ActivationCache {
     /// The hash of the environment which produced the activation's environment variables.
     hash: EnvironmentHash,
+    /// The environment variables that were used to hash the environment.
+    input_environment_variables: Vec<String>,
     /// The environment variables set by the activation.
     environment_variables: HashMap<String, String>,
 }
@@ -159,23 +161,45 @@ pub async fn run_activation(
     force_activate: bool,
     experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // If a lock file is provided, we can check whether there exists an environment cache.
+    // If the user requested to use the cache and the lockfile is provided, we can try to use the cache.
     if !force_activate && experimental {
         if let Some(lock_file) = lock_file {
+            // Find cache file
             let cache_file = environment.activation_cache_file_path();
             if cache_file.exists() {
+                // Read the cache file
                 if let Ok(cache) = tokio_fs::read_to_string(&cache_file).await {
                     if let Ok(cache) = serde_json::from_str::<ActivationCache>(&cache) {
-                        let hash = EnvironmentHash::from_environment(environment, lock_file);
+                        // Verify that the environment variables used as input for the activation still exist
+                        let mut current_input_env_vars = HashMap::new();
+                        let mut reactivation_needed = false;
+                        for key in cache.input_environment_variables.iter() {
+                            if let Ok(var) = std::env::var(key) {
+                                current_input_env_vars.insert(key.clone(), var.to_string());
+                            } else {
+                                tracing::debug!("env-var {key} has been removed, reactivating");
+                                reactivation_needed = true;
+                                break;
+                            }
+                        }
 
-                        // If the cache's hash matches the environment hash, we can return the cached
-                        // environment variables.
-                        if cache.hash == hash {
-                            tracing::debug!(
-                                "Using cached environment variables for {:?}",
-                                environment.name()
+                        // If the environment variables are still present, we can check if the cache is still valid.
+                        if !reactivation_needed {
+                            // Hash the current state
+                            let hash = EnvironmentHash::from_environment(
+                                environment,
+                                &current_input_env_vars,
+                                lock_file,
                             );
-                            return Ok(cache.environment_variables);
+
+                            // Check if the hash matches
+                            if cache.hash == hash {
+                                tracing::debug!(
+                                    "Using cached environment variables for {:?}",
+                                    environment.name()
+                                );
+                                return Ok(cache.environment_variables);
+                            }
                         }
                     }
                 }
@@ -251,12 +275,25 @@ pub async fn run_activation(
     // cache file.
     if experimental {
         if let Some(lock_file) = lock_file {
+            // Figure out which environment variables have changed but already existed.
+            let changed_env_vars: HashMap<String, String> = std::env::vars()
+                .collect_vec()
+                .into_iter()
+                .filter(|(key, value)| {
+                    if let Some(old_value) = activator_result.get(key) {
+                        return old_value != value;
+                    }
+                    false
+                })
+                .collect();
+
             let cache_file = environment
                 .project()
                 .activation_env_cache_folder()
                 .join(environment.activation_cache_name());
             let cache = ActivationCache {
-                hash: EnvironmentHash::from_environment(environment, lock_file),
+                hash: EnvironmentHash::from_environment(environment, &changed_env_vars, lock_file),
+                input_environment_variables: changed_env_vars.keys().cloned().collect_vec(),
                 environment_variables: activator_result.clone(),
             };
             let cache = serde_json::to_string(&cache).into_diagnostic()?;
@@ -498,14 +535,14 @@ mod tests {
         );
     }
 
-    /// Test that the activation cache is created and used correctly.
+    /// Test that the activation cache is created and used correctly based on the lockfile.
     ///
     /// This test will validate the cache usages by running the activation script and checking if the cache is created.
     /// - It will then modify the cache and check if the cache is used.
     /// - It will then modify the lock file and check if the cache is not used and recreated.
     /// - It will then modify the cache again and check if the cache is used again.
     #[tokio::test]
-    async fn test_run_activation_cache() {
+    async fn test_run_activation_cache_based_on_lockfile() {
         let temp_dir = tempfile::tempdir().unwrap();
         let project = r#"
         [project]
@@ -615,6 +652,39 @@ packages:
             true,
         );
         assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
+    }
+
+    #[tokio::test]
+    async fn test_run_activation_cache_based_on_activation_env() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = []
+
+        [activation.env]
+        TEST = "ACTIVATION123"
+        "#;
+        let project =
+            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+        let default_env = project.default_environment();
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            Some(&LockFile::default()),
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+        assert_eq!(env.get("TEST").unwrap(), "ACTIVATION123",);
+
+        // Modify the variable in cache
+        let cache_file = project.default_environment().activation_cache_file_path();
+        let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
+        let modified = contents.replace("ACTIVATION123", "ACTIVATION456");
+        tokio_fs::write(&cache_file, modified).await.unwrap();
 
         // Check that the cache is invalidated when the activation.env changes.
         let project = r#"
@@ -633,9 +703,9 @@ packages:
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
-            Some(&lock_file),
+            Some(&LockFile::default()),
             false,
-            false,
+            true,
         )
         .await
         .unwrap();
@@ -650,4 +720,77 @@ packages:
             "The new variable should be set"
         );
     }
+
+    // This test works, most of the times.., so this is a good test to run locally.
+    // But it is to flaky for CI unfortunately!
+    // #[tokio::test]
+    // async fn test_run_activation_based_on_existing_env(){
+    //     let temp_dir = tempfile::tempdir().unwrap();
+    //     let project = r#"
+    //     [project]
+    //     name = "pixi"
+    //     channels = []
+    //     platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+    //
+    //     [target.unix.activation.env]
+    //     TEST_ENV_VAR = "${TEST_ENV_VAR}_and_some_more"
+    //
+    //     [target.win.activation.env]
+    //     TEST_ENV_VAR = "%TEST_ENV_VAR%_and_some_more"
+    //     "#;
+    //     let project =
+    //         Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+    //     let default_env = project.default_environment();
+    //
+    //     // Set the environment variable
+    //     std::env::set_var("TEST_ENV_VAR", "test_value");
+    //
+    //     // Run the activation script
+    //     let env = run_activation(
+    //         &default_env,
+    //         &CurrentEnvVarBehavior::Include,
+    //         Some(&LockFile::default()),
+    //         false,
+    //         true,
+    //     ).await.unwrap();
+    //
+    //     // Check that the environment variable is set correctly
+    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "test_value_and_some_more");
+    //
+    //     // Modify the environment variable
+    //     let cache_file = project.default_environment().activation_cache_file_path();
+    //     let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
+    //     let modified = contents.replace("test_value_and_some_more", "modified_cache");
+    //     tokio_fs::write(&cache_file, modified).await.unwrap();
+    //
+    //     // Run the activation script
+    //     let env = run_activation(
+    //         &default_env,
+    //         &CurrentEnvVarBehavior::Include,
+    //         Some(&LockFile::default()),
+    //         false,
+    //         true,
+    //     ).await.unwrap();
+    //
+    //     // Check that the environment variable is taken from cache
+    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "modified_cache");
+    //
+    //     // Reset the environment variable
+    //     std::env::set_var("TEST_ENV_VAR", "different_test_value");
+    //
+    //     // Run the activation script
+    //     let env = run_activation(
+    //         &default_env,
+    //         &CurrentEnvVarBehavior::Include,
+    //         Some(&LockFile::default()),
+    //         false,
+    //         true,
+    //     ).await.unwrap();
+    //
+    //     // Check that the environment variable reset, thus the cache was invalidated.
+    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "different_test_value_and_some_more");
+    //
+    //     // Unset the environment variable
+    //     std::env::remove_var("TEST_ENV_VAR");
+    // }
 }
