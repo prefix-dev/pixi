@@ -238,7 +238,7 @@ impl Trampoline {
         Ok(Trampoline::new(exposed_name, parent_path, metadata))
     }
 
-    // return the path to the trampoline
+    /// Returns the path to the trampoline
     pub fn path(&self) -> PathBuf {
         self.root_path.join(file_name(&self.exposed_name))
     }
