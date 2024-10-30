@@ -275,7 +275,7 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Write the manifest file of the trampoline
+    /// Writes the manifest file of the trampoline
     async fn write_manifest(&self) -> miette::Result<()> {
         let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
         tokio_fs::write(self.manifest_path(), manifest_string)
