@@ -169,7 +169,7 @@ impl GlobalBin {
         matches!(self, GlobalBin::Trampoline(_))
     }
 
-    /// Return the inner trampoline.
+    /// Returns the inner trampoline.
     pub fn trampoline(&self) -> Option<&Trampoline> {
         match self {
             GlobalBin::Trampoline(trampoline) => Some(trampoline),
