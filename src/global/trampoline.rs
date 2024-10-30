@@ -156,7 +156,7 @@ impl GlobalBin {
         }
     }
 
-    /// Return the path to the exposed binary.
+    /// Returns the path to the exposed binary.
     pub fn path(&self) -> PathBuf {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.path(),
