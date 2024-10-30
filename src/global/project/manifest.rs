@@ -169,7 +169,7 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         spec: &MatchSpec,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<PackageName> {
         // Determine the name of the package to add
         let (Some(name), _spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
@@ -200,7 +200,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(())
+        Ok(name)
     }
 
     /// Sets the platform of a specific environment in the manifest
@@ -357,11 +357,11 @@ impl Manifest {
     }
 
     /// Removes exposed mapping from the manifest
-    pub fn remove_exposed_name(
+    pub fn remove_exposed_name<'a>(
         &mut self,
         env_name: &EnvironmentName,
-        exposed_name: &ExposedName,
-    ) -> miette::Result<()> {
+        exposed_name: &'a ExposedName,
+    ) -> miette::Result<&'a ExposedName> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
@@ -384,7 +384,7 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
-        Ok(())
+        Ok(exposed_name)
     }
 
     /// Removes all exposed mappings for a specific environment

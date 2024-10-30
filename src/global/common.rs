@@ -20,6 +20,7 @@ use rattler_conda_types::{
 };
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::iter::Peekable;
 use std::str::FromStr;
 use std::{
     io::Read,
@@ -272,6 +273,9 @@ impl InstallChange {
     pub fn is_transitive(&self) -> bool {
         matches!(self, InstallChange::TransitiveUpgraded(_, _))
     }
+    pub fn is_removed(&self) -> bool {
+        matches!(self, InstallChange::Removed)
+    }
 
     pub fn version_fancy_display(&self) -> StyledObject<String> {
         let version_style = console::Style::new().blue();
@@ -326,6 +330,10 @@ impl EnvironmentUpdate {
 
     pub fn current_packages(&self) -> &Vec<PackageName> {
         &self.current_packages
+    }
+
+    pub fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
+        self.current_packages.extend(packages);
     }
 }
 
@@ -386,6 +394,24 @@ impl StateChanges {
         self.changes
     }
 
+    fn accumulate_changes<F, T>(
+        iter: &mut Peekable<std::slice::Iter<StateChange>>,
+        filter_fn: F,
+        init_value: Option<T>,
+    ) -> Vec<T>
+    where
+        F: Fn(Option<&StateChange>) -> Option<T>,
+    {
+        let mut changes = init_value.into_iter().collect::<Vec<T>>();
+
+        while let Some(next) = filter_fn(iter.peek().cloned()) {
+            changes.push(next);
+            iter.next();
+        }
+
+        changes
+    }
+
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
         self.changes = self
@@ -414,16 +440,21 @@ impl StateChanges {
                 continue;
             }
 
-            let mut iter = changes_for_env.iter().peekable();
+            let mut iter: std::iter::Peekable<std::slice::Iter<'_, StateChange>> =
+                changes_for_env.iter().peekable();
 
             while let Some(change) = iter.next() {
                 match change {
-                    StateChange::AddedExposed(exposed) => {
-                        let mut exposed_names = vec![exposed.clone()];
-                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
-                            exposed_names.push(next_exposed.clone());
-                            iter.next();
-                        }
+                    StateChange::AddedExposed(first_name) => {
+                        let exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(first_name.clone()),
+                        );
+
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Exposed executable {} from environment {}.",
@@ -442,20 +473,42 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::RemovedExposed(exposed) => {
-                        eprintln!(
-                            "{}Removed exposed executable {} from environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            exposed.fancy_display(),
-                            env_name.fancy_display()
+                    StateChange::RemovedExposed(removed) => {
+                        let exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(removed.clone()),
                         );
+                        if exposed_names.len() == 1 {
+                            eprintln!(
+                                "{}Removed exposed executable {} from environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                exposed_names[0].fancy_display(),
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Removed exposed executables from environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for exposed_name in exposed_names {
+                                eprintln!("   - {}", exposed_name.fancy_display());
+                            }
+                        }
                     }
                     StateChange::UpdatedExposed(exposed) => {
-                        let mut exposed_names = vec![exposed.clone()];
-                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
-                            exposed_names.push(next_exposed.clone());
-                            iter.next();
-                        }
+                        let exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(exposed.clone()),
+                        );
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Updated executable {} of environment {}.",
@@ -475,13 +528,37 @@ impl StateChanges {
                         }
                     }
                     StateChange::AddedPackage(pkg) => {
-                        eprintln!(
-                            "{}Added package {}={} to environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            console::style(pkg.name.as_normalized()).green(),
-                            console::style(&pkg.version).blue(),
-                            env_name.fancy_display()
+                        let added_pkgs = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedPackage(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(pkg.clone()),
                         );
+
+                        if added_pkgs.len() == 1 {
+                            eprintln!(
+                                "{}Added package {}={} to environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                console::style(pkg.name.as_normalized()).green(),
+                                console::style(&pkg.version).blue(),
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Added packages of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for pkg in added_pkgs {
+                                eprintln!(
+                                    "   - {}={}",
+                                    console::style(pkg.name.as_normalized()).green(),
+                                    console::style(&pkg.version).blue(),
+                                );
+                            }
+                        }
                     }
                     StateChange::AddedEnvironment => {
                         eprintln!(
@@ -533,6 +610,13 @@ impl StateChanges {
             }
         }
 
+        let was_removed = top_level_changes
+            .iter()
+            .find_map(|(_, change)| change.is_removed().then_some(|| true))
+            .is_some();
+
+        let message = if was_removed { "Removed" } else { "Updated" };
+
         // Output messages based on the type of changes
         if top_level_changes.is_empty() && !transitive_changes.is_empty() {
             eprintln!(
@@ -548,16 +632,18 @@ impl StateChanges {
             );
         } else if top_level_changes.len() == 1 {
             eprintln!(
-                "{}Updated package {} {} in environment {}.",
+                "{}{} package {} {} in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
+                message,
                 console::style(top_level_changes[0].0.as_normalized()).green(),
                 top_level_changes[0].1.version_fancy_display(),
                 env_name.fancy_display()
             );
         } else if top_level_changes.len() > 1 {
             eprintln!(
-                "{}Updated packages in environment {}.",
+                "{}{} packages in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
+                message,
                 env_name.fancy_display()
             );
             for (package, install_change) in top_level_changes {
