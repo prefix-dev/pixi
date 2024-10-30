@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crate::cli::cli_config::ProjectConfig;
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
@@ -35,6 +36,10 @@ pub struct Args {
     /// The environment directory to remove.
     #[arg(long, short, conflicts_with = "command")]
     pub environment: Option<String>,
+
+    /// Only remove the activation cache
+    #[arg(long)]
+    pub activation_cache: bool,
 }
 
 /// Clean the cache of your system which are touched by pixi.
@@ -94,8 +99,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .transpose()?;
 
             if let Some(explicit_env) = explicit_environment {
-                remove_folder_with_progress(explicit_env.dir(), true).await?;
-                tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{:?}'", explicit_env.name());
+                if args.activation_cache {
+                    remove_file(explicit_env.activation_cache_file_path(), false).await?;
+                    tracing::info!(
+                        "Only removing activation cache for explicit environment '{}'",
+                        explicit_env.name().fancy_display()
+                    );
+                } else {
+                    remove_folder_with_progress(explicit_env.dir(), true).await?;
+                    remove_file(explicit_env.activation_cache_file_path(), false).await?;
+                    tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{}'", explicit_env.name().fancy_display());
+                }
             } else {
                 // Remove all pixi related work from the project.
                 if !project.environments_dir().starts_with(project.pixi_dir())
@@ -193,5 +207,26 @@ async fn remove_folder_with_progress(
         console::style("removed").green(),
         folder.display()
     ));
+    Ok(())
+}
+
+async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {
+    if !file.exists() {
+        if warning_non_existent {
+            eprintln!(
+                "{}",
+                console::style(format!("File {:?} was not found.", &file)).yellow()
+            );
+        }
+        return Ok(());
+    }
+
+    // Ignore errors
+    let result = tokio_fs::remove_file(&file).await;
+    if let Err(e) = result {
+        tracing::info!("Failed to remove file {:?}: {}", file, e);
+    } else {
+        eprintln!("{} {}", console::style("removed").green(), file.display());
+    }
     Ok(())
 }
