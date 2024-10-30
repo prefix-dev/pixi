@@ -66,11 +66,6 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/design_proposals/pixi_global_manifest/</loc>
-         <lastmod>2024-10-30</lastmod>
-         <changefreq>daily</changefreq>
-    </url>
-    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/examples/cpp-sdl/</loc>
          <lastmod>2024-10-30</lastmod>
          <changefreq>daily</changefreq>
