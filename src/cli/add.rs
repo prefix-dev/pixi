@@ -87,9 +87,9 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let (dependency_config, prefix_update_config, project_config) = (
-        args.dependency_config,
-        args.prefix_update_config,
-        args.project_config,
+        &args.dependency_config,
+        &args.prefix_update_config,
+        &args.project_config,
     );
 
     let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
@@ -101,20 +101,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Add the platform if it is not already present
     project
         .manifest
-        .add_platforms(dependency_config.platform.iter(), &FeatureName::Default)?;
+        .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
+
+    let (match_specs, pypi_deps) = match dependency_config.dependency_type() {
+        DependencyType::CondaDependency(spec_type) => {
+            let match_specs = dependency_config
+                .specs()?
+                .into_iter()
+                .map(|(name, spec)| (name, (spec, spec_type)))
+                .collect();
+            let pypi_deps = IndexMap::default();
+            (match_specs, pypi_deps)
+        }
+        DependencyType::PypiDependency => {
+            let match_specs = IndexMap::default();
+            let pypi_deps = dependency_config.pypi_deps(&project)?;
+            (match_specs, pypi_deps)
+        }
+    };
 
     let implicit_constraints = set_dependencies(
         project,
-        &dependency_config,
-        &prefix_update_config,
-        &project_config,
+        match_specs,
+        pypi_deps,
+        prefix_update_config,
+        &args.dependency_config.feature_name(),
+        &args.dependency_config.platforms,
         args.editable,
     )
     .await?;
 
-    if let Some(implicit_constraints) = implicit_constraints {
-        dependency_config.display_success("Added", implicit_constraints);
-    }
+    // Notify the user we succeeded
+    dependency_config.display_success("Added", implicit_constraints);
 
     Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
@@ -123,73 +141,63 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Sets the dependencies for the given project based on the provided configurations.
 async fn set_dependencies(
     mut project: Project,
-    dependency_config: &DependencyConfig,
+    match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
+    pypi_deps: IndexMap<PyPiPackageName, Requirement>,
     prefix_update_config: &PrefixUpdateConfig,
-    project_config: &ProjectConfig,
+    feature_name: &FeatureName,
+    platforms: &[Platform],
     editable: bool,
-) -> Result<Option<HashMap<String, String>>, miette::Error> {
+) -> Result<HashMap<String, String>, miette::Error> {
     let mut conda_specs_to_add_constraints_for = IndexMap::new();
     let mut pypi_specs_to_add_constraints_for = IndexMap::new();
     let mut conda_packages = HashSet::new();
     let mut pypi_packages = HashSet::new();
-    match dependency_config.dependency_type() {
-        DependencyType::CondaDependency(spec_type) => {
-            let specs = dependency_config.specs()?;
-            let channel_config = project.channel_config();
-            for (name, spec) in specs {
-                let added = project.manifest.add_dependency(
-                    &spec,
-                    spec_type,
-                    &dependency_config.platform,
-                    &dependency_config.feature_name(),
-                    DependencyOverwriteBehavior::Overwrite,
-                    &channel_config,
-                )?;
-                if added {
-                    if spec.version.is_none() {
-                        conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
-                    }
-                    conda_packages.insert(name);
-                }
+    let channel_config = project.channel_config();
+    for (name, (spec, spec_type)) in match_specs {
+        let added = project.manifest.add_dependency(
+            &spec,
+            spec_type,
+            platforms,
+            feature_name,
+            DependencyOverwriteBehavior::Overwrite,
+            &channel_config,
+        )?;
+        if added {
+            if spec.version.is_none() {
+                conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
             }
+            conda_packages.insert(name);
         }
-        DependencyType::PypiDependency => {
-            let specs = dependency_config.pypi_deps(&project)?;
-            for (name, spec) in specs {
-                let added = project.manifest.add_pep508_dependency(
-                    &spec,
-                    &dependency_config.platform,
-                    &dependency_config.feature_name(),
-                    Some(editable),
-                    DependencyOverwriteBehavior::Overwrite,
-                )?;
-                if added {
-                    if spec.version_or_url.is_none() {
-                        pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
-                    }
-                    pypi_packages.insert(name.as_normalized().clone());
-                }
+    }
+
+    for (name, spec) in pypi_deps {
+        let added = project.manifest.add_pep508_dependency(
+            &spec,
+            platforms,
+            feature_name,
+            Some(editable),
+            DependencyOverwriteBehavior::Overwrite,
+        )?;
+        if added {
+            if spec.version_or_url.is_none() {
+                pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
             }
+            pypi_packages.insert(name.as_normalized().clone());
         }
     }
 
     if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
         project.save()?;
 
-        // Notify the user we succeeded.
-        dependency_config.display_success("Added", HashMap::default());
-
-        Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
-        return Ok(None);
+        return Ok(HashMap::default());
     }
 
     let lock_file = load_lock_file(&project).await?;
-    let feature_name = dependency_config.feature_name();
     let affected_environments = project
         .environments()
         .iter()
         // Filter out any environment that does not contain the feature we modified
-        .filter(|e| e.features().any(|f| f.name == feature_name))
+        .filter(|e| e.features().any(|f| f.name == *feature_name))
         // Expand the selection to also included any environment that shares the same solve
         // group
         .flat_map(|e| {
@@ -210,9 +218,7 @@ async fn set_dependencies(
         // Create an iterator over all environment and platform combinations
         .flat_map(|e| e.platforms().into_iter().map(move |p| (e.clone(), p)))
         // Filter out any platform that is not affected by the changes.
-        .filter(|(_, platform)| {
-            dependency_config.platform.is_empty() || dependency_config.platform.contains(platform)
-        })
+        .filter(|(_, platform)| platforms.is_empty() || platforms.contains(platform))
         .map(|(e, p)| (e.name().to_string(), p))
         .collect_vec();
     let unlocked_lock_file = unlock_packages(
@@ -245,8 +251,8 @@ async fn set_dependencies(
             &lock_file,
             conda_specs_to_add_constraints_for,
             affect_environment_and_platforms,
-            &feature_name,
-            &dependency_config.platform,
+            feature_name,
+            platforms,
         )?
     } else if !pypi_specs_to_add_constraints_for.is_empty() {
         update_pypi_specs_from_lock_file(
@@ -254,8 +260,8 @@ async fn set_dependencies(
             &lock_file,
             pypi_specs_to_add_constraints_for,
             affect_environment_and_platforms,
-            &feature_name,
-            &dependency_config.platform,
+            feature_name,
+            platforms,
             editable,
         )?
     } else {
@@ -282,7 +288,7 @@ async fn set_dependencies(
             .prefix(&project.default_environment())
             .await?;
     }
-    Ok(Some(implicit_constraints))
+    Ok(implicit_constraints)
 }
 
 /// Update the pypi specs of newly added packages based on the contents of the

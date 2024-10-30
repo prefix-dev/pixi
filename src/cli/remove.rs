@@ -46,7 +46,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .manifest
                     .remove_pypi_dependency(
                         name,
-                        &dependency_config.platform,
+                        &dependency_config.platforms,
                         &dependency_config.feature_name(),
                     )
                     .wrap_err(format!(
@@ -62,7 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .remove_dependency(
                         name,
                         spec_type,
-                        &dependency_config.platform,
+                        &dependency_config.platforms,
                         &dependency_config.feature_name(),
                     )
                     .wrap_err(format!(
