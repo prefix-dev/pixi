@@ -7,6 +7,10 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+
+// trampoline configuration folder name
+pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
+
 #[derive(Deserialize, Debug)]
 struct Metadata {
     exe: String,
@@ -15,8 +19,11 @@ struct Metadata {
 }
 
 fn read_metadata(current_exe: &Path) -> Metadata {
-    // the metadata file is next to the current executable, under the name of exe + ".json"
-    let metadata_path = current_exe.with_extension("json");
+    // the metadata file is next to the current executable parent folder,
+    // under trampoline_configuration/current_exe_name.json
+    let exe_parent = current_exe.parent().expect("should have a parent");
+    let exe_name = current_exe.file_stem().expect("should have a file name");
+    let metadata_path = exe_parent.join(TRAMPOLINE_CONFIGURATION).join(exe_name).join(".json");
     let metadata_file = File::open(metadata_path).unwrap();
     let metadata: Metadata = serde_json::from_reader(metadata_file).unwrap();
     metadata
