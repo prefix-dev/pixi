@@ -9,7 +9,7 @@ def test_trampoline_respect_activation_variables(
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_path / "bin" / "dummy-trampoline"
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     verify_cli_command(
         [
@@ -51,7 +51,7 @@ def test_trampoline_new_activation_scripts(
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_path / "bin" / "dummy-trampoline"
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     verify_cli_command(
         [
