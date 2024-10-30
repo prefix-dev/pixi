@@ -1024,7 +1024,6 @@ mod tests {
             project.env_root.path().join("test/bin/not-python")
         };
 
-        // let non_exposed_env_path = project.env_root.path().join("test/bin/not-python");
         tokio_fs::create_dir_all(non_exposed_env_path.parent().unwrap())
             .await
             .unwrap();

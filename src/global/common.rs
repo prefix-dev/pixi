@@ -53,7 +53,6 @@ impl BinDir {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
-        tracing::debug!("Collecting bins");
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             // TODO: should we add a magic number to ensure that it's our trampoline?
