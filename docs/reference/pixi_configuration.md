@@ -44,7 +44,7 @@ The configuration is loaded in the following order:
     To find the locations where `pixi` looks for configuration files, run
     `pixi` with `-vv`.
 
-## Reference
+## Configuration options
 
 ??? info "Casing In Configuration"
     In versions of pixi `0.20.1` and older the global configuration used snake_case
@@ -214,6 +214,65 @@ keyring-provider = "subprocess"
 !!! Note "`index-url` and `extra-index-urls` are *not* globals"
     Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml` file and are not globally interpreted when not present in the manifest.
     This is because we want to keep the manifest file as complete and reproducible as possible.
+
+## Experimental
+This allows the user to set specific experimental features that are not yet stable.
+
+Please write a GitHub issue and add the flag `experimental` to the issue if you find issues with the feature you activated.
+
+You can enable all experimental features in cli using:
+```shell
+pixi <command> --experimental
+# e.g.
+pixi run --experimental task
+pixi shell --experimental
+pixi shell-hook --experimental
+```
+
+### Caching environment activations
+Turn this feature on from configuration with the following command:
+```shell
+# For all your projects
+pixi config set experimental.use-environment-activation-cache true --global
+
+# For a specific project
+pixi config set experimental.use-environment-activation-cache true --local
+```
+
+This will cache the environment activation in the `.pixi/activation-env-v0` folder in the project root.
+It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
+```bash
+> tree .pixi/activation-env-v0/
+.pixi/activation-env-v0/
+├── activation_default.json
+└── activation_lint.json
+
+> cat  .pixi/activation-env-v0/activation_lint.json
+{"hash":"8d8344e0751d377a","environment_variables":{<ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION>}}
+```
+
+- The `hash` is a hash of the data on that environment in the `pixi.lock`, plus some important information on the environment activation.
+  Like `[activation.scripts]` and `[activation.env]` from the manifest file.
+- The `environment_variables` are the environment variables that are set when activating the environment.
+
+You can ignore the cache by running:
+```
+pixi run/shell/shell-hook --force-activate
+```
+
+Set the configuration with:
+```toml title="config.toml"
+[experimental]
+# Enable the use of the environment activation cache
+use-environment-activation-cache = true
+```
+
+!!! note "Why is this experimental?"
+This feature is experimental because the cache invalidation is very tricky,
+and we don't want to disturb users that are not affected by activation times.
+
+
+
 
 ## Mirror configuration
 

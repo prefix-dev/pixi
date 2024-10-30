@@ -204,6 +204,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
+- `--experimental`: Enable all [experimental features](pixi_configuration.md#experimental)
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
@@ -460,6 +462,8 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 
 ```shell
 pixi list
@@ -521,6 +525,8 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 
 ```shell
 pixi tree
@@ -631,7 +637,12 @@ To exit the pixi shell, simply run `exit`.
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: Don't install the environment, only activate the environment.
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+- `--experimental`: Enable all [experimental features](pixi_configuration.md#experimental)
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 
 ```shell
 pixi shell
@@ -660,6 +671,8 @@ This command prints the activation script of an environment.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
+- `--experimental`: Enable all [experimental features](pixi_configuration.md#experimental)
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 
 ```shell
 pixi shell-hook
@@ -825,6 +838,7 @@ Use this command to manage the configuration.
 - `--system (-s)`: Specify management scope to system configuration.
 - `--global (-g)`: Specify management scope to global configuration.
 - `--local (-l)`: Specify management scope to local configuration.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 
 Checkout the [pixi configuration](./pixi_configuration.md) for more information about the locations.
 
