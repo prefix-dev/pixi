@@ -61,9 +61,10 @@ pub struct ScriptExecMapping {
     pub original_executable: PathBuf,
 }
 
-/// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable.
-pub(crate) async fn create_executable_scripts(
+/// Create the executables trampolines by running the activation scripts,
+/// recording this information in the trampoline metadata,
+/// and saving both the trampoline and the metadata.
+pub(crate) async fn create_executable_trampolines(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     env_name: &EnvironmentName,

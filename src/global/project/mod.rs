@@ -3,7 +3,7 @@ use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
-use crate::global::install::{create_executable_scripts, script_exec_mapping};
+use crate::global::install::{create_executable_trampolines, script_exec_mapping};
 use crate::global::project::environment::environment_specs_in_sync;
 use crate::repodata::Repodata;
 use crate::rlimit::try_increase_rlimit_to_sensible;
@@ -767,7 +767,7 @@ impl Project {
             env_name.fancy_display()
         );
 
-        state_changes |= create_executable_scripts(&script_mapping, &prefix, env_name).await?;
+        state_changes |= create_executable_trampolines(&script_mapping, &prefix, env_name).await?;
 
         Ok(state_changes)
     }
