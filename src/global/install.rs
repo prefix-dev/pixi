@@ -1,7 +1,7 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        trampoline::{ManifestMetadata, Trampoline},
+        trampoline::{Configuration, Trampoline},
         BinDir, StateChange,
     },
     prefix::Executable,
@@ -94,9 +94,9 @@ pub(crate) async fn create_executable_trampolines(
                     original_executable.display()
                 )
             })?);
-        let metadata = ManifestMetadata::new(exe, path, Some(activation_variables.clone()));
+        let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
 
-        let json_path = ManifestMetadata::trampoline_configuration(global_script_path);
+        let json_path = Configuration::trampoline_configuration(global_script_path);
 
         // Check if an old bash script is present and remove it
         let mut changed = if global_script_path.exists()
@@ -117,7 +117,7 @@ pub(crate) async fn create_executable_trampolines(
                     .await
                     .into_diagnostic()?;
 
-                let previous_manifest_metadata: ManifestMetadata =
+                let previous_manifest_metadata: Configuration =
                     serde_json::from_str(&previous_manifest_data_bytes).into_diagnostic()?;
 
                 changed = if previous_manifest_metadata == metadata {

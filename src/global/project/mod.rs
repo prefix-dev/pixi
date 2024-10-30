@@ -1019,7 +1019,7 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use crate::global::trampoline::{ManifestMetadata, Trampoline};
+    use crate::global::trampoline::{Configuration, Trampoline};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -1121,7 +1121,7 @@ mod tests {
             .unwrap();
         tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
 
-        let non_exposed_manifest = ManifestMetadata::new(
+        let non_exposed_manifest = Configuration::new(
             non_exposed_env_path,
             project.env_root.path().join("test/bin"),
             None,
@@ -1150,7 +1150,7 @@ mod tests {
             .await
             .unwrap();
 
-        let exposed_manifest = ManifestMetadata::new(
+        let exposed_manifest = Configuration::new(
             python_exposed_env_path,
             project.env_root.path().join("test/bin"),
             None,

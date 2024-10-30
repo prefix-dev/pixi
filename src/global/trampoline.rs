@@ -96,11 +96,11 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
     )
 }
 
-/// Manifest data of the original executable.
+/// Configuration of the original executable.
 /// This is used by trampoline to set the environment variables
 /// prepened the path and execute the original executable.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ManifestMetadata {
+pub struct Configuration {
     /// Path to the original executable.
     pub exe: PathBuf,
     /// Root path of the original executable that should be prepended to the PATH.
@@ -109,17 +109,17 @@ pub struct ManifestMetadata {
     pub env: HashMap<String, String>,
 }
 
-impl ManifestMetadata {
-    /// Create a new manifest metadata.
+impl Configuration {
+    /// Create a new configuration of trampoline.
     pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
-        ManifestMetadata {
+        Configuration {
             exe,
             path,
             env: env.unwrap_or_default(),
         }
     }
 
-    /// Read existing manifest metadata from the root path.
+    /// Read existing configuration of trampoline from the root path.
     pub async fn from_root_path(
         root_path: PathBuf,
         exposed_name: &ExposedName,
@@ -220,16 +220,20 @@ pub struct Trampoline {
     /// Root path where the trampoline is stored
     root_path: PathBuf,
     /// Metadata of the trampoline
-    metadata: ManifestMetadata,
+    configuration: Configuration,
 }
 
 impl Trampoline {
     /// Creates a new trampoline.
-    pub fn new(exposed_name: ExposedName, root_path: PathBuf, metadata: ManifestMetadata) -> Self {
+    pub fn new(
+        exposed_name: ExposedName,
+        root_path: PathBuf,
+        configuration: Configuration,
+    ) -> Self {
         Trampoline {
             exposed_name,
             root_path,
-            metadata,
+            configuration,
         }
     }
 
@@ -246,7 +250,7 @@ impl Trampoline {
             })?
             .to_path_buf();
 
-        let metadata = ManifestMetadata::from_root_path(parent_path.clone(), &exposed_name).await?;
+        let metadata = Configuration::from_root_path(parent_path.clone(), &exposed_name).await?;
 
         Ok(Trampoline::new(exposed_name, parent_path, metadata))
     }
@@ -257,7 +261,7 @@ impl Trampoline {
     }
 
     pub fn original_exe(&self) -> PathBuf {
-        self.metadata.exe.clone()
+        self.configuration.exe.clone()
     }
 
     /// Returns the path to the trampoline manifest
@@ -307,9 +311,10 @@ impl Trampoline {
 
     /// Writes the manifest file of the trampoline
     async fn write_manifest(&self) -> miette::Result<()> {
-        let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
+        let manifest_string =
+            serde_json::to_string_pretty(&self.configuration).into_diagnostic()?;
         tokio_fs::create_dir_all(
-            ManifestMetadata::trampoline_configuration(&self.path())
+            Configuration::trampoline_configuration(&self.path())
                 .parent()
                 .expect("should have a parent folder"),
         )

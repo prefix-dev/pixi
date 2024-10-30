@@ -766,7 +766,7 @@ pub(crate) fn get_install_changes(
 
 #[cfg(test)]
 mod tests {
-    use crate::global::trampoline::ManifestMetadata;
+    use crate::global::trampoline::Configuration;
 
     use super::*;
     use rstest::rstest;
@@ -995,7 +995,7 @@ mod tests {
             env_dir.path().join("bin/test")
         };
 
-        let manifest = ManifestMetadata::new(original_exe, bin_dir.path().join("bin"), None);
+        let manifest = Configuration::new(original_exe, bin_dir.path().join("bin"), None);
         let trampoline = Trampoline::new(
             ExposedName::from_str("test").unwrap(),
             bin_dir.path().to_path_buf(),
