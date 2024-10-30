@@ -6,7 +6,7 @@ pub(crate) trait Repodata {
     /// Initialized the [`Gateway`]
     fn repodata_gateway_init(
         authenticated_client: reqwest_middleware::ClientWithMiddleware,
-        channel_config: ChannelConfig,
+        channel_config: Config,
     ) -> Gateway {
         // Determine the cache directory and fall back to sane defaults otherwise.
         let cache_dir = pixi_config::get_cache_dir().unwrap_or_else(|e| {
@@ -22,6 +22,7 @@ pub(crate) trait Repodata {
             .with_cache_dir(cache_dir.join(pixi_consts::consts::CONDA_REPODATA_CACHE_DIR))
             .with_package_cache(package_cache)
             .with_channel_config(channel_config)
+            .with_max_concurrent_requests(10)
             .finish()
     }
 

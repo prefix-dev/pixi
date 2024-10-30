@@ -1025,7 +1025,7 @@ impl Repodata for Project {
         self.repodata_gateway.get_or_init(|| {
             Self::repodata_gateway_init(
                 self.authenticated_client().clone(),
-                self.config().clone().into(),
+                self.config(),
             )
         })
     }
