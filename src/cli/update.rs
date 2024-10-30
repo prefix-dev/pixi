@@ -5,6 +5,8 @@ use std::{
     io::{stdout, Write},
 };
 
+use fancy_display::FancyDisplay;
+
 use crate::cli::cli_config::ProjectConfig;
 use crate::{
     load_lock_file,
@@ -90,10 +92,15 @@ impl From<UpdateSpecsArgs> for UpdateSpecs {
 impl UpdateSpecs {
     /// Returns true if the package should be relaxed according to the user
     /// input.
-    fn should_relax(&self, environment_name: &str, platform: Platform, package: &Package) -> bool {
+    fn should_relax(
+        &self,
+        environment_name: &EnvironmentName,
+        platform: &Platform,
+        package: &Package,
+    ) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms {
-            if !platforms.contains(&platform) {
+            if !platforms.contains(platform) {
                 return false;
             }
         }
@@ -115,7 +122,7 @@ impl UpdateSpecs {
         tracing::debug!(
             "relaxing package: {}, env={}, platform={}",
             package.name(),
-            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+            environment_name.fancy_display(),
             consts::PLATFORM_STYLE.apply_to(platform),
         );
 
@@ -134,7 +141,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if let Some(env) = &specs.environments {
         for env in env {
             if project.environment(env).is_none() {
-                miette::bail!("could not find an environment named '{}'", env)
+                miette::bail!(
+                    "could not find an environment named {}",
+                    env.fancy_display()
+                )
             }
         }
     }
@@ -146,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
         for package in packages {
-            check_package_exists(&loaded_lock_file, package, &specs)?
+            ensure_package_exists(&loaded_lock_file, package, &specs)?
         }
     }
 
@@ -189,9 +199,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Checks if the specified package exists and returns a helpful error message
-/// if it doesn't.
-fn check_package_exists(
+/// Ensures the existence of the specified package
+///
+/// # Returns
+///
+/// Returns `miette::Result` with a descriptive error message
+/// if the package does not exist.
+fn ensure_package_exists(
     lock_file: &LockFile,
     package_name: &str,
     specs: &UpdateSpecs,
@@ -262,7 +276,7 @@ fn check_package_exists(
 /// Constructs a new lock-file where some of the constraints have been removed.
 fn unlock_packages(project: &Project, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
-        !specs.should_relax(env.name().as_str(), platform, package)
+        !specs.should_relax(env.name(), &platform, package)
     })
 }
 

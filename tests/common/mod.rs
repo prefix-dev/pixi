@@ -16,7 +16,7 @@ use pixi::{
     cli::{
         add,
         cli_config::{PrefixUpdateConfig, ProjectConfig},
-        init,
+        init::{self, GitAttributes},
         install::Args,
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
@@ -261,6 +261,7 @@ impl PixiControl {
                 env_file: None,
                 format: None,
                 pyproject_toml: false,
+                scm: Some(GitAttributes::Github),
             },
         }
     }
@@ -278,6 +279,7 @@ impl PixiControl {
                 env_file: None,
                 format: None,
                 pyproject_toml: false,
+                scm: Some(GitAttributes::Github),
             },
         }
     }

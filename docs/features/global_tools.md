@@ -172,7 +172,7 @@ Creating two separate non-interfering environments, while exposing only the mini
 ### Example: Creating a Data Science Sandbox Environment
 You can create an environment with multiple tools using the following command:
 ```shell
-pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
+pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
 ```
 This command generates the following entry in the manifest:
 ```toml
@@ -203,4 +203,46 @@ channels = ["conda-forge"]
 platforms = ["osx-64"]
 dependencies = { python = "*" }
 # ...
+```
+
+
+## Potential Future Features
+
+### PyPI support
+
+We could support packages from PyPI via a command like this:
+
+```
+pixi global install --pypi flask
+```
+
+### Lock file
+
+A lock file is less important for global tools.
+However, there is demand for it, and users that don't care about it should not be negatively impacted
+
+### Multiple manifests
+
+We could go for one default manifest, but also parse other manifests in the same directory.
+The only requirement to be parsed as manifest is a `.toml` extension
+In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
+
+- pixi-global.toml: Default
+- pixi-global-company-tools.toml
+- pixi-global-from-my-dotfiles.toml
+
+It is unclear whether the first implementation already needs to support this.
+At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
+
+### No activation
+
+The current `pixi global install` features `--no-activation`.
+When this flag is set, `CONDA_PREFIX` and `PATH` will not be set when running the exposed executable.
+This is useful when installing Python package managers or shells.
+
+Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:
+
+```toml
+[envs.pip.exposed]
+pip = { executable = "pip", activation = false }
 ```

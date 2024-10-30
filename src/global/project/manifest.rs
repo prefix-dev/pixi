@@ -12,7 +12,7 @@ use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
@@ -465,6 +465,32 @@ impl FromStr for Mapping {
         let (exposed_name, executable_name) = input.split_once('=').unwrap_or((input, input));
         let exposed_name = ExposedName::from_str(exposed_name)?;
         Ok(Mapping::new(exposed_name, executable_name.to_string()))
+    }
+}
+
+#[derive(Default)]
+pub enum ExposedType {
+    #[default]
+    All,
+    Filter(Vec<PackageName>),
+    Mappings(Vec<Mapping>),
+}
+
+impl ExposedType {
+    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
+        if !mappings.is_empty() {
+            return Self::Mappings(mappings);
+        }
+
+        if filter.is_empty() {
+            Self::All
+        } else {
+            Self::Filter(filter)
+        }
+    }
+
+    pub fn subset() -> Self {
+        Self::Mappings(Default::default())
     }
 }
 

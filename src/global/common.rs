@@ -1,16 +1,23 @@
 use super::trampoline::{GlobalBin, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
+use crate::prefix::Executable;
+
+use ahash::HashSet;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
+use rattler::install::{Transaction, TransactionOperation};
+use rattler_conda_types::{
+    Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
+    RepoDataRecord, Version,
+};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
@@ -55,7 +62,6 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            // TODO: should we add a magic number to ensure that it's our trampoline?
             if path.is_file()
                 && path.is_executable()
                 && is_binary(&path)?
@@ -256,6 +262,76 @@ pub(crate) struct EnvChanges {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstallChange {
+    Installed(Version),
+    Upgraded(Version, Version),
+    TransitiveUpgraded(Version, Version),
+    Reinstalled(Version),
+    Removed,
+}
+
+impl InstallChange {
+    pub fn is_transitive(&self) -> bool {
+        matches!(self, InstallChange::TransitiveUpgraded(_, _))
+    }
+
+    pub fn version_fancy_display(&self) -> StyledObject<String> {
+        let version_style = console::Style::new().blue();
+        let default_style = console::Style::new();
+
+        match self {
+            InstallChange::Installed(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Upgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::TransitiveUpgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::Reinstalled(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Removed => version_style.apply_to("".to_string()),
+        }
+    }
+}
+
+/// Tracks changes made to the environment
+/// after installing packages.
+/// It also contain what packages were in environment before the update.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[must_use]
+pub(crate) struct EnvironmentUpdate {
+    package_changes: HashMap<PackageName, InstallChange>,
+    current_packages: Vec<PackageName>,
+}
+
+impl EnvironmentUpdate {
+    pub fn new(
+        package_changes: HashMap<PackageName, InstallChange>,
+        current_packages: Vec<PackageName>,
+    ) -> Self {
+        Self {
+            package_changes,
+            current_packages,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.package_changes.is_empty()
+    }
+
+    pub fn changes(&self) -> &HashMap<PackageName, InstallChange> {
+        &self.package_changes
+    }
+
+    pub fn current_packages(&self) -> &Vec<PackageName> {
+        &self.current_packages
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
     AddedExposed(ExposedName),
@@ -264,7 +340,7 @@ pub(crate) enum StateChange {
     AddedPackage(PackageRecord),
     AddedEnvironment,
     RemovedEnvironment,
-    UpdatedEnvironment,
+    UpdatedEnvironment(EnvironmentUpdate),
 }
 
 #[must_use]
@@ -331,10 +407,10 @@ impl StateChanges {
             .collect()
     }
 
-    pub(crate) fn report(&mut self) {
+    pub(crate) fn report(mut self) {
         self.prune();
 
-        for (env_name, changes_for_env) in &self.changes {
+        for (env_name, changes_for_env) in self.changes {
             // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
                 continue;
@@ -423,14 +499,75 @@ impl StateChanges {
                             env_name.fancy_display()
                         );
                     }
-                    StateChange::UpdatedEnvironment => {
-                        eprintln!(
-                            "{}Updated environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
+                    StateChange::UpdatedEnvironment(update_change) => {
+                        StateChanges::report_update_changes(&env_name, update_change);
                     }
                 }
+            }
+        }
+    }
+
+    pub(crate) fn report_update_changes(
+        env_name: &EnvironmentName,
+        environment_update: &EnvironmentUpdate,
+    ) {
+        // Check if there are any changes
+        if environment_update.is_empty() {
+            eprintln!(
+                "{}Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display(),
+            );
+            return;
+        }
+
+        // Separate top-level and transitive changes
+        let mut top_level_changes = Vec::new();
+        let mut transitive_changes = Vec::new();
+
+        let env_dependencies = environment_update.current_packages();
+
+        for (package_name, change) in environment_update.changes() {
+            if env_dependencies.contains(package_name) && !change.is_transitive() {
+                top_level_changes.push((package_name, change));
+            } else if change.is_transitive() {
+                transitive_changes.push((package_name, change));
+            }
+        }
+
+        // Output messages based on the type of changes
+        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
+            eprintln!(
+                "{}Updated environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
+            eprintln!(
+                "{}Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() == 1 {
+            eprintln!(
+                "{}Updated package {} {} in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(top_level_changes[0].0.as_normalized()).green(),
+                top_level_changes[0].1.version_fancy_display(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() > 1 {
+            eprintln!(
+                "{}Updated packages in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+            for (package, install_change) in top_level_changes {
+                eprintln!(
+                    "    - {} {}",
+                    console::style(package.as_normalized()).green(),
+                    install_change.version_fancy_display()
+                );
             }
         }
     }
@@ -545,6 +682,86 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect::<IndexSet<ExposedName>>();
 
     Ok((to_remove, to_add))
+}
+
+/// Check if all binaries were exposed, or if the user selected a subset of them.
+pub fn check_all_exposed(
+    env_binaries: &IndexMap<PackageName, Vec<Executable>>,
+    exposed_mapping_binaries: &IndexSet<Mapping>,
+) -> bool {
+    let mut env_binaries_names_iter = env_binaries
+        .values()
+        .flatten()
+        .map(|executable| executable.name.clone());
+
+    let exposed_binaries_names: HashSet<&str> = exposed_mapping_binaries
+        .iter()
+        .map(|mapping| mapping.executable_name())
+        .collect();
+
+    let auto_exposed =
+        env_binaries_names_iter.all(|name| exposed_binaries_names.contains(&name.as_str()));
+
+    auto_exposed
+}
+
+pub(crate) fn get_install_changes(
+    install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
+) -> HashMap<PackageName, InstallChange> {
+    install_transaction
+        .operations
+        .into_iter()
+        .map(|transaction| match transaction {
+            TransactionOperation::Install(package) => {
+                let pkg_name = package.package_record.name;
+
+                (
+                    pkg_name,
+                    InstallChange::Installed(package.package_record.version.version().clone()),
+                )
+            }
+            TransactionOperation::Change { old, new } => {
+                let old_pkg_version = old.repodata_record.package_record.version;
+                let new_pkg_version = new.package_record.version;
+
+                let pkg_name = new.package_record.name;
+
+                let same_base_version = old_pkg_version == new_pkg_version;
+
+                let change = if same_base_version {
+                    InstallChange::TransitiveUpgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
+                } else {
+                    InstallChange::Upgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
+                };
+
+                (pkg_name, change)
+            }
+            TransactionOperation::Reinstall(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                (
+                    pkg_name,
+                    InstallChange::Reinstalled(
+                        package
+                            .repodata_record
+                            .package_record
+                            .version
+                            .version()
+                            .clone(),
+                    ),
+                )
+            }
+            TransactionOperation::Remove(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                (pkg_name, InstallChange::Removed)
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

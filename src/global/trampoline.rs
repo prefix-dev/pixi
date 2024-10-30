@@ -49,7 +49,7 @@ pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
 );
 
-// return file name of the executable
+/// Returns the file name of the executable
 pub(crate) fn file_name(exposed_name: &ExposedName) -> String {
     if cfg!(target_os = "windows") {
         format!("{}.exe", exposed_name)
@@ -129,7 +129,7 @@ impl ManifestMetadata {
     }
 }
 
-/// Represent an exposed global binary installed by pixi.
+/// Represents an exposed global executable installed by pixi global.
 /// This can be either a trampoline or a old script.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalBin {
@@ -138,7 +138,7 @@ pub enum GlobalBin {
 }
 
 impl GlobalBin {
-    /// Return the path to the original executable.
+    /// Returns the path to the original executable.
     pub async fn executable(&self) -> miette::Result<PathBuf> {
         Ok(match self {
             GlobalBin::Trampoline(trampoline) => trampoline.original_exe(),
@@ -146,7 +146,7 @@ impl GlobalBin {
         })
     }
 
-    /// Return exposed name
+    /// Returns exposed name
     pub fn exposed_name(&self) -> ExposedName {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.exposed_name.clone(),
@@ -156,7 +156,7 @@ impl GlobalBin {
         }
     }
 
-    /// Return the path to the exposed binary.
+    /// Returns the path to the exposed binary.
     pub fn path(&self) -> PathBuf {
         match self {
             GlobalBin::Trampoline(trampoline) => trampoline.path(),
@@ -164,12 +164,12 @@ impl GlobalBin {
         }
     }
 
-    /// Return if the exposed global binary is trampoline.
+    /// Returns if the exposed global binary is trampoline.
     pub fn is_trampoline(&self) -> bool {
         matches!(self, GlobalBin::Trampoline(_))
     }
 
-    /// Return the inner trampoline.
+    /// Returns the inner trampoline.
     pub fn trampoline(&self) -> Option<&Trampoline> {
         match self {
             GlobalBin::Trampoline(trampoline) => Some(trampoline),
@@ -177,8 +177,8 @@ impl GlobalBin {
         }
     }
 
-    /// Remove exposed global binary.
-    /// In case if it's trampoline, it will also remove it's manifest.
+    /// Removes exposed global executable.
+    /// In case it is a trampoline, it will also remove its manifest.
     pub async fn remove(&self) -> miette::Result<()> {
         match self {
             GlobalBin::Trampoline(trampoline) => {
@@ -202,16 +202,16 @@ impl GlobalBin {
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trampoline {
-    // Exposed name of the trampoline
+    /// Exposed name of the trampoline
     exposed_name: ExposedName,
-    // Root path where the trampoline is stored
+    /// Root path where the trampoline is stored
     root_path: PathBuf,
-    // Metadata of the trampoline
+    /// Metadata of the trampoline
     metadata: ManifestMetadata,
 }
 
 impl Trampoline {
-    /// Create a new trampoline.
+    /// Creates a new trampoline.
     pub fn new(exposed_name: ExposedName, root_path: PathBuf, metadata: ManifestMetadata) -> Self {
         Trampoline {
             exposed_name,
@@ -220,7 +220,7 @@ impl Trampoline {
         }
     }
 
-    /// Try to create a trampoline object from the already existing trampoline.
+    /// Tries to create a trampoline object from the already existing trampoline.
     pub async fn try_from(trampoline_path: PathBuf) -> miette::Result<Self> {
         let exposed_name = ExposedName::from_str(&executable_from_path(&trampoline_path))?;
         let parent_path = trampoline_path
@@ -238,7 +238,7 @@ impl Trampoline {
         Ok(Trampoline::new(exposed_name, parent_path, metadata))
     }
 
-    // return the path to the trampoline
+    /// Returns the path to the trampoline
     pub fn path(&self) -> PathBuf {
         self.root_path.join(file_name(&self.exposed_name))
     }
@@ -247,7 +247,7 @@ impl Trampoline {
         self.metadata.exe.clone()
     }
 
-    // return the path to the trampoline manifest
+    /// Returns the path to the trampoline manifest
     pub fn manifest_path(&self) -> PathBuf {
         self.root_path.join(self.exposed_name.to_string() + ".json")
     }
@@ -275,7 +275,7 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Write the manifest file of the trampoline
+    /// Writes the manifest file of the trampoline
     async fn write_manifest(&self) -> miette::Result<()> {
         let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
         tokio_fs::write(self.manifest_path(), manifest_string)
@@ -285,7 +285,7 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Check if binary is a saved trampoline
+    /// Checks if executable is a saved trampoline
     /// by reading only first 1048 bytes of the file
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
