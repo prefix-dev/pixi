@@ -5,9 +5,8 @@ use crate::{
         trampoline::{ManifestMetadata, Trampoline},
         BinDir, StateChange,
     },
-    global::{BinDir, StateChange},
+    prefix::Executable,
     prefix::Prefix,
-    prefix::{Executable, Prefix},
 };
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -43,7 +42,7 @@ pub(crate) fn script_exec_mapping<'a>(
     executables
         .find(|executable| executable.name == entry_point)
         .map(|executable| ScriptExecMapping {
-            global_script_path: bin_dir.executable_script_path(exposed_name),
+            global_script_path: bin_dir.executable_trampoline_path(exposed_name),
             original_executable: executable.path.clone(),
         })
         .ok_or_else(|| {

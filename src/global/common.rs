@@ -2,7 +2,6 @@ use super::trampoline::{GlobalBin, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
 use crate::prefix::Executable;
 
-use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
 use ahash::HashSet;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -14,13 +13,11 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
-use pixi_utils::executable_from_path;
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
     RepoDataRecord, Version,
 };
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, PackageRecord, PrefixRecord};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;

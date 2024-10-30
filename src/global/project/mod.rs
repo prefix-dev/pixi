@@ -1,7 +1,6 @@
 use super::common::{get_install_changes, EnvironmentUpdate};
 use super::install::find_binary_by_name;
 use super::trampoline::GlobalBin;
-use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
 use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
