@@ -183,6 +183,7 @@ impl<'p> LockFileDerivedData<'p> {
                 CurrentEnvVarBehavior::Exclude,
                 None,
                 false,
+                false,
             )
             .await?;
 
@@ -1104,6 +1105,7 @@ impl<'p> UpdateContext<'p> {
                     environment,
                     CurrentEnvVarBehavior::Exclude,
                     None,
+                    false,
                     false,
                 )
                 .await?;

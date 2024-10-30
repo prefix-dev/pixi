@@ -257,6 +257,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             CurrentEnvVarBehavior::Exclude,
             Some(&lock_file_data.lock_file),
             project.config().force_activate(),
+            project.config().experimental_activation_cache_usage(),
         )
         .await?;
 

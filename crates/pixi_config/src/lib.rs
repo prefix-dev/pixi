@@ -22,6 +22,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
+const EXPERIMENTAL: &str = "experimental";
+
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
@@ -115,6 +117,11 @@ pub struct ConfigCli {
     /// Specifies if we want to use uv keyring provider
     #[arg(long)]
     pypi_keyring_provider: Option<KeyringProvider>,
+
+    /// Enable all experimental features (use with caution).
+    /// These features might be unstable or change in the future.
+    #[arg(long)]
+    experimental: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -142,7 +149,7 @@ impl ConfigCliPrompt {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
-    /// Do not use the environment activation cache.
+    /// Do not use the environment activation cache. (default: true except in experimental mode)
     #[arg(long)]
     force_activate: bool,
 }
@@ -231,6 +238,33 @@ impl DetachedEnvironments {
 impl Default for DetachedEnvironments {
     fn default() -> Self {
         DetachedEnvironments::Boolean(false)
+    }
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExperimentalConfig {
+    /// The option to opt into the environment activation cache feature.
+    /// This is an experimental feature and may be removed in the future or made default.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_environment_activation_cache: Option<bool>,
+}
+
+impl ExperimentalConfig {
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            use_environment_activation_cache: other
+                .use_environment_activation_cache
+                .or(self.use_environment_activation_cache),
+        }
+    }
+    pub fn use_environment_activation_cache(&self) -> bool {
+        self.use_environment_activation_cache.unwrap_or(false)
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.use_environment_activation_cache.is_none()
     }
 }
 
@@ -445,6 +479,11 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_activate: Option<bool>,
+
+    /// Experimental features that can be enabled.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ExperimentalConfig::is_default")]
+    pub experimental: ExperimentalConfig,
 }
 
 impl Default for Config {
@@ -462,6 +501,7 @@ impl Default for Config {
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
             force_activate: None,
+            experimental: Default::default(),
         }
     }
 }
@@ -476,6 +516,9 @@ impl From<ConfigCli> for Config {
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
             detached_environments: None,
+            experimental: ExperimentalConfig {
+                use_environment_activation_cache: if cli.experimental { Some(true) } else { None },
+            },
             ..Default::default()
         }
     }
@@ -697,6 +740,7 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "experimental.use-environment-activation-cache",
         ]
     }
 
@@ -726,6 +770,7 @@ impl Config {
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
+            experimental: other.experimental.merge(self.experimental),
         }
     }
 
@@ -785,6 +830,10 @@ impl Config {
 
     pub fn force_activate(&self) -> bool {
         self.force_activate.unwrap_or(false)
+    }
+
+    pub fn experimental_activation_cache_usage(&self) -> bool {
+        self.experimental.use_environment_activation_cache()
     }
 
     /// Modify this config with the given key and value
@@ -907,6 +956,29 @@ impl Config {
                                 _ => Err(miette::miette!("invalid keyring provider")),
                             })
                             .transpose()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            key if key.starts_with(EXPERIMENTAL) => {
+                if key == EXPERIMENTAL {
+                    if let Some(value) = value {
+                        self.experimental = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.experimental = ExperimentalConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with(format!("{EXPERIMENTAL}.").as_str()) {
+                    return Err(err);
+                }
+
+                let subkey = key
+                    .strip_prefix(format!("{EXPERIMENTAL}.").as_str())
+                    .unwrap();
+                match subkey {
+                    "use-environment-activation-cache" => {
+                        self.experimental.use_environment_activation_cache =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     _ => return Err(err),
                 }
@@ -1040,6 +1112,7 @@ UNUSED = "unused"
             tls_no_verify: true,
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
+            experimental: false,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
@@ -1052,6 +1125,7 @@ UNUSED = "unused"
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
+            experimental: false,
         };
 
         let config = Config::from(cli);
@@ -1060,6 +1134,7 @@ UNUSED = "unused"
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
         );
+        assert!(!config.experimental.use_environment_activation_cache());
     }
 
     #[test]

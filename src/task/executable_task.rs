@@ -353,6 +353,7 @@ pub async fn get_task_env<'p>(
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
+    experimental_cache: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -369,6 +370,7 @@ pub async fn get_task_env<'p>(
             env_var_behavior,
             lock_file,
             force_activate,
+            experimental_cache,
         )
     })
     .await
@@ -474,7 +476,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         let environment = project.default_environment();
-        let env = get_task_env(&environment, false, None, false)
+        let env = get_task_env(&environment, false, None, false, false)
             .await
             .unwrap();
         assert_eq!(

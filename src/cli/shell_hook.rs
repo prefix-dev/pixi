@@ -95,6 +95,7 @@ async fn generate_environment_json(
     environment: &Environment<'_>,
     lock_file: &LockFile,
     force_activate: bool,
+    experimental_cache: bool,
 ) -> miette::Result<String> {
     let environment_variables = environment
         .project()
@@ -103,6 +104,7 @@ async fn generate_environment_json(
             CurrentEnvVarBehavior::Exclude,
             Some(lock_file),
             force_activate,
+            experimental_cache,
         )
         .await?;
 
@@ -136,6 +138,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &environment,
                 &lock_file_data.lock_file,
                 project.config().force_activate(),
+                project.config().experimental_activation_cache_usage(),
             )
             .await?
         }

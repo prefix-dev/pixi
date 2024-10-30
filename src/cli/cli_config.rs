@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Project configuration
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 pub struct ProjectConfig {
     /// The path to `pixi.toml` or `pyproject.toml`
     #[arg(long)]

@@ -420,7 +420,8 @@ impl PixiControl {
                 None => {
                     lock_file.prefix(&task.run_environment).await?;
                     let env =
-                        get_task_env(&task.run_environment, args.clean_env, None, false).await?;
+                        get_task_env(&task.run_environment, args.clean_env, None, false, false)
+                            .await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,

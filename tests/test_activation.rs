@@ -22,6 +22,7 @@ async fn test_pixi_only_env_activation() {
             CurrentEnvVarBehavior::Exclude,
             None,
             false,
+            false,
         )
         .await
         .unwrap();
@@ -50,6 +51,7 @@ async fn test_full_env_activation() {
             CurrentEnvVarBehavior::Include,
             None,
             false,
+            false,
         )
         .await
         .unwrap();
@@ -74,6 +76,7 @@ async fn test_clean_env_activation() {
             &default_env,
             CurrentEnvVarBehavior::Clean,
             None,
+            false,
             false,
         )
         .await

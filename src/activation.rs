@@ -157,9 +157,10 @@ pub async fn run_activation(
     env_var_behavior: &CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
+    experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // If a lock file is provided, we can check whether there exists an environment cache.
-    if !force_activate {
+    if !force_activate && experimental {
         if let Some(lock_file) = lock_file {
             let cache_file = environment.activation_cache_file_path();
             if cache_file.exists() {
@@ -248,28 +249,30 @@ pub async fn run_activation(
 
     // If the lock file is provided, and we can compute the environment hash, let's rewrite the
     // cache file.
-    if let Some(lock_file) = lock_file {
-        let cache_file = environment
-            .project()
-            .activation_env_cache_folder()
-            .join(environment.activation_cache_name());
-        let cache = ActivationCache {
-            hash: EnvironmentHash::from_environment(environment, lock_file),
-            environment_variables: activator_result.clone(),
-        };
-        let cache = serde_json::to_string(&cache).into_diagnostic()?;
+    if experimental {
+        if let Some(lock_file) = lock_file {
+            let cache_file = environment
+                .project()
+                .activation_env_cache_folder()
+                .join(environment.activation_cache_name());
+            let cache = ActivationCache {
+                hash: EnvironmentHash::from_environment(environment, lock_file),
+                environment_variables: activator_result.clone(),
+            };
+            let cache = serde_json::to_string(&cache).into_diagnostic()?;
 
-        tokio_fs::create_dir_all(environment.project().activation_env_cache_folder())
-            .await
-            .into_diagnostic()?;
-        tokio_fs::write(&cache_file, cache)
-            .await
-            .into_diagnostic()?;
-        tracing::debug!(
-            "Wrote activation cache for {} to {}",
-            environment.name(),
-            cache_file.display()
-        );
+            tokio_fs::create_dir_all(environment.project().activation_env_cache_folder())
+                .await
+                .into_diagnostic()?;
+            tokio_fs::write(&cache_file, cache)
+                .await
+                .into_diagnostic()?;
+            tracing::debug!(
+                "Wrote activation cache for {} to {}",
+                environment.name(),
+                cache_file.display()
+            );
+        }
     }
 
     Ok(activator_result)
@@ -355,9 +358,16 @@ pub(crate) async fn initialize_env_variables(
     env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
+    experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    let activation_env =
-        run_activation(environment, &env_var_behavior, lock_file, force_activate).await?;
+    let activation_env = run_activation(
+        environment,
+        &env_var_behavior,
+        lock_file,
+        force_activate,
+        experimental,
+    )
+    .await?;
 
     // Get environment variables from the currently activated shell.
     let current_shell_env_vars = match env_var_behavior {
@@ -511,9 +521,15 @@ mod tests {
         let default_env = project.default_environment();
 
         // Don't create cache
-        let env = run_activation(&default_env, &CurrentEnvVarBehavior::Include, None, false)
-            .await
-            .unwrap();
+        let env = run_activation(
+            &default_env,
+            &CurrentEnvVarBehavior::Include,
+            None,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
         assert!(!project.activation_env_cache_folder().exists());
         assert!(env.contains_key("CONDA_PREFIX"));
 
@@ -523,6 +539,7 @@ mod tests {
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
             false,
         )
         .await
@@ -543,6 +560,7 @@ mod tests {
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
             false,
         )
         .await
@@ -578,6 +596,7 @@ packages:
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
             false,
+            false,
         )
         .await
         .unwrap();
@@ -592,6 +611,7 @@ packages:
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
             false,
         );
         assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
@@ -614,6 +634,7 @@ packages:
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
             false,
         )
         .await

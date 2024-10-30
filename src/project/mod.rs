@@ -418,6 +418,7 @@ impl Project {
         current_env_var_behavior: CurrentEnvVarBehavior,
         lock_file: Option<&LockFile>,
         force_activate: bool,
+        experimental_cache: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -434,6 +435,7 @@ impl Project {
                             current_env_var_behavior,
                             lock_file,
                             force_activate,
+                            experimental_cache,
                         )
                         .await
                     })
@@ -447,6 +449,7 @@ impl Project {
                             current_env_var_behavior,
                             lock_file,
                             force_activate,
+                            experimental_cache,
                         )
                         .await
                     })
@@ -460,6 +463,7 @@ impl Project {
                             current_env_var_behavior,
                             lock_file,
                             force_activate,
+                            experimental_cache,
                         )
                         .await
                     })
