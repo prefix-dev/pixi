@@ -28,10 +28,11 @@ It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if 
 
 ##### Options
 
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: Specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: Specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
 - `--format <FORMAT>`: Specify the format of the project file, either `pyproject` or `pixi`. [default: `pixi`]
+- `--scm <SCM>`: Specify the SCM used to manage the project with. Possible values: github, gitlab, codeberg. [default: `github`]
 
 !!! info "Importing an environment.yml"
   When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
@@ -46,7 +47,7 @@ pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
 pixi init --import environment.yml
 pixi init --format pyproject
-pixi init --format pixi
+pixi init --format pixi --scm gitlab
 ```
 
 ## `add`
@@ -978,12 +979,13 @@ Allowing you to access it anywhere on your system without activating the environ
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
 - `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
 - `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
+- `--with <WITH>`: Add additional dependencies to the environment. Their executables will not be exposed.
 
 ```shell
 pixi global install ruff
-# multiple packages can be installed at once
+# Multiple packages can be installed at once
 pixi global install starship rattler-build
-# specify the channel(s)
+# Specify the channel(s)
 pixi global install --channel conda-forge --channel bioconda trackplot
 # Or in a more concise form
 pixi global install -c conda-forge -c bioconda trackplot
@@ -997,8 +999,11 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 # Install for a specific platform, only useful on osx-arm64
 pixi global install --platform osx-64 ruff
 
-# Install into a specific environment name
-pixi global install --environment data-science python numpy matplotlib ipython
+# Install a package with all its executables exposed, together with additional packages that don't expose anything
+pixi global install ipython --with numpy --with scipy
+
+# Install into a specific environment name and expose all executables
+pixi global install --environment data-science ipython jupyterlab numpy matplotlib
 
 # Expose the binary under a different name
 pixi global install --expose "py39=python3.9" "python=3.9.*"

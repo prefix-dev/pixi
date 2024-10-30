@@ -9,7 +9,7 @@ from pathlib import Path
 from read_wheels import read_wheel_file
 
 
-def terminal_summary():
+def terminal_summary() -> None:
     # Read aggregated results from the shared file
     results_file = RESULTS_FILE
     if not results_file.exists():
@@ -79,7 +79,7 @@ def terminal_summary():
     console.print(summary_panel)
 
 
-def markdown_summary():
+def markdown_summary() -> None:
     if not RESULTS_FILE.exists():
         return
 

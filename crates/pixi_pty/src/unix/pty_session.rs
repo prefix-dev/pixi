@@ -75,7 +75,7 @@ impl PtySession {
     /// Interact with the process. This will put the current process into raw mode and
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
-    pub fn interact(&mut self) -> io::Result<Option<i32>> {
+    pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
 
@@ -99,6 +99,7 @@ impl PtySession {
         // and forward the new terminal size to the process
         let mut signals = Signals::new([SIGWINCH])?;
 
+        let mut write_stdout = wait_until.is_none();
         // Call select in a loop and handle incoming data
         let exit_status = loop {
             // Make sure that the process is still alive
@@ -140,7 +141,16 @@ impl PtySession {
                 // We have new data coming from the process
                 if select_set.contains(process_stdout_fd) {
                     let bytes_read = self.process_stdout.read(&mut buf).unwrap_or(0);
-                    if bytes_read > 0 {
+                    if !write_stdout {
+                        if let Some(wait_until) = wait_until {
+                            if buf[..bytes_read]
+                                .windows(wait_until.len())
+                                .any(|window| window == wait_until.as_bytes())
+                            {
+                                write_stdout = true;
+                            }
+                        }
+                    } else if bytes_read > 0 {
                         io::stdout().write_all(&buf[..bytes_read])?;
                         io::stdout().flush()?;
                     }
