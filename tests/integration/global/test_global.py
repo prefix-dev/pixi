@@ -1636,7 +1636,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "dummy-b",
         ],
         env=env,
-        stderr_contains="Exposed executable dummy-b from environment dummy-a",
+        stderr_contains=["Exposed executables from environment", "- dummy-b"],
     )
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")

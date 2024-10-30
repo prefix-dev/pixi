@@ -25,7 +25,7 @@ def test_trampoline_respect_activation_variables(
 
     assert is_binary(dummy_b)
 
-    dummy_b_json = tmp_path / "bin" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -67,7 +67,7 @@ def test_trampoline_new_activation_scripts(
 
     assert is_binary(dummy_b)
 
-    dummy_b_json = tmp_path / "bin" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -92,7 +92,7 @@ def test_trampoline_new_activation_scripts(
     )
 
     # verify that newever activation is recorded
-    dummy_b_json = tmp_path / "bin" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -132,6 +132,6 @@ def test_trampoline_migrate_previous_script(
     assert dummy_trampoline.is_file()
     assert is_binary(dummy_trampoline)
 
-    dummy_trampoline_json = tmp_path / "bin" / "dummy-trampoline.json"
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     assert dummy_trampoline_json.is_file()

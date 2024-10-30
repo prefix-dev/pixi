@@ -1,7 +1,6 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        common::is_binary,
         trampoline::{ManifestMetadata, Trampoline},
         BinDir, StateChange,
     },
@@ -97,21 +96,12 @@ pub(crate) async fn create_executable_trampolines(
             })?);
         let metadata = ManifestMetadata::new(exe, path, Some(activation_variables.clone()));
 
-        let json_path = global_script_path.with_extension("json");
-
-        let global_script_path = {
-            #[cfg(windows)]
-            {
-                &global_script_path.with_extension("exe")
-            }
-            #[cfg(unix)]
-            {
-                global_script_path
-            }
-        };
+        let json_path = ManifestMetadata::trampoline_configuration(global_script_path);
 
         // Check if an old bash script is present and remove it
-        let mut changed = if global_script_path.exists() && !is_binary(global_script_path)? {
+        let mut changed = if global_script_path.exists()
+            && !Trampoline::is_trampoline(global_script_path).await?
+        {
             tokio_fs::remove_file(global_script_path)
                 .await
                 .into_diagnostic()?;

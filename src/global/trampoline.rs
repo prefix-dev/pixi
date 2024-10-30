@@ -49,6 +49,9 @@ pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
 );
 
+// trampoline configuration folder name
+pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
+
 /// Returns the file name of the executable
 pub(crate) fn file_name(exposed_name: &ExposedName) -> String {
     if cfg!(target_os = "windows") {
@@ -121,11 +124,21 @@ impl ManifestMetadata {
         root_path: PathBuf,
         exposed_name: &ExposedName,
     ) -> miette::Result<Self> {
-        let manifest_path = root_path.join(exposed_name.to_string() + ".json");
+        let manifest_path = root_path
+            .join(TRAMPOLINE_CONFIGURATION)
+            .join(exposed_name.to_string() + ".json");
         let manifest_str = tokio_fs::read_to_string(manifest_path)
             .await
             .into_diagnostic()?;
         serde_json::from_str(&manifest_str).into_diagnostic()
+    }
+
+    /// Return the configuration file for the trampoline.
+    pub fn trampoline_configuration(trampoline: &Path) -> PathBuf {
+        let parent = trampoline.parent().expect("should have a parent");
+        parent
+            .join(PathBuf::from(TRAMPOLINE_CONFIGURATION))
+            .join(Trampoline::name(trampoline))
     }
 }
 
@@ -249,7 +262,24 @@ impl Trampoline {
 
     /// Returns the path to the trampoline manifest
     pub fn manifest_path(&self) -> PathBuf {
-        self.root_path.join(self.exposed_name.to_string() + ".json")
+        self.root_path
+            .join(TRAMPOLINE_CONFIGURATION)
+            .join(self.exposed_name.to_string() + ".json")
+    }
+
+    /// Returns the name of the trampoline
+    pub fn name(trampoline: &Path) -> String {
+        let trampoline_name = trampoline.file_name().expect("should have a file name");
+        // strip .exe from the file name
+        if cfg!(windows) {
+            trampoline_name
+                .to_string_lossy()
+                .strip_suffix(".exe")
+                .expect("should have suffix")
+                .to_string()
+        } else {
+            trampoline_name.to_string_lossy().to_string()
+        }
     }
 
     pub async fn save(&self) -> miette::Result<()> {
@@ -278,6 +308,14 @@ impl Trampoline {
     /// Writes the manifest file of the trampoline
     async fn write_manifest(&self) -> miette::Result<()> {
         let manifest_string = serde_json::to_string_pretty(&self.metadata).into_diagnostic()?;
+        tokio_fs::create_dir_all(
+            ManifestMetadata::trampoline_configuration(&self.path())
+                .parent()
+                .expect("should have a parent folder"),
+        )
+        .await
+        .into_diagnostic()?;
+
         tokio_fs::write(self.manifest_path(), manifest_string)
             .await
             .into_diagnostic()?;
