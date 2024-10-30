@@ -279,6 +279,8 @@ uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
+tabled = { version = "0.16.0", default-features = false, features = ["std"] }
+globset = "0.4.15"
 
 
 [target.'cfg(unix)'.dependencies]
