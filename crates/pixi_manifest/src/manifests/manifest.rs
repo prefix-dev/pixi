@@ -666,10 +666,12 @@ impl Manifest {
     where
         Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
-        self.parsed
-            .features
-            .get_mut(name)
-            .ok_or_else(|| miette!("Feature `{name}` does not exist"))
+        self.parsed.features.get_mut(name).ok_or_else(|| {
+            miette!(
+                "Feature {} does not exist",
+                consts::FEATURE_STYLE.apply_to(name)
+            )
+        })
     }
 
     /// Returns the mutable feature with the given name or `Err` if it does not
