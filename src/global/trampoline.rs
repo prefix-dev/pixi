@@ -202,11 +202,11 @@ impl GlobalBin {
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trampoline {
-    // Exposed name of the trampoline
+    /// Exposed name of the trampoline
     exposed_name: ExposedName,
-    // Root path where the trampoline is stored
+    /// Root path where the trampoline is stored
     root_path: PathBuf,
-    // Metadata of the trampoline
+    /// Metadata of the trampoline
     metadata: ManifestMetadata,
 }
 
