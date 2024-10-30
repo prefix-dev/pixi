@@ -672,7 +672,7 @@ impl Manifest {
             .ok_or_else(|| miette!("Feature `{name}` does not exist"))
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not
+    /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
     pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
         self.parsed
