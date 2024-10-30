@@ -3,9 +3,19 @@ from pathlib import Path
 import pytest
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--pixi-build",
+        action="store",
+        default="release",
+        help="Specify the pixi build type (e.g., release or debug)",
+    )
+
+
 @pytest.fixture
-def pixi() -> Path:
-    return Path(__file__).parent.joinpath("../../target-pixi/release/pixi")
+def pixi(request: pytest.FixtureRequest) -> Path:
+    pixi_build = request.config.getoption("--pixi-build")
+    return Path(__file__).parent.joinpath(f"../../target-pixi/{pixi_build}/pixi")
 
 
 @pytest.fixture

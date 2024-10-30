@@ -1,5 +1,6 @@
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, PIXI_VERSION
+import pytest
 
 
 def test_pixi(pixi: Path) -> None:
@@ -9,6 +10,7 @@ def test_pixi(pixi: Path) -> None:
     verify_cli_command([pixi, "--version"], ExitCode.SUCCESS, stdout_contains=PIXI_VERSION)
 
 
+@pytest.mark.slow
 def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     # Create a new project
@@ -163,6 +165,7 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_search(pixi: Path) -> None:
     verify_cli_command(
         [pixi, "search", "rattler-build", "-c", "conda-forge"],
@@ -176,6 +179,7 @@ def test_search(pixi: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
     conda_forge = "https://fast.prefix.dev/conda-forge"
@@ -279,6 +283,7 @@ def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pyproject.toml"
     # Create a new project
