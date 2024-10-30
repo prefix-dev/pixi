@@ -81,9 +81,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Load the current lock-file, if any. If none is found, a dummy lock-file is
-    // returned.
-    let loaded_lock_file = load_lock_file(&project).await?;
+    // TODO: Also support build and host
+    let match_specs = feature
+        .dependencies(None, None)
+        .into_iter()
+        .flat_map(|deps| deps.into_owned())
+        .filter_map(|(name, _)| match &specs.packages {
+            None => Some(name),
+            Some(packages) if packages.contains(name.as_normalized()) => Some(name),
+            _ => None,
+        });
+
+    let pypi_deps = feature
+        .pypi_dependencies(None)
+        .into_iter()
+        .flat_map(|deps| deps.into_owned())
+        .filter_map(|(name, _)| match &specs.packages {
+            None => Some(name),
+            Some(packages) if packages.contains(name.as_normalized().as_str()) => Some(name),
+            _ => None,
+        });
+
+    // project
+    //     .update_dependencies(
+    //         match_specs,
+    //         pypi_deps,
+    //         args.prefix_update_config,
+    //         &args.dependency_config.feature_name(),
+    //         &args.dependency_config.platforms,
+    //         args.editable,
+    //     )
+    //     .await?;
 
     todo!()
 }
