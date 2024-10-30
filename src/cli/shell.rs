@@ -250,20 +250,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    let opt_lock_file = if project.config().no_env_activation_cache.is_none()
-        || project.config().no_env_activation_cache.is_some_and(|x| !x)
-    {
-        Some(&lock_file_data.lock_file)
-    } else {
-        None
-    };
-
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
         .get_activated_environment_variables(
             &environment,
             CurrentEnvVarBehavior::Exclude,
-            opt_lock_file,
+            Some(&lock_file_data.lock_file),
+            project.config().force_activate(),
         )
         .await?;
 

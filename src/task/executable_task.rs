@@ -247,17 +247,14 @@ impl<'p> ExecutableTask<'p> {
     /// `CanSkip::No` and includes the hash of the task that caused the task
     /// to not be skipped - we can use this later to update the cache file
     /// quickly.
-    pub(crate) async fn can_skip(
-        &self,
-        lock_file: &LockFileDerivedData<'p>,
-    ) -> Result<CanSkip, std::io::Error> {
+    pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
         let cache_name = self.cache_name();
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
             let cache = tokio::fs::read_to_string(&cache_file).await?;
             let cache: TaskCache = serde_json::from_str(&cache)?;
-            let hash = TaskHash::from_task(self, &lock_file.lock_file).await;
+            let hash = TaskHash::from_task(self, lock_file).await;
             if let Ok(Some(hash)) = hash {
                 if hash.computation_hash() != cache.hash {
                     return Ok(CanSkip::No(Some(hash)));
@@ -355,6 +352,7 @@ pub async fn get_task_env<'p>(
     environment: &Environment<'p>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
+    force_activate: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -370,6 +368,7 @@ pub async fn get_task_env<'p>(
             environment,
             env_var_behavior,
             lock_file,
+            force_activate,
         )
     })
     .await
@@ -475,7 +474,9 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         let environment = project.default_environment();
-        let env = get_task_env(&environment, false, None).await.unwrap();
+        let env = get_task_env(&environment, false, None, false)
+            .await
+            .unwrap();
         assert_eq!(
             env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()

@@ -2,7 +2,7 @@ use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::ConfigCliPrompt;
+use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -36,6 +36,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    activation_config: ConfigCliActivation,
 
     /// The environment to activate in the script
     #[arg(long, short)]
@@ -91,6 +94,7 @@ async fn generate_activation_script(
 async fn generate_environment_json(
     environment: &Environment<'_>,
     lock_file: &LockFile,
+    force_activate: bool,
 ) -> miette::Result<String> {
     let environment_variables = environment
         .project()
@@ -98,6 +102,7 @@ async fn generate_environment_json(
             environment,
             CurrentEnvVarBehavior::Exclude,
             Some(lock_file),
+            force_activate,
         )
         .await?;
 
@@ -112,6 +117,7 @@ async fn generate_environment_json(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .prompt_config
+        .merge_config(args.activation_config.into())
         .merge_config(args.prefix_update_config.config.clone().into());
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
@@ -125,7 +131,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     let output = match args.json {
-        true => generate_environment_json(&environment, &lock_file_data.lock_file).await?,
+        true => {
+            generate_environment_json(
+                &environment,
+                &lock_file_data.lock_file,
+                project.config().force_activate(),
+            )
+            .await?
+        }
         // Skipping the activated environment caching for the script.
         // As it can still run scripts.
         false => generate_activation_script(args.shell, &environment).await?,

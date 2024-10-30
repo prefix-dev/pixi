@@ -156,23 +156,26 @@ pub async fn run_activation(
     environment: &Environment<'_>,
     env_var_behavior: &CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
+    force_activate: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // If a lock file is provided, we can check whether there exists an environment cache.
-    if let Some(lock_file) = lock_file {
-        let cache_file = environment.activation_cache_file_path();
-        if cache_file.exists() {
-            if let Ok(cache) = tokio_fs::read_to_string(&cache_file).await {
-                if let Ok(cache) = serde_json::from_str::<ActivationCache>(&cache) {
-                    let hash = EnvironmentHash::from_environment(environment, lock_file);
+    if !force_activate {
+        if let Some(lock_file) = lock_file {
+            let cache_file = environment.activation_cache_file_path();
+            if cache_file.exists() {
+                if let Ok(cache) = tokio_fs::read_to_string(&cache_file).await {
+                    if let Ok(cache) = serde_json::from_str::<ActivationCache>(&cache) {
+                        let hash = EnvironmentHash::from_environment(environment, lock_file);
 
-                    // If the cache's hash matches the environment hash, we can return the cached
-                    // environment variables.
-                    if cache.hash == hash {
-                        tracing::debug!(
-                            "Using cached environment variables for {:?}",
-                            environment.name()
-                        );
-                        return Ok(cache.environment_variables);
+                        // If the cache's hash matches the environment hash, we can return the cached
+                        // environment variables.
+                        if cache.hash == hash {
+                            tracing::debug!(
+                                "Using cached environment variables for {:?}",
+                                environment.name()
+                            );
+                            return Ok(cache.environment_variables);
+                        }
                     }
                 }
             }
@@ -351,8 +354,10 @@ pub(crate) async fn initialize_env_variables(
     environment: &Environment<'_>,
     env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
+    force_activate: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    let activation_env = run_activation(environment, &env_var_behavior, lock_file).await?;
+    let activation_env =
+        run_activation(environment, &env_var_behavior, lock_file, force_activate).await?;
 
     // Get environment variables from the currently activated shell.
     let current_shell_env_vars = match env_var_behavior {
@@ -506,7 +511,7 @@ mod tests {
         let default_env = project.default_environment();
 
         // Don't create cache
-        let env = run_activation(&default_env, &CurrentEnvVarBehavior::Include, None)
+        let env = run_activation(&default_env, &CurrentEnvVarBehavior::Include, None, false)
             .await
             .unwrap();
         assert!(!project.activation_env_cache_folder().exists());
@@ -518,6 +523,7 @@ mod tests {
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
         )
         .await
         .unwrap();
@@ -537,6 +543,7 @@ mod tests {
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
         )
         .await
         .unwrap();
@@ -570,6 +577,7 @@ packages:
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
         )
         .await
         .unwrap();
@@ -584,6 +592,7 @@ packages:
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
         );
         assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
 
@@ -605,6 +614,7 @@ packages:
             &default_env,
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
+            false,
         )
         .await
         .unwrap();

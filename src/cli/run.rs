@@ -91,7 +91,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = project
+    let lock_file = project
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             ..UpdateLockFileOptions::default()
@@ -156,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // check task cache
         let task_cache = match executable_task
-            .can_skip(&lock_file)
+            .can_skip(&lock_file.lock_file)
             .await
             .into_diagnostic()?
         {
@@ -177,18 +177,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
-                lock_file.prefix(&executable_task.run_environment).await?;
-                let opt_lock_file = if project.config().no_env_activation_cache.is_none()
-                    || project.config().no_env_activation_cache.is_some_and(|x| !x)
-                {
-                    Some(&lock_file.lock_file)
-                } else {
-                    None
-                };
+                // lock_file.prefix(&executable_task.run_environment).await?;
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
-                    opt_lock_file,
+                    Some(&lock_file.lock_file),
+                    project.config().force_activate(),
                 )
                 .await?;
                 entry.insert(command_env)

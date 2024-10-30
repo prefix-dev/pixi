@@ -144,13 +144,13 @@ impl ConfigCliPrompt {
 pub struct ConfigCliActivation {
     /// Do not use the environment activation cache.
     #[arg(long)]
-    no_env_activation_cache: bool,
+    force_activate: bool,
 }
 
 impl ConfigCliActivation {
     pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
-        config.no_env_activation_cache = Some(self.no_env_activation_cache);
+        config.force_activate = Some(self.force_activate);
         config
     }
 }
@@ -158,7 +158,7 @@ impl ConfigCliActivation {
 impl From<ConfigCliActivation> for Config {
     fn from(cli: ConfigCliActivation) -> Self {
         Self {
-            no_env_activation_cache: Some(cli.no_env_activation_cache),
+            force_activate: Some(cli.force_activate),
             ..Default::default()
         }
     }
@@ -444,7 +444,7 @@ pub struct Config {
     /// The option to disable the environment activation cache
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub no_env_activation_cache: Option<bool>,
+    pub force_activate: Option<bool>,
 }
 
 impl Default for Config {
@@ -461,7 +461,7 @@ impl Default for Config {
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
-            no_env_activation_cache: None,
+            force_activate: None,
         }
     }
 }
@@ -725,7 +725,7 @@ impl Config {
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
-            no_env_activation_cache: other.no_env_activation_cache,
+            force_activate: other.force_activate,
         }
     }
 
@@ -781,6 +781,10 @@ impl Config {
     /// Retrieve the value for the target_environments_directory field.
     pub fn detached_environments(&self) -> DetachedEnvironments {
         self.detached_environments.clone().unwrap_or_default()
+    }
+
+    pub fn force_activate(&self) -> bool {
+        self.force_activate.unwrap_or(false)
     }
 
     /// Modify this config with the given key and value

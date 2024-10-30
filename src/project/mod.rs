@@ -417,6 +417,7 @@ impl Project {
         environment: &Environment<'_>,
         current_env_var_behavior: CurrentEnvVarBehavior,
         lock_file: Option<&LockFile>,
+        force_activate: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -428,24 +429,39 @@ impl Project {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
-                            .await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Exclude => {
                 vars.pixi_only()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
-                            .await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Include => {
                 vars.full()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior, lock_file)
-                            .await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                        )
+                        .await
                     })
                     .await
             }

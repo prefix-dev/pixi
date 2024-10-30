@@ -67,6 +67,11 @@ impl Project {
     ) -> miette::Result<LockFileDerivedData<'_>> {
         update::update_lock_file(self, options).await
     }
+
+    /// Get lockfile without checking
+    pub async fn get_lock_file(&self) -> miette::Result<LockFile> {
+        load_lock_file(self).await
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -173,7 +178,12 @@ impl<'p> LockFileDerivedData<'p> {
             .project
             // Not providing a lock-file as the cache will be invalidated directly anyway,
             // by it changing the lockfile with pypi records.
-            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude, None)
+            .get_activated_environment_variables(
+                environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+            )
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
@@ -1094,6 +1104,7 @@ impl<'p> UpdateContext<'p> {
                     environment,
                     CurrentEnvVarBehavior::Exclude,
                     None,
+                    false,
                 )
                 .await?;
 
