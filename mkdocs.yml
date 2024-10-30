@@ -123,8 +123,6 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
-  - Design Proposals:
-      - Pixi Global Manifest: design_proposals/pixi_global_manifest.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Info Command: advanced/explain_info_command.md
