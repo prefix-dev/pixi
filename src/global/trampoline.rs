@@ -220,7 +220,7 @@ impl Trampoline {
         }
     }
 
-    /// Try to create a trampoline object from the already existing trampoline.
+    /// Tries to create a trampoline object from the already existing trampoline.
     pub async fn try_from(trampoline_path: PathBuf) -> miette::Result<Self> {
         let exposed_name = ExposedName::from_str(&executable_from_path(&trampoline_path))?;
         let parent_path = trampoline_path
