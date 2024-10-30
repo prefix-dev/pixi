@@ -62,7 +62,6 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            // TODO: should we add a magic number to ensure that it's our trampoline?
             if path.is_file()
                 && path.is_executable()
                 && is_binary(&path)?
