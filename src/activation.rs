@@ -520,13 +520,13 @@ mod tests {
             Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
         let default_env = project.default_environment();
 
-        // Don't create cache
+        // Don't create cache, by not giving it a lockfile
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
             None,
             false,
-            false,
+            true,
         )
         .await
         .unwrap();
@@ -540,7 +540,7 @@ mod tests {
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
             false,
-            false,
+            true,
         )
         .await
         .unwrap();
@@ -561,7 +561,7 @@ mod tests {
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
             false,
-            false,
+            true,
         )
         .await
         .unwrap();
@@ -596,7 +596,7 @@ packages:
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
             false,
-            false,
+            true,
         )
         .await
         .unwrap();
@@ -612,7 +612,7 @@ packages:
             &CurrentEnvVarBehavior::Include,
             Some(&lock_file),
             false,
-            false,
+            true,
         );
         assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
 
