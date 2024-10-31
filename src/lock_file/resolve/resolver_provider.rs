@@ -105,6 +105,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                     FlatDistributions,
                 >(version_map)
             };
+
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 flat_dists,
             )])))

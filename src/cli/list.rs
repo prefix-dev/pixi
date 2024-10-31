@@ -1,5 +1,6 @@
 use std::io;
 use std::io::{stdout, Write};
+use std::str::FromStr;
 
 use clap::Parser;
 use console::Color;
@@ -320,8 +321,17 @@ fn create_package_to_output<'a, 'b>(
         Package::Pypi(p) => {
             let package_data = p.data().package;
             registry_index.as_mut().and_then(|registry| {
-                let version = registry.get_version(&package_data.name, &package_data.version)?;
-                get_dir_size(&version.path).ok()
+                let entry = registry
+                    .get(
+                        &uv_normalize::PackageName::new(package_data.name.to_string())
+                            .expect("cannot normalize package name"),
+                    )
+                    .find(|i| {
+                        i.dist.filename.version
+                            == uv_pep440::Version::from_str(&p.data().package.version.to_string())
+                                .expect("could not parse version")
+                    });
+                entry.map(|e| get_dir_size(e.dist.path).ok()).flatten()
             })
         }
     };
@@ -333,9 +343,19 @@ fn create_package_to_output<'a, 'b>(
             registry_index
                 .as_mut()
                 .and_then(|registry| {
-                    let version =
-                        registry.get_version(&package_data.name, &package_data.version)?;
-                    Some(version.filename.to_string())
+                    let entry = registry
+                        .get(
+                            &uv_normalize::PackageName::new(package_data.name.to_string())
+                                .expect("cannot normalize package name"),
+                        )
+                        .find(|i| {
+                            i.dist.filename.version
+                                == uv_pep440::Version::from_str(
+                                    &p.data().package.version.to_string(),
+                                )
+                                .expect("could not parse version")
+                        });
+                    entry.map(|e| e.dist.filename.to_string())
                 })
                 .or_else(|| match &package_data.url_or_path {
                     UrlOrPath::Url(url) => Some(url.to_string()),

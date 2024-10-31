@@ -106,7 +106,7 @@ pub enum PlatformUnsat {
     CorruptedEntry(String, ConversionError),
 
     #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
-    TooManyPypiPackages(Vec<uv_normalize::PackageName>),
+    TooManyPypiPackages(Vec<pep508_rs::PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,

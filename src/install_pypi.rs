@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    cell::RefCell,
     collections::{HashMap, HashSet},
     fs,
     path::Path,
@@ -29,9 +28,8 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use uv_distribution_types::{
-    BuiltDist, CachedDist, DependencyMetadata, Dist, IndexCapabilities, IndexLocations, IndexUrl,
-    InstalledDist, Name, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
-    UrlString,
+    BuiltDist, CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name,
+    RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
@@ -727,7 +725,7 @@ pub async fn update_python_distributions(
     );
 
     // This is used to find wheels that are available from the registry
-    let mut registry_index = RegistryWheelIndex::new(
+    let registry_index = RegistryWheelIndex::new(
         &uv_context.cache,
         &tags,
         &index_locations,
