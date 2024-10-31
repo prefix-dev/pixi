@@ -7,18 +7,13 @@ use std::{
     str::FromStr,
 };
 
-use distribution_filename::DistExtension;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::FeaturesExt;
 use pixi_spec::{PixiSpec, SpecConversionError};
 use pixi_uv_conversions::{as_uv_req, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_types::{
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
-};
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
     ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
@@ -28,8 +23,13 @@ use rattler_lock::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_distribution_filename::DistExtension;
 use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
+use uv_pep508::Pep508Error;
+use uv_pypi_types::{
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+};
 
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
@@ -83,13 +83,13 @@ pub enum PlatformUnsat {
     UnsatisfiableMatchSpec(MatchSpec, String),
 
     #[error("failed to convert the requirement for '{0}'")]
-    FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
+    FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<Pep508Error>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
+    UnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
+    CondaUnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -118,13 +118,17 @@ pub enum PlatformUnsat {
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
-    PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
+    PythonVersionMismatch(
+        pep508_rs::PackageName,
+        VersionSpecifiers,
+        Box<pep440_rs::Version>,
+    ),
 
     #[error("when converting {0} into a pep508 requirement")]
-    AsPep508Error(PackageName, #[source] AsPep508Error),
+    AsPep508Error(pep508_rs::PackageName, #[source] AsPep508Error),
 
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, Box<pypi_types::RequirementSource>),
+    EditableDependencyOnCondaInstalledPackage(PackageName, Box<uv_pypi_types::RequirementSource>),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
@@ -142,10 +146,10 @@ pub enum PlatformUnsat {
     EditablePackagePathMismatch(PackageName, PathBuf, PathBuf),
 
     #[error("failed to determine pypi source tree hash for {0}")]
-    FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
+    FailedToDetermineSourceTreeHash(pep508_rs::PackageName, std::io::Error),
 
     #[error("source tree hash for {0} does not match the hash in the lock-file")]
-    SourceTreeHashMismatch(PackageName),
+    SourceTreeHashMismatch(pep508_rs::PackageName),
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
@@ -171,59 +175,80 @@ impl PlatformUnsat {
 /// Convert something into a uv requirement.
 trait IntoUvRequirement {
     type E;
-    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E>;
+    fn into_uv_requirement(self) -> Result<uv_pypi_types::Requirement, Self::E>;
 }
 
-impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
-    type E = ParsedUrlError;
+impl IntoUvRequirement for pep508_rs::Requirement {
+    type E = Pep508Error;
 
-    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
+    fn into_uv_requirement(self) -> Result<uv_pypi_types::Requirement, Self::E> {
         let parsed_url = if let Some(version_or_url) = self.version_or_url {
             match version_or_url {
-                VersionOrUrl::VersionSpecifier(version) => {
-                    Some(VersionOrUrl::VersionSpecifier(version))
+                pep508_rs::VersionOrUrl::VersionSpecifier(version) => {
+                    Some(uv_pep508::VersionOrUrl::VersionSpecifier(
+                        uv_pep440::VersionSpecifiers::from_str(&version.to_string())
+                            .expect("cannot convert version"),
+                    ))
                 }
-                VersionOrUrl::Url(verbatim_url) => {
+                pep508_rs::VersionOrUrl::Url(verbatim_url) => {
                     let url_or_path =
                         UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
 
                     // it is actually a path
                     let url = match url_or_path {
                         UrlOrPath::Path(path) => {
-                            let ext = DistExtension::from_path(path.clone()).map_err(|e| {
-                                ParsedUrlError::MissingExtensionPath(path.clone(), e)
-                            })?;
+                            let ext = DistExtension::from_path(path.clone())
+                                .map_err(|e| ParsedUrlError::MissingExtensionPath(path.clone(), e))
+                                .expect("cannot get extension");
                             let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                                 path.clone(),
                                 ext,
                                 verbatim_url.to_url(),
                             ));
 
+                            let url =
+                                Url::from_file_path(path).expect("cannot convert to file path");
+
                             VerbatimParsedUrl {
                                 parsed_url,
-                                verbatim: verbatim_url,
+                                verbatim: uv_pep508::VerbatimUrl::from_url(url),
                             }
                             // Can only be an archive
                         }
                         UrlOrPath::Url(u) => VerbatimParsedUrl {
-                            parsed_url: ParsedUrl::try_from(u)?,
-                            verbatim: verbatim_url,
+                            parsed_url: ParsedUrl::try_from(u.clone())
+                                .expect("cannot convert to url"),
+                            verbatim: uv_pep508::VerbatimUrl::from_url(u),
                         },
                     };
 
-                    Some(VersionOrUrl::Url(url))
+                    Some(uv_pep508::VersionOrUrl::Url(url))
                 }
             }
         } else {
             None
         };
 
-        let converted = pep508_rs::Requirement {
-            name: self.name,
-            extras: self.extras,
-            marker: self.marker,
+        let converted = uv_pep508::Requirement {
+            name: uv_pep508::PackageName::new(self.name.to_string())
+                .expect("cannot normalize name"),
+            extras: self
+                .extras
+                .iter()
+                .map(|e| {
+                    uv_pep508::ExtraName::new(e.to_string()).expect("cannot convert extra name")
+                })
+                .collect(),
+            marker: self
+                .marker
+                .map(|m| {
+                    uv_pep508::MarkerTree::from_str(&m.to_string())
+                        .expect("cannot convert MarkerTree")
+                })
+                .unwrap_or_default(),
             version_or_url: parsed_url,
-            origin: self.origin,
+            // Don't think this needs to be set
+            origin: None,
         };
 
         Ok(converted.into())
@@ -393,14 +418,14 @@ enum Dependency {
         Cow<'static, str>,
     ),
     Conda(MatchSpec, Cow<'static, str>),
-    PyPi(pypi_types::Requirement, Cow<'static, str>),
+    PyPi(uv_pypi_types::Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_editable(
-    spec: &pypi_types::Requirement,
+    spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
@@ -454,11 +479,11 @@ fn seems_like_commit_sha(s: &str) -> bool {
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_requirement(
-    spec: &pypi_types::Requirement,
+    spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> bool {
-    if spec.name != locked_data.name {
+    if spec.name.to_string() != locked_data.name.to_string() {
         return false;
     }
 
@@ -466,7 +491,10 @@ pub(crate) fn pypi_satifisfies_requirement(
         RequirementSource::Registry { specifier, .. } => {
             // In the old way we always satisfy based on version so let's keep it similar
             // here
-            specifier.contains(&locked_data.version)
+            specifier.contains(
+                &uv_pep440::Version::from_str(&locked_data.version.to_string())
+                    .expect("could not parse version"),
+            )
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
@@ -790,17 +818,15 @@ pub(crate) fn verify_package_platform_satisfiability(
 
                     // Ensure that the record matches the currently selected interpreter.
                     if let Some(python_version) = &record.0.requires_python {
-                        if !python_version
-                            .contains(&marker_environment.python_full_version().version)
-                        {
+                        let marker_version = pep440_rs::Version::from_str(
+                            &marker_environment.python_full_version().version.to_string(),
+                        )
+                        .expect("cannot parse version");
+                        if !python_version.contains(&marker_version) {
                             return Err(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
                                 python_version.clone(),
-                                marker_environment
-                                    .python_full_version()
-                                    .version
-                                    .clone()
-                                    .into(),
+                                marker_version.into(),
                             ));
                         }
                     }
@@ -860,7 +886,9 @@ pub(crate) fn verify_package_platform_satisfiability(
         .records
         .iter()
         .filter(|record| record.0.editable)
-        .map(|record| record.0.name.clone())
+        .map(|record| {
+            uv_normalize::PackageName::new(record.0.name.to_string()).expect("cannot convert name")
+        })
         .collect::<HashSet<_>>();
     let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
     let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);

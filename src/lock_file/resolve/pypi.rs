@@ -106,7 +106,7 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 /// relative
 ///
 /// I think this has to do with the order of UV processing the requirements
-fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
+fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> PathBuf {
     let given = path_url.given().expect("path should have a given url");
     if given.starts_with("file://") {
         path_url
@@ -147,7 +147,7 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
 }
 
 /// Prints the number of overridden uv PyPI package requests
-fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
+fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
     if !package_requests.is_empty() {
         // Print package requests in form of (PackageName, NumRequest)
         let package_requests = package_requests
@@ -189,7 +189,13 @@ pub async fn resolve_pypi(
                 },
             )
         })
-        .map_ok(|(record, p)| (p.name.as_normalized().clone(), (record.clone(), p)))
+        .map_ok(|(record, p)| {
+            (
+                uv_normalize::PackageName::new(p.name.as_normalized().to_string())
+                    .expect("cannot convert to package name"),
+                (record.clone(), p),
+            )
+        })
         .collect::<Result<HashMap<_, _>, _>>()
         .into_diagnostic()
         .context("failed to extract python packages from conda metadata")?;
@@ -467,6 +473,7 @@ pub async fn resolve_pypi(
         &build_dispatch,
         &registry_client,
         resolution,
+        &context.capabilities,
         context.concurrency.downloads,
     )
     .await
@@ -478,6 +485,7 @@ async fn lock_pypi_packages<'a>(
     build_dispatch: &BuildDispatch<'a>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
+    index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
@@ -525,14 +533,19 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 let metadata = registry_client
-                    .wheel_metadata(dist)
+                    .wheel_metadata(dist, index_capabilities)
                     .await
                     .expect("failed to get wheel metadata");
                 PypiPackageData {
-                    name: metadata.name,
-                    version: metadata.version,
+                    name: pep508_rs::PackageName::new(metadata.name.to_string())
+                        .expect("cannot convert name"),
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .expect("cannot convert version"),
+                    requires_python: metadata.requires_python.map(|r| {
+                        pep440_rs::VersionSpecifiers::from_str(&r.to_string())
+                            .expect("cannot convert requires python")
+                    }),
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
-                    requires_python: metadata.requires_python,
                     editable: false,
                     url_or_path,
                     hash,
@@ -622,13 +635,17 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 PypiPackageData {
-                    name: metadata.name,
-                    version: metadata.version,
-                    // TODO make another conversion function
+                    name: pep508_rs::PackageName::new(metadata.name.to_string())
+                        .expect("cannot convert name"),
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .expect("cannot convert version"),
+                    requires_python: metadata.requires_python.map(|r| {
+                        pep440_rs::VersionSpecifiers::from_str(&r.to_string())
+                            .expect("cannot convert requires python")
+                    }),
                     requires_dist: uv_pypi_types_requirement_to_pep508(
                         metadata.requires_dist.iter(),
                     ),
-                    requires_python: metadata.requires_python,
                     url_or_path,
                     hash,
                     editable,
