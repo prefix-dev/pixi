@@ -12,8 +12,8 @@ use rattler_conda_types::RepoDataRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
 use uv_distribution_types::{
-    Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl, PrioritizedDist,
-    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
+    Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
+    SourceDist, SourceDistCompatibility, UrlString,
 };
 use uv_normalize::PackageName;
 use uv_resolver::{
@@ -92,10 +92,20 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 .and_modify(|e| *e += 1)
                 .or_insert(1);
 
-            let flat_dists = FlatDistributions::from(BTreeMap::from_iter([(
-                identifier.version.clone(),
-                prioritized_dist,
-            )]));
+            // Convert version
+            let version = identifier.version.to_string();
+            let version =
+                uv_pep440::Version::from_str(&version).expect("could not convert to pypi version");
+
+            // TODO: very unsafe but we need to convert the BTreeMap to a FlatDistributions
+            //       should make a PR to be able to set this directly
+            let version_map = BTreeMap::from_iter([(version, prioritized_dist)]);
+            let flat_dists = unsafe {
+                std::mem::transmute::<
+                    BTreeMap<uv_pep440::Version, PrioritizedDist>,
+                    FlatDistributions,
+                >(version_map)
+            };
             return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 flat_dists,
             )])))
