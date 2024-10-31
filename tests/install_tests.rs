@@ -25,7 +25,7 @@ use uv_python::PythonEnvironment;
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();

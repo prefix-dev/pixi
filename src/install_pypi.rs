@@ -273,7 +273,7 @@ fn convert_to_dist(
     Ok(dist)
 }
 
-enum ValidateInstall {
+pub enum ValidateInstall {
     /// Keep this package
     Keep,
     /// Reinstall this package
@@ -302,7 +302,7 @@ fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miet
 }
 
 /// Check if a package needs to be reinstalled
-fn need_reinstall(
+pub(crate) fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
     python_version: &Version,

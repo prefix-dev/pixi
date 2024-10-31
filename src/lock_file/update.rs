@@ -1,41 +1,4 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Write,
-    future::{ready, Future},
-    iter,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
-
-use barrier_cell::BarrierCell;
-use fancy_display::FancyDisplay;
-use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::IndexSet;
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
-use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-use parking_lot::Mutex;
-use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
-use pixi_progress::global_multi_progress;
-use pypi_mapping::{self, Reporter};
-use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, Channel, MatchSpec, Platform, RepoDataRecord};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
-use thiserror::Error;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use url::Url;
-use uv_normalize::ExtraName;
-
+use crate::install_pypi::{need_reinstall, ValidateInstall};
 use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -55,6 +18,45 @@ use crate::{
     },
     Project,
 };
+use barrier_cell::BarrierCell;
+use distribution_types::Name;
+use fancy_display::FancyDisplay;
+use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use indexmap::IndexSet;
+use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use itertools::Itertools;
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use parking_lot::Mutex;
+use pixi_consts::consts;
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_progress::global_multi_progress;
+use pypi_mapping::{self, Reporter};
+use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, Channel, MatchSpec, Platform, RepoDataRecord};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use std::path::Path;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::Write,
+    future::{ready, Future},
+    iter,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
+use thiserror::Error;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use url::Url;
+use uv_installer::SitePackages;
+use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -127,6 +129,92 @@ impl<'p> LockFileDerivedData<'p> {
             .context("failed to write lock-file to disk")
     }
 
+    /// Validate up-to-date prefix.
+    async fn validate_conda_prefix(&self, environment: &Environment<'p>) -> bool {
+        // Validate conda prefix records
+        let prefix = Prefix::new(environment.dir());
+        let platform = environment.best_platform();
+        let repodata_records = self
+            .repodata_records(environment, platform)
+            .unwrap()
+            .unwrap_or_default();
+
+        let installed_packages = prefix.find_installed_prefix_record_files().await.unwrap();
+
+        // Compare installed with locked
+        if installed_packages.len() != repodata_records.len() {
+            return false;
+        }
+
+        let mut matched: usize = 0;
+        // Match requested records with installed records
+        for record in repodata_records {
+            let installed = installed_packages.iter().find(|p| {
+                p.name == record.package_record.name
+                    && &p.version == record.package_record.version.version()
+                    && p.build_string == record.package_record.build
+            });
+            if installed.is_none() {
+                return false;
+            }
+            matched += 1;
+        }
+
+        // Extra validation to see if any packages we're skipped
+        matched == installed_packages.len()
+    }
+
+    async fn validate_installed_pypi_packages(
+        &self,
+        environment: &Environment<'p>,
+        python_exe: impl AsRef<Path>,
+        cache: &uv_cache::Cache,
+    ) -> miette::Result<bool> {
+        // Current interpreter and venv
+        let interpreter = uv_python::Interpreter::query(python_exe, cache).into_diagnostic()?;
+        let env = uv_python::PythonEnvironment::from_interpreter(interpreter);
+
+        // TODO: remove unwrap
+        let start = Instant::now();
+        let site_packages = SitePackages::from_environment(&env).unwrap();
+        let duration = start.elapsed();
+        println!("validate_prefix took: {:?}", duration);
+
+        let platform = environment.best_platform();
+        let lock_pypi_records = self
+            .pypi_records(environment, platform)?
+            .unwrap_or_default();
+
+        // TODO: Just run .satisfies on the site_packages
+        for dist in site_packages {
+            let installer = dist
+                .installer()
+                // Empty string if no installer or any other error
+                .map_or(String::new(), |f| f.unwrap_or_default());
+
+            // Not installed by us, not valid!
+            if installer != consts::PIXI_UV_INSTALLER {
+                return Ok(false);
+            }
+
+            // Does it satisfy the locked data?
+            if let Some((package, _)) = lock_pypi_records
+                .iter()
+                .find(|(package, _)| package.name.as_str() == dist.name().as_str())
+            {
+                match need_reinstall(&dist, package, env.interpreter().python_version())? {
+                    ValidateInstall::Keep => {
+                        // Check next
+                        continue;
+                    }
+                    _ => return Ok(false),
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
         // Save an environment file to the environment directory
@@ -139,21 +227,25 @@ impl<'p> LockFileDerivedData<'p> {
             },
         )?;
 
+        // Early out as these can only be set after the pypi installation is done.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
 
+        // Fetch data to validate the prefix
+        let start = Instant::now();
+        let result = self.validate_conda_prefix(environment).await;
+        let duration = start.elapsed();
+        println!("validate_prefix took: {:?}", duration);
+
+        // Uncomment for using the conda prefix cache
+        // if result {
+        //     return Ok(Prefix::new(environment.dir()));
+        // }
+
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
-        let repodata_records = self
-            .repodata_records(environment, platform)
-            .into_diagnostic()?
-            .unwrap_or_default();
-        let pypi_records = self
-            .pypi_records(environment, platform)
-            .into_diagnostic()?
-            .unwrap_or_default();
 
         // No `uv` support for WASM right now
         if platform.arch() == Some(Arch::Wasm32) {
@@ -168,6 +260,37 @@ impl<'p> LockFileDerivedData<'p> {
             }
             Some(context) => context.clone(),
         };
+
+        let python_path = python_status
+            .location()
+            .map(|path| prefix.root().join(path))
+            .ok_or_else(|| {
+                miette::miette!(
+                    help = "Use `pixi add python` to install the latest python interpreter.",
+                    "missing python interpreter from environment"
+                )
+            })?;
+
+        // Fetch data to validate the pypi prefix
+        let start = Instant::now();
+        let result = self
+            .validate_installed_pypi_packages(environment, python_path, &uv_context.cache)
+            .await?;
+        let duration = start.elapsed();
+        println!("validate_installed_pypi_packages took: {:?}", duration);
+
+        if result {
+            return Ok(Prefix::new(environment.dir()));
+        }
+
+        let repodata_records = self
+            .repodata_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
+        let pypi_records = self
+            .pypi_records(environment, platform)
+            .into_diagnostic()?
+            .unwrap_or_default();
 
         let env_variables = self
             .project

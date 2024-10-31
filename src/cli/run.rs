@@ -15,8 +15,8 @@ use crate::project::errors::UnsupportedPlatformError;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::{
-    get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-    InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
 use crate::Project;
 use fancy_display::FancyDisplay;
@@ -170,12 +170,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
                 lock_file.prefix(&executable_task.run_environment).await?;
-
-                let command_env = get_task_env(
-                    &executable_task.run_environment,
-                    args.clean_env || executable_task.task().clean_env(),
-                )
-                .await?;
+                //
+                // let command_env = get_task_env(
+                //     &executable_task.run_environment,
+                //     args.clean_env || executable_task.task().clean_env(),
+                // )
+                // .await?;
+                let command_env = HashMap::new();
                 entry.insert(command_env)
             }
         };

@@ -1,3 +1,5 @@
+use fs_err::tokio as tokio_fs;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -8,7 +10,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::strip_executable_extension;
-use rattler_conda_types::{PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord, Version};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
@@ -21,6 +23,12 @@ pub struct Prefix {
     root: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct PrefixRecordIdentifier {
+    pub name: PackageName,
+    pub version: Version,
+    pub build_string: String,
+}
 impl Prefix {
     /// Constructs a new instance.
     pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
@@ -107,6 +115,36 @@ impl Prefix {
         }
 
         Ok(result)
+    }
+
+    pub async fn find_installed_prefix_record_files(
+        &self,
+    ) -> miette::Result<Vec<PrefixRecordIdentifier>> {
+        let mut entries = tokio_fs::read_dir(self.root.join("conda-meta"))
+            .await
+            .into_diagnostic()?;
+
+        let mut identifiers = Vec::new();
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+
+            if path.is_file() && path.extension() == Some("json".as_ref()) {
+                if let Some((build_string, version, name)) = path
+                    .file_stem()
+                    .and_then(|os_str| os_str.to_str())
+                    .and_then(|stem| stem.rsplitn(3, '-').next_tuple())
+                {
+                    identifiers.push(PrefixRecordIdentifier {
+                        name: PackageName::from_str(name).into_diagnostic()?,
+                        version: Version::from_str(version).into_diagnostic()?,
+                        build_string: build_string.to_owned(),
+                    });
+                }
+            }
+        }
+
+        Ok(identifiers)
     }
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
