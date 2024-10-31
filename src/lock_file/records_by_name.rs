@@ -1,9 +1,11 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use pep508_rs::PackageName;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::str::FromStr;
 
 pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
 pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
@@ -22,10 +24,10 @@ pub(crate) trait HasNameVersion {
 }
 
 impl HasNameVersion for PypiRecord {
-    type N = uv_normalize::PackageName;
+    type N = PackageName;
     type V = pep440_rs::Version;
 
-    fn name(&self) -> &uv_normalize::PackageName {
+    fn name(&self) -> &PackageName {
         &self.0.name
     }
     fn version(&self) -> &Self::V {
@@ -173,10 +175,9 @@ impl RepoDataRecordsByName {
             })
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {
-                    (
-                        identifier.name.as_normalized().clone(),
-                        (identifier, idx, record),
-                    )
+                    let name = uv_normalize::PackageName::from_str(identifier.name.as_source())
+                        .expect("should be a valid python package name");
+                    (name, (identifier, idx, record))
                 })
             })
             .collect()
