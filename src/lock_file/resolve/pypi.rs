@@ -44,7 +44,7 @@ use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverMarkers,
 };
-use uv_types::{EmptyInstalledPackages, HashStrategy};
+use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{

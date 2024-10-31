@@ -34,7 +34,6 @@ use uv_distribution_types::{
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
-use uv_normalize::PackageName;
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_pypi_types::{
     HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,

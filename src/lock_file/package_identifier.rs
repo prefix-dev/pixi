@@ -3,7 +3,7 @@ use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
 use pixi_manifest::pypi::PyPiPackageName;
-use uv_normalize::{ExtraName, InvalidNameError, PackageName};
+use uv_normalize::{ExtraName, InvalidNameError};
 
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package. That can be used for comparison in both

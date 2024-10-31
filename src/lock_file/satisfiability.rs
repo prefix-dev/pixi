@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_manifest::FeaturesExt;
 use pixi_spec::{PixiSpec, SpecConversionError};
-use pixi_uv_conversions::{as_uv_req, to_normalize, to_uv_normalize, AsPep508Error};
+use pixi_uv_conversions::{as_uv_req, to_normalize, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
@@ -607,14 +607,7 @@ pub(crate) fn verify_package_platform_satisfiability(
 
     if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
         return Err(PlatformUnsat::TooManyPypiPackages(
-            locked_pypi_environment
-                .names()
-                .cloned()
-                .map(|value| {
-                    uv_normalize::PackageName::from_str(value.to_string().as_str())
-                        .expect("should be ok")
-                })
-                .collect(),
+            locked_pypi_environment.names().cloned().collect(),
         ));
     }
 
@@ -884,7 +877,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                     if pypi_packages_visited.contains(&idx) {
                         None
                     } else {
-                        Some(to_uv_normalize(name))
+                        Some(name.clone())
                     }
                 })
                 .collect(),
