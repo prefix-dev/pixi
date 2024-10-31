@@ -357,10 +357,10 @@ impl Manifest {
     }
 
     /// Removes exposed mapping from the manifest
-    pub fn remove_exposed_name<'a>(
+    pub fn remove_exposed_name(
         &mut self,
         env_name: &EnvironmentName,
-        exposed_name: &'a ExposedName,
+        exposed_name: &ExposedName,
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
