@@ -173,12 +173,8 @@ async fn try_get_valid_activation_cache(
     environment: &Environment<'_>,
     cache_file: PathBuf,
 ) -> Option<HashMap<String, String>> {
-    // Check if the lock file is provided
-    let lock_file = if let Some(lock_file) = lock_file {
-        lock_file
-    } else {
-        return None;
-    };
+    // Check if the lock file is provided, early out if it is not.
+    let lock_file = lock_file?;
 
     // Find cache file
     if !cache_file.exists() {
