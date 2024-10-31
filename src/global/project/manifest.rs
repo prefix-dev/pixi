@@ -361,7 +361,7 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         exposed_name: &'a ExposedName,
-    ) -> miette::Result<&'a ExposedName> {
+    ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
@@ -384,7 +384,7 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
-        Ok(exposed_name)
+        Ok(())
     }
 
     /// Removes all exposed mappings for a specific environment
