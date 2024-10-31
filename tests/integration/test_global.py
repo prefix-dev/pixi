@@ -1662,7 +1662,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         ],
         env=env,
         stderr_contains=[
-            "✔ Added packages of environment my-env:\n   - dummy-b=0.1.0\n   - dummy-a=0.1.0\n",
+            "✔ Added packages of environment my-env:\n   - dummy-a=0.1.0\n   - dummy-b=0.1.0\n",
             "✔ Exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b\n",
         ],
     )
@@ -1677,7 +1677,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         env=env,
         stderr_contains=[
             "✔ Removed package dummy-a  in environment my-env.",
-            "✔ Removed exposed executables from environment my-env:\n   - dummy-aa\n   - dummy-a\n",
+            "✔ Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
         ],
     )
     assert not dummy_a.is_file()
@@ -1702,7 +1702,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         env=env,
         stderr_contains=[
             "Removed packages in environment my-env.\n    - dummy-a \n    - dummy-b",
-            "Removed exposed executables from environment my-env:\n   - dummy-aa\n   - dummy-b\n   - dummy-a",
+            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b",
         ],
     )
 

@@ -445,7 +445,7 @@ impl StateChanges {
             while let Some(change) = iter.next() {
                 match change {
                     StateChange::AddedExposed(first_name) => {
-                        let exposed_names = StateChanges::accumulate_changes(
+                        let mut exposed_names = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
                                 Some(StateChange::AddedExposed(name)) => Some(name.clone()),
@@ -453,6 +453,8 @@ impl StateChanges {
                             },
                             Some(first_name.clone()),
                         );
+
+                        exposed_names.sort();
 
                         if exposed_names.len() == 1 {
                             eprintln!(
@@ -473,7 +475,7 @@ impl StateChanges {
                         }
                     }
                     StateChange::RemovedExposed(removed) => {
-                        let exposed_names = StateChanges::accumulate_changes(
+                        let mut exposed_names = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
                                 Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
@@ -481,6 +483,7 @@ impl StateChanges {
                             },
                             Some(removed.clone()),
                         );
+                        exposed_names.sort();
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Removed exposed executable {} from environment {}.",
@@ -500,7 +503,7 @@ impl StateChanges {
                         }
                     }
                     StateChange::UpdatedExposed(exposed) => {
-                        let exposed_names = StateChanges::accumulate_changes(
+                        let mut exposed_names = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
                                 Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
@@ -508,6 +511,7 @@ impl StateChanges {
                             },
                             Some(exposed.clone()),
                         );
+                        exposed_names.sort();
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Updated executable {} of environment {}.",
@@ -527,7 +531,7 @@ impl StateChanges {
                         }
                     }
                     StateChange::AddedPackage(pkg) => {
-                        let added_pkgs = StateChanges::accumulate_changes(
+                        let mut added_pkgs = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
                                 Some(StateChange::AddedPackage(name)) => Some(name.clone()),
@@ -535,6 +539,8 @@ impl StateChanges {
                             },
                             Some(pkg.clone()),
                         );
+
+                        added_pkgs.sort_by(|pkg1, pkg2| pkg1.name.cmp(&pkg2.name));
 
                         if added_pkgs.len() == 1 {
                             eprintln!(
