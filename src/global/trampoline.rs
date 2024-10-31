@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -334,7 +335,17 @@ impl Trampoline {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
 
         let mut buf = [0; 1048];
-        bin_file.read_exact(buf.as_mut()).await.into_diagnostic()?;
-        Ok(buf == TRAMPOLINE_BIN[..1048])
+        // match all result
+        let result = bin_file.read_exact(buf.as_mut()).await;
+        match result {
+            Ok(_) => Ok(buf == TRAMPOLINE_BIN[..1048]),
+            Err(err) => {
+                if err.kind() == ErrorKind::UnexpectedEof {
+                    Ok(false)
+                } else {
+                    Err(err).into_diagnostic()
+                }
+            }
+        }
     }
 }
