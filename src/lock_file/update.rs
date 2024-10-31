@@ -1716,7 +1716,9 @@ async fn spawn_extract_environment_task(
                 .by_name(&name)
                 .map(PackageRecord::Conda),
             PackageName::Pypi((name, extra)) => {
-                if let Some(found_record) = grouped_pypi_records.by_name(&name) {
+                if let Some(found_record) = grouped_pypi_records
+                    .by_name(&pep508_rs::PackageName::new(name.to_string()).expect("valid name"))
+                {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
                     Some(PackageRecord::Conda(found_record))

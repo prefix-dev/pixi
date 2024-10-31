@@ -7,7 +7,6 @@ use std::{
 };
 
 use dialoguer::theme::ColorfulTheme;
-use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
@@ -22,6 +21,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
+use uv_distribution_types::{InstalledDist, Name};
 
 use crate::{
     install_pypi,
