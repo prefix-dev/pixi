@@ -62,11 +62,7 @@ impl BinDir {
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file()
-                && path.is_executable()
-                && is_binary(&path)?
-                && Trampoline::is_trampoline(&path).await?
-            {
+            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
                 let trampoline = Trampoline::try_from(path).await?;
                 files.push(GlobalBin::Trampoline(trampoline));
             } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
