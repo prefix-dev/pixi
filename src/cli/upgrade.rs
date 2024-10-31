@@ -7,7 +7,6 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::MietteDiagnostic;
-use pixi_config::ConfigCli;
 
 use pixi_manifest::Feature;
 use pixi_manifest::FeatureName;
@@ -71,13 +70,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .filter_map(|(name, spec)| {
             match spec.try_into_nameless_match_spec(&project.channel_config()) {
-                Ok(Some(nameless_spec)) => Some((
-                    name.clone(),
-                    (
-                        MatchSpec::from_nameless(nameless_spec, Some(name)),
-                        spec_type,
-                    ),
-                )),
+                Ok(Some(mut nameless_spec)) => {
+                    // In order to upgrade, we remove the version requirement
+                    nameless_spec.version = None;
+                    Some((
+                        name.clone(),
+                        (
+                            MatchSpec::from_nameless(nameless_spec, Some(name)),
+                            spec_type,
+                        ),
+                    ))
+                }
                 _ => None,
             }
         })

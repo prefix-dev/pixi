@@ -301,7 +301,7 @@ def test_upgrade_package_does_not_exist(
     # Create a new project
     verify_cli_command([pixi, "init", "--channel", global_update_channel_1, tmp_path])
 
-    # Add package pinned to version 0.1.0
+    # Add package
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package"])
 
     # Similar package names that don't exist should get suggestions
@@ -336,4 +336,4 @@ def test_upgrade_package(pixi: Path, tmp_path: Path, global_update_channel_1: st
     # Upgrade package, it should now be at 0.2.0, with semver ranges
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"] == ">=0.2.0, <0.3"
+    assert parsed_manifest["dependencies"]["package"] == ">=0.2.0,<0.3"
