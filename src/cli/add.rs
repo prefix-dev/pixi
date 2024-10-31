@@ -12,7 +12,7 @@ use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
     SpecType,
 };
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, Platform, Version};
 use rattler_lock::{LockFile, Package};
 
 use super::has_specs::HasSpecs;
@@ -359,7 +359,10 @@ fn update_pypi_specs_from_lock_file(
 fn update_conda_specs_from_lock_file(
     project: &mut Project,
     updated_lock_file: &LockFile,
-    conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, MatchSpec)>,
+    conda_specs_to_add_constraints_for: IndexMap<
+        rattler_conda_types::PackageName,
+        (SpecType, MatchSpec),
+    >,
     affect_environment_and_platforms: Vec<(String, Platform)>,
     feature_name: &FeatureName,
     platforms: &[Platform],
@@ -418,8 +421,8 @@ fn update_conda_specs_from_lock_file(
 fn unlock_packages(
     project: &Project,
     lock_file: &LockFile,
-    conda_packages: HashSet<PackageName>,
-    pypi_packages: HashSet<uv_normalize::PackageName>,
+    conda_packages: HashSet<rattler_conda_types::PackageName>,
+    pypi_packages: HashSet<pep508_rs::PackageName>,
     affected_environments: HashSet<(&str, Platform)>,
 ) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
