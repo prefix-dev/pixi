@@ -34,8 +34,8 @@ def dummy_channel_2(test_data: Path) -> str:
 
 
 @pytest.fixture
-def global_update_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("channels", "global_update_channel_1").as_uri()
+def multiple_versions_channel_1(test_data: Path) -> str:
+    return test_data.joinpath("channels", "multiple_versions_channel_1").as_uri()
 
 
 @pytest.fixture

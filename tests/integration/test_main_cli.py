@@ -294,12 +294,12 @@ def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
 
 
 def test_upgrade_package_does_not_exist(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     manifest_path = tmp_path / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", global_update_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
 
     # Add package
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package"])
@@ -322,11 +322,13 @@ def test_upgrade_package_does_not_exist(
     )
 
 
-def test_upgrade_package(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+def test_upgrade_conda_package(
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+) -> None:
     manifest_path = tmp_path / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", global_update_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
 
     # Add package pinned to version 0.1.0
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package==0.1.0"])

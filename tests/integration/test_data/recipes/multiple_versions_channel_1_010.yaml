@@ -1,5 +1,5 @@
 recipe:
-  name: global-update-channel
+  name: multiple-versions-channel
   version: 1.0.0
 
 context:
