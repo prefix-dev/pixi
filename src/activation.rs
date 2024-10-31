@@ -17,6 +17,7 @@ use rattler_shell::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
@@ -35,8 +36,6 @@ pub enum CurrentEnvVarBehavior {
 struct ActivationCache {
     /// The hash of the environment which produced the activation's environment variables.
     hash: EnvironmentHash,
-    /// The environment variables that were used to hash the environment.
-    input_environment_variables: Vec<String>,
     /// The environment variables set by the activation.
     environment_variables: HashMap<String, String>,
 }
@@ -153,6 +152,70 @@ pub(crate) fn get_activator<'p>(
     Ok(activator)
 }
 
+/// Get the environment variables from the shell environment.
+/// This method will get the environment variables from the shell environment and return them as a HashMap.
+/// If the environment variable does not exist, an empty string will be used.
+fn get_environment_variable_from_shell_environment(names: Vec<&String>) -> HashMap<String, String> {
+    names
+        .into_iter()
+        .map(|name| {
+            let value = std::env::var(name).unwrap_or_default();
+            (name.clone(), value)
+        })
+        .collect()
+}
+
+/// Try to get the activation cache from the cache file.
+/// If it can get the cache, it will validate it with the lock file and the current environment.
+/// If the cache is valid, it will return the environment variables from the cache.
+async fn try_get_valid_activation_cache(
+    lock_file: Option<&LockFile>,
+    environment: &Environment<'_>,
+    cache_file: PathBuf,
+) -> Option<HashMap<String, String>> {
+    // Check if the lock file is provided
+    let lock_file = if let Some(lock_file) = lock_file {
+        lock_file
+    } else {
+        return None;
+    };
+
+    // Find cache file
+    if !cache_file.exists() {
+        return None;
+    }
+    // Read the cache file
+    let cache_content = match tokio_fs::read_to_string(&cache_file).await {
+        Ok(content) => content,
+        Err(e) => {
+            tracing::debug!("Failed to read activation cache file, reactivating. Error: {e}");
+            return None;
+        }
+    };
+    // Parse the cache file
+    let cache: ActivationCache = match serde_json::from_str(&cache_content) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            tracing::debug!("Failed to parse cache file, reactivating. Error: {e}");
+            return None;
+        }
+    };
+
+    // Get the current environment variables
+    let current_input_env_vars = get_environment_variable_from_shell_environment(
+        cache.environment_variables.keys().collect(),
+    );
+
+    // Hash the current state
+    let hash = EnvironmentHash::from_environment(environment, &current_input_env_vars, lock_file);
+
+    // Check if the hash matches
+    if cache.hash == hash {
+        return Some(cache.environment_variables);
+    }
+    None
+}
+
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
@@ -163,47 +226,15 @@ pub async fn run_activation(
 ) -> miette::Result<HashMap<String, String>> {
     // If the user requested to use the cache and the lockfile is provided, we can try to use the cache.
     if !force_activate && experimental {
-        if let Some(lock_file) = lock_file {
-            // Find cache file
-            let cache_file = environment.activation_cache_file_path();
-            if cache_file.exists() {
-                // Read the cache file
-                if let Ok(cache) = tokio_fs::read_to_string(&cache_file).await {
-                    if let Ok(cache) = serde_json::from_str::<ActivationCache>(&cache) {
-                        // Verify that the environment variables used as input for the activation still exist
-                        let mut current_input_env_vars = HashMap::new();
-                        let mut reactivation_needed = false;
-                        for key in cache.input_environment_variables.iter() {
-                            if let Ok(var) = std::env::var(key) {
-                                current_input_env_vars.insert(key.clone(), var.to_string());
-                            } else {
-                                tracing::debug!("env-var {key} has been removed, reactivating");
-                                reactivation_needed = true;
-                                break;
-                            }
-                        }
-
-                        // If the environment variables are still present, we can check if the cache is still valid.
-                        if !reactivation_needed {
-                            // Hash the current state
-                            let hash = EnvironmentHash::from_environment(
-                                environment,
-                                &current_input_env_vars,
-                                lock_file,
-                            );
-
-                            // Check if the hash matches
-                            if cache.hash == hash {
-                                tracing::debug!(
-                                    "Using cached environment variables for {:?}",
-                                    environment.name()
-                                );
-                                return Ok(cache.environment_variables);
-                            }
-                        }
-                    }
-                }
-            }
+        let cache_file = environment
+            .project()
+            .activation_env_cache_folder()
+            .join(environment.activation_cache_name());
+        if let Some(env_vars) =
+            try_get_valid_activation_cache(lock_file, environment, cache_file).await
+        {
+            tracing::debug!("Using activation cache for {:?}", environment.name());
+            return Ok(env_vars);
         }
     }
     tracing::debug!("Running activation script for {:?}", environment.name());
@@ -275,25 +306,16 @@ pub async fn run_activation(
     // cache file.
     if experimental {
         if let Some(lock_file) = lock_file {
-            // Figure out which environment variables have changed but already existed.
-            let changed_env_vars: HashMap<String, String> = std::env::vars()
-                .collect_vec()
-                .into_iter()
-                .filter(|(key, value)| {
-                    if let Some(old_value) = activator_result.get(key) {
-                        return old_value != value;
-                    }
-                    false
-                })
-                .collect();
-
-            let cache_file = environment
-                .project()
-                .activation_env_cache_folder()
-                .join(environment.activation_cache_name());
+            // Get the current environment variables from the shell to be part of the hash
+            let current_input_env_vars =
+                get_environment_variable_from_shell_environment(activator_result.keys().collect());
+            let cache_file = environment.activation_cache_file_path();
             let cache = ActivationCache {
-                hash: EnvironmentHash::from_environment(environment, &changed_env_vars, lock_file),
-                input_environment_variables: changed_env_vars.keys().cloned().collect_vec(),
+                hash: EnvironmentHash::from_environment(
+                    environment,
+                    &current_input_env_vars,
+                    lock_file,
+                ),
                 environment_variables: activator_result.clone(),
             };
             let cache = serde_json::to_string(&cache).into_diagnostic()?;

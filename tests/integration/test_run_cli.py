@@ -64,9 +64,9 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [activation.env]
-    TEST_ENV_VAR = "test123"
+    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
     [tasks]
-    task = "echo $TEST_ENV_VAR"
+    task = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
     """
     manifest.write_text(toml)
 

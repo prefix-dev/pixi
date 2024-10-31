@@ -46,7 +46,10 @@ impl EnvironmentHash {
         let mut hasher = Xxh3::new();
 
         // Hash the environment variables
-        for (key, value) in input_environment_variables {
+        let mut sorted_input_environment_variables: Vec<_> =
+            input_environment_variables.iter().collect();
+        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
+        for (key, value) in sorted_input_environment_variables {
             key.hash(&mut hasher);
             value.hash(&mut hasher);
         }
