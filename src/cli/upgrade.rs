@@ -20,9 +20,6 @@ use super::cli_config::PrefixUpdateConfig;
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
-    pub config: ConfigCli,
-
-    #[clap(flatten)]
     pub project_config: ProjectConfig,
 
     #[clap(flatten)]
@@ -44,7 +41,7 @@ pub struct UpgradeSpecsArgs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.config);
+        .with_cli_config(args.prefix_update_config.config.clone());
 
     // Ensure that the given feature exists
     let Some(feature) = project.manifest.feature(&args.specs.feature) else {
