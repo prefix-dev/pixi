@@ -59,12 +59,16 @@ impl PypiPackageIdentifier {
             );
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
-            let name = PackageName::from_str(record.package_record.name.as_source()).ok();
+            let name =
+                uv_normalize::PackageName::from_str(record.package_record.name.as_source()).ok();
             let version =
                 pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
+                let pep_name = pep508_rs::PackageName::from_str(name.as_str())
+                    .expect("should be a valid python package name");
+
                 result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(name),
+                    name: PyPiPackageName::from_normalized(pep_name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
@@ -98,7 +102,7 @@ impl PypiPackageIdentifier {
     ) -> Result<Self, ConversionError> {
         assert_eq!(package_url.package_type(), "pypi");
         let name = package_url.name();
-        let name = PackageName::from_str(name)
+        let name = uv_normalize::PackageName::from_str(name)
             .map_err(|e| ConversionError::PackageName(name.to_string(), e))?;
         let version_str = package_url.version().unwrap_or(fallback_version);
         let version = pep440_rs::Version::from_str(version_str)
@@ -106,9 +110,11 @@ impl PypiPackageIdentifier {
 
         // TODO: We can't really tell which python extras are enabled from a PURL.
         let extras = HashSet::new();
+        let pep_name = pep508_rs::PackageName::from_str(name.as_str())
+            .expect("should be a valid python package name");
 
         Ok(Self {
-            name: PyPiPackageName::from_normalized(name),
+            name: PyPiPackageName::from_normalized(pep_name),
             version,
             extras,
         })
@@ -116,28 +122,32 @@ impl PypiPackageIdentifier {
 
     /// Checks of a found pypi requirement satisfies with the information
     /// in this package identifier.
-    pub(crate) fn satisfies(&self, requirement: &pypi_types::Requirement) -> bool {
+    pub(crate) fn satisfies(&self, requirement: &uv_pypi_types::Requirement) -> bool {
         // Verify the name of the package
-        if self.name.as_normalized() != &requirement.name {
+        let uv_normalized = uv_normalize::PackageName::from_str(self.name.as_source())
+            .expect("should be a valid python package name");
+        if uv_normalized != requirement.name {
             return false;
         }
 
         // Check the version of the requirement
         match &requirement.source {
-            pypi_types::RequirementSource::Registry { specifier, .. } => {
-                specifier.contains(&self.version)
+            uv_pypi_types::RequirementSource::Registry { specifier, .. } => {
+                let uv_version = uv_pep440::Version::from_str(self.version.to_string().as_str())
+                    .expect("could not convert to pypi version");
+                specifier.contains(&uv_version)
             }
             // a pypi -> conda requirement on these versions are not supported
-            pypi_types::RequirementSource::Url { .. } => {
+            uv_pypi_types::RequirementSource::Url { .. } => {
                 unreachable!("direct url requirement on conda package is not supported")
             }
-            pypi_types::RequirementSource::Git { .. } => {
+            uv_pypi_types::RequirementSource::Git { .. } => {
                 unreachable!("git requirement on conda package is not supported")
             }
-            pypi_types::RequirementSource::Path { .. } => {
+            uv_pypi_types::RequirementSource::Path { .. } => {
                 unreachable!("path requirement on conda package is not supported")
             }
-            pypi_types::RequirementSource::Directory { .. } => {
+            uv_pypi_types::RequirementSource::Directory { .. } => {
                 unreachable!("directory requirement on conda package is not supported")
             }
         }

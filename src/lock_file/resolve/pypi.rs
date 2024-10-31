@@ -319,7 +319,7 @@ pub async fn resolve_pypi(
         build_isolation,
         LinkMode::default(),
         &context.build_options,
-        &HashStrategy::default(),
+        &context.hash_strategy,
         None,
         LowerBound::default(),
         context.source_strategy,
