@@ -2771,6 +2771,12 @@ It will only add if the package with its version constraint is able to work with
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi config set pinning-strategy no-pin --global
 </span></code></pre></div>
 The default is <code>semver</code> which will pin the dependencies to the latest major version or minor for <code>v0</code> versions.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>There is an exception to this rule when you add a package we defined as non <code>semver</code>, then we'll use the <code>minor</code> strategy.
+These are the packages we defined as non <code>semver</code>:
+Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl</p>
+</div>
 </div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
 <p>Installs an environment based on the <a href="../project_configuration/">manifest file</a>.
