@@ -133,19 +133,19 @@ pub enum PlatformUnsat {
     ),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
-    DirectUrlDependencyOnCondaInstalledPackage(PackageName),
+    DirectUrlDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
     #[error("git dependency on a conda installed package '{0}' is not supported")]
-    GitDependencyOnCondaInstalledPackage(PackageName),
+    GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
     #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'")]
-    EditablePackageIsUrl(PackageName, String),
+    EditablePackageIsUrl(uv_normalize::PackageName, String),
 
     #[error("the editable package path '{0}', lock does not equal spec path '{1}' == '{2}'")]
-    EditablePackagePathMismatch(PackageName, PathBuf, PathBuf),
+    EditablePackagePathMismatch(uv_normalize::PackageName, PathBuf, PathBuf),
 
     #[error("failed to determine pypi source tree hash for {0}")]
     FailedToDetermineSourceTreeHash(pep508_rs::PackageName, std::io::Error),
@@ -908,7 +908,7 @@ pub(crate) fn verify_package_platform_satisfiability(
 
 enum FoundPackage {
     Conda(usize),
-    PyPi(usize, Vec<ExtraName>),
+    PyPi(usize, Vec<uv_pep508::ExtraName>),
 }
 
 #[allow(clippy::result_large_err)]
