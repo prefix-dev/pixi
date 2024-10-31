@@ -335,9 +335,7 @@ impl Trampoline {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
 
         let mut buf = [0; 1048];
-        // match all result
-        let result = bin_file.read_exact(buf.as_mut()).await;
-        match result {
+        match bin_file.read_exact(buf.as_mut()).await {
             Ok(_) => Ok(buf == TRAMPOLINE_BIN[..1048]),
             Err(err) => {
                 if err.kind() == ErrorKind::UnexpectedEof {
@@ -347,5 +345,53 @@ impl Trampoline {
                 }
             }
         }
+    }
+}
+
+mod tests {
+
+    // Test is_trampoline when it is a trampoline
+    #[tokio::test]
+    async fn test_is_trampoline() {
+        use super::*;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let trampoline_path = dir.path().join("trampoline");
+        tokio_fs::write(&trampoline_path, TRAMPOLINE_BIN)
+            .await
+            .unwrap();
+
+        assert!(Trampoline::is_trampoline(&trampoline_path).await.unwrap());
+    }
+
+    // Test is_trampoline on simple empty file
+    // We want to be sure that eof is properly handled
+    #[tokio::test]
+    async fn test_is_trampoline_handle_eof() {
+        use super::*;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let trampoline_path = dir.path().join("trampoline");
+        tokio_fs::write(&trampoline_path, "").await.unwrap();
+
+        assert_eq!(
+            Trampoline::is_trampoline(&trampoline_path).await.unwrap(),
+            false
+        );
+    }
+
+    // Test is_trampoline on non existing file
+    // it should raise an error
+    #[tokio::test]
+    async fn test_is_trampoline_err() {
+        use super::*;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let trampoline_path = dir.path().join("trampoline");
+
+        assert!(Trampoline::is_trampoline(&trampoline_path).await.is_err());
     }
 }
