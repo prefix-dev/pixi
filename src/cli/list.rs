@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::{stdout, Write};
 use std::str::FromStr;
@@ -174,10 +175,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_iter()
             .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
+    let mut name_map = HashMap::new();
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
-        .map(|p| create_package_to_output(p, &project_dependency_names, &mut registry_index))
+        .map(|p| {
+            create_package_to_output(
+                p,
+                &project_dependency_names,
+                &mut name_map,
+                &mut registry_index,
+            )
+        })
         .collect::<Vec<PackageToOutput>>();
 
     // Filter packages by regex if needed
@@ -300,72 +309,78 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
 }
 
 fn create_package_to_output<'a, 'b>(
-    p: &'b Package,
+    package: &'b Package,
     project_dependency_names: &'a [String],
-    registry_index: &'a mut Option<RegistryWheelIndex<'b>>,
+    name_map: &'b mut HashMap<pep508_rs::PackageName, uv_normalize::PackageName>,
+    registry_index: &'b mut Option<RegistryWheelIndex<'b>>,
 ) -> PackageToOutput {
-    let name = p.name().to_string();
-    let version = p.version().into_owned();
+    let name = package.name().to_string();
+    let version = package.version().into_owned();
 
-    let kind = match p {
+    let kind = match package {
         Package::Conda(_) => "conda".to_string(),
         Package::Pypi(_) => "pypi".to_string(),
     };
-    let build = match p {
+    let build = match package {
         Package::Conda(pkg) => Some(pkg.package_record().build.clone()),
         Package::Pypi(_) => None,
     };
 
-    let size_bytes = match p {
-        Package::Conda(pkg) => pkg.package_record().size,
+    /// Inner enum to handle different package types
+    enum PackageInner<'b, 'a> {
+        Conda(&'b rattler_lock::CondaPackage),
+        Pypi(
+            &'b rattler_lock::PypiPackage,
+            &'a mut uv_normalize::PackageName,
+        ),
+    }
+
+    // Create a PackageName if needed
+    let inner = match package {
         Package::Pypi(p) => {
             let package_data = p.data().package;
-            registry_index.as_mut().and_then(|registry| {
-                let entry = registry
-                    .get(
-                        &uv_normalize::PackageName::new(package_data.name.to_string())
-                            .expect("cannot normalize package name"),
-                    )
-                    .find(|i| {
-                        i.dist.filename.version
-                            == uv_pep440::Version::from_str(&p.data().package.version.to_string())
-                                .expect("could not parse version")
-                    });
-                entry.map(|e| get_dir_size(e.dist.path).ok()).flatten()
-            })
+            let name = name_map
+                .entry(package_data.name.clone())
+                .or_insert_with(|| {
+                    uv_normalize::PackageName::new(package_data.name.to_string())
+                        .expect("cannot convert package name")
+                });
+            PackageInner::Pypi(p, name)
         }
+        Package::Conda(conda_package) => PackageInner::Conda(conda_package),
     };
 
-    let source = match p {
-        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
-        Package::Pypi(p) => {
-            let package_data = p.data().package;
-            registry_index
-                .as_mut()
-                .and_then(|registry| {
-                    let entry = registry
-                        .get(
-                            &uv_normalize::PackageName::new(package_data.name.to_string())
-                                .expect("cannot normalize package name"),
-                        )
-                        .find(|i| {
-                            i.dist.filename.version
-                                == uv_pep440::Version::from_str(
-                                    &p.data().package.version.to_string(),
-                                )
-                                .expect("could not parse version")
-                        });
-                    entry.map(|e| e.dist.filename.to_string())
-                })
-                .or_else(|| match &package_data.url_or_path {
-                    UrlOrPath::Url(url) => Some(url.to_string()),
-                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
-                })
+    let (size_bytes, source) = match inner {
+        PackageInner::Conda(pkg) => (
+            pkg.package_record().size,
+            pkg.file_name().map(ToOwned::to_owned),
+        ),
+        PackageInner::Pypi(p, name) => {
+            if let Some(registry_index) = registry_index.as_mut() {
+                let entry = registry_index.get(name).find(|i| {
+                    i.dist.filename.version
+                        == uv_pep440::Version::from_str(&p.data().package.version.to_string())
+                            .expect("could not parse version")
+                });
+                let size = entry
+                    .map(|e| get_dir_size(e.dist.path.clone()).ok())
+                    .flatten();
+                let name = entry.map(|e| e.dist.filename.to_string());
+                (size, name)
+            } else {
+                match &p.data().package.url_or_path {
+                    UrlOrPath::Url(url) => (None, Some(url.to_string())),
+                    UrlOrPath::Path(path) => (
+                        get_dir_size(path.clone()).ok(),
+                        Some(path.to_string_lossy().to_string()),
+                    ),
+                }
+            }
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
-    let is_editable = match p {
+    let is_editable = match package {
         Package::Conda(_) => false,
         Package::Pypi(p) => p.data().package.editable,
     };
