@@ -229,9 +229,7 @@ impl<'p> Environment<'p> {
     /// are defined for the environment.
     pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
-            .filter_map(|f| f.activation_scripts(platform))
-            .flatten()
-            .cloned()
+            .flat_map(|f| f.activation_scripts(platform))
             .collect()
     }
 
@@ -242,7 +240,7 @@ impl<'p> Environment<'p> {
     /// are defined for the environment.
     pub(crate) fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.features()
-            .filter_map(|f| f.activation_env(platform))
+            .map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
                 acc
@@ -310,6 +308,7 @@ impl<'p> Hash for Environment<'p> {
 mod tests {
     use std::{collections::HashSet, path::Path};
 
+    use indexmap::indexmap;
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
@@ -474,23 +473,23 @@ mod tests {
         let manifest = Project::from_str(
             Path::new("pixi.toml"),
             r#"
-        [project]
-        name = "foobar"
-        channels = []
-        platforms = ["linux-64", "osx-64"]
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
 
-        [activation]
-        scripts = ["default.bat"]
+            [activation]
+            scripts = ["default.bat"]
 
-        [target.linux-64.activation]
-        scripts = ["linux.bat"]
+            [target.linux-64.activation]
+            scripts = ["linux.bat"]
 
-        [feature.foo.activation]
-        scripts = ["foo.bat"]
+            [feature.foo.activation]
+            scripts = ["foo.bat"]
 
-        [environments]
-        foo = ["foo"]
-                "#,
+            [environments]
+            foo = ["foo"]
+            "#,
         )
         .unwrap();
 
@@ -501,7 +500,54 @@ mod tests {
         );
         assert_eq!(
             foo_env.activation_scripts(Some(Platform::Linux64)),
-            vec!["foo.bat".to_string(), "linux.bat".to_string()]
+            vec![
+                "foo.bat".to_string(),
+                "linux.bat".to_string(),
+                "default.bat".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_activation_env() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [activation.env]
+            DEFAULT_VAR = "1"
+
+            [target.linux-64.activation.env]
+            LINUX_VAR = "1"
+
+            [feature.foo.activation.env]
+            FOO_VAR = "1"
+
+            [environments]
+            foo = ["foo"]
+            "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        let foo_env = manifest.environment("foo").unwrap();
+        assert_eq!(
+            foo_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "1".to_string(),
+                "DEFAULT_VAR".to_string() => "1".to_string(),
+            }
+        );
+        assert_eq!(
+            default_env.activation_env(Some(Platform::Linux64)),
+            indexmap! {
+                "LINUX_VAR".to_string() => "1".to_string(),
+                "DEFAULT_VAR".to_string() => "1".to_string(),
+            }
         );
     }
 

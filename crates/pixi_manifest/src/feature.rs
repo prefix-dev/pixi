@@ -257,12 +257,15 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Option<&Vec<String>> {
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
             .filter_map(|a| a.scripts.as_ref())
-            .next()
+            .fold(Vec::new(), |mut acc, x| {
+                acc.extend(x.iter().cloned());
+                acc
+            })
     }
 
     /// Returns the activation environment for the most specific target that
@@ -270,12 +273,19 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
             .filter_map(|a| a.env.as_ref())
-            .next()
+            .fold(IndexMap::new(), |mut acc, x| {
+                for (k, v) in x {
+                    if !acc.contains_key(k) {
+                        acc.insert(k.clone(), v.clone());
+                    }
+                }
+                acc
+            })
     }
 
     /// Returns true if the feature contains any reference to a pypi
@@ -466,16 +476,15 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            manifest.default_feature().activation_scripts(None).unwrap(),
-            &vec!["run.bat".to_string()],
+            manifest.default_feature().activation_scripts(None),
+            vec!["run.bat".to_string()],
             "should have selected the activation from the [activation] section"
         );
         assert_eq!(
             manifest
                 .default_feature()
-                .activation_scripts(Some(Platform::Linux64))
-                .unwrap(),
-            &vec!["linux-64.bat".to_string()],
+                .activation_scripts(Some(Platform::Linux64)),
+            vec!["linux-64.bat".to_string(), "run.bat".to_string()],
             "should have selected the activation from the [linux-64] section"
         );
     }

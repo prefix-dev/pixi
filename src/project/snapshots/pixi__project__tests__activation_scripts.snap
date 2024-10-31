@@ -1,12 +1,17 @@
 ---
 source: src/project/mod.rs
-expression: "format!(\"= Linux64\\n{}\\n\\n= Win64\\n{}\\n\\n= OsxArm64\\n{}\",\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    Linux64).unwrap()),\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    Win64).unwrap()),\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    OsxArm64).unwrap()))"
+expression: "format!(\"= Linux64\\n{}\\n\\n= Win64\\n{}\\n\\n= OsxArm64\\n{}\",\nfmt_activation_scripts(project.default_environment().activation_scripts(Some(Platform::Linux64))),\nfmt_activation_scripts(project.default_environment().activation_scripts(Some(Platform::Win64))),\nfmt_activation_scripts(project.default_environment().activation_scripts(Some(Platform::OsxArm64))))"
+snapshot_kind: text
 ---
 = Linux64
 Cargo.toml
+pixi.toml
+pixi.lock
 
 = Win64
 Cargo.lock
+pixi.toml
+pixi.lock
 
 = OsxArm64
 pixi.toml
