@@ -20,9 +20,11 @@ use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
+use pep508_rs::MarkerEnvironment;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
+use pixi_uv_conversions::{to_extra_name, to_normalize, to_uv_extra_name, to_uv_normalize};
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
@@ -1684,12 +1686,16 @@ async fn spawn_extract_environment_task(
     let mut pypi_package_names = HashSet::new();
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
+        let uv_name = to_uv_normalize(&name);
         for req in reqs {
             for extra in req.extras().iter() {
-                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra.clone()))));
+                pypi_package_names.insert(PackageName::Pypi((
+                    uv_name.clone(),
+                    Some(to_uv_extra_name(extra)),
+                )));
             }
         }
-        pypi_package_names.insert(PackageName::Pypi((name, None)));
+        pypi_package_names.insert(PackageName::Pypi((uv_name, None)));
     }
 
     // Compute the Pypi marker environment. Only do this if we have pypi
@@ -1716,9 +1722,8 @@ async fn spawn_extract_environment_task(
                 .by_name(&name)
                 .map(PackageRecord::Conda),
             PackageName::Pypi((name, extra)) => {
-                if let Some(found_record) = grouped_pypi_records
-                    .by_name(&pep508_rs::PackageName::new(name.to_string()).expect("valid name"))
-                {
+                let pep_name = to_normalize(&name);
+                if let Some(found_record) = grouped_pypi_records.by_name(&pep_name) {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
                     Some(PackageRecord::Conda(found_record))
@@ -1752,26 +1757,39 @@ async fn spawn_extract_environment_task(
             }
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies
-                let extras = extra.map(|extra| vec![extra]).unwrap_or_default();
+                let extras = extra
+                    .map(|extra| vec![to_extra_name(&extra)])
+                    .unwrap_or_default();
                 for req in record.0.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
-                        if !req.evaluate_markers(marker_env, &extras) {
+                        // let marker_str = marker_env.to_string();
+                        let serde_str = serde_json::to_string(marker_env).expect("its valid");
+                        let pep_marker: pep508_rs::MarkerEnvironment =
+                            serde_json::from_str(&serde_str).expect("we just serialized it");
+
+                        if !req.evaluate_markers(&pep_marker, &extras) {
                             continue;
                         }
                     }
+                    let uv_name = to_uv_normalize(&req.name);
 
                     // Add the package to the queue
                     for extra in req.extras.iter() {
-                        if queued_names
-                            .insert(PackageName::Pypi((req.name.clone(), Some(extra.clone()))))
-                        {
-                            queue.push(PackageName::Pypi((req.name.clone(), Some(extra.clone()))));
+                        let extra_name = to_uv_extra_name(extra);
+                        if queued_names.insert(PackageName::Pypi((
+                            uv_name.clone(),
+                            Some(extra_name.clone()),
+                        ))) {
+                            queue.push(PackageName::Pypi((
+                                uv_name.clone(),
+                                Some(extra_name.clone()),
+                            )));
                         }
                     }
 
                     // Also add the dependency without any extras
-                    queue.push(PackageName::Pypi((req.name.clone(), None)));
+                    queue.push(PackageName::Pypi((uv_name, None)));
                 }
 
                 // Insert the record if it is not already present
@@ -1865,7 +1883,7 @@ async fn spawn_solve_pypi_task(
             &pypi_options,
             dependencies
                 .into_iter()
-                .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
+                .map(|(name, requirement)| (to_uv_normalize(name.as_normalized()), requirement))
                 .collect(),
             system_requirements,
             &conda_records,

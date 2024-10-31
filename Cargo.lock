@@ -3747,6 +3747,7 @@ name = "pypi_modifiers"
 version = "0.1.0"
 dependencies = [
  "miette 7.2.0",
+ "pep508_rs",
  "pixi_default_versions",
  "pixi_manifest",
  "rattler_conda_types",

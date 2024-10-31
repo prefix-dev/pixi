@@ -185,3 +185,12 @@ pub fn to_normalize(normalise: &uv_normalize::PackageName) -> pep508_rs::Package
 pub fn to_uv_normalize(normalise: &pep508_rs::PackageName) -> uv_normalize::PackageName {
     uv_normalize::PackageName::from_str(normalise.to_string().as_str()).expect("should be the same")
 }
+
+/// Converts `pep508_rs::ExtraName` to `uv_normalize::ExtraName`
+pub fn to_uv_extra_name(extra_name: &pep508_rs::ExtraName) -> uv_normalize::ExtraName {
+    uv_normalize::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
+}
+/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+pub fn to_extra_name(extra_name: &uv_normalize::ExtraName) -> pep508_rs::ExtraName {
+    pep508_rs::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
+}
