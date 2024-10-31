@@ -64,6 +64,9 @@ jobs:
 
   aggregate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
     needs: build  # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
@@ -79,16 +82,16 @@ jobs:
 
       - name: Move trampolines
         run: |
-          mkdir -p crates/pixi_trampoline/trampolines
+          mkdir -p trampolines
           # Iterate through all files in trampolines directory and its subdirectories
-          find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} crates/pixi_trampoline/trampolines/ \;
-          ls -R crates/pixi_trampoline/trampolines/
+          find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
+          ls -R trampolines/
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v3
         with:
           name: trampolines
-          path: crates/pixi_trampoline/trampolines/
+          path: trampolines/
 
 
 
@@ -99,7 +102,7 @@ jobs:
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add crates/pixi_trampoline/trampolines/
+          git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
           # Push changes to the branch that triggered the workflow
           BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
