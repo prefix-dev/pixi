@@ -1665,9 +1665,9 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
             "dummy-b",
         ],
         env=env,
-        stderr_contains=[
-            "Added packages of environment my-env:\n   - dummy-a=0.1.0\n   - dummy-b=0.1.0\n",
-            "Exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b\n",
+        stdout_contains=[
+            "dependencies: dummy-a 0.1.0, dummy-b 0.1.0",
+            "exposes: dummy-a, dummy-aa, dummy-b",
         ],
     )
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
