@@ -376,10 +376,7 @@ mod tests {
         let trampoline_path = dir.path().join("trampoline");
         tokio_fs::write(&trampoline_path, "").await.unwrap();
 
-        assert_eq!(
-            Trampoline::is_trampoline(&trampoline_path).await.unwrap(),
-            false
-        );
+        assert!(!Trampoline::is_trampoline(&trampoline_path).await.unwrap(),);
     }
 
     // Test is_trampoline on non existing file
