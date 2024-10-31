@@ -6,12 +6,14 @@ use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use miette::MietteDiagnostic;
 
-use pixi_manifest::Feature;
+use pep508_rs::Requirement;
 use pixi_manifest::FeatureName;
 use pixi_manifest::SpecType;
 use rattler_conda_types::MatchSpec;
+use rattler_conda_types::ParseStrictness;
 
 use super::cli_config::PrefixUpdateConfig;
 
@@ -50,20 +52,60 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    // If the user specified a package name, check to see if it is even there.
-    if let Some(packages) = &args.specs.packages {
-        for package in packages {
-            ensure_package_exists(feature, package)?
-        }
-    }
+    // TODO: also extract the version ranges and if there use it instead of "*" everything
+    let package_names = args
+        .specs
+        .packages
+        .iter()
+        .flatten()
+        .map(|spec| {
+            MatchSpec::from_str(spec, ParseStrictness::Lenient)
+                .into_diagnostic()
+                .and_then(|m| {
+                    m.name
+                        .ok_or_else(|| miette::miette!("Name needs to be there."))
+                })
+                .map(|name| name.as_normalized().to_string())
+                .or_else(|_| {
+                    Requirement::parse(spec, project.root())
+                        .into_diagnostic()
+                        .map(|dep: pep508_rs::Requirement<url::Url>| dep.name.to_string())
+                })
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
 
     // TODO: Also support build and host
     let spec_type = SpecType::Run;
-    let match_specs = feature
+    let match_spec_iter = feature
         .dependencies(Some(spec_type), None)
         .into_iter()
-        .flat_map(|deps| deps.into_owned())
+        .flat_map(|deps| deps.into_owned());
+
+    let pypi_deps_iter = feature
+        .pypi_dependencies(None)
+        .into_iter()
+        .flat_map(|deps| deps.into_owned());
+
+    // If the user specified a package name, check to see if it is even there.
+    if !package_names.is_empty() {
+        let available_packages = match_spec_iter
+            .clone()
+            .map(|(name, _)| name.as_normalized().to_string())
+            .chain(
+                pypi_deps_iter
+                    .clone()
+                    .map(|(name, _)| name.as_normalized().to_string()),
+            )
+            .collect_vec();
+
+        for package in package_names {
+            ensure_package_exists(&package, &available_packages)?
+        }
+    }
+
+    let match_specs = match_spec_iter
         .filter(|(name, _)| match &args.specs.packages {
+            // TODO: replace args.specs.packages with package_names
             None => true,
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
@@ -72,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             match spec.try_into_nameless_match_spec(&project.channel_config()) {
                 Ok(Some(mut nameless_spec)) => {
                     // In order to upgrade, we remove the version requirement
-                    nameless_spec.version = None;
+                    nameless_spec.version = None; // TODO: use matchspec if given
                     Some((
                         name.clone(),
                         (
@@ -86,17 +128,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect();
 
-    let pypi_deps = feature
-        .pypi_dependencies(None)
-        .into_iter()
-        .flat_map(|deps| deps.into_owned())
+    let pypi_deps = pypi_deps_iter
         .filter(|(name, _)| match &args.specs.packages {
+            // TODO: replace args.specs.packages with package_names
             None => true,
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
         })
         .filter_map(
             |(name, req)| match pep508_rs::Requirement::from_str(&req.to_string()) {
+                // TODO: if given, use that version requirement, or remove version requirement if none is given
                 Ok(pep_req) => Some((name, pep_req)),
                 _ => None,
             },
@@ -124,15 +165,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 ///
 /// Returns `miette::Result` with a descriptive error message
 /// if the package does not exist.
-fn ensure_package_exists(feature: &Feature, package_name: &str) -> miette::Result<()> {
-    let similar_names = feature
-        .dependencies(None, None)
-        .into_iter()
-        .flat_map(|deps| deps.into_owned())
-        .map(|(name, _)| name.as_normalized().to_string())
+fn ensure_package_exists(package_name: &str, available_packages: &[String]) -> miette::Result<()> {
+    let similar_names = available_packages
+        .iter()
         .unique()
         .filter_map(|name| {
-            let distance = strsim::jaro(package_name, &name);
+            let distance = strsim::jaro(package_name, name);
             if distance > 0.6 {
                 Some((name, distance))
             } else {
@@ -144,7 +182,7 @@ fn ensure_package_exists(feature: &Feature, package_name: &str) -> miette::Resul
         .map(|(name, _)| name)
         .collect_vec();
 
-    if similar_names.first().map(String::as_str) == Some(package_name) {
+    if similar_names.first().map(|s| s.as_str()) == Some(package_name) {
         return Ok(());
     }
 

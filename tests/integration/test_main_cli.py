@@ -322,7 +322,7 @@ def test_upgrade_package_does_not_exist(
     )
 
 
-def test_upgrade_conda_package(
+def test_upgrade_conda_package_newest(
     pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     manifest_path = tmp_path / "pixi.toml"
@@ -339,3 +339,43 @@ def test_upgrade_conda_package(
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == ">=0.2.0,<0.3"
+
+
+def test_upgrade_conda_package_specific_version(
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.2.0
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package==0.2.0"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == "==0.2.0"
+
+    # Upgrade package, it should now be at 0.1.0
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package==0.1.0"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
+
+
+@pytest.mark.slow
+def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_path])
+
+    # Add python
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python=3.13"])
+
+    # Add httpx pinned to version 1.2.9
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "--pypi", "httpx==0.26.0"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["pypi-dependencies"]["httpx"] == "==0.26.0"
+
+    # Upgrade httpx, it should now be at 1.2.9, with semver ranges
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "httpx==0.27.0"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["pypi-dependencies"]["httpx"] == "==0.27.0"
