@@ -15,7 +15,6 @@ use uv_distribution_types::{
     Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
     SourceDist, SourceDistCompatibility, UrlString,
 };
-use uv_normalize::PackageName;
 use uv_resolver::{
     DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
     VersionsResponse, WheelMetadataResult,
@@ -27,16 +26,16 @@ use crate::lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier};
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
-        &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+        &'a HashMap<uv_normalize::PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
 
     /// Saves the number of requests by the uv solver per package
-    pub(super) package_requests: Rc<RefCell<HashMap<PackageName, u32>>>,
+    pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
 }
 
 impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
     fn get_package_versions<'io>(
         &'io self,
-        package_name: &'io PackageName,
+        package_name: &'io uv_normalize::PackageName,
         index: Option<&'io IndexUrl>,
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)

@@ -13,8 +13,6 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
-use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_uv_conversions::{
     as_uv_req, isolated_names_to_packages, names_to_build_isolation,
@@ -40,7 +38,6 @@ use uv_distribution_types::{
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
-use uv_normalize::PackageName;
 use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
@@ -117,7 +114,8 @@ fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> PathBuf {
     }
 }
 
-type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
+type CondaPythonPackages =
+    HashMap<uv_normalize::PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
 
 /// Convert back to PEP508 without the VerbatimParsedUrl
 /// We need this function because we need to convert to the introduced
@@ -147,7 +145,7 @@ fn uv_pypi_types_requirement_to_pep508<'req>(
 }
 
 /// Prints the number of overridden uv PyPI package requests
-fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
+fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
     if !package_requests.is_empty() {
         // Print package requests in form of (PackageName, NumRequest)
         let package_requests = package_requests
@@ -165,7 +163,7 @@ fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
+    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
     locked_pypi_packages: &[PypiRecord],

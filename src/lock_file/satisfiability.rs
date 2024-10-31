@@ -25,7 +25,6 @@ use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
 use uv_git::GitReference;
-use uv_normalize::{ExtraName, PackageName};
 use uv_pep508::Pep508Error;
 use uv_pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
@@ -73,8 +72,8 @@ impl Display for IndexesMismatch {
 
 #[derive(Debug, Error)]
 pub struct EditablePackagesMismatch {
-    pub expected_editable: Vec<PackageName>,
-    pub unexpected_editable: Vec<PackageName>,
+    pub expected_editable: Vec<uv_normalize::PackageName>,
+    pub unexpected_editable: Vec<uv_normalize::PackageName>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -107,7 +106,7 @@ pub enum PlatformUnsat {
     CorruptedEntry(String, ConversionError),
 
     #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
-    TooManyPypiPackages(Vec<PackageName>),
+    TooManyPypiPackages(Vec<uv_normalize::PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,
@@ -128,7 +127,10 @@ pub enum PlatformUnsat {
     AsPep508Error(pep508_rs::PackageName, #[source] AsPep508Error),
 
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, Box<uv_pypi_types::RequirementSource>),
+    EditableDependencyOnCondaInstalledPackage(
+        uv_normalize::PackageName,
+        Box<uv_pypi_types::RequirementSource>,
+    ),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
@@ -1067,7 +1069,7 @@ impl Display for EditablePackagesMismatch {
 
         fn format_package_list(
             f: &mut std::fmt::Formatter<'_>,
-            packages: &[PackageName],
+            packages: &[uv_normalize::PackageName],
         ) -> std::fmt::Result {
             for (idx, package) in packages.iter().enumerate() {
                 if idx == packages.len() - 1 && idx > 0 {

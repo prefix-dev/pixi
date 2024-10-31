@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use pep440_rs::{VersionSpecifiers, VersionSpecifiersParseError};
+use pep440_rs::VersionSpecifiers;
 use pep508_rs::{InvalidNameError, PackageName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

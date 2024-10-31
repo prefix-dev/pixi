@@ -1,6 +1,6 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pypi_modifiers::pypi_tags::is_python_record;
-use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -33,10 +33,10 @@ impl HasNameVersion for PypiRecord {
     }
 }
 impl HasNameVersion for RepoDataRecord {
-    type N = PackageName;
+    type N = rattler_conda_types::PackageName;
     type V = VersionWithSource;
 
-    fn name(&self) -> &PackageName {
+    fn name(&self) -> &rattler_conda_types::PackageName {
         &self.package_record.name
     }
     fn version(&self) -> &Self::V {
