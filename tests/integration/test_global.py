@@ -1666,8 +1666,8 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         ],
         env=env,
         stderr_contains=[
-            "✔ Added packages of environment my-env:\n   - dummy-a=0.1.0\n   - dummy-b=0.1.0\n",
-            "✔ Exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b\n",
+            "Added packages of environment my-env:\n   - dummy-a=0.1.0\n   - dummy-b=0.1.0\n",
+            "Exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b\n",
         ],
     )
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
@@ -1680,8 +1680,8 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         env=env,
         stderr_contains=[
-            "✔ Removed package dummy-a  in environment my-env.",
-            "✔ Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
+            "Removed package dummy-a  in environment my-env.",
+            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
         ],
     )
     assert not dummy_a.is_file()
