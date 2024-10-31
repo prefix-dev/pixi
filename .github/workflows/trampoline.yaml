@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: trampoline-${{ matrix.target }}
-          path: trampolines-binaries/
+          path: crates/pixi_trampoline/trampolines-binaries/
 
   aggregate:
     runs-on: ubuntu-latest
@@ -75,7 +75,7 @@ jobs:
       - name: Download all binaries
         uses: actions/download-artifact@v3
         with:
-          path: trampolines-binaries/
+          path: crates/pixi_trampoline/trampolines-binaries/
 
       - name: List downloaded files
         run: ls -R trampolines-binaries/
@@ -91,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: trampolines
-          path: trampolines/
+          path: crates/pixi_trampoline/trampolines/
 
 
 
