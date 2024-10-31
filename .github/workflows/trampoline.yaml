@@ -16,6 +16,9 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
     strategy:
       fail-fast: true
       matrix:
@@ -39,19 +42,19 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Build trampoline binary
-        run: cd crates/pixi_trampoline && cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Move trampoline binary on windows
         if: startsWith(matrix.name, 'Windows')
         run: |
           mkdir -p trampolines-binaries
-          mv crates/pixi_trampoline/target/${{ matrix.target }}/release/pixi_trampoline.exe trampolines-binaries/pixi-trampoline-${{ matrix.target }}.exe
+          mv target/${{ matrix.target }}/release/pixi_trampoline.exe trampolines-binaries/pixi-trampoline-${{ matrix.target }}.exe
 
       - name: Move trampoline binary on unix
         if: startsWith(matrix.name, 'Windows') == false
         run: |
           mkdir -p trampolines-binaries
-          mv crates/pixi_trampoline/target/${{ matrix.target }}/release/pixi_trampoline trampolines-binaries/pixi-trampoline-${{ matrix.target }}
+          mv target/${{ matrix.target }}/release/pixi_trampoline trampolines-binaries/pixi-trampoline-${{ matrix.target }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v3
