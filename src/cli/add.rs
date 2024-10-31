@@ -3,18 +3,6 @@ use std::{
     str::FromStr,
 };
 
-use clap::Parser;
-use indexmap::IndexMap;
-use itertools::Itertools;
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_manifest::{
-    pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
-    SpecType,
-};
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, Package};
-
 use super::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::{
@@ -24,6 +12,25 @@ use crate::{
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
     project::{grouped_environment::GroupedEnvironment, DependencyType, Project},
 };
+use clap::Parser;
+use indexmap::IndexMap;
+use itertools::Itertools;
+use pep440_rs::VersionSpecifiers;
+use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_config::PinningStrategy;
+use pixi_manifest::{
+    pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    SpecType,
+};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
+use rattler_lock::{LockFile, Package};
+
+/// List of packages that are not following the semver versioning scheme
+/// but will use the minor version by default when adding a dependency.
+// Don't forget to add to the docstring if you add a package here!
+const NON_SEMVER_PACKAGES: [&str; 11] = [
+    "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
+];
 
 /// Adds dependencies to the project
 ///
@@ -68,6 +75,12 @@ use crate::{
 ///
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
+///
+/// The versions will be automatically added with a pinning strategy based on semver
+/// or the pinning strategy set in the config. There is a list of packages
+/// that are not following the semver versioning scheme but will use
+/// the minor version by default:
+/// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -380,18 +393,29 @@ fn update_conda_specs_from_lock_file(
         .flatten()
         .collect_vec();
 
-    let pinning_strategy = project.config().pinning_strategy.unwrap_or_default();
+    let mut pinning_strategy = project.config().pinning_strategy;
     let channel_config = project.channel_config();
     for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
-        let version_constraint = pinning_strategy.determine_version_constraint(
-            conda_records.iter().filter_map(|record| {
+        // Edge case: some packages are a special case where we want to pin the minor version by default.
+        // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
+        // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
+        if NON_SEMVER_PACKAGES.contains(&name.as_normalized()) && pinning_strategy.is_none() {
+            tracing::info!(
+                "Pinning {} to minor version by default",
+                name.as_normalized()
+            );
+            pinning_strategy = Some(PinningStrategy::Minor);
+        }
+
+        let version_constraint = pinning_strategy
+            .unwrap_or_default()
+            .determine_version_constraint(conda_records.iter().filter_map(|record| {
                 if record.package_record.name == name {
                     Some(record.package_record.version.version())
                 } else {
                     None
                 }
-            }),
-        );
+            }));
 
         if let Some(version_constraint) = version_constraint {
             implicit_constraints
