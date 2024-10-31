@@ -1,7 +1,7 @@
-use std::{cmp::Ordering, collections::HashSet};
+use std::cmp::Ordering;
+use std::str::FromStr;
 
 use crate::cli::cli_config::ProjectConfig;
-use crate::load_lock_file;
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -13,7 +13,6 @@ use pixi_manifest::Feature;
 use pixi_manifest::FeatureName;
 use pixi_manifest::SpecType;
 use rattler_conda_types::MatchSpec;
-use rattler_lock::Package;
 
 use super::cli_config::PrefixUpdateConfig;
 
@@ -44,7 +43,7 @@ pub struct UpgradeSpecsArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config);
 
     // Ensure that the given feature exists
@@ -76,7 +75,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .filter_map(|(name, spec)| {
             match spec.try_into_nameless_match_spec(&project.channel_config()) {
                 Ok(Some(nameless_spec)) => Some((
-                    name,
+                    name.clone(),
                     (
                         MatchSpec::from_nameless(nameless_spec, Some(name)),
                         spec_type,
@@ -96,7 +95,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
         })
-        .map(|(name, req)| (name, req.into()))
+        .filter_map(
+            |(name, req)| match pep508_rs::Requirement::from_str(&req.to_string()) {
+                Ok(pep_req) => Some((name, pep_req)),
+                _ => None,
+            },
+        )
         .collect();
 
     project
@@ -110,7 +114,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
 
-    todo!()
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Ok(())
 }
 
 /// Ensures the existence of the specified package
