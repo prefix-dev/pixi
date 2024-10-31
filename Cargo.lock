@@ -3541,6 +3541,7 @@ name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "pep508_rs",
  "pixi_manifest",
  "rattler_lock",
  "thiserror",

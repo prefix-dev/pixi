@@ -12,6 +12,7 @@ version = "0.1.0"
 
 [dependencies]
 dunce = { workspace = true }
+pep508_rs = { workspace = true }
 pixi_manifest = { workspace = true }
 rattler_lock = { workspace = true }
 thiserror = { workspace = true }

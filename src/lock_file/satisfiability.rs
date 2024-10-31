@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_manifest::FeaturesExt;
 use pixi_spec::{PixiSpec, SpecConversionError};
-use pixi_uv_conversions::{as_uv_req, AsPep508Error};
+use pixi_uv_conversions::{as_uv_req, to_normalize, to_uv_normalize, AsPep508Error};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
@@ -607,7 +607,14 @@ pub(crate) fn verify_package_platform_satisfiability(
 
     if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
         return Err(PlatformUnsat::TooManyPypiPackages(
-            locked_pypi_environment.names().cloned().collect(),
+            locked_pypi_environment
+                .names()
+                .cloned()
+                .map(|value| {
+                    uv_normalize::PackageName::from_str(value.to_string().as_str())
+                        .expect("should be ok")
+                })
+                .collect(),
         ));
     }
 
@@ -736,7 +743,9 @@ pub(crate) fn verify_package_platform_satisfiability(
                         ));
                     }
                     FoundPackage::Conda(*repodata_idx)
-                } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
+                } else if let Some(idx) =
+                    locked_pypi_environment.index_by_name(&to_normalize(&requirement.name))
+                {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
                         pypi_satifisfies_editable(&requirement, &record.0, project_root)?;
@@ -875,7 +884,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                     if pypi_packages_visited.contains(&idx) {
                         None
                     } else {
-                        Some(name.clone())
+                        Some(to_uv_normalize(name))
                     }
                 })
                 .collect(),

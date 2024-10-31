@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use pixi_manifest::pypi::{
     pypi_options::{IndexStrategy, PypiOptions},
@@ -171,4 +174,14 @@ pub fn to_index_strategy(
     } else {
         uv_configuration::IndexStrategy::default()
     }
+}
+
+/// Converts `uv_normalize::PackageName` to our normalise
+pub fn to_normalize(normalise: &uv_normalize::PackageName) -> pep508_rs::PackageName {
+    pep508_rs::PackageName::from_str(normalise.as_str()).expect("should be the same")
+}
+
+/// Converts `uv_normalize::PackageName` to our normalise
+pub fn to_uv_normalize(normalise: &pep508_rs::PackageName) -> uv_normalize::PackageName {
+    uv_normalize::PackageName::from_str(normalise.to_string().as_str()).expect("should be the same")
 }
