@@ -109,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             match_specs,
             pypi_deps,
             prefix_update_config,
-            &args.dependency_config.feature_name(),
+            &args.dependency_config.feature,
             &args.dependency_config.platforms,
             args.editable,
         )

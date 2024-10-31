@@ -141,8 +141,8 @@ pub struct DependencyConfig {
     pub platforms: Vec<Platform>,
 
     /// The feature for which the dependency should be modified
-    #[arg(long = "feature", short)]
-    pub features: Option<String>,
+    #[clap(long, short, default_value_t)]
+    pub feature: FeatureName,
 }
 
 impl DependencyConfig {
@@ -157,11 +157,7 @@ impl DependencyConfig {
             DependencyType::CondaDependency(SpecType::Run)
         }
     }
-    pub(crate) fn feature_name(&self) -> FeatureName {
-        self.features
-            .clone()
-            .map_or(FeatureName::Default, FeatureName::Named)
-    }
+
     pub(crate) fn display_success(
         &self,
         operation: &str,
@@ -200,7 +196,7 @@ impl DependencyConfig {
             )
         }
         // Print something if we've modified for features
-        if let Some(feature) = &self.features {
+        if let FeatureName::Named(feature) = &self.feature {
             {
                 eprintln!(
                     "{operation} these only for feature: {}",

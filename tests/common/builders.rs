@@ -139,7 +139,7 @@ pub trait HasDependencyConfig: Sized {
             build: false,
             pypi: false,
             platforms: Default::default(),
-            features: None,
+            feature: None,
         }
     }
 
@@ -193,7 +193,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.features = Some(feature.to_string());
+        self.args.dependency_config.feature = Some(feature.to_string());
         self
     }
 }
