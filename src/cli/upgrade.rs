@@ -11,7 +11,11 @@ use pixi_config::ConfigCli;
 
 use pixi_manifest::Feature;
 use pixi_manifest::FeatureName;
+use pixi_manifest::SpecType;
+use rattler_conda_types::MatchSpec;
 use rattler_lock::Package;
+
+use super::cli_config::PrefixUpdateConfig;
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -21,6 +25,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub project_config: ProjectConfig,
+
+    #[clap(flatten)]
+    pub prefix_update_config: PrefixUpdateConfig,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
@@ -36,82 +43,72 @@ pub struct UpgradeSpecsArgs {
     pub feature: FeatureName,
 }
 
-/// A distilled version of `UpgradeSpecsArgs`.
-struct UpgradeSpecs {
-    packages: Option<HashSet<String>>,
-    feature: FeatureName,
-}
-
-impl From<UpgradeSpecsArgs> for UpgradeSpecs {
-    fn from(args: UpgradeSpecsArgs) -> Self {
-        Self {
-            packages: args.packages.map(|args| args.into_iter().collect()),
-            feature: args.feature,
-        }
-    }
-}
-
-impl UpgradeSpecs {
-    /// Returns true if the package should be relaxed according to the user
-    /// input.
-    fn should_relax(&self, feature_name: &str, package: &Package) -> bool {
-        todo!()
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = args.config;
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(config);
-
-    let specs = UpgradeSpecs::from(args.specs);
+        .with_cli_config(args.config);
 
     // Ensure that the given feature exists
-    let Some(feature) = project.manifest.feature(&specs.feature) else {
+    let Some(feature) = project.manifest.feature(&args.specs.feature) else {
         miette::bail!(
             "could not find a feature named {}",
-            specs.feature.fancy_display()
+            args.specs.feature.fancy_display()
         )
     };
 
     // If the user specified a package name, check to see if it is even there.
-    if let Some(packages) = &specs.packages {
+    if let Some(packages) = &args.specs.packages {
         for package in packages {
             ensure_package_exists(feature, package)?
         }
     }
 
     // TODO: Also support build and host
+    let spec_type = SpecType::Run;
     let match_specs = feature
-        .dependencies(None, None)
+        .dependencies(Some(spec_type), None)
         .into_iter()
         .flat_map(|deps| deps.into_owned())
-        .filter_map(|(name, _)| match &specs.packages {
-            None => Some(name),
-            Some(packages) if packages.contains(name.as_normalized()) => Some(name),
-            _ => None,
-        });
+        .filter(|(name, _)| match &args.specs.packages {
+            None => true,
+            Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
+            _ => false,
+        })
+        .filter_map(|(name, spec)| {
+            match spec.try_into_nameless_match_spec(&project.channel_config()) {
+                Ok(Some(nameless_spec)) => Some((
+                    name,
+                    (
+                        MatchSpec::from_nameless(nameless_spec, Some(name)),
+                        spec_type,
+                    ),
+                )),
+                _ => None,
+            }
+        })
+        .collect();
 
     let pypi_deps = feature
         .pypi_dependencies(None)
         .into_iter()
         .flat_map(|deps| deps.into_owned())
-        .filter_map(|(name, _)| match &specs.packages {
-            None => Some(name),
-            Some(packages) if packages.contains(name.as_normalized().as_str()) => Some(name),
-            _ => None,
-        });
+        .filter(|(name, _)| match &args.specs.packages {
+            None => true,
+            Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
+            _ => false,
+        })
+        .map(|(name, req)| (name, req.into()))
+        .collect();
 
-    // project
-    //     .update_dependencies(
-    //         match_specs,
-    //         pypi_deps,
-    //         args.prefix_update_config,
-    //         &args.dependency_config.feature_name(),
-    //         &args.dependency_config.platforms,
-    //         args.editable,
-    //     )
-    //     .await?;
+    project
+        .update_dependencies(
+            match_specs,
+            pypi_deps,
+            &args.prefix_update_config,
+            &args.specs.feature,
+            &[],
+            false,
+        )
+        .await?;
 
     todo!()
 }
