@@ -727,7 +727,6 @@ pub async fn update_python_distributions(
     );
 
     // This is used to find wheels that are available from the registry
-    let mut new_map = HashMap::new();
     let mut registry_index = RegistryWheelIndex::new(
         &uv_context.cache,
         &tags,
