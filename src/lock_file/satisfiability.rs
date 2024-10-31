@@ -1146,6 +1146,7 @@ mod tests {
     }
 
     #[rstest]
+    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
