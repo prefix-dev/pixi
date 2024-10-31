@@ -11,9 +11,9 @@ This document explains what an environment looks like and how to use it.
 
 ## Structure
 
-A pixi environment is located in the `.pixi/envs` directory of the project.
-This location is **not** configurable as it is a specific design decision to keep the environments in the project directory.
+A pixi environment is located in the `.pixi/envs` directory of the project by default.
 This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.
+While this structure is generally recommended, environments can also be stored outside of project directories by enabling [detached environments](../reference/pixi_configuration.md#detached-environments).
 
 If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is normally used, if you specify a custom environment the name you specified will be used.
 

@@ -20,6 +20,7 @@ def main() -> None:
                     "build",
                     "--target-platform",
                     platform,
+                    "--no-include-recipe",
                     "--output-dir",
                     f"channels/{channel}",
                     "--recipe",
