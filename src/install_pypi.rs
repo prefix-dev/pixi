@@ -1,24 +1,21 @@
 use std::{
-    borrow::Cow, collections::HashMap, fs, path::Path, str::FromStr, sync::Arc, time::Duration,
+    borrow::Cow,
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fs,
+    path::Path,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
 
-use distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
-use distribution_types::{
-    BuiltDist, CachedDist, Dist, IndexLocations, IndexUrl, InstalledDist, Name, RegistryBuiltDist,
-    RegistryBuiltWheel, RegistrySourceDist, SourceDist, UrlString,
-};
-use install_wheel_rs::linker::LinkMode;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
-use pep508_rs::{VerbatimUrl, VerbatimUrlError};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
 use pixi_uv_conversions::{isolated_names_to_packages, locked_indexes_to_index_locations};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use pypi_types::{
-    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
-};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{
     PackageHashes, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
@@ -27,12 +24,23 @@ use url::Url;
 use uv_auth::store_credentials_from_url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, IndexStrategy};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
+use uv_distribution_types::{
+    BuiltDist, CachedDist, DependencyMetadata, Dist, IndexCapabilities, IndexLocations, IndexUrl,
+    InstalledDist, Name, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist, SourceDist,
+    UrlString,
+};
 use uv_git::GitResolver;
+use uv_install_wheel::linker::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
+use uv_pep508::{VerbatimUrl, VerbatimUrlError};
+use uv_pypi_types::{
+    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
+};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_types::HashStrategy;
@@ -93,8 +101,8 @@ fn locked_data_to_file(
     hash: Option<&PackageHashes>,
     filename: &str,
     requires_python: Option<VersionSpecifiers>,
-) -> distribution_types::File {
-    let url = distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
+) -> uv_distribution_types::File {
+    let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
 
     // Convert PackageHashes to uv hashes
     let hashes = if let Some(hash) = hash {
@@ -122,11 +130,15 @@ fn locked_data_to_file(
         vec![]
     };
 
-    distribution_types::File {
+    let uv_requires_python = requires_python.map(|inside| {
+        uv_pep440::VersionSpecifiers::from_str(&inside.to_string()).expect("should be the same")
+    });
+
+    uv_distribution_types::File {
         filename: filename.to_string(),
         dist_info_metadata: false,
         hashes,
-        requires_python,
+        requires_python: uv_requires_python,
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
@@ -160,7 +172,7 @@ enum ConvertToUvDistError {
     #[error("error creating ParsedUrl")]
     ParseUrl(#[from] Box<ParsedUrlError>),
     #[error("error creating uv Dist from url")]
-    Uv(#[from] distribution_types::Error),
+    Uv(#[from] uv_distribution_types::Error),
     #[error("error constructing verbatim url")]
     VerbatimUrl(#[from] VerbatimUrlError),
     #[error("error extracting extension from {1}")]
@@ -176,8 +188,10 @@ fn convert_to_dist(
     let dist = match &pkg.url_or_path {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
+            let pkg_name =
+                uv_normalize::PackageName::new(pkg.name.to_string()).expect("should be correct");
             Dist::from_url(
-                pkg.name.clone(),
+                pkg_name,
                 VerbatimParsedUrl {
                     parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
                         .map_err(Box::new)?,
@@ -225,9 +239,13 @@ fn convert_to_dist(
                     sdist: None,
                 }))
             } else {
+                let pkg_name = uv_normalize::PackageName::new(pkg.name.to_string())
+                    .expect("should be correct");
+                let pkg_version = uv_pep440::Version::from_str(&pkg.version.to_string())
+                    .expect("should be correct");
                 Dist::Source(SourceDist::Registry(RegistrySourceDist {
-                    name: pkg.name.clone(),
-                    version: pkg.version.clone(),
+                    name: pkg_name,
+                    version: pkg_version,
                     file: Box::new(file),
                     // This should be fine because currently it is only used for caching
                     index: IndexUrl::Pypi(VerbatimUrl::from_url(
@@ -249,17 +267,13 @@ fn convert_to_dist(
             };
 
             let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
+            let pkg_name =
+                uv_normalize::PackageName::new(pkg.name.to_string()).expect("should be correct");
             if abs_path.is_dir() {
-                Dist::from_directory_url(
-                    pkg.name.clone(),
-                    absolute_url,
-                    &abs_path,
-                    pkg.editable,
-                    false,
-                )?
+                Dist::from_directory_url(pkg_name, absolute_url, &abs_path, pkg.editable, false)?
             } else {
                 Dist::from_file_url(
-                    pkg.name.clone(),
+                    pkg_name,
                     absolute_url,
                     &abs_path,
                     DistExtension::from_path(&abs_path).map_err(|e| {
@@ -310,11 +324,14 @@ fn need_reinstall(
     // Check if the installed version is the same as the required version
     match installed {
         InstalledDist::Registry(reg) => {
-            if reg.version != locked.version {
+            let specifier =
+                uv_pep440::Version::from_str(&locked.version.to_string()).expect("invalid version");
+
+            if reg.version != specifier {
                 tracing::debug!(
                     "Installed version {} does not match locked version {}",
                     reg.version,
-                    locked.version
+                    specifier
                 );
                 return Ok(ValidateInstall::Reinstall);
             }
@@ -342,7 +359,7 @@ fn need_reinstall(
             };
 
             match direct_url_json {
-                pypi_types::DirectUrl::LocalDirectory { url, dir_info } => {
+                uv_pypi_types::DirectUrl::LocalDirectory { url, dir_info } => {
                     // Recreate file url
                     let result = Url::parse(&url);
                     match result {
@@ -365,7 +382,7 @@ fn need_reinstall(
                         return Ok(ValidateInstall::Reinstall);
                     }
                 }
-                pypi_types::DirectUrl::ArchiveUrl {
+                uv_pypi_types::DirectUrl::ArchiveUrl {
                     url,
                     // Don't think anything ever fills this?
                     archive_info: _,
@@ -400,7 +417,7 @@ fn need_reinstall(
                         }
                     }
                 }
-                pypi_types::DirectUrl::VcsUrl {
+                uv_pypi_types::DirectUrl::VcsUrl {
                     url,
                     vcs_info,
                     subdirectory: _,
@@ -449,7 +466,9 @@ fn need_reinstall(
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
-        if !requires_python.contains(python_version) {
+        let uv_version =
+            uv_pep440::Version::from_str(&python_version.to_string()).expect("should be the same");
+        if !requires_python.contains(&uv_version) {
             return Ok(ValidateInstall::Reinstall);
         }
     }
@@ -461,17 +480,13 @@ fn need_reinstall(
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
-    required: &'a [CombinedPypiPackageData],
-    site_packages: &mut SitePackages,
-    registry_index: &'a mut RegistryWheelIndex<'a>,
+    site_packages: &'a mut SitePackages,
+    mut registry_index: RegistryWheelIndex<'a>,
+    required_pkgs: &'a HashMap<uv_normalize::PackageName, &'a PypiPackageData>,
     uv_cache: &Cache,
     python_version: &Version,
     lock_file_dir: &Path,
 ) -> miette::Result<PixiInstallPlan> {
-    // Create a HashSet of PackageName and Version
-    let mut required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
-        required.iter().map(|(pkg, _)| (&pkg.name, pkg)).collect();
-
     // Packages to be removed
     let mut extraneous = vec![];
     // Packages to be installed directly from the cache
@@ -486,12 +501,15 @@ fn whats_the_plan<'a>(
 
     // Used to verify if there are any additional .dist-info installed
     // that should be removed
-    let required_map_copy = required_map.clone();
+    let required_map_copy = required_pkgs.clone();
+
+    let mut removed_keys: HashSet<uv_normalize::PackageName> =
+        required_pkgs.keys().cloned().collect();
 
     // Walk over all installed packages and check if they are required
     for dist in site_packages.iter() {
         // Check if we require the package to be installed
-        let pkg = required_map.remove(&dist.name());
+        let pkg = required_pkgs.get(&dist.name());
         // Get the installer name
         let installer = dist
             .installer()
@@ -506,6 +524,14 @@ fn whats_the_plan<'a>(
         }
 
         if let Some(pkg) = pkg {
+            // TODO: previously we removed the name from required_pkgs
+            // now we are checking it here
+            if removed_keys.contains(dist.name()) {
+                removed_keys.remove(dist.name());
+            } else {
+                continue;
+            }
+
             if installer == consts::PIXI_UV_INSTALLER {
                 // Check if we need to reinstall
                 match need_reinstall(dist, pkg, python_version)? {
@@ -524,17 +550,22 @@ fn whats_the_plan<'a>(
 
             // Check if we need to revalidate the package
             // then we should get it from the remote
-            if uv_cache.must_revalidate(&pkg.name) {
+            if uv_cache.must_revalidate(&dist.name()) {
                 remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
                 continue;
             }
 
+            let uv_version =
+                uv_pep440::Version::from_str(&pkg.version.to_string()).expect("should be the same");
+
             // Have we cached the wheel?
             let wheel = registry_index
-                .get(&pkg.name)
-                .find(|(version, _)| **version == pkg.version);
-            if let Some((_, cached)) = wheel {
-                local.push(CachedDist::Registry(cached.clone()));
+                .get(dist.name())
+                .find(|entry| entry.dist.filename.version == uv_version);
+
+            if let Some(cached) = wheel {
+                let entire_cloned = cached.clone();
+                local.push(CachedDist::Registry(entire_cloned.dist.clone()));
             } else {
                 remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
             }
@@ -549,21 +580,25 @@ fn whats_the_plan<'a>(
     }
 
     // Now we need to check if we have any packages left in the required_map
-    for pkg in required_map.values() {
+    for (name, pkg) in required_pkgs.iter() {
         // Check if we need to revalidate
         // In that case we need to download from the registry
-        if uv_cache.must_revalidate(&pkg.name) {
+        if uv_cache.must_revalidate(name) {
             remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
             continue;
         }
 
+        let uv_version =
+            uv_pep440::Version::from_str(&pkg.version.to_string()).expect("should be the same");
+
         // Do we have in the registry cache?
         let wheel = registry_index
-            .get(&pkg.name)
-            .find(|(version, _)| **version == pkg.version);
-        if let Some((_, cached)) = wheel {
+            .get(name)
+            .find(|entry| entry.dist.filename.version == uv_version)
+            .cloned();
+        if let Some(cached) = wheel {
             // Sure we have it in the cache, lets use that
-            local.push(CachedDist::Registry(cached.clone()));
+            local.push(CachedDist::Registry(cached.dist));
         } else {
             // We need to download from the registry or any url
             remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
@@ -621,10 +656,8 @@ pub async fn update_python_distributions(
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &uv_context.cache);
-        let entries = client
-            .fetch(index_locations.flat_index())
-            .await
-            .into_diagnostic()?;
+        let indexes = index_locations.indexes().map(|index| index.url());
+        let entries = client.fetch(indexes).await.into_diagnostic()?;
         FlatIndex::from_entries(
             entries,
             Some(&tags),
@@ -648,22 +681,31 @@ pub async fn update_python_distributions(
 
     let git_resolver = GitResolver::default();
     // Prep the build context.
+
+    let dep_metadata = DependencyMetadata::default();
+
+    let constraints = Constraints::default();
+
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
-        &[],
+        constraints,
         venv.interpreter(),
         &index_locations,
         &flat_index,
+        &dep_metadata,
         &in_memory_index,
         &git_resolver,
+        &uv_context.capabilities,
         &uv_context.in_flight,
         IndexStrategy::default(),
         &config_settings,
         build_isolation,
         LinkMode::default(),
         &uv_context.build_options,
+        &uv_context.hash_strategy,
         None,
+        LowerBound::default(),
         uv_context.source_strategy,
         uv_context.concurrency,
     )
@@ -671,6 +713,7 @@ pub async fn update_python_distributions(
 
     let _lock = venv
         .lock()
+        .await
         .into_diagnostic()
         .with_context(|| "error locking installation directory")?;
 
@@ -684,12 +727,22 @@ pub async fn update_python_distributions(
     );
 
     // This is used to find wheels that are available from the registry
+    let mut new_map = HashMap::new();
     let mut registry_index = RegistryWheelIndex::new(
         &uv_context.cache,
         &tags,
         &index_locations,
         &HashStrategy::None,
     );
+    let required_map: std::collections::HashMap<uv_normalize::PackageName, &PypiPackageData> =
+        python_packages
+            .iter()
+            .map(|(pkg, _)| {
+                let uv_name = uv_normalize::PackageName::new(pkg.name.to_string())
+                    .expect("should be correct");
+                (uv_name, pkg)
+            })
+            .collect();
 
     tracing::debug!("Figuring out what to install/reinstall/remove");
     // Partition into those that should be linked from the cache (`local`), those
@@ -702,11 +755,12 @@ pub async fn update_python_distributions(
         extraneous,
         mut installer_mismatch,
     } = whats_the_plan(
-        python_packages,
         &mut site_packages,
-        &mut registry_index,
+        registry_index,
+        &required_map,
         &uv_context.cache,
-        venv.interpreter().python_version(),
+        &pep440_rs::Version::from_str(&venv.interpreter().python_version().to_string())
+            .expect("should be the same"),
         lock_file_dir,
     )?;
 
@@ -790,7 +844,7 @@ pub async fn update_python_distributions(
 
         // Before hitting the network let's make sure the credentials are available to
         // uv
-        for url in index_locations.urls() {
+        for url in index_locations.indexes().map(|index| index.url()) {
             let success = store_credentials_from_url(url);
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
@@ -832,8 +886,8 @@ pub async fn update_python_distributions(
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e))
-                    if matches!(e, install_wheel_rs::Error::MissingRecord(_))
-                        || matches!(e, install_wheel_rs::Error::MissingTopLevel(_)) =>
+                    if matches!(e, uv_install_wheel::Error::MissingRecord(_))
+                        || matches!(e, uv_install_wheel::Error::MissingTopLevel(_)) =>
                 {
                     // If the uninstallation failed, remove the directory manually and continue
                     tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
@@ -968,9 +1022,9 @@ fn is_dynamic(path: &Path) -> bool {
 mod tests {
     use std::{path::PathBuf, str::FromStr};
 
-    use distribution_types::RemoteSource;
     use pep440_rs::Version;
     use rattler_lock::{PypiPackageData, UrlOrPath};
+    use uv_distribution_types::RemoteSource;
 
     use super::convert_to_dist;
 
