@@ -2,13 +2,7 @@
 // use pep508_rs::PackageName;
 
 use once_cell::sync::Lazy;
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fmt::Debug,
-    str::FromStr,
-    sync::{Arc, RwLock},
-};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 
 use dashmap::DashMap;
 
