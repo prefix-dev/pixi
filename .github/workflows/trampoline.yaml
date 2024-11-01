@@ -16,6 +16,9 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
     strategy:
       fail-fast: true
       matrix:
@@ -39,7 +42,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Build trampoline binary
-        run: cargo build --release --target ${{ matrix.target }} --package pixi_trampoline
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Move trampoline binary on windows
         if: startsWith(matrix.name, 'Windows')
@@ -57,10 +60,13 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: trampoline-${{ matrix.target }}
-          path: trampolines-binaries/
+          path: crates/pixi_trampoline/trampolines-binaries/
 
   aggregate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
     needs: build  # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
@@ -69,7 +75,7 @@ jobs:
       - name: Download all binaries
         uses: actions/download-artifact@v3
         with:
-          path: trampolines-binaries/
+          path: crates/pixi_trampoline/trampolines-binaries/
 
       - name: List downloaded files
         run: ls -R trampolines-binaries/
@@ -79,13 +85,13 @@ jobs:
           mkdir -p trampolines
           # Iterate through all files in trampolines directory and its subdirectories
           find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
-          ls -R trampolines
+          ls -R trampolines/
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v3
         with:
           name: trampolines
-          path: trampolines/
+          path: crates/pixi_trampoline/trampolines/
 
 
 
