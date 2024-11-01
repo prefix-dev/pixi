@@ -230,6 +230,7 @@ async fn install_locked_with_config() {
             task: vec!["which_python".to_string()],
             project_config: ProjectConfig {
                 manifest_path: None,
+                name: None,
             },
             ..Default::default()
         })

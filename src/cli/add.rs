@@ -105,8 +105,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.project_config,
     );
 
-    let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
-        .with_cli_config(prefix_update_config.config.clone());
+    let mut project = Project::load_or_else_discover(
+        project_config.manifest_path.as_deref(),
+        project_config.name,
+    )?
+    .with_cli_config(prefix_update_config.config.clone());
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;

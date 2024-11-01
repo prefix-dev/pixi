@@ -345,7 +345,11 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(
+        args.project_config.manifest_path.as_deref(),
+        args.project_config.name,
+    )
+    .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());

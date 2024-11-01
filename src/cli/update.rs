@@ -132,8 +132,11 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(config);
+    let project = Project::load_or_else_discover(
+        args.project_config.manifest_path.as_deref(),
+        args.project_config.name,
+    )?
+    .with_cli_config(config);
 
     let specs = UpdateSpecs::from(args.specs);
 

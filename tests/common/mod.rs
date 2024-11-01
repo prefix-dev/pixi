@@ -210,7 +210,7 @@ impl PixiControl {
 
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
-        Project::load_or_else_discover(Some(&self.manifest_path()))
+        Project::load_or_else_discover(Some(&self.manifest_path()), None)
     }
 
     /// Get the path to the project
@@ -262,6 +262,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                register: false,
             },
         }
     }
@@ -280,6 +281,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                register: false,
             },
         }
     }
@@ -297,6 +299,7 @@ impl PixiControl {
             args: add::Args {
                 project_config: ProjectConfig {
                     manifest_path: Some(self.manifest_path()),
+                    name: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 prefix_update_config: PrefixUpdateConfig {
@@ -316,6 +319,7 @@ impl PixiControl {
             args: remove::Args {
                 project_config: ProjectConfig {
                     manifest_path: Some(self.manifest_path()),
+                    name: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 prefix_update_config: PrefixUpdateConfig {
@@ -445,6 +449,7 @@ impl PixiControl {
                 environment: None,
                 project_config: ProjectConfig {
                     manifest_path: Some(self.manifest_path()),
+                    name: None,
                 },
                 lock_file_usage: LockFileUsageArgs {
                     frozen: false,
@@ -464,6 +469,7 @@ impl PixiControl {
                 config: Default::default(),
                 project_config: ProjectConfig {
                     manifest_path: Some(self.manifest_path()),
+                    name: None,
                 },
                 no_install: true,
                 dry_run: false,
@@ -478,7 +484,7 @@ impl PixiControl {
     /// If you want to lock-file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
+        let project = Project::load_or_else_discover(Some(&self.manifest_path()), None)?;
         pixi::load_lock_file(&project).await
     }
 
@@ -537,6 +543,7 @@ impl TasksControl<'_> {
         task::execute(task::Args {
             project_config: ProjectConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
+                name: None,
             },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],

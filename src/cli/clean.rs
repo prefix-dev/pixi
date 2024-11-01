@@ -72,8 +72,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::Cache(args)) => clean_cache(args).await?,
         None => {
-            let project =
-                Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
+            let project = Project::load_or_else_discover(
+                args.project_config.manifest_path.as_deref(),
+                args.project_config.name,
+            )?; // Extract the passed in environment name.
 
             let explicit_environment = args
                 .environment

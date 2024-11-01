@@ -114,6 +114,7 @@ async fn test_alias() {
             task: vec!["helloworld".to_string()],
             project_config: ProjectConfig {
                 manifest_path: None,
+                name: None,
             },
             ..Default::default()
         })
@@ -190,6 +191,7 @@ async fn test_cwd() {
             task: vec!["pwd-test".to_string()],
             project_config: ProjectConfig {
                 manifest_path: None,
+                name: None,
             },
             ..Default::default()
         })
@@ -211,7 +213,8 @@ async fn test_cwd() {
         .run(Args {
             task: vec!["unknown-cwd".to_string()],
             project_config: ProjectConfig {
-                manifest_path: None
+                manifest_path: None,
+                name: None
             },
             ..Default::default()
         })
@@ -239,6 +242,7 @@ async fn test_task_with_env() {
             task: vec!["env-test".to_string()],
             project_config: ProjectConfig {
                 manifest_path: None,
+                name: None,
             },
             ..Default::default()
         })
@@ -265,6 +269,7 @@ async fn test_clean_env() {
         task: vec!["env-test".to_string()],
         project_config: ProjectConfig {
             manifest_path: None,
+            name: None,
         },
         clean_env: true,
         ..Default::default()
@@ -284,6 +289,7 @@ async fn test_clean_env() {
             task: vec!["env-test".to_string()],
             project_config: ProjectConfig {
                 manifest_path: None,
+                name: None,
             },
             clean_env: false,
             ..Default::default()
