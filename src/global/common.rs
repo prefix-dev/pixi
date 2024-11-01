@@ -13,6 +13,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
+use pixi_utils::executable_from_path;
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
@@ -208,7 +209,9 @@ pub(crate) enum NotChangedReason {
 impl std::fmt::Display for NotChangedReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NotChangedReason::AlreadyInstalled => write!(f, "already installed"),
+            NotChangedReason::AlreadyInstalled => {
+                write!(f, "{}", NotChangedReason::AlreadyInstalled.as_str())
+            }
         }
     }
 }
@@ -634,16 +637,8 @@ pub(crate) async fn get_expose_scripts_sync_status(
         .collect_vec();
 
     fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
-        exposed
-            .file_name()
-            .expect("should have a file_name")
-            .to_string_lossy()
-            == mapping.exposed_name().to_string()
-            && executable
-                .file_name()
-                .expect("should have a file_name")
-                .to_string_lossy()
-                == mapping.executable_name()
+        executable_from_path(exposed) == mapping.exposed_name().to_string()
+            && executable_from_path(executable) == mapping.executable_name()
     }
 
     // Get all related expose scripts not required by the environment manifest

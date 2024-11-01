@@ -45,9 +45,7 @@ def test_trampoline_respect_activation_variables(
     assert trampoline_metadata["path"] == str(original_dummy_b.parent)
 
     # now execute the binary
-    verify_cli_command(
-        [dummy_b], stdout_contains="Success:"
-    )
+    verify_cli_command([dummy_b], stdout_contains="Success:")
 
 
 def test_trampoline_new_activation_scripts(
@@ -106,9 +104,7 @@ def test_trampoline_new_activation_scripts(
     assert "TRAMPOLINE_TEST_ENV" not in trampoline_metadata["env"]
 
     # now execute the binary
-    verify_cli_command(
-        [dummy_b], stdout_contains="Success:"
-    )
+    verify_cli_command([dummy_b], stdout_contains="Success:")
 
 
 def test_trampoline_migrate_previous_script(

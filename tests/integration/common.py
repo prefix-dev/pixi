@@ -82,6 +82,11 @@ def verify_cli_command(
 
     return output
 
+def bat_extension(exe_name: str) -> str:
+    if platform.system() == "Windows":
+        return exe_name + ".bat"
+    else:
+        return exe_name
 
 def exec_extension(exe_name: str) -> str:
     if platform.system() == "Windows":
