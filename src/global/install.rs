@@ -459,7 +459,7 @@ mod tests {
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
-            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
+            Path::new("C:\\Users\\USER\\.pixi\\envs\\hyperfine\\bin/hyperfine.exe")
         );
     }
 
