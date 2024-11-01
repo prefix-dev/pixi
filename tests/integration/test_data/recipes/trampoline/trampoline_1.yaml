@@ -15,7 +15,7 @@ outputs:
         - if: win
           then:
             - mkdir -p $PREFIX/etc/conda/activate.d
-            - echo "set TRAMPOLINE_TEST_ENV='teapot'" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
+            - echo "set TRAMPOLINE_TEST_ENV=teapot" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
             - mv check_env_1.bat $PREFIX/bin/dummy-trampoline.bat
           else:
             - mkdir -p $PREFIX/etc/conda/activate.d

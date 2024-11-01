@@ -9,13 +9,13 @@
       "build": "hb0f4dca_0",
       "build_number": 0,
       "depends": [],
-      "md5": "bb5252fef7a7c541d08387e7373b7ffb",
+      "md5": "544ba78b6b59cb5dfb6b8782a18bb782",
       "name": "dummy-trampoline",
       "platform": "linux",
-      "sha256": "8fb459eb1280d77f06c56cf24e018aa23fef85b138d5a60060604dfb84cc4471",
-      "size": 2961,
+      "sha256": "1ff07371bf6b8e2ba108ddab83500558ae9b79aaf71da55d6052a2544f5e7254",
+      "size": 1632,
       "subdir": "linux-64",
-      "timestamp": 1730214472786,
+      "timestamp": 1730465123049,
       "version": "0.2.0"
     }
   },

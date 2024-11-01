@@ -9,13 +9,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "9301cc8899e1d9e2784c3249aa775b11",
+      "md5": "3ed52f8fcd7a5e4d175c12897339432d",
       "name": "dummy-trampoline",
       "platform": "osx",
-      "sha256": "bc172d22e2ea431649e34a62383c7c8a8e57bf4479f357984849d2e038e7fbc3",
-      "size": 2961,
+      "sha256": "2c8fd52735bb13d1e7b0fd50cb1372420b96c64613a6a04f42f514bb745cf69c",
+      "size": 1630,
       "subdir": "osx-64",
-      "timestamp": 1730214472848,
+      "timestamp": 1730465123125,
       "version": "0.2.0"
     }
   },
