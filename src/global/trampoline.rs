@@ -139,7 +139,7 @@ impl Configuration {
         let parent = trampoline.parent().expect("should have a parent");
         parent
             .join(PathBuf::from(TRAMPOLINE_CONFIGURATION))
-            .join(Trampoline::name(trampoline))
+            .join(Trampoline::name(trampoline) + ".json")
     }
 }
 

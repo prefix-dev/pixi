@@ -69,6 +69,7 @@ pub(crate) async fn create_executable_trampolines(
     prefix: &Prefix,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
+    #[derive(Debug)]
     enum AddedOrChanged {
         Unchanged,
         Added,
@@ -106,6 +107,8 @@ pub(crate) async fn create_executable_trampolines(
                 .await
                 .into_diagnostic()?;
             AddedOrChanged::Migrated
+        } else if !global_script_path.exists() {
+            AddedOrChanged::Added
         } else {
             AddedOrChanged::Unchanged
         };
@@ -145,14 +148,15 @@ pub(crate) async fn create_executable_trampolines(
             global_script_path_parent.to_path_buf(),
             metadata,
         );
-        trampoline.save().await?;
 
         match changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
+                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
             }
             AddedOrChanged::Changed | AddedOrChanged::Migrated => {
+                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
