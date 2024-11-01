@@ -514,11 +514,7 @@ fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> 
             .requires_dist
             .iter()
             .filter_map(|p| {
-                if p.marker.as_ref().is_some_and(|marker| {
-                    uv_pep508::MarkerTree::from_str(marker.to_string().as_str())
-                        .expect("should be good")
-                        .is_true()
-                }) {
+                if p.marker.is_true() {
                     Some(p.name.as_dist_info_name().into_owned())
                 } else {
                     tracing::info!(

@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_manifest::FeaturesExt;
 use pixi_spec::{PixiSpec, SpecConversionError};
-use pixi_uv_conversions::{as_uv_req, AsPep508Error, GLOBAL_UV_CONVERSIONS};
+use pixi_uv_conversions::{as_uv_req, to_uv_marker_tree, AsPep508Error, GLOBAL_UV_CONVERSIONS};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
@@ -283,6 +283,7 @@ impl IntoUvRequirement for pep508_rs::Requirement {
             None
         };
 
+        let marker = to_uv_marker_tree(&self.marker);
         let converted = uv_pep508::Requirement {
             name: uv_pep508::PackageName::new(self.name.to_string())
                 .expect("cannot normalize name"),
@@ -293,13 +294,7 @@ impl IntoUvRequirement for pep508_rs::Requirement {
                     uv_pep508::ExtraName::new(e.to_string()).expect("cannot convert extra name")
                 })
                 .collect(),
-            marker: self
-                .marker
-                .map(|m| {
-                    uv_pep508::MarkerTree::from_str(&m.to_string())
-                        .expect("cannot convert MarkerTree")
-                })
-                .unwrap_or_default(),
+            marker,
             version_or_url: parsed_url,
             // Don't think this needs to be set
             origin: None,

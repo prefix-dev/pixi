@@ -100,12 +100,12 @@ impl UvConversions {
     }
 }
 
-/// Converts `uv_normalize::PackageName` to our normalise
+/// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
 pub fn to_normalize(normalise: &uv_normalize::PackageName) -> pep508_rs::PackageName {
     pep508_rs::PackageName::from_str(normalise.as_str()).expect("should be the same")
 }
 
-/// Converts `uv_normalize::PackageName` to our normalise
+/// Converts `pe508::PackageName` to  `uv_normalize::PackageName`
 pub fn to_uv_normalize(normalise: &pep508_rs::PackageName) -> uv_normalize::PackageName {
     uv_normalize::PackageName::from_str(normalise.to_string().as_str()).expect("should be the same")
 }
@@ -114,7 +114,18 @@ pub fn to_uv_normalize(normalise: &pep508_rs::PackageName) -> uv_normalize::Pack
 pub fn to_uv_extra_name(extra_name: &pep508_rs::ExtraName) -> uv_normalize::ExtraName {
     uv_normalize::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
 }
+
 /// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
 pub fn to_extra_name(extra_name: &uv_normalize::ExtraName) -> pep508_rs::ExtraName {
     pep508_rs::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
+}
+
+/// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
+pub fn to_uv_marker_tree(marker_tree: &pep508_rs::MarkerTree) -> uv_pep508::MarkerTree {
+    let serialized = marker_tree.try_to_string();
+    if let Some(serialized) = serialized {
+        uv_pep508::MarkerTree::from_str(serialized.as_str()).expect("should be the same")
+    } else {
+        uv_pep508::MarkerTree::default()
+    }
 }

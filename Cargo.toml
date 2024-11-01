@@ -50,10 +50,10 @@ minijinja = "2.1.1"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.19.0"
 parking_lot = "0.12.2"
-pep440_rs = "0.6.0"
-pep508_rs = "0.6.0"
+pep440_rs = "0.7.2"
+pep508_rs = "0.9.1"
 percent-encoding = "2.3.1"
-pyproject-toml = "0.11.0"
+pyproject-toml = "0.13.4"
 regex = "1.10.4"
 reqwest = { version = "0.12.4", default-features = false }
 reqwest-middleware = "0.3.0"
@@ -318,23 +318,23 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
+reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
+reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 # For pyproject-toml
 # pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
 # pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
-reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
-reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 # deno_task_shell = { path = "../deno_task_shell" }
-# rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
