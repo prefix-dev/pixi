@@ -158,9 +158,11 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
-        // ---- The prefix is not up-to-date, so we need to update it -----
+        // Get the up-to-date prefix
+        let prefix = self.update_prefix(environment).await?;
 
-        // Save an environment file to the environment directory
+        // Save an environment file to the environment directory after the update.
+        // Avoiding writing the cache away before the update is done.
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
@@ -171,6 +173,11 @@ impl<'p> LockFileDerivedData<'p> {
             },
         )?;
 
+        Ok(prefix)
+    }
+
+    /// Returns the up-to-date prefix for the given environment.
+    pub async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }

@@ -186,6 +186,7 @@ impl LockedEnvironmentHash {
     }
 }
 
+/// Information about the environment that was used to create the environment.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
     /// The path to the manifest file that was used to create the environment.
@@ -197,9 +198,9 @@ pub(crate) struct EnvironmentFile {
     /// The hash of the lock file that was used to create the environment.
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
 }
+
 /// Write information about the environment to a file in the environment
-/// directory. This can be useful for other tools that only know the environment
-/// directory to find the original project.
+/// directory. Used by the prefix updating to validate if it needs to be updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
