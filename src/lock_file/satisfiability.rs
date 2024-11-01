@@ -155,6 +155,58 @@ pub enum PlatformUnsat {
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
+
+    #[error("expect pypi package name '{expected}' but found '{found}'")]
+    LockedPyPINamesMismatch { expected: String, found: String },
+
+    #[error(
+        "'{name}' with specifiers '{specifiers}' does not match the locked version '{version}' "
+    )]
+    LockedPyPIVersionsMismatch {
+        name: String,
+        specifiers: String,
+        version: String,
+    },
+
+    #[error("the direct url should start with `direct+` or `git+` but found '{0}'")]
+    LockedPyPIMalformedUrl(Url),
+
+    #[error("the spec for '{0}' required a direct url but it was not locked as such")]
+    LockedPyPIRequiresDirectUrl(String),
+
+    #[error("'{name}' has mismatching url: '{spec_url} != {lock_url}'")]
+    LockedPyPIDirectUrlMismatch {
+        name: String,
+        spec_url: Url,
+        lock_url: Url,
+    },
+
+    #[error("'{name}' has mismatching git url: '{spec_url} != {lock_url}'")]
+    LockedPyPIGitUrlMismatch {
+        name: String,
+        spec_url: Url,
+        lock_url: Url,
+    },
+
+    #[error("'{name}' has mismatching git ref: '{expected_ref} != {found_ref}'")]
+    LockedPyPIGitRefMismatch {
+        name: String,
+        expected_ref: String,
+        found_ref: String,
+    },
+
+    #[error("'{0}' expected a git url but the lock file has: '{1}'")]
+    LockedPyPIRequiresGitUrl(String, String),
+
+    #[error("'{0}' expected a path but the lock file has a url")]
+    LockedPyPIRequiresPath(String),
+
+    #[error("'{name}' expected this path {expected_path} but found {found_path}")]
+    LockedPyPIPathMismatch {
+        name: String,
+        expected_path: PathBuf,
+        found_path: PathBuf,
+    },
 }
 
 impl PlatformUnsat {
@@ -208,12 +260,12 @@ impl IntoUvRequirement for pep508_rs::Requirement {
                                 verbatim_url.to_url(),
                             ));
 
-                            let url =
-                                Url::from_file_path(path).expect("cannot convert to file path");
-
                             VerbatimParsedUrl {
                                 parsed_url,
-                                verbatim: uv_pep508::VerbatimUrl::from_url(url),
+                                verbatim: uv_pep508::VerbatimUrl::from_url(
+                                    verbatim_url.raw().clone(),
+                                )
+                                .with_given(verbatim_url.given().unwrap()),
                             }
                             // Can only be an archive
                         }
@@ -484,19 +536,30 @@ pub(crate) fn pypi_satifisfies_requirement(
     spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
-) -> bool {
+) -> Result<(), PlatformUnsat> {
     if spec.name.to_string() != locked_data.name.to_string() {
-        return false;
+        return Err(PlatformUnsat::LockedPyPINamesMismatch {
+            expected: spec.name.to_string(),
+            found: locked_data.name.to_string(),
+        });
     }
 
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
             // In the old way we always satisfy based on version so let's keep it similar
             // here
-            specifier.contains(
-                &uv_pep440::Version::from_str(&locked_data.version.to_string())
-                    .expect("could not parse version"),
-            )
+            let version_string = locked_data.version.to_string();
+            if specifier.contains(
+                &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
+            ) {
+                Ok(())
+            } else {
+                Err(PlatformUnsat::LockedPyPIVersionsMismatch {
+                    name: spec.name.clone().to_string(),
+                    specifiers: specifier.clone().to_string(),
+                    version: version_string,
+                })
+            }
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.url_or_path {
@@ -504,7 +567,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
                 {
-                    return false;
+                    return Err(PlatformUnsat::LockedPyPIMalformedUrl(locked_url.clone()));
                 }
                 let locked_url = locked_url
                     .as_ref()
@@ -512,9 +575,19 @@ pub(crate) fn pypi_satifisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                return *spec_url.raw() == locked_url;
+                if *spec_url.raw() == locked_url {
+                    return Ok(());
+                } else {
+                    return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
+                        name: spec.name.clone().to_string(),
+                        spec_url: spec_url.raw().clone(),
+                        lock_url: locked_url,
+                    });
+                }
             }
-            false
+            return Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(
+                spec.name.to_string(),
+            ));
         }
         RequirementSource::Git {
             repository,
@@ -526,10 +599,17 @@ pub(crate) fn pypi_satifisfies_requirement(
                 UrlOrPath::Url(url) => {
                     if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
                         let repo_is_same = locked_git_url.url.repository() == repository;
+                        if !repo_is_same {
+                            return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
+                                name: spec.name.clone().to_string(),
+                                spec_url: repository.clone(),
+                                lock_url: locked_git_url.url.repository().clone(),
+                            });
+                        }
                         // If the spec does not specify a revision than any will do
                         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
                         if *reference == GitReference::DefaultBranch {
-                            return repo_is_same;
+                            return Ok(());
                         }
                         // If the spec has a short commit than we can do a partial match
                         // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
@@ -541,17 +621,41 @@ pub(crate) fn pypi_satifisfies_requirement(
                                 if let GitReference::FullCommit(sha) =
                                     locked_git_url.url.reference()
                                 {
-                                    return repo_is_same && sha.starts_with(branch_or_tag);
+                                    if sha.starts_with(branch_or_tag) {
+                                        return Ok(());
+                                    } else {
+                                        return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                            name: spec.name.clone().to_string(),
+                                            expected_ref: branch_or_tag.to_string(),
+                                            found_ref: sha.to_string(),
+                                        });
+                                    }
                                 }
                             }
                         }
 
                         // If the spec does specify a revision than the revision must match
-                        return repo_is_same && locked_git_url.url.reference() == reference;
+                        if locked_git_url.url.reference() == reference {
+                            return Ok(());
+                        } else {
+                            return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                name: spec.name.clone().to_string(),
+                                expected_ref: reference.to_string(),
+                                found_ref: locked_git_url.url.reference().to_string(),
+                            });
+                        }
                     }
-                    false
+                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                        spec.name.to_string(),
+                        url.to_string(),
+                    ));
                 }
-                UrlOrPath::Path(_) => false,
+                UrlOrPath::Path(path) => {
+                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                        spec.name.to_string(),
+                        path.to_string_lossy().to_string(),
+                    ))
+                }
             }
         }
         RequirementSource::Path { install_path, .. }
@@ -559,11 +663,15 @@ pub(crate) fn pypi_satifisfies_requirement(
             if let UrlOrPath::Path(locked_path) = &locked_data.url_or_path {
                 // sometimes the path is relative, so we need to join it with the project root
                 if &project_root.join(locked_path) != install_path {
-                    return false;
+                    return Err(PlatformUnsat::LockedPyPIPathMismatch {
+                        name: spec.name.clone().to_string(),
+                        expected_path: install_path.clone(),
+                        found_path: project_root.join(locked_path),
+                    });
                 }
-                return true;
+                return Ok(());
             }
-            false
+            return Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()));
         }
     }
 }
@@ -750,12 +858,7 @@ pub(crate) fn verify_package_platform_satisfiability(
 
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
-                        if !pypi_satifisfies_requirement(&requirement, &record.0, project_root) {
-                            return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                Box::new(requirement),
-                                source.into_owned(),
-                            ));
-                        }
+                        pypi_satifisfies_requirement(&requirement, &record.0, project_root)?;
                         FoundPackage::PyPi(idx, requirement.extras)
                     }
                 } else {
@@ -1223,32 +1326,20 @@ mod tests {
             .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
         let non_matching_spec =
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
                 .unwrap()
                 .into_uv_requirement()
                 .unwrap();
         // This should not
-        assert!(!pypi_satifisfies_requirement(
-            &non_matching_spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
         // Removing the rev from the Requirement should satisfy any revision
         let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the
@@ -1270,14 +1361,10 @@ mod tests {
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
-                .unwrap()
-                .into_uv_requirement()
                 .unwrap();
+        dbg!(&spec.version_or_url);
+        let spec = spec.into_uv_requirement().unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            Path::new("")
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 }
