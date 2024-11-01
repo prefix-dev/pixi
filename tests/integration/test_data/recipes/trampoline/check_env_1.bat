@@ -8,7 +8,7 @@ set "ENV_VAR_NAME=TRAMPOLINE_TEST_ENV"
 set "EXPECTED_VALUE=teapot"
 
 :: Get the value of the environment variable
-set "ACTUAL_VALUE=%~1"
+set "ACTUAL_VALUE=%TRAMPOLINE_TEST_ENV%"
 
 if "%ACTUAL_VALUE%"=="" (
     echo Error: Environment variable '%ENV_VAR_NAME%' is not set.
