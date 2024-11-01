@@ -1,17 +1,3 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Write,
-    future::{ready, Future},
-    iter,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
-
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
@@ -30,12 +16,27 @@ use rattler_conda_types::{Arch, Channel, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
+use std::cmp::PartialEq;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::Write,
+    future::{ready, Future},
+    iter,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::environment::{read_environment_file, LockedEnvironmentHash};
 use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -127,8 +128,38 @@ impl<'p> LockFileDerivedData<'p> {
             .context("failed to write lock-file to disk")
     }
 
+    fn locked_environment_hash(
+        &self,
+        environment: &Environment<'p>,
+    ) -> miette::Result<LockedEnvironmentHash> {
+        let locked_environment = self
+            .lock_file
+            .environment(environment.name().as_str())
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        Ok(LockedEnvironmentHash::from_environment(
+            locked_environment,
+            environment.best_platform(),
+        ))
+    }
+
     /// Returns the up-to-date prefix for the given environment.
-    pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+    pub async fn prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        force_update: bool,
+    ) -> miette::Result<Prefix> {
+        // Check if the prefix is already up-to-date by validating the hash with the environment file
+        let hash = self.locked_environment_hash(environment)?;
+        if !force_update {
+            if let Some(environment_file) = read_environment_file(&environment.dir())? {
+                if environment_file.environment_lock_file_hash == hash {
+                    return Ok(Prefix::new(environment.dir()));
+                }
+            }
+        }
+
+        // ---- The prefix is not up-to-date, so we need to update it -----
+
         // Save an environment file to the environment directory
         write_environment_file(
             &environment.dir(),
@@ -136,6 +167,7 @@ impl<'p> LockFileDerivedData<'p> {
                 manifest_path: environment.project().manifest_path(),
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
+                environment_lock_file_hash: hash,
             },
         )?;
 

@@ -47,6 +47,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
+        true,
     )
     .await?;
     project.save()?;

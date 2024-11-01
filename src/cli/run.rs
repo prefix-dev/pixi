@@ -1,12 +1,12 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashSet;
-use std::convert::identity;
-use std::{collections::HashMap, string::String};
-
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
+use std::collections::hash_map::Entry;
+use std::collections::HashSet;
+use std::convert::identity;
+use std::time::Instant;
+use std::{collections::HashMap, string::String};
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::environment::verify_prefix_location_unchanged;
@@ -82,6 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
+    let start = Instant::now();
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
         .update_lock_file(UpdateLockFileOptions {
@@ -89,6 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..UpdateLockFileOptions::default()
         })
         .await?;
+    let duration = start.elapsed();
+    println!("Lock file updated in {:?}", duration);
 
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
@@ -169,7 +172,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
-                lock_file.prefix(&executable_task.run_environment).await?;
+                lock_file
+                    .prefix(&executable_task.run_environment, false)
+                    .await?;
 
                 let command_env = get_task_env(
                     &executable_task.run_environment,

@@ -241,6 +241,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
+        false,
     )
     .await?;
 

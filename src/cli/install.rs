@@ -52,7 +52,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let environment = project.environment_from_name_or_env_var(Some(env))?;
 
         // Update the prefix by installing all packages
-        update_prefix(&environment, args.lock_file_usage.into(), false).await?;
+        update_prefix(&environment, args.lock_file_usage.into(), false, true).await?;
 
         installed_envs.push(environment.name().clone());
     }

@@ -1,11 +1,11 @@
-use std::{
-    collections::HashMap,
-    convert::identity,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    sync::Arc,
+use crate::{
+    install_pypi,
+    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
 };
-
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
@@ -21,16 +21,16 @@ use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
-
-use crate::{
-    install_pypi,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
-    rlimit::try_increase_rlimit_to_sensible,
-    Project,
+use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    convert::identity,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+use tokio::sync::Semaphore;
+use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -163,11 +163,39 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockedEnvironmentHash(String);
+impl LockedEnvironmentHash {
+    pub(crate) fn from_environment(
+        environment: rattler_lock::Environment,
+        platform: Platform,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+        let mut urls = Vec::new();
+
+        if let Some(packages) = environment.packages(platform) {
+            for package in packages {
+                urls.push(package.url_or_path().into_owned().to_string())
+            }
+        }
+        urls.sort();
+
+        urls.hash(&mut hasher);
+
+        LockedEnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
+    /// The path to the manifest file that was used to create the environment.
     pub(crate) manifest_path: PathBuf,
+    /// The name of the environment.
     pub(crate) environment_name: String,
+    /// The version of the pixi that was used to create the environment.
     pub(crate) pixi_version: String,
+    /// The hash of the lock file that was used to create the environment.
+    pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
 }
 /// Write information about the environment to a file in the environment
 /// directory. This can be useful for other tools that only know the environment
@@ -177,7 +205,7 @@ pub(crate) fn write_environment_file(
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
     let path = environment_dir
-        .join("conda-meta")
+        .join(consts::CONDA_META_DIR)
         .join(consts::ENVIRONMENT_FILE_NAME);
 
     let parent = path
@@ -193,6 +221,36 @@ pub(crate) fn write_environment_file(
     tracing::debug!("Wrote environment file to: {:?}", path);
 
     Ok(path)
+}
+
+pub(crate) fn read_environment_file(
+    environment_dir: &Path,
+) -> miette::Result<Option<EnvironmentFile>> {
+    let path = environment_dir
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME);
+
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            tracing::debug!("Environment file not yet found at: {:?}", path);
+            return Ok(None);
+        }
+        Err(e) => return Err(e).into_diagnostic(),
+    };
+    let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
+        Ok(env_file) => env_file,
+        Err(e) => {
+            tracing::debug!(
+                "Failed to parse environment file at: {:?}, error: {}",
+                path,
+                e
+            );
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(env_file))
 }
 
 /// Runs the following checks to make sure the project is in a sane state:
@@ -292,6 +350,7 @@ pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
+    force_update: bool,
 ) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
@@ -316,7 +375,7 @@ pub async fn update_prefix(
 
     // Get the locked environment from the lock-file.
     if !no_install {
-        lock_file.prefix(environment).await?;
+        lock_file.prefix(environment, force_update).await?;
     }
     Ok(())
 }

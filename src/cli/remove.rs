@@ -82,6 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &project.default_environment(),
             prefix_update_config.lock_file_usage(),
             prefix_update_config.no_install,
+            true,
         )
         .await?;
     }
