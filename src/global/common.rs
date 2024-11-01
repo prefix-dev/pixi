@@ -506,7 +506,7 @@ impl StateChanges {
                         let mut exposed_names = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
+                                Some(StateChange::UpdatedExposed(name)) => Some(name.clone()),
                                 _ => None,
                             },
                             Some(exposed.clone()),
