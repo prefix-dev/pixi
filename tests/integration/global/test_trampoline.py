@@ -1,5 +1,7 @@
 import json
+import pathlib
 from pathlib import Path
+import platform
 
 from ..common import verify_cli_command, exec_extension, is_binary
 
@@ -37,7 +39,9 @@ def test_trampoline_respect_activation_variables(
 
     # verify that exe and root folder is correctly set to the original one
     original_dummy_b = tmp_path / "envs" / "dummy-trampoline" / "bin" / "dummy-trampoline"
-    assert trampoline_metadata["exe"] == str(original_dummy_b)
+    if platform.system() == "Windows":
+        original_dummy_b = original_dummy_b.with_suffix(".bat")
+    assert pathlib.Path(trampoline_metadata["exe"]) == pathlib.Path(original_dummy_b)
     assert trampoline_metadata["path"] == str(original_dummy_b.parent)
 
     # now execute the binary
