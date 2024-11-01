@@ -1,3 +1,4 @@
+use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
@@ -64,8 +65,7 @@ impl PypiPackageIdentifier {
             let version =
                 pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
-                let pep_name = pep508_rs::PackageName::from_str(name.as_str())
-                    .expect("should be a valid python package name");
+                let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
 
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(pep_name),
@@ -104,14 +104,14 @@ impl PypiPackageIdentifier {
         let name = package_url.name();
         let name = uv_normalize::PackageName::from_str(name)
             .map_err(|e| ConversionError::PackageName(name.to_string(), e))?;
+
         let version_str = package_url.version().unwrap_or(fallback_version);
         let version = pep440_rs::Version::from_str(version_str)
             .map_err(|_| ConversionError::Version(version_str.to_string()))?;
 
         // TODO: We can't really tell which python extras are enabled from a PURL.
         let extras = HashSet::new();
-        let pep_name = pep508_rs::PackageName::from_str(name.as_str())
-            .expect("should be a valid python package name");
+        let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(pep_name),
@@ -124,8 +124,7 @@ impl PypiPackageIdentifier {
     /// in this package identifier.
     pub(crate) fn satisfies(&self, requirement: &uv_pypi_types::Requirement) -> bool {
         // Verify the name of the package
-        let uv_normalized = uv_normalize::PackageName::from_str(self.name.as_source())
-            .expect("should be a valid python package name");
+        let uv_normalized = GLOBAL_UV_CONVERSIONS.to_uv_normalize(self.name.as_normalized());
         if uv_normalized != requirement.name {
             return false;
         }

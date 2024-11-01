@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::update_prefix;
 use crate::Project;
@@ -5,6 +7,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
+use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
 
 /// Install all dependencies
 #[derive(Parser, Debug)]
@@ -80,6 +83,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             detached_envs_message
         );
     }
+
+    eprintln!("debug uv conversions{:?}", GLOBAL_UV_CONVERSIONS);
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())

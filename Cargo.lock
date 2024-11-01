@@ -3540,7 +3540,9 @@ dependencies = [
 name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "dunce",
+ "once_cell",
  "pep508_rs",
  "pixi_manifest",
  "rattler_lock",

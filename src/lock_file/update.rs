@@ -20,11 +20,10 @@ use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
-use pep508_rs::MarkerEnvironment;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
-use pixi_uv_conversions::{to_extra_name, to_normalize, to_uv_extra_name, to_uv_normalize};
+use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
@@ -1686,12 +1685,12 @@ async fn spawn_extract_environment_task(
     let mut pypi_package_names = HashSet::new();
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
-        let uv_name = to_uv_normalize(&name);
+        let uv_name = GLOBAL_UV_CONVERSIONS.to_uv_normalize(&name);
         for req in reqs {
             for extra in req.extras().iter() {
                 pypi_package_names.insert(PackageName::Pypi((
                     uv_name.clone(),
-                    Some(to_uv_extra_name(extra)),
+                    Some(GLOBAL_UV_CONVERSIONS.to_uv_extra_name(extra)),
                 )));
             }
         }
@@ -1722,7 +1721,7 @@ async fn spawn_extract_environment_task(
                 .by_name(&name)
                 .map(PackageRecord::Conda),
             PackageName::Pypi((name, extra)) => {
-                let pep_name = to_normalize(&name);
+                let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
                 if let Some(found_record) = grouped_pypi_records.by_name(&pep_name) {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
@@ -1758,7 +1757,7 @@ async fn spawn_extract_environment_task(
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies
                 let extras = extra
-                    .map(|extra| vec![to_extra_name(&extra)])
+                    .map(|extra| vec![GLOBAL_UV_CONVERSIONS.to_extra_name(&extra)])
                     .unwrap_or_default();
                 for req in record.0.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
@@ -1772,11 +1771,11 @@ async fn spawn_extract_environment_task(
                             continue;
                         }
                     }
-                    let uv_name = to_uv_normalize(&req.name);
+                    let uv_name = GLOBAL_UV_CONVERSIONS.to_uv_normalize(&req.name);
 
                     // Add the package to the queue
                     for extra in req.extras.iter() {
-                        let extra_name = to_uv_extra_name(extra);
+                        let extra_name = GLOBAL_UV_CONVERSIONS.to_uv_extra_name(extra);
                         if queued_names.insert(PackageName::Pypi((
                             uv_name.clone(),
                             Some(extra_name.clone()),
@@ -1883,7 +1882,12 @@ async fn spawn_solve_pypi_task(
             &pypi_options,
             dependencies
                 .into_iter()
-                .map(|(name, requirement)| (to_uv_normalize(name.as_normalized()), requirement))
+                .map(|(name, requirement)| {
+                    (
+                        GLOBAL_UV_CONVERSIONS.to_uv_normalize(name.as_normalized()),
+                        requirement,
+                    )
+                })
                 .collect(),
             system_requirements,
             &conda_records,

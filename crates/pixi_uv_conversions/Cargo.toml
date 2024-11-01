@@ -11,7 +11,9 @@ version = "0.1.0"
 
 
 [dependencies]
+dashmap = { workspace = true }
 dunce = { workspace = true }
+once_cell = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_manifest = { workspace = true }
 rattler_lock = { workspace = true }
