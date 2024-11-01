@@ -322,9 +322,7 @@ tokio = { workspace = true, features = ["rt"] }
 # If you change this also change the versions in the the patch section for uv
 # pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
-reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121", features = [
-  "multipart",
-] }
+reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 # deno_task_shell = { path = "../deno_task_shell" }
 # rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
