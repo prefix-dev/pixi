@@ -17,7 +17,7 @@ pub(crate) use resolve::{
 };
 pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
 pub(crate) use update::{LockFileDerivedData, UpdateContext};
-pub use update::{UpdateMode, UpdateLockFileOptions};
+pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
 
 use crate::Project;

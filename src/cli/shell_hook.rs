@@ -10,15 +10,15 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::{
-    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
-    lock_file::UpdateMode,
-    project::{HasProjectRef, Environment},
-    Project,
-    activation::get_activator,
-};
 use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::update_prefix;
+use crate::{
+    activation::get_activator,
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    lock_file::UpdateMode,
+    project::{Environment, HasProjectRef},
+    Project,
+};
 
 /// Print the pixi environment activation script.
 ///
