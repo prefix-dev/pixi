@@ -5,8 +5,8 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
-pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
+pub(crate) type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
+pub(crate) type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
 pub(crate) trait HasNameVersion {
@@ -47,7 +47,7 @@ impl HasNameVersion for RepoDataRecord {
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
 #[derive(Clone, Debug)]
 pub(crate) struct DependencyRecordsByName<D: HasNameVersion> {
-    pub records: Vec<D>,
+    pub(crate) records: Vec<D>,
     by_name: HashMap<D::N, usize>,
 }
 

@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::lock_file::UpdateMode;
 use crate::{
     environment::{update_prefix, LockFileUsage},
     Project,
@@ -47,7 +48,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        true,
+        UpdateMode::Force,
     )
     .await?;
     project.save()?;

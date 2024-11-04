@@ -10,14 +10,15 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::project::HasProjectRef;
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
-    environment::update_prefix,
-    project::Environment,
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    lock_file::UpdateMode,
+    project::{HasProjectRef, Environment},
     Project,
+    activation::get_activator,
 };
+use crate::activation::CurrentEnvVarBehavior;
+use crate::environment::update_prefix;
 
 /// Print the pixi environment activation script.
 ///
@@ -113,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
-        false,
+        UpdateMode::Validate,
     )
     .await?;
 
