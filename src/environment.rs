@@ -23,7 +23,14 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
-use std::{collections::HashMap, convert::identity, io, io::ErrorKind, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    collections::HashMap,
+    convert::identity,
+    io,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::sync::Semaphore;
 use xxhash_rust::xxh3::Xxh3;
 
@@ -147,7 +154,11 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
 
     tracing::info!("Verify history file exists: {}", history_file.display());
 
-    write_file(history_file, "// not relevant for pixi but for `conda run -p`").into_diagnostic()
+    write_file(
+        history_file,
+        "// not relevant for pixi but for `conda run -p`",
+    )
+    .into_diagnostic()
 }
 
 #[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
