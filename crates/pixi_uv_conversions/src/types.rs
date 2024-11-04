@@ -120,7 +120,7 @@ impl Error for VersionError {
     }
 }
 
-// Define a custom error type for all potential conversion errors
+/// List of errors that can occur during conversion from/to uv and pep508
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error(transparent)]
@@ -213,13 +213,13 @@ pub fn to_extra_name(
     )
 }
 
-/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+/// Converts `uv_pep440::Version` to `pep440_rs::Version`
 pub fn to_version(version: &uv_pep440::Version) -> Result<pep440_rs::Version, ConversionError> {
     Ok(pep440_rs::Version::from_str(version.to_string().as_str())
         .map_err(|err| VersionError::PepError(err))?)
 }
 
-/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+/// Converts `pep440_rs::Version` to `uv_pep440::Version`
 pub fn to_uv_version(version: &pep440_rs::Version) -> Result<uv_pep440::Version, ConversionError> {
     Ok(uv_pep440::Version::from_str(version.to_string().as_str())
         .map_err(|err| VersionError::UvError(err))?)
@@ -238,7 +238,7 @@ pub fn to_uv_marker_tree(
     }
 }
 
-/// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
+/// Converts `uv_pep508::MarkerTree` to `pep508_rs::MarkerTree`
 pub fn to_marker_environment(
     marker_env: &uv_pep508::MarkerEnvironment,
 ) -> Result<pep508_rs::MarkerEnvironment, ConversionError> {
@@ -247,6 +247,7 @@ pub fn to_marker_environment(
         .map_err(|err| ConversionError::MarkerEnvironmentSerialization(err))?)
 }
 
+/// Converts `pep440_rs::VersionSpecifiers` to `uv_pep440::VersionSpecifiers`
 pub fn to_uv_version_specifiers(
     version_specifier: &pep440_rs::VersionSpecifiers,
 ) -> Result<uv_pep440::VersionSpecifiers, ConversionError> {
@@ -256,6 +257,7 @@ pub fn to_uv_version_specifiers(
     )
 }
 
+/// Converts `uv_pep440::VersionSpecifiers` to `pep440_rs::VersionSpecifiers`
 pub fn to_version_specifiers(
     version_specifier: &uv_pep440::VersionSpecifiers,
 ) -> Result<pep440_rs::VersionSpecifiers, ConversionError> {
