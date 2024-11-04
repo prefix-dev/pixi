@@ -387,7 +387,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = { 'conda-forge' = "tests/mapping_files/compressed_mapping.json" }
+    conda-pypi-map = { 'conda-forge' = "tests/data/mapping_files/compressed_mapping.json" }
     "#,
     )
     .unwrap();
@@ -473,7 +473,7 @@ async fn test_custom_mapping_channel_with_suffix() {
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/mapping_files/custom_mapping.json" }
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/data/mapping_files/custom_mapping.json" }
      "#,
     )
     .unwrap();
@@ -524,7 +524,7 @@ async fn test_repo_data_record_channel_with_suffix() {
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/mapping_files/custom_mapping.json" }
+     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/data/mapping_files/custom_mapping.json" }
      "#,
     )
     .unwrap();
@@ -575,7 +575,7 @@ async fn test_path_channel() {
      name = "test-channel-change"
      channels = ["file:///home/user/staged-recipes/build_artifacts"]
      platforms = ["linux-64"]
-     conda-pypi-map = {"file:///home/user/staged-recipes/build_artifacts" = "tests/mapping_files/custom_mapping.json"}
+     conda-pypi-map = {"file:///home/user/staged-recipes/build_artifacts" = "tests/data/mapping_files/custom_mapping.json"}
      "#,
     )
     .unwrap();

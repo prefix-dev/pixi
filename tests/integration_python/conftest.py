@@ -19,30 +19,30 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def test_data() -> Path:
-    return Path(__file__).parent.joinpath("test_data").resolve()
+def channels() -> Path:
+    return Path(__file__).parent.parent.joinpath("data", "channels", "channels").resolve()
 
 
 @pytest.fixture
-def dummy_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("channels", "dummy_channel_1").as_uri()
+def dummy_channel_1(channels: Path) -> str:
+    return channels.joinpath("dummy_channel_1").as_uri()
 
 
 @pytest.fixture
-def dummy_channel_2(test_data: Path) -> str:
-    return test_data.joinpath("channels", "dummy_channel_2").as_uri()
+def dummy_channel_2(channels: Path) -> str:
+    return channels.joinpath("dummy_channel_2").as_uri()
 
 
 @pytest.fixture
-def global_update_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("channels", "global_update_channel_1").as_uri()
+def global_update_channel_1(channels: Path) -> str:
+    return channels.joinpath("global_update_channel_1").as_uri()
 
 
 @pytest.fixture
-def non_self_expose_channel_1(test_data: Path) -> str:
-    return test_data.joinpath("channels", "non_self_expose_channel_1").as_uri()
+def non_self_expose_channel_1(channels: Path) -> str:
+    return channels.joinpath("non_self_expose_channel_1").as_uri()
 
 
 @pytest.fixture
-def non_self_expose_channel_2(test_data: Path) -> str:
-    return test_data.joinpath("channels", "non_self_expose_channel_2").as_uri()
+def non_self_expose_channel_2(channels: Path) -> str:
+    return channels.joinpath("non_self_expose_channel_2").as_uri()

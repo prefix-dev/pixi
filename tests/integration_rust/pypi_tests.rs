@@ -7,7 +7,7 @@ use url::Url;
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_index_strategy() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes).unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(

@@ -563,9 +563,10 @@ async fn test_installer_name() {
 /// Test full prefix install for an old lock file to see if it still works.
 /// Makes sure the lockfile isn't touched and the environment is still installed.
 async fn test_old_lock_install() {
-    let lock_str = std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap();
+    let lock_str =
+        std::fs::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
     let project = Project::from_path(Path::new(
-        "tests/satisfiability/old_lock_file/pyproject.toml",
+        "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();
     pixi::environment::update_prefix(&project.default_environment(), LockFileUsage::Update, false)
@@ -573,7 +574,7 @@ async fn test_old_lock_install() {
         .unwrap();
     assert_eq!(
         lock_str,
-        std::fs::read_to_string("tests/satisfiability/old_lock_file/pixi.lock").unwrap()
+        std::fs::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()
     );
 }
 

@@ -1124,7 +1124,7 @@ mod tests {
 
     #[rstest]
     fn test_good_satisfiability(
-        #[files("tests/integration_rust/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
