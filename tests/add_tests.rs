@@ -520,3 +520,66 @@ async fn add_unconstrainted_dependency() {
     bar = "*"
     "###);
 }
+
+#[tokio::test]
+async fn pinning_dependency() {
+    // Create a channel with a single package
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foobar").await.unwrap();
+    pixi.add("python").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `python` package
+    let python_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("python")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    // Testing to see if edge cases are handled correctly
+    // Python shouldn't be automatically pinned to a major version.
+    assert_eq!(python_spec, r#"">=3.13,<3.14""#);
+
+    // Get the specs for the `foobar` package
+    let foobar_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("foobar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    assert_eq!(foobar_spec, r#"">=1,<2""#);
+
+    // Add the `python` package with a specific version
+    pixi.add("python==3.13").await.unwrap();
+    let project = pixi.project().unwrap();
+    let python_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(None, None)
+        .unwrap_or_default()
+        .get("python")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    assert_eq!(python_spec, r#""==3.13""#);
+}

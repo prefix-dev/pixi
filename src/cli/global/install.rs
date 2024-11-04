@@ -118,16 +118,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
             Ok(state_changes) => {
-                match state_changes.has_changed() {
-                    true => env_changes
+                if state_changes.has_changed() {
+                    env_changes
                         .changes
-                        .insert(env_name.clone(), EnvState::Installed),
-                    false => env_changes.changes.insert(
+                        .insert(env_name.clone(), EnvState::Installed)
+                } else {
+                    env_changes.changes.insert(
                         env_name.clone(),
                         EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
-                    ),
+                    )
                 };
-                state_changes.report();
             }
             Err(err) => {
                 revert_environment_after_error(env_name, &last_updated_project)

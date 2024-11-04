@@ -1,3 +1,4 @@
+use super::package_identifier::ConversionError;
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pep508_rs::PackageName;
 use pixi_uv_conversions::to_uv_normalize;
@@ -6,8 +7,6 @@ use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
-
-use super::package_identifier::ConversionError;
 
 pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
 pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;

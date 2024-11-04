@@ -702,6 +702,7 @@ async fn test_many_linux_wheel_tag() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_ensure_gitignore_file_creation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();

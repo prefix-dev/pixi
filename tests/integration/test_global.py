@@ -18,6 +18,7 @@ def exec_extension(exe_name: str) -> str:
         return exe_name
 
 
+@pytest.mark.slow
 def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -61,6 +62,7 @@ def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -154,6 +156,7 @@ def test_sync_manually_remove_binary(pixi: Path, tmp_path: Path, dummy_channel_1
     assert dummy_a.is_file()
 
 
+@pytest.mark.slow
 def test_sync_migrate(
     pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
@@ -1007,6 +1010,7 @@ def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_
     assert not dummy_x.is_file()
 
 
+@pytest.mark.slow
 def test_install_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     # Exists on win-64
@@ -1661,6 +1665,10 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
             "dummy-b",
         ],
         env=env,
+        stdout_contains=[
+            "dependencies: dummy-a 0.1.0, dummy-b 0.1.0",
+            "exposes: dummy-a, dummy-aa, dummy-b",
+        ],
     )
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
@@ -1671,8 +1679,36 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
     verify_cli_command(
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         env=env,
+        stderr_contains=[
+            "Removed package dummy-a  in environment my-env.",
+            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
+        ],
     )
     assert not dummy_a.is_file()
+
+    # install back removed dummy-a
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "my-env",
+            "dummy-a",
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a", "dummy-b"],
+        env=env,
+        stderr_contains=[
+            "Removed packages in environment my-env.\n    - dummy-a \n    - dummy-b",
+            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b",
+        ],
+    )
 
     # Remove non-existing package
     verify_cli_command(
