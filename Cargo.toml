@@ -55,7 +55,7 @@ pep508_rs = "0.9.1"
 percent-encoding = "2.3.1"
 pyproject-toml = "0.13.4"
 regex = "1.10.4"
-reqwest = { version = "0.12.4", default-features = false }
+reqwest = { version = "0.12.9", default-features = false }
 reqwest-middleware = "0.3.0"
 reqwest-retry = "0.5.0"
 rlimit = "0.10.1"
@@ -326,15 +326,15 @@ reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev =
 # pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.28" }
 # deno_task_shell = { path = "../deno_task_shell" }
-rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
-rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/bump-peps" }
+rattler = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }

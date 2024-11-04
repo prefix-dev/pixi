@@ -178,15 +178,15 @@ pub enum PlatformUnsat {
     #[error("'{name}' has mismatching url: '{spec_url} != {lock_url}'")]
     LockedPyPIDirectUrlMismatch {
         name: String,
-        spec_url: Url,
-        lock_url: Url,
+        spec_url: String,
+        lock_url: String,
     },
 
     #[error("'{name}' has mismatching git url: '{spec_url} != {lock_url}'")]
     LockedPyPIGitUrlMismatch {
         name: String,
-        spec_url: Url,
-        lock_url: Url,
+        spec_url: String,
+        lock_url: String,
     },
 
     #[error("'{name}' has mismatching git ref: '{expected_ref} != {found_ref}'")]
@@ -576,8 +576,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
                         name: spec.name.clone().to_string(),
-                        spec_url: spec_url.raw().clone(),
-                        lock_url: locked_url,
+                        spec_url: spec_url.raw().to_string(),
+                        lock_url: locked_url.to_string(),
                     });
                 }
             }
@@ -598,8 +598,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_url: repository.clone(),
-                                lock_url: locked_git_url.url.repository().clone(),
+                                spec_url: repository.to_string(),
+                                lock_url: locked_git_url.url.repository().to_string(),
                             });
                         }
                         // If the spec does not specify a revision than any will do
