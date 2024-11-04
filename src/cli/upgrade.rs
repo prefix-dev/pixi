@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;
@@ -8,8 +8,12 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::MietteDiagnostic;
 
+use pep508_rs::MarkerTree;
+use pep508_rs::Requirement;
 use pixi_manifest::FeatureName;
+use pixi_manifest::PyPiRequirement;
 use pixi_manifest::SpecType;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::MatchSpec;
 
 use super::cli_config::PrefixUpdateConfig;
@@ -79,44 +83,67 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let match_specs = match_spec_iter
+        // If specific packages have been requested, only upgrade those
         .filter(|(name, _)| match &args.specs.packages {
-            // TODO: replace args.specs.packages with package_names
             None => true,
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
         })
-        .filter_map(|(name, spec)| {
-            match spec.try_into_nameless_match_spec(&project.channel_config()) {
-                Ok(Some(mut nameless_spec)) => {
-                    // In order to upgrade, we remove the version requirement
-                    nameless_spec.version = None; // TODO: use matchspec if given
-                    Some((
-                        name.clone(),
-                        (
-                            MatchSpec::from_nameless(nameless_spec, Some(name)),
-                            spec_type,
-                        ),
-                    ))
-                }
-                _ => None,
+        // Only upgrade version specs
+        .filter_map(|(name, req)| match req {
+            PixiSpec::DetailedVersion(version_spec) => {
+                let channel = version_spec
+                    .channel
+                    .and_then(|c| c.into_channel(&project.channel_config()).ok())
+                    .map(Arc::new);
+                Some((
+                    name.clone(),
+                    (
+                        MatchSpec {
+                            name: Some(name),
+                            channel,
+                            ..Default::default()
+                        },
+                        spec_type,
+                    ),
+                ))
             }
+            PixiSpec::Version(_) => Some((name.clone(), (MatchSpec::from(name), spec_type))),
+            _ => None,
         })
         .collect();
 
     let pypi_deps = pypi_deps_iter
+        // If specific packages have been requested, only upgrade those
         .filter(|(name, _)| match &args.specs.packages {
-            // TODO: replace args.specs.packages with package_names
             None => true,
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
         })
-        .filter_map(
-            |(name, req)| match pep508_rs::Requirement::from_str(&req.to_string()) {
-                // TODO: if given, use that version requirement, or remove version requirement if none is given
-                Ok(pep_req) => Some((name, pep_req)),
-                _ => None,
-            },
-        )
+        // Only upgrade version specs
+        .filter_map(|(name, req)| match req {
+            PyPiRequirement::Version { extras, .. } => Some((
+                name.clone(),
+                Requirement {
+                    name: name.as_normalized().clone(),
+                    extras,
+                    marker: MarkerTree::default(),
+                    origin: None,
+                    version_or_url: None,
+                },
+            )),
+            PyPiRequirement::RawVersion(_) => Some((
+                name.clone(),
+                Requirement {
+                    name: name.as_normalized().clone(),
+                    extras: Vec::default(),
+                    marker: MarkerTree::default(),
+                    origin: None,
+                    version_or_url: None,
+                },
+            )),
+            _ => None,
+        })
         .collect();
 
     project
