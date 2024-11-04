@@ -448,7 +448,6 @@ async fn test_channels_changed() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();

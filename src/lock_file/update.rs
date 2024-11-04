@@ -166,12 +166,16 @@ impl<'p> LockFileDerivedData<'p> {
         if update_mode == UpdateMode::Validate {
             if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
                 if environment_file.environment_lock_file_hash == hash {
+                    tracing::info!(
+                        "Environment '{}' is up-to-date with lock file hash",
+                        environment.name().fancy_display()
+                    );
                     return Ok(Prefix::new(environment.dir()));
                 }
             } else {
                 tracing::debug!(
                     "Environment file not found or parsable for '{}'",
-                    environment.name()
+                    environment.name().fancy_display()
                 );
             }
         }
@@ -201,6 +205,7 @@ impl<'p> LockFileDerivedData<'p> {
             return Ok(prefix.clone());
         }
 
+        tracing::info!("Updating prefix");
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;

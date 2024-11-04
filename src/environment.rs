@@ -9,6 +9,7 @@ use crate::{
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use fs_err as fs;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
@@ -22,13 +23,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
-use std::{
-    collections::HashMap,
-    convert::identity,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, convert::identity, io, io::ErrorKind, path::{Path, PathBuf}, sync::Arc};
 use tokio::sync::Semaphore;
 use xxhash_rust::xxh3::Xxh3;
 
@@ -102,13 +97,22 @@ async fn prefix_location_changed(
     }
 }
 
+// Write the contents to the file at the given path.
+fn write_file<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    // Verify existence of parent
+    if let Some(parent) = path.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, contents)
+}
+
 /// Create the prefix location file.
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file_path = environment_dir
         .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
-    tracing::info!("Creating prefix file at: {}", prefix_file_path.display());
 
     let parent_dir = prefix_file_path.parent().ok_or_else(|| {
         miette::miette!(
@@ -120,18 +124,17 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     if parent_dir.exists() {
         let contents = parent_dir.to_string_lossy();
 
-        let path = Path::new(&prefix_file_path);
         // Read existing contents to determine if an update is necessary
-        if path.exists() {
-            let existing_contents = std::fs::read_to_string(path).into_diagnostic()?;
+        if prefix_file_path.exists() {
+            let existing_contents = fs::read_to_string(&prefix_file_path).into_diagnostic()?;
             if existing_contents == contents {
                 tracing::info!("No update needed for the prefix file.");
                 return Ok(());
             }
         }
 
-        // Write new contents to the prefix file
-        std::fs::write(path, &*contents).into_diagnostic()?;
+        write_file(&prefix_file_path, contents.as_bytes()).into_diagnostic()?;
+
         tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
@@ -142,25 +145,9 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     let history_file = environment_dir.join("conda-meta").join("history");
 
-    tracing::info!(
-        "Checking if history file exists: {}",
-        history_file.display()
-    );
+    tracing::info!("Verify history file exists: {}", history_file.display());
 
-    let binding = history_file.clone();
-    let parent = binding
-        .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
-
-    if parent.exists() && !history_file.exists() {
-        tracing::info!("Creating history file: {}", history_file.display());
-        std::fs::write(
-            history_file,
-            "// not relevant for pixi but for `conda run -p`",
-        )
-        .into_diagnostic()?;
-    }
-    Ok(())
+    write_file(history_file, "// not relevant for pixi but for `conda run -p`").into_diagnostic()
 }
 
 #[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
