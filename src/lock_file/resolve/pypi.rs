@@ -15,8 +15,9 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_uv_conversions::{
-    as_uv_req, isolated_names_to_packages, names_to_build_isolation,
-    pypi_options_to_index_locations, to_index_strategy,
+    as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
+    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_requirements,
+    to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -116,33 +117,6 @@ fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> PathBuf {
 
 type CondaPythonPackages =
     HashMap<uv_normalize::PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
-
-/// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced
-/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
-fn convert_uv_requirements_to_pep508<'req>(
-    requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<VerbatimParsedUrl>>,
-) -> Vec<pep508_rs::Requirement> {
-    // Convert back top PEP508 Requirement<VerbatimUrl>
-    requires_dist
-        .map(|r| {
-            let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement).expect("invalid requirement")
-        })
-        .collect()
-}
-
-fn uv_pypi_types_requirement_to_pep508<'req>(
-    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
-) -> Vec<pep508_rs::Requirement> {
-    requirements
-        .map(|requirement| {
-            let requirement: uv_pep508::Requirement<VerbatimParsedUrl> =
-                uv_pep508::Requirement::from(requirement.clone());
-            pep508_rs::Requirement::from_str(&requirement.to_string()).expect("invalid requirement")
-        })
-        .collect()
-}
 
 /// Prints the number of overridden uv PyPI package requests
 fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
@@ -539,11 +513,11 @@ async fn lock_pypi_packages<'a>(
                         .expect("cannot convert name"),
                     version: pep440_rs::Version::from_str(&metadata.version.to_string())
                         .expect("cannot convert version"),
-                    requires_python: metadata.requires_python.map(|r| {
-                        pep440_rs::VersionSpecifiers::from_str(&r.to_string())
-                            .expect("cannot convert requires python")
-                    }),
-                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r).expect("need tim help")),
+                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
+                        .into_diagnostic()?,
                     editable: false,
                     url_or_path,
                     hash,
@@ -637,13 +611,11 @@ async fn lock_pypi_packages<'a>(
                         .expect("cannot convert name"),
                     version: pep440_rs::Version::from_str(&metadata.version.to_string())
                         .expect("cannot convert version"),
-                    requires_python: metadata.requires_python.map(|r| {
-                        pep440_rs::VersionSpecifiers::from_str(&r.to_string())
-                            .expect("cannot convert requires python")
-                    }),
-                    requires_dist: uv_pypi_types_requirement_to_pep508(
-                        metadata.requires_dist.iter(),
-                    ),
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r).expect("need tim help")),
+                    requires_dist: to_requirements(metadata.requires_dist.iter())
+                        .into_diagnostic()?,
                     url_or_path,
                     hash,
                     editable,

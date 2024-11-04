@@ -23,7 +23,9 @@ use parking_lot::Mutex;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
-use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
+use pixi_uv_conversions::{
+    to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
+};
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
 use rattler::package_cache::PackageCache;
@@ -1685,12 +1687,12 @@ async fn spawn_extract_environment_task(
     let mut pypi_package_names = HashSet::new();
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
-        let uv_name = GLOBAL_UV_CONVERSIONS.to_uv_normalize(&name);
+        let uv_name = to_uv_normalize(&name).into_diagnostic()?;
         for req in reqs {
             for extra in req.extras().iter() {
                 pypi_package_names.insert(PackageName::Pypi((
                     uv_name.clone(),
-                    Some(GLOBAL_UV_CONVERSIONS.to_uv_extra_name(extra)),
+                    Some(to_uv_extra_name(extra).into_diagnostic()?),
                 )));
             }
         }
@@ -1721,7 +1723,7 @@ async fn spawn_extract_environment_task(
                 .by_name(&name)
                 .map(PackageRecord::Conda),
             PackageName::Pypi((name, extra)) => {
-                let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
+                let pep_name = to_normalize(&name).into_diagnostic()?;
                 if let Some(found_record) = grouped_pypi_records.by_name(&pep_name) {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
@@ -1757,25 +1759,25 @@ async fn spawn_extract_environment_task(
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies
                 let extras = extra
-                    .map(|extra| vec![GLOBAL_UV_CONVERSIONS.to_extra_name(&extra)])
+                    // .map(|extra| Ok(vec![to_extra_name(&extra)?]))
+                    .map(|extra| vec![to_extra_name(&extra).expect("need tim help")])
                     .unwrap_or_default();
+
                 for req in record.0.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();
-                        let serde_str = serde_json::to_string(marker_env).expect("its valid");
-                        let pep_marker: pep508_rs::MarkerEnvironment =
-                            serde_json::from_str(&serde_str).expect("we just serialized it");
+                        let pep_marker = to_marker_environment(marker_env).into_diagnostic()?;
 
                         if !req.evaluate_markers(&pep_marker, &extras) {
                             continue;
                         }
                     }
-                    let uv_name = GLOBAL_UV_CONVERSIONS.to_uv_normalize(&req.name);
+                    let uv_name = to_uv_normalize(&req.name).into_diagnostic()?;
 
                     // Add the package to the queue
                     for extra in req.extras.iter() {
-                        let extra_name = GLOBAL_UV_CONVERSIONS.to_uv_extra_name(extra);
+                        let extra_name = to_uv_extra_name(extra).into_diagnostic()?;
                         if queued_names.insert(PackageName::Pypi((
                             uv_name.clone(),
                             Some(extra_name.clone()),
@@ -1877,6 +1879,16 @@ async fn spawn_solve_pypi_task(
 
         let start = Instant::now();
 
+        // let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+        // .into_iter()
+        // .map(|(name, requirement)| {
+        //     Ok((
+        //         to_uv_normalize(name.as_normalized())?,
+        //         requirement,
+        //     ))
+        // })
+        // .collect::<Result<Vec<(uv_normalize::PackageName, IndexSet<PyPiRequirement>)>, _>>()?;
+
         let records = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
@@ -1884,7 +1896,7 @@ async fn spawn_solve_pypi_task(
                 .into_iter()
                 .map(|(name, requirement)| {
                     (
-                        GLOBAL_UV_CONVERSIONS.to_uv_normalize(name.as_normalized()),
+                        to_uv_normalize(name.as_normalized()).expect("need tim help"),
                         requirement,
                     )
                 })

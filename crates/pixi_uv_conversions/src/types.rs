@@ -2,124 +2,234 @@
 // use pep508_rs::PackageName;
 
 use once_cell::sync::Lazy;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::error::Error;
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+    sync::Arc,
+};
+use thiserror::Error;
+use uv_distribution_types::Name;
+use uv_pypi_types::VerbatimParsedUrl;
 
-use dashmap::DashMap;
-
-// use crate::to_uv_normalize;
-
-// Create a globally accessible instance of `UvConversions` wrapped in `Arc`.
-pub static GLOBAL_UV_CONVERSIONS: Lazy<Arc<UvConversions>> =
-    Lazy::new(|| Arc::new(UvConversions::new()));
-
-pub struct UvConversions {
-    pep_to_uv_name: DashMap<pep508_rs::PackageName, uv_normalize::PackageName>,
-    uv_to_pep_name: DashMap<uv_normalize::PackageName, pep508_rs::PackageName>,
-    pep_to_uv_extra_name: DashMap<pep508_rs::ExtraName, uv_normalize::ExtraName>,
-    uv_to_pep_extra_name: DashMap<uv_normalize::ExtraName, pep508_rs::ExtraName>,
+#[derive(Debug)]
+pub enum NameError {
+    PepNameError(pep508_rs::InvalidNameError),
+    PepExtraNameError(pep508_rs::InvalidNameError),
+    UvNameError(uv_normalize::InvalidNameError),
+    UvExtraNameError(uv_normalize::InvalidNameError),
 }
 
-impl Debug for UvConversions {
+impl Display for NameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // print the number of items in each map
-        f.debug_struct("UvConversions")
-            .field("pep_to_uv_name", &self.pep_to_uv_name.len())
-            .field("uv_to_pep_name", &self.uv_to_pep_name.len())
-            .field("pep_to_uv_extra_name", &self.pep_to_uv_extra_name.len())
-            .field("uv_to_pep_extra_name", &self.uv_to_pep_extra_name.len())
-            .finish()
+        match self {
+            NameError::PepNameError(e) => write!(f, "Failed to convert to pep name {}", e),
+            NameError::UvNameError(e) => write!(f, "Failed to convert to uv name  {}", e),
+            NameError::PepExtraNameError(e) => {
+                write!(f, "Failed to convert to uv extra name  {}", e)
+            }
+            NameError::UvExtraNameError(e) => {
+                write!(f, "Failed to convert to uv extra name  {}", e)
+            }
+        }
     }
 }
 
-impl Default for UvConversions {
-    fn default() -> Self {
-        Self::new()
+impl Error for NameError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NameError::PepNameError(e) => Some(e),
+            NameError::UvNameError(e) => Some(e),
+            NameError::PepExtraNameError(e) => Some(e),
+            NameError::UvExtraNameError(e) => Some(e),
+        }
     }
 }
 
-impl UvConversions {
-    pub fn new() -> Self {
-        Self {
-            pep_to_uv_name: DashMap::with_capacity(52),
-            uv_to_pep_name: DashMap::with_capacity(52),
-            pep_to_uv_extra_name: DashMap::with_capacity(52),
-            uv_to_pep_extra_name: DashMap::with_capacity(52),
+#[derive(Debug)]
+pub enum VersionSpecifiersError {
+    PepVersionError(pep440_rs::VersionSpecifiersParseError),
+    UvVersionError(uv_pep440::VersionSpecifiersParseError),
+}
+
+impl Display for VersionSpecifiersError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersionSpecifiersError::PepVersionError(e) => {
+                write!(f, "Failed to convert to pep version {}", e)
+            }
+            VersionSpecifiersError::UvVersionError(e) => {
+                write!(f, "Failed to convert to uv version  {}", e)
+            }
         }
     }
+}
 
-    pub fn to_uv_normalize(&self, name: &pep508_rs::PackageName) -> uv_normalize::PackageName {
-        if let Some(cached_uv_name) = self.pep_to_uv_name.get(name) {
-            return cached_uv_name.clone();
+impl Error for VersionSpecifiersError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            VersionSpecifiersError::PepVersionError(e) => Some(e),
+            VersionSpecifiersError::UvVersionError(e) => Some(e),
         }
-
-        let uv_name = to_uv_normalize(name);
-        self.pep_to_uv_name.insert(name.clone(), uv_name.clone());
-
-        uv_name
     }
+}
 
-    pub fn to_normalize(&self, name: &uv_normalize::PackageName) -> pep508_rs::PackageName {
-        if let Some(cached_uv_name) = self.uv_to_pep_name.get(name) {
-            return cached_uv_name.clone();
+#[derive(Debug)]
+pub enum Pep508Error {
+    Pep508Error(pep508_rs::Pep508Error),
+    UvPep508(uv_pep508::Pep508Error),
+}
+
+impl Display for Pep508Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pep508Error::Pep508Error(e) => write!(f, "Failed to convert {}", e),
+            Pep508Error::UvPep508(e) => write!(f, "Failed to convert to convert {}", e),
         }
-
-        let pep_name = to_normalize(name);
-        self.uv_to_pep_name.insert(name.clone(), pep_name.clone());
-
-        pep_name
     }
+}
 
-    pub fn to_uv_extra_name(&self, name: &pep508_rs::ExtraName) -> uv_normalize::ExtraName {
-        if let Some(cached_uv_name) = self.pep_to_uv_extra_name.get(name) {
-            return cached_uv_name.clone();
+impl Error for Pep508Error {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Pep508Error::Pep508Error(e) => Some(e),
+            Pep508Error::UvPep508(e) => Some(e),
         }
-
-        let pep_name = to_uv_extra_name(name);
-        self.pep_to_uv_extra_name
-            .insert(name.clone(), pep_name.clone());
-
-        pep_name
     }
+}
 
-    pub fn to_extra_name(&self, name: &uv_normalize::ExtraName) -> pep508_rs::ExtraName {
-        if let Some(cached_uv_name) = self.uv_to_pep_extra_name.get(name) {
-            return cached_uv_name.clone();
-        }
+// Define a custom error type for all potential conversion errors
+#[derive(Error, Debug)]
+pub enum ConversionError {
+    #[error(transparent)]
+    InvalidPackageName(#[from] NameError),
 
-        let pep_name = to_extra_name(name);
-        self.uv_to_pep_extra_name
-            .insert(name.clone(), pep_name.clone());
+    #[error(transparent)]
+    Pep508Error(#[from] Pep508Error),
 
-        pep_name
-    }
+    #[error("Invalid marker environment serialization")]
+    MarkerEnvironmentSerialization(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    InvalidVersionSpecifier(#[from] VersionSpecifiersError),
+
+    #[error(transparent)]
+    InvalidVersion(#[from] uv_pep440::VersionParseError),
+}
+
+pub fn to_requirements<'req>(
+    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
+) -> Result<Vec<pep508_rs::Requirement>, ConversionError> {
+    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
+        .map(|requirement| {
+            let requirement: uv_pep508::Requirement<VerbatimParsedUrl> =
+                uv_pep508::Requirement::from(requirement.clone());
+            pep508_rs::Requirement::from_str(&requirement.to_string())
+                .map_err(|err| Pep508Error::Pep508Error(err))
+        })
+        .collect();
+
+    Ok(requirements?)
+}
+
+/// Convert back to PEP508 without the VerbatimParsedUrl
+/// We need this function because we need to convert to the introduced
+/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+pub fn convert_uv_requirements_to_pep508<'req>(
+    requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<VerbatimParsedUrl>>,
+) -> Result<Vec<pep508_rs::Requirement>, ConversionError> {
+    // Convert back top PEP508 Requirement<VerbatimUrl>
+    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+        .map(|r| {
+            let requirement = r.to_string();
+            pep508_rs::Requirement::from_str(&requirement)
+                .map_err(|err| Pep508Error::Pep508Error(err))
+        })
+        .collect();
+
+    Ok(requirements?)
 }
 
 /// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
-pub fn to_normalize(normalise: &uv_normalize::PackageName) -> pep508_rs::PackageName {
-    pep508_rs::PackageName::from_str(normalise.as_str()).expect("should be the same")
+pub fn to_normalize(
+    normalise: &uv_normalize::PackageName,
+) -> Result<pep508_rs::PackageName, ConversionError> {
+    Ok(pep508_rs::PackageName::from_str(normalise.as_str())
+        .map_err(|err| NameError::PepNameError(err))?)
 }
 
 /// Converts `pe508::PackageName` to  `uv_normalize::PackageName`
-pub fn to_uv_normalize(normalise: &pep508_rs::PackageName) -> uv_normalize::PackageName {
-    uv_normalize::PackageName::from_str(normalise.to_string().as_str()).expect("should be the same")
+pub fn to_uv_normalize(
+    normalise: &pep508_rs::PackageName,
+) -> Result<uv_normalize::PackageName, ConversionError> {
+    Ok(
+        uv_normalize::PackageName::from_str(normalise.to_string().as_str())
+            .map_err(|err| NameError::UvNameError(err))?,
+    )
 }
 
 /// Converts `pep508_rs::ExtraName` to `uv_normalize::ExtraName`
-pub fn to_uv_extra_name(extra_name: &pep508_rs::ExtraName) -> uv_normalize::ExtraName {
-    uv_normalize::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
+pub fn to_uv_extra_name(
+    extra_name: &pep508_rs::ExtraName,
+) -> Result<uv_normalize::ExtraName, ConversionError> {
+    Ok(
+        uv_normalize::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(|err| NameError::UvExtraNameError(err))?,
+    )
 }
 
 /// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
-pub fn to_extra_name(extra_name: &uv_normalize::ExtraName) -> pep508_rs::ExtraName {
-    pep508_rs::ExtraName::from_str(extra_name.to_string().as_str()).expect("should be the same")
+pub fn to_extra_name(
+    extra_name: &uv_normalize::ExtraName,
+) -> Result<pep508_rs::ExtraName, ConversionError> {
+    Ok(
+        pep508_rs::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(|err| NameError::PepExtraNameError(err))?,
+    )
+}
+
+/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+pub fn to_uv_version(version: &pep440_rs::Version) -> Result<uv_pep440::Version, ConversionError> {
+    Ok(uv_pep440::Version::from_str(version.to_string().as_str())
+        .map_err(|err| ConversionError::InvalidVersion(err))?)
 }
 
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
-pub fn to_uv_marker_tree(marker_tree: &pep508_rs::MarkerTree) -> uv_pep508::MarkerTree {
+pub fn to_uv_marker_tree(
+    marker_tree: &pep508_rs::MarkerTree,
+) -> Result<uv_pep508::MarkerTree, ConversionError> {
     let serialized = marker_tree.try_to_string();
     if let Some(serialized) = serialized {
-        uv_pep508::MarkerTree::from_str(serialized.as_str()).expect("should be the same")
+        Ok(uv_pep508::MarkerTree::from_str(serialized.as_str())
+            .map_err(|err| Pep508Error::UvPep508(err))?)
     } else {
-        uv_pep508::MarkerTree::default()
+        Ok(uv_pep508::MarkerTree::default())
     }
+}
+
+/// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
+pub fn to_marker_environment(
+    marker_env: &uv_pep508::MarkerEnvironment,
+) -> Result<pep508_rs::MarkerEnvironment, ConversionError> {
+    let serde_str = serde_json::to_string(marker_env).expect("its valid");
+    Ok(serde_json::from_str(&serde_str)
+        .map_err(|err| ConversionError::MarkerEnvironmentSerialization(err))?)
+}
+
+pub fn to_uv_version_specifiers(
+    version_specifier: &pep440_rs::VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, ConversionError> {
+    Ok(
+        uv_pep440::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(|err| VersionSpecifiersError::UvVersionError(err))?,
+    )
+}
+
+pub fn to_version_specifiers(
+    version_specifier: &uv_pep440::VersionSpecifiers,
+) -> Result<pep440_rs::VersionSpecifiers, ConversionError> {
+    Ok(
+        pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(|err| VersionSpecifiersError::PepVersionError(err))?,
+    )
 }

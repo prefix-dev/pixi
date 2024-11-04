@@ -14,7 +14,7 @@ use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
-use pixi_uv_conversions::{pypi_options_to_index_locations, GLOBAL_UV_CONVERSIONS};
+use pixi_uv_conversions::{pypi_options_to_index_locations, to_uv_normalize};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackage, Package, PypiPackage, UrlOrPath};
@@ -166,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .map(|p| match p {
             Package::Pypi(p) => {
-                let name = GLOBAL_UV_CONVERSIONS.to_uv_normalize(&p.data().package.name);
+                let name = to_uv_normalize(&p.data().package.name).expect("need tim help");
                 PackageExt::PyPI(p, name)
             }
             Package::Conda(c) => PackageExt::Conda(c),

@@ -1,4 +1,6 @@
-use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
+use pixi_uv_conversions::{
+    to_normalize, to_uv_normalize, to_uv_version, ConversionError as PixiConversionError,
+};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
@@ -65,7 +67,7 @@ impl PypiPackageIdentifier {
             let version =
                 pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
-                let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
+                let pep_name = to_normalize(&name)?;
 
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(pep_name),
@@ -111,7 +113,7 @@ impl PypiPackageIdentifier {
 
         // TODO: We can't really tell which python extras are enabled from a PURL.
         let extras = HashSet::new();
-        let pep_name = GLOBAL_UV_CONVERSIONS.to_normalize(&name);
+        let pep_name = to_normalize(&name)?;
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(pep_name),
@@ -122,19 +124,21 @@ impl PypiPackageIdentifier {
 
     /// Checks of a found pypi requirement satisfies with the information
     /// in this package identifier.
-    pub(crate) fn satisfies(&self, requirement: &uv_pypi_types::Requirement) -> bool {
+    pub(crate) fn satisfies(
+        &self,
+        requirement: &uv_pypi_types::Requirement,
+    ) -> Result<bool, ConversionError> {
         // Verify the name of the package
-        let uv_normalized = GLOBAL_UV_CONVERSIONS.to_uv_normalize(self.name.as_normalized());
+        let uv_normalized = to_uv_normalize(self.name.as_normalized())?;
         if uv_normalized != requirement.name {
-            return false;
+            return Ok(false);
         }
 
         // Check the version of the requirement
         match &requirement.source {
             uv_pypi_types::RequirementSource::Registry { specifier, .. } => {
-                let uv_version = uv_pep440::Version::from_str(self.version.to_string().as_str())
-                    .expect("could not convert to pypi version");
-                specifier.contains(&uv_version)
+                let uv_version = to_uv_version(&self.version)?;
+                Ok(specifier.contains(&uv_version))
             }
             // a pypi -> conda requirement on these versions are not supported
             uv_pypi_types::RequirementSource::Url { .. } => {
@@ -162,4 +166,6 @@ pub enum ConversionError {
     Version(String),
     // #[error("'{0}' is not a valid python extra")]
     // Extra(String),
+    #[error("Failed to convert to pypi package name")]
+    NameConversion(#[from] PixiConversionError),
 }

@@ -1,6 +1,6 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pep508_rs::PackageName;
-use pixi_uv_conversions::GLOBAL_UV_CONVERSIONS;
+use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
@@ -177,7 +177,7 @@ impl RepoDataRecordsByName {
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {
                     let name =
-                        GLOBAL_UV_CONVERSIONS.to_uv_normalize(identifier.name.as_normalized());
+                        to_uv_normalize(identifier.name.as_normalized()).expect("need tim help");
                     (name, (identifier, idx, record))
                 })
             })

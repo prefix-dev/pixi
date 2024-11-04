@@ -12,14 +12,17 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_manifest::FeaturesExt;
 use pixi_spec::{PixiSpec, SpecConversionError};
-use pixi_uv_conversions::{as_uv_req, to_uv_marker_tree, AsPep508Error, GLOBAL_UV_CONVERSIONS};
+use pixi_uv_conversions::{
+    as_uv_req, to_normalize, to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
+};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
     ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
-    ConversionError, Package, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+    ConversionError as RattlerLockConversionError, Package, PypiIndexes, PypiPackageData,
+    PypiSourceTreeHashable, UrlOrPath,
 };
 use thiserror::Error;
 use url::Url;
@@ -30,7 +33,9 @@ use uv_pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 
-use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use super::{
+    package_identifier::ConversionError, PypiRecord, PypiRecordsByName, RepoDataRecordsByName,
+};
 use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -81,9 +86,6 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
 
-    #[error("failed to convert the requirement for '{0}'")]
-    FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<Pep508Error>),
-
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
 
@@ -103,7 +105,7 @@ pub enum PlatformUnsat {
     MissingPurls,
 
     #[error("corrupted lock-file entry for '{0}'")]
-    CorruptedEntry(String, ConversionError),
+    CorruptedEntry(String, RattlerLockConversionError),
 
     #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
     TooManyPypiPackages(Vec<pep508_rs::PackageName>),
@@ -207,6 +209,9 @@ pub enum PlatformUnsat {
         expected_path: PathBuf,
         found_path: PathBuf,
     },
+
+    #[error("failed to convert between pep508 and uv types {0}")]
+    UvTypesConversionError(#[from] ConversionError),
 }
 
 impl PlatformUnsat {
@@ -233,17 +238,14 @@ trait IntoUvRequirement {
 }
 
 impl IntoUvRequirement for pep508_rs::Requirement {
-    type E = Pep508Error;
+    type E = ConversionError;
 
     fn into_uv_requirement(self) -> Result<uv_pypi_types::Requirement, Self::E> {
         let parsed_url = if let Some(version_or_url) = self.version_or_url {
             match version_or_url {
-                pep508_rs::VersionOrUrl::VersionSpecifier(version) => {
-                    Some(uv_pep508::VersionOrUrl::VersionSpecifier(
-                        uv_pep440::VersionSpecifiers::from_str(&version.to_string())
-                            .expect("cannot convert version"),
-                    ))
-                }
+                pep508_rs::VersionOrUrl::VersionSpecifier(version) => Some(
+                    uv_pep508::VersionOrUrl::VersionSpecifier(to_uv_version_specifiers(&version)?),
+                ),
                 pep508_rs::VersionOrUrl::Url(verbatim_url) => {
                     let url_or_path =
                         UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
@@ -283,7 +285,7 @@ impl IntoUvRequirement for pep508_rs::Requirement {
             None
         };
 
-        let marker = to_uv_marker_tree(&self.marker);
+        let marker = to_uv_marker_tree(&self.marker)?;
         let converted = uv_pep508::Requirement {
             name: uv_pep508::PackageName::new(self.name.to_string())
                 .expect("cannot normalize name"),
@@ -406,11 +408,11 @@ pub fn verify_platform_satisfiability(
         match package {
             Package::Conda(conda) => {
                 let url = conda.url().clone();
-                conda_packages.push(
-                    conda
-                        .try_into()
-                        .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
-                );
+                conda_packages.push(conda.try_into().map_err(
+                    |e: RattlerLockConversionError| {
+                        PlatformUnsat::CorruptedEntry(url.to_string(), e)
+                    },
+                )?);
             }
             Package::Pypi(pypi) => {
                 pypi_packages.push((pypi.data().package.clone(), pypi.data().environment.clone()));
@@ -831,7 +833,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                         ));
                     }
 
-                    if !identifier.satisfies(&requirement) {
+                    if !identifier.satisfies(&requirement)? {
                         // The record does not match the spec, the lock-file is inconsistent.
                         return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
                             Box::new(requirement.clone()),
@@ -839,9 +841,10 @@ pub(crate) fn verify_package_platform_satisfiability(
                         ));
                     }
                     FoundPackage::Conda(*repodata_idx)
-                } else if let Some(idx) = locked_pypi_environment
-                    .index_by_name(&GLOBAL_UV_CONVERSIONS.to_normalize(&requirement.name))
-                {
+                } else if let Some(idx) = locked_pypi_environment.index_by_name(
+                    &to_normalize(&requirement.name)
+                        .map_err(|err| ConversionError::NameConversion(err))?,
+                ) {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
                         pypi_satifisfies_editable(&requirement, &record.0, project_root)?;
@@ -936,12 +939,7 @@ pub(crate) fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
-                        PlatformUnsat::FailedToConvertRequirement(
-                            record.0.name.clone(),
-                            Box::new(e),
-                        )
-                    })?;
+                    let requirement = requirement.clone().into_uv_requirement()?;
                     // Skip this requirement if it does not apply.
                     if !requirement.evaluate_markers(Some(marker_environment), &extras) {
                         continue;

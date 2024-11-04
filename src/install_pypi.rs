@@ -13,7 +13,9 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
-use pixi_uv_conversions::{isolated_names_to_packages, locked_indexes_to_index_locations};
+use pixi_uv_conversions::{
+    isolated_names_to_packages, locked_indexes_to_index_locations, to_uv_version_specifiers,
+};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{
@@ -127,9 +129,8 @@ fn locked_data_to_file(
         vec![]
     };
 
-    let uv_requires_python = requires_python.map(|inside| {
-        uv_pep440::VersionSpecifiers::from_str(&inside.to_string()).expect("should be the same")
-    });
+    let uv_requires_python =
+        requires_python.map(|inside| to_uv_version_specifiers(&inside).expect("need tim help"));
 
     uv_distribution_types::File {
         filename: filename.to_string(),
