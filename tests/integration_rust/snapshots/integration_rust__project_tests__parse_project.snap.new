@@ -1,0 +1,11 @@
+---
+source: tests/integration_rust/project_tests.rs
+assertion_line: 97
+expression: "dependency_names(&project, Platform::Linux64)"
+---
+[
+    "all",
+    "linux",
+    "all_linux",
+    "all_unix",
+]

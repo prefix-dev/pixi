@@ -1124,7 +1124,7 @@ mod tests {
 
     #[rstest]
     fn test_good_satisfiability(
-        #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/integration_rust/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
@@ -1160,16 +1160,20 @@ mod tests {
     fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::from_path(path).unwrap();
-            let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-            let err = verify_lockfile_satisfiability(&project, &lock_file)
-                .expect_err("expected failing satisfiability");
+        insta::glob!(
+            "../../tests/integration_rust/non-satisfiability",
+            "*/pixi.toml",
+            |path| {
+                let project = Project::from_path(path).unwrap();
+                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+                let err = verify_lockfile_satisfiability(&project, &lock_file)
+                    .expect_err("expected failing satisfiability");
 
-            let mut s = String::new();
-            report_handler.render_report(&mut s, &err).unwrap();
-            insta::assert_snapshot!(s);
-        });
+                let mut s = String::new();
+                report_handler.render_report(&mut s, &err).unwrap();
+                insta::assert_snapshot!(s);
+            }
+        );
     }
 
     #[test]

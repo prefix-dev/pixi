@@ -1,5 +1,3 @@
-mod common;
-
 use pixi_consts::consts;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;

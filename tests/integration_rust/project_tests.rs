@@ -1,5 +1,3 @@
-mod common;
-
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;

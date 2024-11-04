@@ -1,10 +1,8 @@
-mod common;
-
 use crate::common::{
     builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
 };
-use common::{LockFileExt, PixiControl};
+use crate::common::{LockFileExt, PixiControl};
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;

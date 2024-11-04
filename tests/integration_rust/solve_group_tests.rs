@@ -17,8 +17,6 @@ use crate::common::{
     LockFileExt, PixiControl,
 };
 
-mod common;
-
 #[tokio::test]
 async fn conda_solve_group_functionality() {
     let mut package_database = PackageDatabase::default();

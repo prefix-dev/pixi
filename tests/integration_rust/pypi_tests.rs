@@ -1,5 +1,3 @@
-mod common;
-
 use std::path::Path;
 
 use crate::common::{LockFileExt, PixiControl};
