@@ -95,6 +95,13 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
         ExitCode.SUCCESS,
     )
 
+    # Run the default task and create cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        ExitCode.SUCCESS,
+        stdout_contains="test123",
+    )
+
     # Modify the environment variable in cache
     cache_path = tmp_path.joinpath(".pixi/activation-env-v0/activation_default.json")
     with cache_path.open("r+") as f:
