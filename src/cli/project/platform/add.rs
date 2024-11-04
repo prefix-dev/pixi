@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     environment::{update_prefix, LockFileUsage},
+    lock_file::UpdateMode,
     Project,
 };
 use clap::Parser;
@@ -48,7 +49,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        true,
+        UpdateMode::Force,
     )
     .await?;
     project.save()?;

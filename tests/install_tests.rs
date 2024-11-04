@@ -8,6 +8,7 @@ use common::{LockFileExt, PixiControl};
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
+use pixi::lock_file::UpdateMode;
 use pixi::Project;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -574,7 +575,7 @@ async fn test_old_lock_install() {
         &project.default_environment(),
         LockFileUsage::Update,
         false,
-        true,
+        UpdateMode::Force,
     )
     .await
     .unwrap();

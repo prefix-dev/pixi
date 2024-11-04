@@ -118,6 +118,19 @@ pub struct LockFileDerivedData<'p> {
     pub io_concurrency_limit: IoConcurrencyLimit,
 }
 
+/// The mode to use when updating a prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Validate if the prefix is up-to-date.
+    /// Used for skipping the update if the prefix is already up-to-date, in activating commands.
+    /// Like `pixi shell` or `pixi run`.
+    Validate,
+    /// Force a prefix install without running the validation.
+    /// Used for updating the prefix when the lock-file likely out of date.
+    /// Like `pixi install` or `pixi update`.
+    Force,
+}
+
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
     pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
@@ -146,15 +159,20 @@ impl<'p> LockFileDerivedData<'p> {
     pub async fn prefix(
         &mut self,
         environment: &Environment<'p>,
-        force_update: bool,
+        update_mode: UpdateMode,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the environment file
         let hash = self.locked_environment_hash(environment)?;
-        if !force_update {
-            if let Some(environment_file) = read_environment_file(&environment.dir())? {
+        if update_mode == UpdateMode::Validate {
+            if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
                 if environment_file.environment_lock_file_hash == hash {
                     return Ok(Prefix::new(environment.dir()));
                 }
+            } else {
+                tracing::debug!(
+                    "Environment file not found or parsable for '{}'",
+                    environment.name()
+                );
             }
         }
 
@@ -178,6 +196,7 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the up-to-date prefix for the given environment.
     pub async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
@@ -208,6 +227,7 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
+        // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = self
             .project
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)

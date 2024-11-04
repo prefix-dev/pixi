@@ -1,6 +1,6 @@
 use crate::{
     install_pypi,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+    lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
     project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
     rlimit::try_increase_rlimit_to_sensible,
@@ -351,7 +351,7 @@ pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
-    force_update: bool,
+    update_mode: UpdateMode,
 ) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
@@ -376,7 +376,7 @@ pub async fn update_prefix(
 
     // Get the locked environment from the lock-file.
     if !no_install {
-        lock_file.prefix(environment, force_update).await?;
+        lock_file.prefix(environment, update_mode).await?;
     }
     Ok(())
 }

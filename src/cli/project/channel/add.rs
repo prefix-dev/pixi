@@ -1,5 +1,6 @@
 use crate::{
     environment::{update_prefix, LockFileUsage},
+    lock_file::UpdateMode,
     Project,
 };
 
@@ -16,7 +17,7 @@ pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Resul
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        true,
+        UpdateMode::Force,
     )
     .await?;
     project.save()?;

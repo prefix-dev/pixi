@@ -46,7 +46,7 @@ impl HasNameVersion for RepoDataRecord {
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<D: HasNameVersion> {
+pub(crate) struct DependencyRecordsByName<D: HasNameVersion> {
     pub records: Vec<D>,
     by_name: HashMap<D::N, usize>,
 }
