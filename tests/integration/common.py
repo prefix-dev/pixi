@@ -80,3 +80,11 @@ def verify_cli_command(
             assert substring not in stderr, f"'{substring}' unexpectedly found in stderr: {stderr}"
 
     return output
+
+
+def pixi_dir(project_root: Path) -> Path:
+    return project_root.joinpath(".pixi")
+
+
+def default_env_path(project_root: Path) -> Path:
+    return pixi_dir(project_root).joinpath("envs").joinpath("default")

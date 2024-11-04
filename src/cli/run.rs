@@ -169,7 +169,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
                 lock_file
-                    .prefix(&executable_task.run_environment, UpdateMode::Force)
+                    .prefix(&executable_task.run_environment, UpdateMode::Validate)
                     .await?;
 
                 let command_env = get_task_env(

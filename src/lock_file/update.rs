@@ -199,7 +199,7 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// Returns the up-to-date prefix for the given environment.
-    pub async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+    async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
         // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
