@@ -170,8 +170,7 @@ impl RepoDataRecordsByName {
         HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)>,
         ConversionError,
     > {
-        Ok(self
-            .records
+        self.records
             .iter()
             .enumerate()
             .filter_map(|(idx, record)| {
@@ -185,6 +184,6 @@ impl RepoDataRecordsByName {
                     Ok((name, (identifier, idx, record)))
                 })
             })
-            .collect::<Result<HashMap<_, _>, ConversionError>>()?)
+            .collect::<Result<HashMap<_, _>, ConversionError>>()
     }
 }

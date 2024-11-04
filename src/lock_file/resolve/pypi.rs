@@ -515,7 +515,7 @@ async fn lock_pypi_packages<'a>(
                         .expect("cannot convert version"),
                     requires_python: metadata
                         .requires_python
-                        .map(|r| Ok::<_, ConversionError>(to_version_specifiers(&r)?))
+                        .map(|r| to_version_specifiers(&r))
                         .transpose()
                         .into_diagnostic()?,
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
@@ -614,7 +614,7 @@ async fn lock_pypi_packages<'a>(
                         .expect("cannot convert version"),
                     requires_python: metadata
                         .requires_python
-                        .map(|r| Ok::<_, ConversionError>(to_version_specifiers(&r)?))
+                        .map(|r| to_version_specifiers(&r))
                         .transpose()
                         .into_diagnostic()?,
                     requires_dist: to_requirements(metadata.requires_dist.iter())

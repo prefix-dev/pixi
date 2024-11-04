@@ -150,7 +150,7 @@ pub fn to_requirements<'req>(
             let requirement: uv_pep508::Requirement<VerbatimParsedUrl> =
                 uv_pep508::Requirement::from(requirement.clone());
             pep508_rs::Requirement::from_str(&requirement.to_string())
-                .map_err(|err| Pep508Error::Pep508Error(err))
+                .map_err(Pep508Error::Pep508Error)
         })
         .collect();
 
@@ -167,8 +167,7 @@ pub fn convert_uv_requirements_to_pep508<'req>(
     let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
         .map(|r| {
             let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement)
-                .map_err(|err| Pep508Error::Pep508Error(err))
+            pep508_rs::Requirement::from_str(&requirement).map_err(Pep508Error::Pep508Error)
         })
         .collect();
 
@@ -179,8 +178,7 @@ pub fn convert_uv_requirements_to_pep508<'req>(
 pub fn to_normalize(
     normalise: &uv_normalize::PackageName,
 ) -> Result<pep508_rs::PackageName, ConversionError> {
-    Ok(pep508_rs::PackageName::from_str(normalise.as_str())
-        .map_err(|err| NameError::PepNameError(err))?)
+    Ok(pep508_rs::PackageName::from_str(normalise.as_str()).map_err(NameError::PepNameError)?)
 }
 
 /// Converts `pe508::PackageName` to  `uv_normalize::PackageName`
@@ -189,7 +187,7 @@ pub fn to_uv_normalize(
 ) -> Result<uv_normalize::PackageName, ConversionError> {
     Ok(
         uv_normalize::PackageName::from_str(normalise.to_string().as_str())
-            .map_err(|err| NameError::UvNameError(err))?,
+            .map_err(NameError::UvNameError)?,
     )
 }
 
@@ -199,7 +197,7 @@ pub fn to_uv_extra_name(
 ) -> Result<uv_normalize::ExtraName, ConversionError> {
     Ok(
         uv_normalize::ExtraName::from_str(extra_name.to_string().as_str())
-            .map_err(|err| NameError::UvExtraNameError(err))?,
+            .map_err(NameError::UvExtraNameError)?,
     )
 }
 
@@ -209,20 +207,22 @@ pub fn to_extra_name(
 ) -> Result<pep508_rs::ExtraName, ConversionError> {
     Ok(
         pep508_rs::ExtraName::from_str(extra_name.to_string().as_str())
-            .map_err(|err| NameError::PepExtraNameError(err))?,
+            .map_err(NameError::PepExtraNameError)?,
     )
 }
 
 /// Converts `uv_pep440::Version` to `pep440_rs::Version`
 pub fn to_version(version: &uv_pep440::Version) -> Result<pep440_rs::Version, ConversionError> {
     Ok(pep440_rs::Version::from_str(version.to_string().as_str())
-        .map_err(|err| VersionError::PepError(err))?)
+        .map_err(VersionError::PepError)?)
 }
 
 /// Converts `pep440_rs::Version` to `uv_pep440::Version`
 pub fn to_uv_version(version: &pep440_rs::Version) -> Result<uv_pep440::Version, ConversionError> {
-    Ok(uv_pep440::Version::from_str(version.to_string().as_str())
-        .map_err(|err| VersionError::UvError(err))?)
+    Ok(
+        uv_pep440::Version::from_str(version.to_string().as_str())
+            .map_err(VersionError::UvError)?,
+    )
 }
 
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
@@ -231,8 +231,7 @@ pub fn to_uv_marker_tree(
 ) -> Result<uv_pep508::MarkerTree, ConversionError> {
     let serialized = marker_tree.try_to_string();
     if let Some(serialized) = serialized {
-        Ok(uv_pep508::MarkerTree::from_str(serialized.as_str())
-            .map_err(|err| Pep508Error::UvPep508(err))?)
+        Ok(uv_pep508::MarkerTree::from_str(serialized.as_str()).map_err(Pep508Error::UvPep508)?)
     } else {
         Ok(uv_pep508::MarkerTree::default())
     }
@@ -243,8 +242,7 @@ pub fn to_marker_environment(
     marker_env: &uv_pep508::MarkerEnvironment,
 ) -> Result<pep508_rs::MarkerEnvironment, ConversionError> {
     let serde_str = serde_json::to_string(marker_env).expect("its valid");
-    Ok(serde_json::from_str(&serde_str)
-        .map_err(|err| ConversionError::MarkerEnvironmentSerialization(err))?)
+    serde_json::from_str(&serde_str).map_err(ConversionError::MarkerEnvironmentSerialization)
 }
 
 /// Converts `pep440_rs::VersionSpecifiers` to `uv_pep440::VersionSpecifiers`
@@ -253,7 +251,7 @@ pub fn to_uv_version_specifiers(
 ) -> Result<uv_pep440::VersionSpecifiers, ConversionError> {
     Ok(
         uv_pep440::VersionSpecifiers::from_str(&version_specifier.to_string())
-            .map_err(|err| VersionSpecifiersError::UvVersionError(err))?,
+            .map_err(VersionSpecifiersError::UvVersionError)?,
     )
 }
 
@@ -263,6 +261,6 @@ pub fn to_version_specifiers(
 ) -> Result<pep440_rs::VersionSpecifiers, ConversionError> {
     Ok(
         pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
-            .map_err(|err| VersionSpecifiersError::PepVersionError(err))?,
+            .map_err(VersionSpecifiersError::PepVersionError)?,
     )
 }

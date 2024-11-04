@@ -97,7 +97,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .map(|url| match url {
             rattler_lock::FindLinksUrlOrPath::Path(path_buf) => {
-                VerbatimUrl::from_path(base_path, &path_buf).map_err(|e| {
+                VerbatimUrl::from_path(base_path, path_buf).map_err(|e| {
                     ConvertFlatIndexLocationError::VerbatimUrlError(e, path_buf.clone())
                 })
             }

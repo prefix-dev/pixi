@@ -465,7 +465,7 @@ fn need_reinstall(
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
-        let uv_version = to_uv_version(&python_version).into_diagnostic()?;
+        let uv_version = to_uv_version(python_version).into_diagnostic()?;
         if !requires_python.contains(&uv_version) {
             return Ok(ValidateInstall::Reinstall);
         }
@@ -507,14 +507,14 @@ fn whats_the_plan<'a>(
     // Walk over all installed packages and check if they are required
     for dist in site_packages.iter() {
         // Check if we require the package to be installed
-        let pkg = required_pkgs.get(&dist.name());
+        let pkg = required_pkgs.get(dist.name());
         // Get the installer name
         let installer = dist
             .installer()
             // Empty string if no installer or any other error
             .map_or(String::new(), |f| f.unwrap_or_default());
 
-        if required_map_copy.contains_key(&dist.name()) && installer != consts::PIXI_UV_INSTALLER {
+        if required_map_copy.contains_key(dist.name()) && installer != consts::PIXI_UV_INSTALLER {
             // We are managing the package but something else has installed a version
             // let's re-install to make sure that we have the **correct** version
             reinstalls.push(dist.clone());
@@ -548,7 +548,7 @@ fn whats_the_plan<'a>(
 
             // Check if we need to revalidate the package
             // then we should get it from the remote
-            if uv_cache.must_revalidate(&dist.name()) {
+            if uv_cache.must_revalidate(dist.name()) {
                 remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
                 continue;
             }

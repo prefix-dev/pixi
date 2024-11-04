@@ -372,9 +372,7 @@ fn create_package_to_output<'a, 'b>(
                     i.dist.filename.version
                         == to_uv_version(&p.data().package.version).expect("invalid version")
                 });
-                let size = entry
-                    .map(|e| get_dir_size(e.dist.path.clone()).ok())
-                    .flatten();
+                let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
                 let name = entry.map(|e| e.dist.filename.to_string());
                 (size, name)
             } else {

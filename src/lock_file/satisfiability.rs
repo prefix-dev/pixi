@@ -581,9 +581,9 @@ pub(crate) fn pypi_satifisfies_requirement(
                     });
                 }
             }
-            return Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(
+            Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(
                 spec.name.to_string(),
-            ));
+            ))
         }
         RequirementSource::Git {
             repository,
@@ -641,10 +641,10 @@ pub(crate) fn pypi_satifisfies_requirement(
                             });
                         }
                     }
-                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                    Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
                         spec.name.to_string(),
                         url.to_string(),
-                    ));
+                    ))
                 }
                 UrlOrPath::Path(path) => {
                     return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
@@ -667,7 +667,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                 }
                 return Ok(());
             }
-            return Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()));
+            Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()))
         }
     }
 }
@@ -841,8 +841,7 @@ pub(crate) fn verify_package_platform_satisfiability(
                     }
                     FoundPackage::Conda(*repodata_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(
-                    &to_normalize(&requirement.name)
-                        .map_err(|err| ConversionError::NameConversion(err))?,
+                    &to_normalize(&requirement.name).map_err(ConversionError::NameConversion)?,
                 ) {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
