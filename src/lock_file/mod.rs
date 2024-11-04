@@ -15,7 +15,7 @@ pub(crate) use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
 pub(crate) use resolve::{
     conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
 };
-pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
+pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability, EnvironmentUnsat, PlatformUnsat};
 pub(crate) use update::{LockFileDerivedData, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
