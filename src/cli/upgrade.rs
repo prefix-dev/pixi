@@ -52,28 +52,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    // TODO: also extract the version ranges and if there use it instead of "*" everything
-    let package_names = args
-        .specs
-        .packages
-        .iter()
-        .flatten()
-        .map(|spec| {
-            MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                .into_diagnostic()
-                .and_then(|m| {
-                    m.name
-                        .ok_or_else(|| miette::miette!("Name needs to be there."))
-                })
-                .map(|name| name.as_normalized().to_string())
-                .or_else(|_| {
-                    Requirement::parse(spec, project.root())
-                        .into_diagnostic()
-                        .map(|dep: pep508_rs::Requirement<url::Url>| dep.name.to_string())
-                })
-        })
-        .collect::<miette::Result<Vec<_>>>()?;
-
     // TODO: Also support build and host
     let spec_type = SpecType::Run;
     let match_spec_iter = feature
@@ -87,7 +65,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .flat_map(|deps| deps.into_owned());
 
     // If the user specified a package name, check to see if it is even there.
-    if !package_names.is_empty() {
+    if let Some(package_names) = &args.specs.packages {
         let available_packages = match_spec_iter
             .clone()
             .map(|(name, _)| name.as_normalized().to_string())
@@ -99,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect_vec();
 
         for package in package_names {
-            ensure_package_exists(&package, &available_packages)?
+            ensure_package_exists(package, &available_packages)?
         }
     }
 
