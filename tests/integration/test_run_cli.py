@@ -72,10 +72,13 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
 
     # Run the default task
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--experimental", "task"],
+        [pixi, "run", "--manifest-path", manifest, "task"],
         ExitCode.SUCCESS,
         stdout_contains="test123",
     )
+
+    # Validate that without experimental it does not use the cache
+    assert not tmp_path.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
     verify_cli_command(

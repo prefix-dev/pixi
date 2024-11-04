@@ -220,14 +220,6 @@ This allows the user to set specific experimental features that are not yet stab
 
 Please write a GitHub issue and add the flag `experimental` to the issue if you find issues with the feature you activated.
 
-You can enable all experimental features in cli using:
-```shell
-pixi <command> --experimental
-# e.g.
-pixi run --experimental task
-pixi shell --experimental
-pixi shell-hook --experimental
-```
 
 ### Caching environment activations
 Turn this feature on from configuration with the following command:
@@ -270,8 +262,6 @@ use-environment-activation-cache = true
 !!! note "Why is this experimental?"
 This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.
-
-
 
 
 ## Mirror configuration

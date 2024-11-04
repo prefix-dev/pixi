@@ -117,11 +117,6 @@ pub struct ConfigCli {
     /// Specifies if we want to use uv keyring provider
     #[arg(long)]
     pypi_keyring_provider: Option<KeyringProvider>,
-
-    /// Enable all experimental features (use with caution).
-    /// These features might be unstable or change in the future.
-    #[arg(long)]
-    experimental: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -516,9 +511,6 @@ impl From<ConfigCli> for Config {
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
             detached_environments: None,
-            experimental: ExperimentalConfig {
-                use_environment_activation_cache: if cli.experimental { Some(true) } else { None },
-            },
             ..Default::default()
         }
     }
@@ -1112,7 +1104,6 @@ UNUSED = "unused"
             tls_no_verify: true,
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
-            experimental: false,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
@@ -1125,7 +1116,6 @@ UNUSED = "unused"
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
-            experimental: false,
         };
 
         let config = Config::from(cli);
