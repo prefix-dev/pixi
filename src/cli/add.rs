@@ -52,6 +52,12 @@ use crate::{
 ///
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
+///
+/// The versions will be automatically added with a pinning strategy based on semver
+/// or the pinning strategy set in the config. There is a list of packages
+/// that are not following the semver versioning scheme but will use
+/// the minor version by default:
+/// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {

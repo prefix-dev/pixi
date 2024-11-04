@@ -28,7 +28,7 @@ use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_config::Config;
+use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
@@ -104,6 +104,13 @@ impl EnvironmentVars {
         &self.full
     }
 }
+
+/// List of packages that are not following the semver versioning scheme
+/// but will use the minor version by default when adding a dependency.
+// Don't forget to add to the docstring if you add a package here!
+const NON_SEMVER_PACKAGES: [&str; 11] = [
+    "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
+];
 
 /// The pixi project, this main struct to interact with the project. This struct
 /// holds the `Manifest` and has functions to modify or request information from
@@ -819,18 +826,28 @@ impl Project {
             .flatten()
             .collect_vec();
 
-        let pinning_strategy = self.config().pinning_strategy.unwrap_or_default();
+        let mut pinning_strategy = self.config().pinning_strategy;
         let channel_config = self.channel_config();
         for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
-            let version_constraint = pinning_strategy.determine_version_constraint(
-                conda_records.iter().filter_map(|record| {
+            // Edge case: some packages are a special case where we want to pin the minor version by default.
+            // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
+            // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
+            if NON_SEMVER_PACKAGES.contains(&name.as_normalized()) && pinning_strategy.is_none() {
+                tracing::info!(
+                    "Pinning {} to minor version by default",
+                    name.as_normalized()
+                );
+                pinning_strategy = Some(PinningStrategy::Minor);
+            }
+            let version_constraint = pinning_strategy
+                .unwrap_or_default()
+                .determine_version_constraint(conda_records.iter().filter_map(|record| {
                     if record.package_record.name == name {
                         Some(record.package_record.version.version())
                     } else {
                         None
                     }
-                }),
-            );
+                }));
 
             if let Some(version_constraint) = version_constraint {
                 implicit_constraints

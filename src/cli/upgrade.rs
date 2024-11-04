@@ -6,14 +6,11 @@ use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 use miette::MietteDiagnostic;
 
-use pep508_rs::Requirement;
 use pixi_manifest::FeatureName;
 use pixi_manifest::SpecType;
 use rattler_conda_types::MatchSpec;
-use rattler_conda_types::ParseStrictness;
 
 use super::cli_config::PrefixUpdateConfig;
 
