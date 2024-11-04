@@ -341,6 +341,38 @@ def test_upgrade_conda_package_newest(
     assert parsed_manifest["dependencies"]["package"] == ">=0.2.0,<0.3"
 
 
+def test_upgrade_conda_package_brackets(
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            f"package==0.1.0[channel={multiple_versions_channel_1},build_number=0]",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"]["version"] == "==0.1.0"
+    assert parsed_manifest["dependencies"]["package"]["channel"] == multiple_versions_channel_1
+    assert parsed_manifest["dependencies"]["package"]["build-number"] == "==0"
+
+    # Upgrade package, it should now be at 0.2.0, with semver ranges
+    # The channel should still be specified
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"]["version"] == ">=0.2.0,<0.3"
+    assert parsed_manifest["dependencies"]["package"]["channel"] == multiple_versions_channel_1
+    assert "build-number" not in parsed_manifest["dependencies"]["package"]
+
+
 @pytest.mark.slow
 def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"

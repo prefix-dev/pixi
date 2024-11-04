@@ -10,6 +10,7 @@ outputs:
       version: ${{ version }}
 
     build:
+      number: 0
       script:
         - mkdir -p $PREFIX/bin
         # Expose two binaries, with and without version number
