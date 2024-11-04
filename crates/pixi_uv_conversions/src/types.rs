@@ -1,15 +1,13 @@
 // use uv_normalize::PackageName;
 // use pep508_rs::PackageName;
 
-use once_cell::sync::Lazy;
 use std::error::Error;
 use std::{
     fmt::{Debug, Display},
     str::FromStr,
-    sync::Arc,
 };
 use thiserror::Error;
-use uv_distribution_types::Name;
+use uv_pep440::VersionSpecifierBuildError;
 use uv_pypi_types::VerbatimParsedUrl;
 
 #[derive(Debug)]
@@ -98,6 +96,30 @@ impl Error for Pep508Error {
     }
 }
 
+#[derive(Debug)]
+pub enum VersionError {
+    PepError(pep440_rs::VersionParseError),
+    UvError(uv_pep440::VersionParseError),
+}
+
+impl Display for VersionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersionError::PepError(e) => write!(f, "Failed to convert {}", e),
+            VersionError::UvError(e) => write!(f, "Failed to convert to convert {}", e),
+        }
+    }
+}
+
+impl Error for VersionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            VersionError::PepError(e) => Some(e),
+            VersionError::UvError(e) => Some(e),
+        }
+    }
+}
+
 // Define a custom error type for all potential conversion errors
 #[derive(Error, Debug)]
 pub enum ConversionError {
@@ -114,7 +136,10 @@ pub enum ConversionError {
     InvalidVersionSpecifier(#[from] VersionSpecifiersError),
 
     #[error(transparent)]
-    InvalidVersion(#[from] uv_pep440::VersionParseError),
+    InvalidVersionSpecifierBuild(#[from] VersionSpecifierBuildError),
+
+    #[error(transparent)]
+    InvalidVersion(#[from] VersionError),
 }
 
 pub fn to_requirements<'req>(
@@ -189,9 +214,15 @@ pub fn to_extra_name(
 }
 
 /// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+pub fn to_version(version: &uv_pep440::Version) -> Result<pep440_rs::Version, ConversionError> {
+    Ok(pep440_rs::Version::from_str(version.to_string().as_str())
+        .map_err(|err| VersionError::PepError(err))?)
+}
+
+/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
 pub fn to_uv_version(version: &pep440_rs::Version) -> Result<uv_pep440::Version, ConversionError> {
     Ok(uv_pep440::Version::from_str(version.to_string().as_str())
-        .map_err(|err| ConversionError::InvalidVersion(err))?)
+        .map_err(|err| VersionError::UvError(err))?)
 }
 
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`

@@ -14,7 +14,8 @@ use pep440_rs::{Version, VersionSpecifiers};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
 use pixi_uv_conversions::{
-    isolated_names_to_packages, locked_indexes_to_index_locations, to_uv_version_specifiers,
+    isolated_names_to_packages, locked_indexes_to_index_locations, to_uv_normalize, to_uv_version,
+    to_uv_version_specifiers, ConversionError,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::{Platform, RepoDataRecord};
@@ -100,7 +101,7 @@ fn locked_data_to_file(
     hash: Option<&PackageHashes>,
     filename: &str,
     requires_python: Option<VersionSpecifiers>,
-) -> uv_distribution_types::File {
+) -> Result<uv_distribution_types::File, ConversionError> {
     let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
 
     // Convert PackageHashes to uv hashes
@@ -129,10 +130,11 @@ fn locked_data_to_file(
         vec![]
     };
 
-    let uv_requires_python =
-        requires_python.map(|inside| to_uv_version_specifiers(&inside).expect("need tim help"));
+    let uv_requires_python = requires_python
+        .map(|inside| to_uv_version_specifiers(&inside))
+        .transpose()?;
 
-    uv_distribution_types::File {
+    Ok(uv_distribution_types::File {
         filename: filename.to_string(),
         dist_info_metadata: false,
         hashes,
@@ -141,7 +143,7 @@ fn locked_data_to_file(
         yanked: None,
         size: None,
         url,
-    }
+    })
 }
 
 /// Check if the url is a direct url
@@ -175,6 +177,9 @@ enum ConvertToUvDistError {
     VerbatimUrl(#[from] VerbatimUrlError),
     #[error("error extracting extension from {1}")]
     Extension(#[source] ExtensionError, String),
+
+    #[error(transparent)]
+    UvPepTypes(#[from] ConversionError),
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
@@ -186,8 +191,7 @@ fn convert_to_dist(
     let dist = match &pkg.url_or_path {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
-            let pkg_name =
-                uv_normalize::PackageName::new(pkg.name.to_string()).expect("should be correct");
+            let pkg_name = to_uv_normalize(&pkg.name)?;
             Dist::from_url(
                 pkg_name,
                 VerbatimParsedUrl {
@@ -214,7 +218,7 @@ fn convert_to_dist(
                 pkg.hash.as_ref(),
                 filename_decoded.as_ref(),
                 pkg.requires_python.clone(),
-            );
+            )?;
 
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
@@ -237,10 +241,8 @@ fn convert_to_dist(
                     sdist: None,
                 }))
             } else {
-                let pkg_name = uv_normalize::PackageName::new(pkg.name.to_string())
-                    .expect("should be correct");
-                let pkg_version = uv_pep440::Version::from_str(&pkg.version.to_string())
-                    .expect("should be correct");
+                let pkg_name = to_uv_normalize(&pkg.name)?;
+                let pkg_version = to_uv_version(&pkg.version)?;
                 Dist::Source(SourceDist::Registry(RegistrySourceDist {
                     name: pkg_name,
                     version: pkg_version,
@@ -322,8 +324,7 @@ fn need_reinstall(
     // Check if the installed version is the same as the required version
     match installed {
         InstalledDist::Registry(reg) => {
-            let specifier =
-                uv_pep440::Version::from_str(&locked.version.to_string()).expect("invalid version");
+            let specifier = to_uv_version(&locked.version).into_diagnostic()?;
 
             if reg.version != specifier {
                 tracing::debug!(
@@ -464,8 +465,7 @@ fn need_reinstall(
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
-        let uv_version =
-            uv_pep440::Version::from_str(&python_version.to_string()).expect("should be the same");
+        let uv_version = to_uv_version(&python_version).into_diagnostic()?;
         if !requires_python.contains(&uv_version) {
             return Ok(ValidateInstall::Reinstall);
         }
@@ -553,8 +553,7 @@ fn whats_the_plan<'a>(
                 continue;
             }
 
-            let uv_version =
-                uv_pep440::Version::from_str(&pkg.version.to_string()).expect("should be the same");
+            let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
 
             // Have we cached the wheel?
             let wheel = registry_index
@@ -586,8 +585,7 @@ fn whats_the_plan<'a>(
             continue;
         }
 
-        let uv_version =
-            uv_pep440::Version::from_str(&pkg.version.to_string()).expect("should be the same");
+        let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
 
         // Do we have in the registry cache?
         let wheel = registry_index

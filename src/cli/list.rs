@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::io;
 use std::io::{stdout, Write};
-use std::str::FromStr;
 
 use clap::Parser;
 use console::Color;
@@ -14,7 +13,9 @@ use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
-use pixi_uv_conversions::{pypi_options_to_index_locations, to_uv_normalize};
+use pixi_uv_conversions::{
+    pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
+};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackage, Package, PypiPackage, UrlOrPath};
@@ -166,12 +167,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .map(|p| match p {
             Package::Pypi(p) => {
-                let name = to_uv_normalize(&p.data().package.name).expect("need tim help");
-                PackageExt::PyPI(p, name)
+                let name = to_uv_normalize(&p.data().package.name)?;
+                Ok(PackageExt::PyPI(p, name))
             }
-            Package::Conda(c) => PackageExt::Conda(c),
+            Package::Conda(c) => Ok(PackageExt::Conda(c)),
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, ConversionError>>()
+        .into_diagnostic()?;
 
     // Get the python record from the lock file
     let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
@@ -221,7 +223,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut packages_to_output = locked_deps_ext
         .iter()
         .map(|p| create_package_to_output(p, &project_dependency_names, registry_index.as_mut()))
-        .collect::<Vec<PackageToOutput>>();
+        .collect::<Result<Vec<PackageToOutput>, _>>()?;
 
     // Filter packages by regex if needed
     if let Some(regex) = args.regex {
@@ -346,7 +348,7 @@ fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     project_dependency_names: &'a [String],
     registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
-) -> PackageToOutput {
+) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
     let version = package.version().into_owned();
 
@@ -368,8 +370,7 @@ fn create_package_to_output<'a, 'b>(
             if let Some(registry_index) = registry_index {
                 let entry = registry_index.get(name).find(|i| {
                     i.dist.filename.version
-                        == uv_pep440::Version::from_str(&p.data().package.version.to_string())
-                            .expect("could not parse version")
+                        == to_uv_version(&p.data().package.version).expect("invalid version")
                 });
                 let size = entry
                     .map(|e| get_dir_size(e.dist.path.clone()).ok())
@@ -394,7 +395,7 @@ fn create_package_to_output<'a, 'b>(
         PackageExt::PyPI(p, _) => p.data().package.editable,
     };
 
-    PackageToOutput {
+    Ok(PackageToOutput {
         name,
         version,
         build,
@@ -403,5 +404,5 @@ fn create_package_to_output<'a, 'b>(
         source,
         is_explicit,
         is_editable,
-    }
+    })
 }

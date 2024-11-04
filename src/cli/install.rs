@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::update_prefix;
 use crate::Project;

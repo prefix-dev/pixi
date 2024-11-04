@@ -1,8 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::atomic::AtomicUsize,
-};
+use std::path::{Path, PathBuf};
 
 use pixi_manifest::pypi::{
     pypi_options::{IndexStrategy, PypiOptions},

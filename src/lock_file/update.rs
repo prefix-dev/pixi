@@ -15,7 +15,7 @@ use std::{
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
@@ -25,6 +25,7 @@ use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
+    ConversionError,
 };
 use pypi_mapping::{self, Reporter};
 use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
@@ -1660,7 +1661,7 @@ async fn spawn_extract_environment_task(
     }
 
     // Convert all the conda records to package identifiers.
-    let conda_package_identifiers = grouped_repodata_records.by_pypi_name();
+    let conda_package_identifiers = grouped_repodata_records.by_pypi_name().into_diagnostic()?;
 
     #[derive(Clone, Eq, PartialEq, Hash)]
     enum PackageName {
@@ -1760,7 +1761,10 @@ async fn spawn_extract_environment_task(
                 // Evaluate all dependencies
                 let extras = extra
                     // .map(|extra| Ok(vec![to_extra_name(&extra)?]))
-                    .map(|extra| vec![to_extra_name(&extra).expect("need tim help")])
+                    // .into_iter()
+                    .map(|extra| Ok::<_, ConversionError>(vec![to_extra_name(&extra)?]))
+                    .transpose()
+                    .into_diagnostic()?
                     .unwrap_or_default();
 
                 for req in record.0.requires_dist.iter() {
@@ -1879,28 +1883,18 @@ async fn spawn_solve_pypi_task(
 
         let start = Instant::now();
 
-        // let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
-        // .into_iter()
-        // .map(|(name, requirement)| {
-        //     Ok((
-        //         to_uv_normalize(name.as_normalized())?,
-        //         requirement,
-        //     ))
-        // })
-        // .collect::<Result<Vec<(uv_normalize::PackageName, IndexSet<PyPiRequirement>)>, _>>()?;
+        let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+            .into_iter()
+            .map(|(name, requirement)| Ok((to_uv_normalize(name.as_normalized())?, requirement)))
+            .collect::<Result<_, ConversionError>>()
+            .into_diagnostic()?;
+
+        let index_map = IndexMap::from_iter(dependencies);
 
         let records = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
-            dependencies
-                .into_iter()
-                .map(|(name, requirement)| {
-                    (
-                        to_uv_normalize(name.as_normalized()).expect("need tim help"),
-                        requirement,
-                    )
-                })
-                .collect(),
+            index_map,
             system_requirements,
             &conda_records,
             &locked_pypi_records,

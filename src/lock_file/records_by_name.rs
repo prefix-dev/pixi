@@ -6,7 +6,8 @@ use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::str::FromStr;
+
+use super::package_identifier::ConversionError;
 
 pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
 pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
@@ -165,8 +166,12 @@ impl RepoDataRecordsByName {
     /// extracted from.
     pub(crate) fn by_pypi_name(
         &self,
-    ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
-        self.records
+    ) -> Result<
+        HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)>,
+        ConversionError,
+    > {
+        Ok(self
+            .records
             .iter()
             .enumerate()
             .filter_map(|(idx, record)| {
@@ -176,11 +181,10 @@ impl RepoDataRecordsByName {
             })
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {
-                    let name =
-                        to_uv_normalize(identifier.name.as_normalized()).expect("need tim help");
-                    (name, (identifier, idx, record))
+                    let name = to_uv_normalize(identifier.name.as_normalized())?;
+                    Ok((name, (identifier, idx, record)))
                 })
             })
-            .collect()
+            .collect::<Result<HashMap<_, _>, ConversionError>>()?)
     }
 }

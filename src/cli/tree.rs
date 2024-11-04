@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io::{StdoutLock, Write};
-use std::str::FromStr;
 
 use ahash::{HashSet, HashSetExt};
 use clap::Parser;

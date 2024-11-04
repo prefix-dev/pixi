@@ -16,8 +16,8 @@ use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_uv_conversions::{
     as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
-    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_requirements,
-    to_version_specifiers,
+    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -39,7 +39,7 @@ use uv_distribution_types::{
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
-use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
+use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -308,9 +308,8 @@ pub async fn resolve_pypi(
             // Create pep440 version from the conda version
             let specifier = uv_pep440::VersionSpecifier::from_version(
                 uv_pep440::Operator::Equal,
-                uv_pep440::Version::from_str(&p.version.to_string()).expect("invalid version"),
-            )
-            .expect("invalid version specifier");
+                to_uv_version(&p.version)?,
+            )?;
 
             // Only one requirement source and we just assume that's a PyPI source
             let source = RequirementSource::Registry {
@@ -318,16 +317,16 @@ pub async fn resolve_pypi(
                 index: None,
             };
 
-            uv_pypi_types::Requirement {
-                name: uv_normalize::PackageName::new(p.name.as_normalized().to_string())
-                    .expect("invalid package name"),
+            Ok::<_, ConversionError>(uv_pypi_types::Requirement {
+                name: to_uv_normalize(p.name.as_normalized())?,
                 extras: vec![],
                 marker: Default::default(),
                 source,
                 origin: None,
-            }
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
@@ -338,17 +337,18 @@ pub async fn resolve_pypi(
             let (package_data, _) = record;
             // Fake being an InstalledRegistryDist
             let installed = InstalledRegistryDist {
-                name: uv_normalize::PackageName::new(package_data.name.to_string())
-                    .expect("invalid package name"),
-                version: uv_pep440::Version::from_str(&package_data.version.clone().to_string())
-                    .expect("invalid version"),
+                name: to_uv_normalize(&package_data.name)?,
+                version: to_uv_version(&package_data.version)?,
                 // This is not used, so we can just set it to a random value
                 path: PathBuf::new().join("does_not_exist"),
                 cache_info: None,
             };
-            Preference::from_installed(&InstalledDist::Registry(installed))
+            Ok(Preference::from_installed(&InstalledDist::Registry(
+                installed,
+            )))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, ConversionError>>()
+        .into_diagnostic()?;
 
     let manifest = Manifest::new(
         requirements,
@@ -515,7 +515,9 @@ async fn lock_pypi_packages<'a>(
                         .expect("cannot convert version"),
                     requires_python: metadata
                         .requires_python
-                        .map(|r| to_version_specifiers(&r).expect("need tim help")),
+                        .map(|r| Ok::<_, ConversionError>(to_version_specifiers(&r)?))
+                        .transpose()
+                        .into_diagnostic()?,
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
                         .into_diagnostic()?,
                     editable: false,
@@ -607,13 +609,14 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 PypiPackageData {
-                    name: pep508_rs::PackageName::new(metadata.name.to_string())
-                        .expect("cannot convert name"),
+                    name: to_normalize(&metadata.name).into_diagnostic()?,
                     version: pep440_rs::Version::from_str(&metadata.version.to_string())
                         .expect("cannot convert version"),
                     requires_python: metadata
                         .requires_python
-                        .map(|r| to_version_specifiers(&r).expect("need tim help")),
+                        .map(|r| Ok::<_, ConversionError>(to_version_specifiers(&r)?))
+                        .transpose()
+                        .into_diagnostic()?,
                     requires_dist: to_requirements(metadata.requires_dist.iter())
                         .into_diagnostic()?,
                     url_or_path,

@@ -28,7 +28,6 @@ use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
 use uv_git::GitReference;
-use uv_pep508::Pep508Error;
 use uv_pypi_types::{
     ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
@@ -751,7 +750,7 @@ pub(crate) fn verify_package_platform_satisfiability(
     };
 
     // Determine the pypi packages provided by the locked conda packages.
-    let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name();
+    let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name()?;
 
     // Keep a list of all conda packages that we have already visisted
     let mut conda_packages_visited = HashSet::new();
