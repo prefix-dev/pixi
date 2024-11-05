@@ -409,6 +409,9 @@ pub struct Config {
     /// it back to the .pixi folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
+
+    /// Registered projects in the config
+    pub registered_projects: HashMap<String, PathBuf>,
 }
 
 impl Default for Config {
@@ -425,6 +428,7 @@ impl Default for Config {
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
+            registered_projects: HashMap::new(),
         }
     }
 }
@@ -668,6 +672,7 @@ impl Config {
     pub fn merge_config(mut self, other: Config) -> Self {
         self.mirrors.extend(other.mirrors);
         self.loaded_from.extend(other.loaded_from);
+        self.registered_projects.extend(other.registered_projects);
 
         Self {
             default_channels: if other.default_channels.is_empty() {
@@ -688,6 +693,7 @@ impl Config {
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
+            registered_projects: self.registered_projects,
         }
     }
 

@@ -211,12 +211,38 @@ impl Project {
         Ok(Project::from_manifest(manifest))
     }
 
+    /// Loads a project from registered projects.
+    pub fn from_name(name: String) -> miette::Result<Self> {
+        let config = Config::load_global();
+        if let Some(project) = config
+            .registered_projects
+            .iter()
+            .find(|(registered_name, _path)| registered_name == &&name)
+        {
+            let manifest = Manifest::from_path(project.1)?;
+            Ok(Project::from_manifest(manifest))
+        } else {
+            miette::bail!(
+                help = format!(
+                    "Registered projects in configuration: {:?}",
+                    config.registered_projects.keys()
+                ),
+                "Project '{}' is not registered",
+                name
+            );
+        }
+    }
+
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
-    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
-        let project = match manifest_path {
-            Some(path) => Project::from_path(path)?,
-            None => Project::discover()?,
+    pub fn load_or_else_discover(
+        manifest_path: Option<&Path>,
+        name: Option<String>,
+    ) -> miette::Result<Self> {
+        let project = match (manifest_path, name) {
+            (Some(path), None) | (Some(path), Some(_)) => Project::from_path(path)?,
+            (None, Some(name)) => Project::from_name(name)?,
+            (None, None) => Project::discover()?,
         };
         Ok(project)
     }

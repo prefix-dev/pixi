@@ -21,6 +21,11 @@ pub struct ProjectConfig {
     /// The path to `pixi.toml` or `pyproject.toml`
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// The name of the project to run the task in.
+    /// If not provided, the project name will be inferred from the current directory.
+    #[arg(long, short)]
+    pub name: Option<String>,
 }
 
 /// Channel configuration

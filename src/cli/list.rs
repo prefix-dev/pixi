@@ -142,7 +142,10 @@ impl PackageExt {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(
+        args.project_config.manifest_path.as_deref(),
+        args.project_config.name,
+    )?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project

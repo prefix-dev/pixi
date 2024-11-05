@@ -57,6 +57,10 @@ pub struct Args {
     /// Source Control Management used for this project
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
+
+    /// Register project to be used from anywhere by name
+    #[arg(long)]
+    pub register: bool,
 }
 
 /// The pixi.toml template
@@ -369,7 +373,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     consts::PYPROJECT_MANIFEST,
                     NEW_PYROJECT_TEMPLATE,
                     context! {
-                        name => default_name,
+                        name => default_name.clone(),
                         pypi_package_name,
                         version,
                         author,
@@ -415,7 +419,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             let rv = render_project(
                 &env,
-                default_name,
+                default_name.clone(),
                 version,
                 author.as_ref(),
                 channels,
@@ -425,6 +429,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
+    }
+
+    // Register the project to be used from anywhere by name
+    if args.register {
+        let mut config = Config::load_global();
+        // TODO: This should be a result of the creation, not just blind defaults
+        config
+            .registered_projects
+            .insert(default_name.clone(), pixi_manifest_path);
+
+        let mut global_locations = pixi_config::config_path_global();
+        let mut to = global_locations
+            .pop()
+            .expect("should have at least one global config path");
+
+        for p in global_locations {
+            if p.exists() {
+                to = p;
+                break;
+            }
+        }
+
+        config.save(&to)?;
+        eprintln!(
+            "{}Registered project '{}' to be used from anywhere by name.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            default_name.clone()
+        );
     }
 
     // create a .gitignore if one is missing

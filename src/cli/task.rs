@@ -268,7 +268,10 @@ fn list_tasks(
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let mut project = Project::load_or_else_discover(
+        args.project_config.manifest_path.as_deref(),
+        args.project_config.name,
+    )?;
     match args.operation {
         Operation::Add(args) => {
             let name = &args.name;

@@ -281,6 +281,7 @@ impl TaskAddBuilder {
             operation: task::Operation::Add(self.args),
             project_config: ProjectConfig {
                 manifest_path: self.manifest_path,
+                name: None,
             },
         })
     }
@@ -304,6 +305,7 @@ impl TaskAliasBuilder {
             operation: task::Operation::Alias(self.args),
             project_config: ProjectConfig {
                 manifest_path: self.manifest_path,
+                name: None,
             },
         })
     }
@@ -340,7 +342,10 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+                name: None,
+            },
             command: project::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -373,7 +378,10 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+                name: None,
+            },
             command: project::channel::Command::Remove(self.args),
         })
         .boxed_local()
@@ -440,7 +448,10 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         project::environment::execute(project::environment::Args {
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+                name: None,
+            },
             command: project::environment::Command::Add(self.args),
         })
         .boxed_local()

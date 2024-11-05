@@ -99,7 +99,11 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let project = Project::load_or_else_discover(
+        args.project_config.manifest_path.as_deref(),
+        args.project_config.name,
+    )
+    .ok();
 
     // Resolve channels from project / CLI args
     let channels = args.channels.resolve_from_project(project.as_ref())?;
