@@ -84,7 +84,6 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
 
     # Break environment on purpose
     dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").joinpath("dummy-a*.json")
-    import glob
 
     files = glob.glob(str(dummy_a_meta_files))
 
