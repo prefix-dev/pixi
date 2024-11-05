@@ -25,7 +25,7 @@ release = "python scripts/release.py"
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build",
 ] }
-test = "cargo nextest run"
+test = "cargo nextest run --workspace"
 test-all-fast = { depends-on = ["test", "test-integration-fast"] }
 test-export = "python tests/scripts/test-export.sh"
 test-workspace = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
