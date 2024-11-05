@@ -440,6 +440,7 @@ async fn add_pypi_extra_functionality() {
                     PyPiRequirement::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
+                        index: None
                     }
                 );
             }
