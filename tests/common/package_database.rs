@@ -239,6 +239,7 @@ impl PackageBuilder {
                 version: self.version,
                 purls: None,
                 run_exports: None,
+                python_site_packages_path: None,
             },
             subdir,
             archive_type: self.archive_type,
