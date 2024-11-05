@@ -1,5 +1,3 @@
-mod common;
-
 use std::str::FromStr;
 
 use pixi::cli;
@@ -85,7 +83,7 @@ async fn init_from_existing_pyproject_toml() {
     // Copy the pyproject.toml file to the project directory
     let project_path = pixi.project_path();
     let pyproject_toml = project_path.join("pyproject.toml");
-    let pyproject_toml_contents = include_str!("pixi_tomls/pyproject_no_pixi.toml");
+    let pyproject_toml_contents = include_str!("../data/pixi_tomls/pyproject_no_pixi.toml");
     std::fs::write(&pyproject_toml, pyproject_toml_contents).unwrap();
 
     // Init a new project

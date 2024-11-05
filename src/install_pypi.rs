@@ -668,7 +668,7 @@ pub async fn update_python_distributions(
     let python_location = prefix.root().join(python_interpreter_path);
     let interpreter = Interpreter::query(&python_location, &uv_context.cache).into_diagnostic()?;
 
-    tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
+    tracing::debug!("using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
     let venv = PythonEnvironment::from_interpreter(interpreter);
     let non_isolated_packages =
@@ -676,12 +676,9 @@ pub async fn update_python_distributions(
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
     let git_resolver = GitResolver::default();
-    // Prep the build context.
 
     let dep_metadata = DependencyMetadata::default();
-
     let constraints = Constraints::default();
-
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,

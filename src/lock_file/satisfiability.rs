@@ -178,15 +178,15 @@ pub enum PlatformUnsat {
     #[error("'{name}' has mismatching url: '{spec_url} != {lock_url}'")]
     LockedPyPIDirectUrlMismatch {
         name: String,
-        spec_url: Url,
-        lock_url: Url,
+        spec_url: String,
+        lock_url: String,
     },
 
     #[error("'{name}' has mismatching git url: '{spec_url} != {lock_url}'")]
     LockedPyPIGitUrlMismatch {
         name: String,
-        spec_url: Url,
-        lock_url: Url,
+        spec_url: String,
+        lock_url: String,
     },
 
     #[error("'{name}' has mismatching git ref: '{expected_ref} != {found_ref}'")]
@@ -576,8 +576,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
                         name: spec.name.clone().to_string(),
-                        spec_url: spec_url.raw().clone(),
-                        lock_url: locked_url,
+                        spec_url: spec_url.raw().to_string(),
+                        lock_url: locked_url.to_string(),
                     });
                 }
             }
@@ -598,8 +598,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_url: repository.clone(),
-                                lock_url: locked_git_url.url.repository().clone(),
+                                spec_url: repository.to_string(),
+                                lock_url: locked_git_url.url.repository().to_string(),
                             });
                         }
                         // If the spec does not specify a revision than any will do
@@ -1250,7 +1250,7 @@ mod tests {
 
     #[rstest]
     fn test_good_satisfiability(
-        #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
@@ -1286,16 +1286,20 @@ mod tests {
     fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::from_path(path).unwrap();
-            let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-            let err = verify_lockfile_satisfiability(&project, &lock_file)
-                .expect_err("expected failing satisfiability");
+        insta::glob!(
+            "../../tests/data/non-satisfiability",
+            "*/pixi.toml",
+            |path| {
+                let project = Project::from_path(path).unwrap();
+                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+                let err = verify_lockfile_satisfiability(&project, &lock_file)
+                    .expect_err("expected failing satisfiability");
 
-            let mut s = String::new();
-            report_handler.render_report(&mut s, &err).unwrap();
-            insta::assert_snapshot!(s);
-        });
+                let mut s = String::new();
+                report_handler.render_report(&mut s, &err).unwrap();
+                insta::assert_snapshot!(s);
+            }
+        );
     }
 
     #[test]

@@ -1,5 +1,3 @@
-mod common;
-
 use std::str::FromStr;
 
 use crate::common::{

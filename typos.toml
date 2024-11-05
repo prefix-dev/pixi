@@ -1,11 +1,5 @@
 [files]
-extend-exclude = [
-  ".git/",
-  ".pixi/",
-  "**/*.snap",
-  ".codespellrc",
-  "tests/mapping_files/*",
-]
+extend-exclude = [".git/", ".pixi/", "**/*.snap", "tests/data/mapping_files/*"]
 ignore-hidden = false
 
 [default.extend-identifiers]

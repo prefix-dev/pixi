@@ -43,7 +43,7 @@ use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver, ResolverMarkers,
+    Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -350,15 +350,13 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
 
+    let resolver_env = ResolverEnvironment::specific(marker_environment.into());
     let manifest = Manifest::new(
         requirements,
         Constraints::from_requirements(constraints.iter().cloned()),
         Overrides::default(),
         Default::default(),
-        Preferences::from_iter(
-            preferences,
-            &ResolverMarkers::SpecificEnvironment(marker_environment.clone().into()),
-        ),
+        Preferences::from_iter(preferences, &resolver_env),
         None,
         None,
         uv_resolver::Exclusions::None,
@@ -374,11 +372,7 @@ pub async fn resolve_pypi(
     .context("error creating version specifier for python version")?;
     let requires_python = uv_resolver::RequiresPython::from_specifiers(
         &uv_pep440::VersionSpecifiers::from(python_specifier),
-    )
-    .into_diagnostic()
-    .context("error creating requires-python for solver")?;
-
-    let markers = ResolverMarkers::SpecificEnvironment(marker_environment.into());
+    );
 
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
@@ -389,7 +383,7 @@ pub async fn resolve_pypi(
         &flat_index,
         Some(&tags),
         &requires_python,
-        AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
+        AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
         &context.build_options,
@@ -411,7 +405,7 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        markers,
+        resolver_env,
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,

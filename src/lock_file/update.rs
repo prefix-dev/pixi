@@ -1760,8 +1760,6 @@ async fn spawn_extract_environment_task(
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies
                 let extras = extra
-                    // .map(|extra| Ok(vec![to_extra_name(&extra)?]))
-                    // .into_iter()
                     .map(|extra| Ok::<_, ConversionError>(vec![to_extra_name(&extra)?]))
                     .transpose()
                     .into_diagnostic()?
