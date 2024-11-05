@@ -29,7 +29,12 @@ impl Display for UnsupportedPlatformError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.environment {
             EnvironmentName::Default => {
-                write!(f, "the project does not support '{}'", self.platform)
+                write!(
+                    f,
+                    "The project does not support '{}'.\n\
+                    Add it with 'pixi project platform add {}'.",
+                    self.platform, self.platform
+                )
             }
             EnvironmentName::Named(name) => write!(
                 f,

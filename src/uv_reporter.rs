@@ -1,8 +1,8 @@
-use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask};
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use uv_distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use uv_normalize::PackageName;
 
 fn create_progress(length: u64, message: &'static str) -> ProgressBar {

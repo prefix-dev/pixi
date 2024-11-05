@@ -84,7 +84,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for mapping in &args.mappings {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        state_changes |= project.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name, None).await?;
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -120,7 +120,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         project
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
-        state_changes |= project.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name, None).await?;
         project.manifest.save().await?;
         Ok(state_changes)
     }

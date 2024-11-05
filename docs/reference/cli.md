@@ -127,6 +127,10 @@ pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
     pixi config set pinning-strategy no-pin --global
     ```
     The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
+    !!! note
+        There is an exception to this rule when you add a package we defined as non `semver`, then we'll use the `minor` strategy.
+        These are the packages we defined as non `semver`:
+        Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 
 
 ## `install`
