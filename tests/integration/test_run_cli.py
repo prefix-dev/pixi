@@ -75,7 +75,6 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     # Run the install
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
     # Validate creation of the pixi file with the hash
