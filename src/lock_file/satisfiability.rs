@@ -1161,7 +1161,7 @@ mod tests {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         insta::glob!(
-            "../../tests/integration_rust/non-satisfiability",
+            "../../tests/data/non-satisfiability",
             "*/pixi.toml",
             |path| {
                 let project = Project::from_path(path).unwrap();
