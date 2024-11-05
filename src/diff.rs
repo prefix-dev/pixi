@@ -1,26 +1,15 @@
 use std::{
     borrow::Cow,
-    cmp::Ordering,
     collections::HashSet,
-    io::{stderr, stdout, Write},
+    io::{stderr, Write},
 };
 
-use fancy_display::FancyDisplay;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::{
-    load_lock_file,
-    lock_file::{filter_lock_file, UpdateContext},
-    Project,
-};
+use crate::Project;
 use ahash::HashMap;
-use clap::Parser;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
-use pixi_config::ConfigCli;
 use pixi_consts::consts;
-use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};

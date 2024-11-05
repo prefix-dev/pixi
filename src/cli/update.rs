@@ -1,8 +1,6 @@
 use std::{
-    borrow::Cow,
     cmp::Ordering,
     collections::HashSet,
-    io::{stdout, Write},
 };
 
 use fancy_display::FancyDisplay;
@@ -16,10 +14,8 @@ use crate::{
     lock_file::{filter_lock_file, UpdateContext},
     Project,
 };
-use ahash::HashMap;
 use clap::Parser;
-use indexmap::IndexMap;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
@@ -27,9 +23,6 @@ use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
-use serde::Serialize;
-use serde_json::Value;
-use tabwriter::TabWriter;
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
