@@ -348,7 +348,10 @@ def test_upgrade_conda_package(
 
     # Upgrade package, it should now be at 0.2.0, with semver ranges
     # The channel should still be specified
-    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "package"],
+        stderr_contains=["package", "0.1.0", "0.2.0"],
+    )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     package = parsed_manifest["dependencies"]["package"]
     assert package["version"] == ">=0.2.0,<0.3"
@@ -383,7 +386,10 @@ def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
 
     # Upgrade httpx, it should now be upgraded
     # Extras should be preserved
-    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "httpx"])
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "httpx"],
+        stderr_contains=["httpx", "0.26.0"],
+    )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
     assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
@@ -407,7 +413,10 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
     assert numpy_conda == "1.*"
 
     # Upgrade numpy, both conda and pypi should be upgraded
-    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "numpy"])
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "numpy"],
+        stderr_contains=["numpy", "1."],
+    )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     numpy_pypi = parsed_manifest["project"]["dependencies"][0]
     assert "1.*" not in numpy_pypi

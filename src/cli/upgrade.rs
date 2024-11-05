@@ -6,6 +6,7 @@ use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use miette::MietteDiagnostic;
 
 use pep508_rs::MarkerTree;
@@ -146,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect();
 
-    project
+    let update_deps = project
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -156,6 +157,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             false,
         )
         .await?;
+
+    if let Some(update_deps) = update_deps {
+        update_deps.lock_file_diff.print().into_diagnostic()?;
+    }
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())

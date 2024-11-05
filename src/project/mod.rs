@@ -47,6 +47,7 @@ use xxhash_rust::xxh3::xxh3_64;
 use crate::{
     activation::{initialize_env_variables, CurrentEnvVarBehavior},
     cli::cli_config::PrefixUpdateConfig,
+    diff::LockFileDiff,
     environment::LockFileUsage,
     load_lock_file,
     lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
@@ -637,7 +638,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
-    ) -> Result<HashMap<String, String>, miette::Error> {
+    ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
         let mut conda_packages = HashSet::new();
@@ -678,10 +679,10 @@ impl Project {
         self.save()?;
 
         if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
-            return Ok(HashMap::default());
+            return Ok(None);
         }
 
-        let lock_file = load_lock_file(self).await?;
+        let original_lock_file = load_lock_file(self).await?;
         let affected_environments = self
             .environments()
             .iter()
@@ -711,7 +712,7 @@ impl Project {
             .map(|(e, p)| (e.name().to_string(), p))
             .collect_vec();
         let unlocked_lock_file = self.unlock_packages(
-            &lock_file,
+            &original_lock_file,
             conda_packages,
             pypi_packages,
             affect_environment_and_platforms
@@ -779,7 +780,14 @@ impl Project {
                 .prefix(&self.default_environment())
                 .await?;
         }
-        Ok(implicit_constraints)
+
+        let lock_file_diff =
+            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.lock_file);
+
+        Ok(Some(UpdateDeps {
+            implicit_constraints,
+            lock_file_diff,
+        }))
     }
 
     /// Constructs a new lock-file where some of the constraints have been removed.
@@ -936,6 +944,11 @@ impl Project {
 
         Ok(implicit_constraints)
     }
+}
+
+pub struct UpdateDeps {
+    pub implicit_constraints: HashMap<String, String>,
+    pub lock_file_diff: LockFileDiff,
 }
 
 impl<'source> HasManifestRef<'source> for &'source Project {

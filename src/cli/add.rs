@@ -110,7 +110,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    let implicit_constraints = project
+    let update_deps = project
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -121,8 +121,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
 
-    // Notify the user we succeeded
-    dependency_config.display_success("Added", implicit_constraints);
+    if let Some(update_deps) = update_deps {
+        // Notify the user we succeeded
+        dependency_config.display_success("Added", update_deps.implicit_constraints);
+    }
 
     Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
