@@ -1,5 +1,5 @@
 ---
-source: tests/project_tests.rs
+source: tests/integration_rust/project_tests.rs
 expression: "dependency_names(&project, Platform::Linux64)"
 ---
 [

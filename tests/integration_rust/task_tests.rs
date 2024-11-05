@@ -8,8 +8,6 @@ use rattler_conda_types::Platform;
 use std::fs;
 use std::path::PathBuf;
 
-mod common;
-
 #[tokio::test]
 pub async fn add_remove_task() {
     let pixi = PixiControl::new().unwrap();
