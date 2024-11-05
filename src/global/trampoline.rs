@@ -3,6 +3,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use miette::IntoDiagnostic;
@@ -18,40 +19,44 @@ use super::ExposedName;
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
-pub const TRAMPOLINE_BIN: &[u8] =
-    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin");
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin.zst"
+);
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "windows")]
-pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-pc-windows-msvc.exe"
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-pc-windows-msvc.exe.zst"
 );
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "linux")]
-pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-unknown-linux-musl"
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-unknown-linux-musl.zst"
 );
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "macos")]
-pub const TRAMPOLINE_BIN: &[u8] =
-    include_bytes!("../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-apple-darwin");
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-apple-darwin.zst"
+);
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "windows")]
-pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe"
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe.zst"
 );
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "linux")]
-pub const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl"
+const TRAMPOLINE_BIN: &[u8] = include_bytes!(
+    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl.zst"
 );
 
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
+// trampoline configuration folder name
+pub const TRAMPOLINE_BIN_NAME: &str = "trampoline_bin";
 
 /// Returns the file name of the executable
 pub(crate) fn file_name(exposed_name: &ExposedName) -> String {
@@ -272,6 +277,14 @@ impl Trampoline {
             .join(self.exposed_name.to_string() + ".json")
     }
 
+    /// Return the path to the original trampoline binary,
+    /// from what all hardlinks are created.
+    fn trampoline_path(&self) -> PathBuf {
+        self.root_path
+            .join(TRAMPOLINE_CONFIGURATION)
+            .join(TRAMPOLINE_BIN_NAME)
+    }
+
     /// Returns the name of the trampoline
     pub fn name(trampoline: &Path) -> String {
         let trampoline_name = trampoline.file_name().expect("should have a file name");
@@ -294,10 +307,36 @@ impl Trampoline {
         Ok(())
     }
 
+    /// Public function to access the decompressed trampoline binary
+    pub fn decompressed_trampoline() -> &'static [u8] {
+        // A static variable to hold the cached decompressed trampoline binary
+        static DECOMPRESSED_TRAMPOLINE_BIN: LazyLock<Vec<u8>> = LazyLock::new(|| {
+            zstd::decode_all(TRAMPOLINE_BIN)
+                .expect("we should be able to decompress trampoline binary")
+        });
+
+        &DECOMPRESSED_TRAMPOLINE_BIN
+    }
+
     async fn write_trampoline(&self) -> miette::Result<()> {
-        tokio_fs::write(self.path(), TRAMPOLINE_BIN)
+        if !self.trampoline_path().exists() {
+            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+                .await
+                .into_diagnostic()?;
+            tokio_fs::write(
+                self.trampoline_path(),
+                Trampoline::decompressed_trampoline(),
+            )
             .await
             .into_diagnostic()?;
+        }
+
+        // Create a hard link to the shared trampoline binary
+        if !self.path().exists() {
+            tokio::fs::hard_link(self.trampoline_path(), self.path())
+                .await
+                .into_diagnostic()?;
+        }
 
         #[cfg(unix)]
         {
@@ -336,7 +375,7 @@ impl Trampoline {
 
         let mut buf = [0; 1048];
         match bin_file.read_exact(buf.as_mut()).await {
-            Ok(_) => Ok(buf == TRAMPOLINE_BIN[..1048]),
+            Ok(_) => Ok(buf == Trampoline::decompressed_trampoline()[..1048]),
             Err(err) => {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     Ok(false)
@@ -349,7 +388,6 @@ impl Trampoline {
 }
 
 mod tests {
-
     // Test is_trampoline when it is a trampoline
     #[tokio::test]
     async fn test_is_trampoline() {
@@ -358,7 +396,7 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let trampoline_path = dir.path().join("trampoline");
-        tokio_fs::write(&trampoline_path, TRAMPOLINE_BIN)
+        tokio_fs::write(&trampoline_path, Trampoline::decompressed_trampoline())
             .await
             .unwrap();
 
@@ -390,5 +428,40 @@ mod tests {
         let trampoline_path = dir.path().join("trampoline");
 
         assert!(Trampoline::is_trampoline(&trampoline_path).await.is_err());
+    }
+
+    // Test is_trampoline on non existing file
+    // it should raise an error
+    #[tokio::test]
+    async fn test_trampoline_is_hardlinked() {
+        use super::*;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let trampoline_path = dir.path().join("hardlink_to_trampoline");
+
+        let trampoline = Trampoline::new(
+            ExposedName::from_str("test_hardlink").unwrap(),
+            dir.path().to_path_buf(),
+            Configuration::new(trampoline_path.clone(), dir.path().to_path_buf(), None),
+        );
+
+        trampoline.save().await.unwrap();
+
+        // Check if the original trampoline is saved correctly
+        assert!(trampoline.trampoline_path().exists());
+        assert!(is_executable::is_executable(trampoline.trampoline_path()));
+
+        // check if we created the hardlink
+        // inspired from this:
+        // https://github.com/rust-lang/rust/blob/27e38f8fc7efc57b75e9a763d7a0ee44822cd5f7/library/std/src/fs/tests.rs#L949
+        assert!(trampoline.path().exists());
+        // Fetch metadata for both files
+        let shared_metadata = tokio_fs::metadata(trampoline.trampoline_path())
+            .await
+            .unwrap();
+        let linked_metadata = tokio_fs::metadata(trampoline.path()).await.unwrap();
+        // Check if the metadata is the same
+        assert_eq!(shared_metadata.len(), linked_metadata.len());
     }
 }
