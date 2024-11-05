@@ -92,12 +92,12 @@ uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" 
 
 # Rattler crates
 file_url = "0.1.4"
-rattler = { version = "0.27.16", default-features = false }
+rattler = { version = "0.28.0", default-features = false }
 rattler_cache = { version = "0.2.7", default-features = false }
-rattler_conda_types = { version = "0.28.3", default-features = false }
+rattler_conda_types = { version = "0.29.0", default-features = false }
 rattler_digest = { version = "1.0.2", default-features = false }
-rattler_lock = { version = "0.22.28", default-features = false }
-rattler_networking = { version = "0.21.4", default-features = false, features = [
+rattler_lock = { version = "0.22.29", default-features = false }
+rattler_networking = { version = "0.21.5", default-features = false, features = [
   "google-cloud-auth",
 ] }
 rattler_repodata_gateway = { version = "0.21.18", default-features = false }
@@ -326,15 +326,15 @@ reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev =
 # pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 # deno_task_shell = { path = "../deno_task_shell" }
-rattler = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
