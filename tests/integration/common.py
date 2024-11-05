@@ -87,4 +87,4 @@ def pixi_dir(project_root: Path) -> Path:
 
 
 def default_env_path(project_root: Path) -> Path:
-    return pixi_dir(project_root).joinpath("envs").joinpath("default")
+    return pixi_dir(project_root).joinpath("envs", "default")
