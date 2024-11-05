@@ -208,6 +208,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
+- `--revalidate`: Revalidate the full environment, skipping the lock file hash check. [more info](../features/environment.md#environment-installation-metadata)
+
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
@@ -636,6 +638,7 @@ To exit the pixi shell, simply run `exit`.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
+- `--revalidate`: Revalidate the full environment, skipping the lock file hash check. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
 pixi shell
@@ -664,6 +667,7 @@ This command prints the activation script of an environment.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
+- `--revalidate`: Revalidate the full environment, skipping the lock file hash check. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
 pixi shell-hook
