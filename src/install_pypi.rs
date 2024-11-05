@@ -635,6 +635,7 @@ pub async fn update_python_distributions(
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
     let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
 
+    dbg!(lock_file_dir);
     let index_locations = pypi_indexes
         .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
         .unwrap_or_else(|| Ok(IndexLocations::default()))
@@ -668,7 +669,7 @@ pub async fn update_python_distributions(
     let python_location = prefix.root().join(python_interpreter_path);
     let interpreter = Interpreter::query(&python_location, &uv_context.cache).into_diagnostic()?;
 
-    tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
+    tracing::debug!("using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
     let venv = PythonEnvironment::from_interpreter(interpreter);
     let non_isolated_packages =
@@ -676,12 +677,9 @@ pub async fn update_python_distributions(
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
     let git_resolver = GitResolver::default();
-    // Prep the build context.
 
     let dep_metadata = DependencyMetadata::default();
-
     let constraints = Constraints::default();
-
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
