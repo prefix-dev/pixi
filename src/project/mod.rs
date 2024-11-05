@@ -794,8 +794,8 @@ impl Project {
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
-        conda_packages: HashSet<PackageName>,
-        pypi_packages: HashSet<uv_normalize::PackageName>,
+        conda_packages: HashSet<rattler_conda_types::PackageName>,
+        pypi_packages: HashSet<pep508_rs::PackageName>,
         affected_environments: HashSet<(&str, Platform)>,
     ) -> LockFile {
         filter_lock_file(self, lock_file, |env, platform, package| {
