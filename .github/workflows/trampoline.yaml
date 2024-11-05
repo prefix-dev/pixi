@@ -85,6 +85,13 @@ jobs:
           mkdir -p trampolines
           # Iterate through all files in trampolines directory and its subdirectories
           find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
+          # now iterate through all files in trampolines directory and compress them using zstd
+          # and remove the original file
+          # by using -f we allow overwriting the file
+          for file in trampolines/*; do
+            zstd "$file" -f
+            rm "$file"
+          done
           ls -R trampolines/
 
       - name: Upload binary artifact

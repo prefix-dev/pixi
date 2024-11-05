@@ -18,5 +18,5 @@ This is the configuration used by trampoline to set the env variables, and run t
 
 # How to build it?
 You can use `trampoline.yaml` workflow to build the binary for all the platforms and architectures supported by pixi.
-If running it manually from forked repo, you can download and commit artifacts to your branch.
+In case of building it manually, you can use the following command, after executing the `cargo build --release`, you need to compress it using `zstd`.
 If running it manually or triggered by changes in `crates/pixi_trampoline` from the main repo, they will be automatically committed to the branch.
