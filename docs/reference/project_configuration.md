@@ -468,6 +468,19 @@ ruff = "~=1.0.0"
 pytest = {version = "*", extras = ["dev"]}
 ```
 
+##### `index`
+
+The index parameter allows you to specify the URL of a custom package index for the installation of a specific package.
+This feature is useful when you want to ensure that a package is retrieved from a particular source, rather than from the default index.
+
+For example, you can use either the official Python Package Index (PyPI) at https://pypi.org/simple or an alternative private index like https://example.com/simple.
+
+Use `index` in combination with `version`:
+
+```toml
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
+```
+
 ##### `git`
 
 A git repository to install from.
