@@ -572,9 +572,6 @@ impl PyPiRequirement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
-pub struct IndexName(String);
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
