@@ -22,6 +22,14 @@ pub fn pypi_options_to_index_locations(
     options: &PypiOptions,
     base_path: &Path,
 ) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
+    // Check if the base path is absolute
+    // Otherwise uv might panic
+    if !base_path.is_absolute() {
+        return Err(ConvertFlatIndexLocationError::NotAbsolute(
+            base_path.to_path_buf(),
+        ));
+    }
+
     // Convert the index to a `IndexUrl`
     let index = options
         .index_url
@@ -48,9 +56,9 @@ pub fn pypi_options_to_index_locations(
         flat_indexes
             .into_iter()
             .map(|url| match url {
-                rattler_lock::FindLinksUrlOrPath::Path(path_buf) => {
-                    VerbatimUrl::from_path(base_path, &path_buf)
-                        .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, path_buf))
+                rattler_lock::FindLinksUrlOrPath::Path(relative) => {
+                    VerbatimUrl::from_path(&relative, &base_path)
+                        .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative))
                 }
                 rattler_lock::FindLinksUrlOrPath::Url(url) => {
                     Ok(VerbatimUrl::from_url(url.clone()))

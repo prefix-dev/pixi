@@ -39,7 +39,7 @@ use uv_distribution_types::{
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
-use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource, ResolverMarkerEnvironment};
+use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -476,10 +476,8 @@ async fn lock_pypi_packages<'a>(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
                             // This happens when it is relative to the non-standard index
-                            FileLocation::RelativeUrl(base, relative) => {
-                                let base = Url::from_str(base).expect("invalid base url");
-                                let url = base.join(relative).expect("could not join urls");
-                                UrlOrPath::Url(url)
+                            FileLocation::RelativeUrl(_base, relative) => {
+                                UrlOrPath::Path(PathBuf::from(relative))
                             }
                         };
 
