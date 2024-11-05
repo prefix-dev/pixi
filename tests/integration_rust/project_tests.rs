@@ -1,5 +1,3 @@
-mod common;
-
 use std::path::PathBuf;
 
 use insta::assert_debug_snapshot;
@@ -94,7 +92,7 @@ async fn parse_project() {
             .collect()
     }
 
-    let pixi_toml = include_str!("./pixi_tomls/many_targets.toml");
+    let pixi_toml = include_str!("../data/pixi_tomls/many_targets.toml");
     let project = Project::from_str(&PathBuf::from("./many/pixi.toml"), pixi_toml).unwrap();
     assert_debug_snapshot!(dependency_names(&project, Platform::Linux64));
     assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));

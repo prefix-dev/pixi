@@ -1,5 +1,3 @@
-mod common;
-
 use std::str::FromStr;
 
 use crate::common::{
@@ -13,7 +11,6 @@ use pixi_manifest::pypi::VersionOrStar;
 use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
-use uv_normalize::ExtraName;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -289,7 +286,10 @@ async fn add_pypi_functionality() {
         .into_specs()
         .for_each(|(name, spec)| {
             if name == PyPiPackageName::from_str("pytest").unwrap() {
-                assert_eq!(spec.extras(), &[ExtraName::from_str("dev").unwrap()]);
+                assert_eq!(
+                    spec.extras(),
+                    &[pep508_rs::ExtraName::from_str("dev").unwrap()]
+                );
             }
         });
 
@@ -394,7 +394,10 @@ async fn add_pypi_extra_functionality() {
         .into_specs()
         .for_each(|(name, spec)| {
             if name == PyPiPackageName::from_str("black").unwrap() {
-                assert_eq!(spec.extras(), &[ExtraName::from_str("cli").unwrap()]);
+                assert_eq!(
+                    spec.extras(),
+                    &[pep508_rs::ExtraName::from_str("cli").unwrap()]
+                );
             }
         });
 
@@ -436,7 +439,7 @@ async fn add_pypi_extra_functionality() {
                     spec,
                     PyPiRequirement::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
-                        extras: vec![ExtraName::from_str("cli").unwrap()],
+                        extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
                     }
                 );
             }

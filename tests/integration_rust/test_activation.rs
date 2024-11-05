@@ -1,8 +1,6 @@
 use crate::common::PixiControl;
 use pixi::activation::CurrentEnvVarBehavior;
 
-mod common;
-
 #[cfg(windows)]
 const HOME: &str = "HOMEPATH";
 #[cfg(unix)]

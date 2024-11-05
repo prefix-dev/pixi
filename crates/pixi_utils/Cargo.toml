@@ -32,7 +32,7 @@ pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_networking = { workspace = true }
+rattler_networking = { workspace = true, features = ["gcs"] }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
