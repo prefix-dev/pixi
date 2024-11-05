@@ -358,15 +358,15 @@ def test_upgrade_conda_package(
 
 @pytest.mark.slow
 def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pyproject.toml"
+    manifest_path = tmp_path / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--format", "pyproject", tmp_path])
+    verify_cli_command([pixi, "init", tmp_path])
 
     # Add python
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python=3.13"])
 
-    # Add httpx pinned to version 0.25.0
+    # Add httpx pinned to version 0.26.0
     verify_cli_command(
         [
             pixi,
@@ -374,18 +374,42 @@ def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
             "--manifest-path",
             manifest_path,
             "--pypi",
-            "httpx[cli]==0.25.0",
+            "httpx[cli]==0.26.0",
         ]
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    print(parsed_manifest)
-    httpx = parsed_manifest["project"]["dependencies"][0]
-    httpx == "httpx[cli]==0.25.0"
+    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] == "==0.26.0"
+    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
 
     # Upgrade httpx, it should now be upgraded
     # Extras should be preserved
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "httpx"])
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    httpx = parsed_manifest["project"]["dependencies"][0]
-    assert httpx.startswith("httpx[cli]")
-    assert "0.26.0" not in httpx
+    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
+    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
+
+
+@pytest.mark.slow
+def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
+    manifest_path = tmp_path / "pyproject.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--format", "pyproject", tmp_path])
+
+    # Add pinned numpy as conda and pypi dependency
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "numpy==1.*"])
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "--pypi", "numpy==1.*"])
+
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    numpy_pypi = parsed_manifest["project"]["dependencies"][0]
+    assert numpy_pypi == "numpy==1.*"
+    numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
+    assert numpy_conda == "1.*"
+
+    # Upgrade numpy, both conda and pypi should be upgraded
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "numpy"])
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    numpy_pypi = parsed_manifest["project"]["dependencies"][0]
+    assert "1.*" not in numpy_pypi
+    numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
+    assert numpy_conda != "1.*"

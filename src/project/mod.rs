@@ -675,10 +675,9 @@ impl Project {
                 pypi_packages.insert(name.as_normalized().clone());
             }
         }
+        self.save()?;
 
         if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
-            self.save()?;
-
             return Ok(HashMap::default());
         }
 
@@ -734,26 +733,31 @@ impl Project {
             .finish()?
             .update()
             .await?;
-        let implicit_constraints = if !conda_specs_to_add_constraints_for.is_empty() {
-            self.update_conda_specs_from_lock_file(
+
+        let mut implicit_constraints = HashMap::new();
+        if !conda_specs_to_add_constraints_for.is_empty() {
+            let conda_constraints = self.update_conda_specs_from_lock_file(
                 &lock_file,
                 conda_specs_to_add_constraints_for,
-                affect_environment_and_platforms,
+                affect_environment_and_platforms.clone(),
                 feature_name,
                 platforms,
-            )?
-        } else if !pypi_specs_to_add_constraints_for.is_empty() {
-            self.update_pypi_specs_from_lock_file(
+            )?;
+            implicit_constraints.extend(conda_constraints);
+        }
+
+        if !pypi_specs_to_add_constraints_for.is_empty() {
+            let pypi_constraints = self.update_pypi_specs_from_lock_file(
                 &lock_file,
                 pypi_specs_to_add_constraints_for,
                 affect_environment_and_platforms,
                 feature_name,
                 platforms,
                 editable,
-            )?
-        } else {
-            HashMap::new()
-        };
+            )?;
+            implicit_constraints.extend(pypi_constraints);
+        }
+
         self.save()?;
         let mut updated_lock_file = LockFileDerivedData {
             project: self,
