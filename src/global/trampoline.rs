@@ -55,7 +55,7 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
 
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
-// trampoline configuration folder name
+// original trampoline binary name
 pub const TRAMPOLINE_BIN_NAME: &str = "trampoline_bin";
 
 /// Returns the file name of the executable
@@ -307,7 +307,7 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Public function to access the decompressed trampoline binary
+    /// Returns the decompressed trampoline binary
     pub fn decompressed_trampoline() -> &'static [u8] {
         // A static variable to hold the cached decompressed trampoline binary
         static DECOMPRESSED_TRAMPOLINE_BIN: LazyLock<Vec<u8>> = LazyLock::new(|| {
