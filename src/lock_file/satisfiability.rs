@@ -1358,8 +1358,9 @@ mod tests {
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
                 .unwrap();
-        dbg!(&spec.version_or_url);
+
         let spec = spec.into_uv_requirement().unwrap();
+
         // This should satisfy:
         pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
