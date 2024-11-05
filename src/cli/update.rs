@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::HashSet,
-};
+use std::{cmp::Ordering, collections::HashSet};
 
 use fancy_display::FancyDisplay;
 
@@ -20,7 +17,6 @@ use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
-use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
 
