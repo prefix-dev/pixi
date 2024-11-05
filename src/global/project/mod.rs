@@ -901,7 +901,7 @@ impl Project {
         }
 
         for env_name in self.environments().keys() {
-            state_changes |= self.sync_environment(env_name).await?;
+            state_changes |= self.sync_environment(env_name, None).await?;
         }
 
         Ok(state_changes)
@@ -912,6 +912,7 @@ impl Project {
     pub(crate) async fn sync_environment(
         &self,
         env_name: &EnvironmentName,
+        removed_packages: Option<Vec<PackageName>>,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
         if !self.environment_in_sync(env_name).await? {
@@ -919,7 +920,12 @@ impl Project {
                 "Environment {} specs not up to date with manifest",
                 env_name.fancy_display()
             );
-            let environment_update = self.install_environment(env_name).await?;
+            let mut environment_update = self.install_environment(env_name).await?;
+
+            if let Some(removed_packages) = removed_packages {
+                environment_update.add_removed_packages(removed_packages.to_vec());
+            };
+
             state_changes.insert_change(
                 env_name,
                 StateChange::UpdatedEnvironment(environment_update),
