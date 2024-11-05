@@ -4,7 +4,6 @@ use std::{
     io::{stderr, Write},
 };
 
-
 use crate::Project;
 use ahash::HashMap;
 use indexmap::IndexMap;
