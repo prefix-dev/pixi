@@ -1,3 +1,20 @@
+/// We are using some optimizations to reduce the size of trampoline binaries
+/// and how we store them.
+///
+///
+/// ### Compression with Zstandard (zstd)
+///
+/// Trampoline files are compressed using the zstd algorithm. This approach can save around 50% of storage per trampoline
+/// when it's included in pixi.
+///
+///
+/// ### Hardlinking
+///
+/// Instead of copying trampolines each time when we install a global binary, we store the decompressed
+/// trampoline only once in `.pixi/bin/trampoline_configuration/trampoline_bin`.
+/// Later we use hardlinks to point to the
+/// original file as needed, reducing redundant data duplication.
+///
 use std::{
     collections::HashMap,
     io::ErrorKind,
