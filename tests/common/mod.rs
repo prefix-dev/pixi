@@ -305,6 +305,7 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
                 editable: false,
             },
@@ -324,6 +325,7 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
             },
         }
