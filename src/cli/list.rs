@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io;
 use std::io::{stdout, Write};
 
@@ -12,10 +13,12 @@ use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
-use pixi_uv_conversions::pypi_options_to_index_locations;
+use pixi_uv_conversions::{
+    pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
+};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{Package, UrlOrPath};
+use rattler_lock::{CondaPackage, Package, PypiPackage, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -107,6 +110,37 @@ where
     Ok(result)
 }
 
+/// Associate with a uv_normalize::PackageName
+enum PackageExt {
+    PyPI(PypiPackage, uv_normalize::PackageName),
+    Conda(CondaPackage),
+}
+
+impl PackageExt {
+    fn as_conda(&self) -> Option<&CondaPackage> {
+        match self {
+            PackageExt::Conda(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Returns the name of the package.
+    pub fn name(&self) -> Cow<'_, str> {
+        match self {
+            Self::Conda(value) => value.package_record().name.as_normalized().into(),
+            Self::PyPI(value, _) => value.data().package.name.as_dist_info_name(),
+        }
+    }
+
+    /// Returns the version string of the package
+    pub fn version(&self) -> Cow<'_, str> {
+        match self {
+            Self::Conda(value) => value.package_record().version.as_str(),
+            Self::PyPI(value, _) => value.data().package.version.to_string().into(),
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
@@ -129,8 +163,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
 
+    let locked_deps_ext = locked_deps
+        .into_iter()
+        .map(|p| match p {
+            Package::Pypi(p) => {
+                let name = to_uv_normalize(&p.data().package.name)?;
+                Ok(PackageExt::PyPI(p, name))
+            }
+            Package::Conda(c) => Ok(PackageExt::Conda(c)),
+        })
+        .collect::<Result<Vec<_>, ConversionError>>()
+        .into_diagnostic()?;
+
     // Get the python record from the lock file
-    let mut conda_records = locked_deps.iter().filter_map(|d| d.as_conda());
+    let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
 
     // Construct the registry index if we have a python record
     let python_record = conda_records.find(|r| is_python_record(r));
@@ -173,11 +219,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_iter()
             .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
-    // Convert the list of package record to specific output format
-    let mut packages_to_output = locked_deps
+
+    let mut packages_to_output = locked_deps_ext
         .iter()
-        .map(|p| create_package_to_output(p, &project_dependency_names, &mut registry_index))
-        .collect::<Vec<PackageToOutput>>();
+        .map(|p| create_package_to_output(p, &project_dependency_names, registry_index.as_mut()))
+        .collect::<Result<Vec<PackageToOutput>, _>>()?;
 
     // Filter packages by regex if needed
     if let Some(regex) = args.regex {
@@ -299,58 +345,55 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
 }
 
 fn create_package_to_output<'a, 'b>(
-    p: &'b Package,
+    package: &'b PackageExt,
     project_dependency_names: &'a [String],
-    registry_index: &'a mut Option<RegistryWheelIndex<'b>>,
-) -> PackageToOutput {
-    let name = p.name().to_string();
-    let version = p.version().into_owned();
+    registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
+) -> miette::Result<PackageToOutput> {
+    let name = package.name().to_string();
+    let version = package.version().into_owned();
 
-    let kind = match p {
-        Package::Conda(_) => "conda".to_string(),
-        Package::Pypi(_) => "pypi".to_string(),
+    let kind = match package {
+        PackageExt::Conda(_) => "conda".to_string(),
+        PackageExt::PyPI(_, _) => "pypi".to_string(),
     };
-    let build = match p {
-        Package::Conda(pkg) => Some(pkg.package_record().build.clone()),
-        Package::Pypi(_) => None,
-    };
-
-    let size_bytes = match p {
-        Package::Conda(pkg) => pkg.package_record().size,
-        Package::Pypi(p) => {
-            let package_data = p.data().package;
-            registry_index.as_mut().and_then(|registry| {
-                let version = registry.get_version(&package_data.name, &package_data.version)?;
-                get_dir_size(&version.path).ok()
-            })
-        }
+    let build = match package {
+        PackageExt::Conda(pkg) => Some(pkg.package_record().build.clone()),
+        PackageExt::PyPI(_, _) => None,
     };
 
-    let source = match p {
-        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
-        Package::Pypi(p) => {
-            let package_data = p.data().package;
-            registry_index
-                .as_mut()
-                .and_then(|registry| {
-                    let version =
-                        registry.get_version(&package_data.name, &package_data.version)?;
-                    Some(version.filename.to_string())
-                })
-                .or_else(|| match &package_data.url_or_path {
-                    UrlOrPath::Url(url) => Some(url.to_string()),
-                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
-                })
+    let (size_bytes, source) = match package {
+        PackageExt::Conda(pkg) => (
+            pkg.package_record().size,
+            pkg.file_name().map(ToOwned::to_owned),
+        ),
+        PackageExt::PyPI(p, name) => {
+            if let Some(registry_index) = registry_index {
+                let entry = registry_index.get(name).find(|i| {
+                    i.dist.filename.version
+                        == to_uv_version(&p.data().package.version).expect("invalid version")
+                });
+                let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
+                let name = entry.map(|e| e.dist.filename.to_string());
+                (size, name)
+            } else {
+                match &p.data().package.url_or_path {
+                    UrlOrPath::Url(url) => (None, Some(url.to_string())),
+                    UrlOrPath::Path(path) => (
+                        get_dir_size(path.clone()).ok(),
+                        Some(path.to_string_lossy().to_string()),
+                    ),
+                }
+            }
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
-    let is_editable = match p {
-        Package::Conda(_) => false,
-        Package::Pypi(p) => p.data().package.editable,
+    let is_editable = match package {
+        PackageExt::Conda(_) => false,
+        PackageExt::PyPI(p, _) => p.data().package.editable,
     };
 
-    PackageToOutput {
+    Ok(PackageToOutput {
         name,
         version,
         build,
@@ -359,5 +402,5 @@ fn create_package_to_output<'a, 'b>(
         source,
         is_explicit,
         is_editable,
-    }
+    })
 }

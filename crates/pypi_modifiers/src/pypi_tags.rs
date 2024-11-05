@@ -1,9 +1,9 @@
 use miette::{Context, IntoDiagnostic};
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
-use platform_tags::Os;
-use platform_tags::Tags;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
+use uv_platform_tags::Os;
+use uv_platform_tags::Tags;
 
 /// Returns true if the specified record refers to a version/variant of python.
 pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
@@ -32,7 +32,7 @@ pub fn get_pypi_tags(
 fn get_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<platform_tags::Platform> {
+) -> miette::Result<uv_platform_tags::Platform> {
     if platform.is_linux() {
         get_linux_platform_tags(platform, system_requirements)
     } else if platform.is_windows() {
@@ -48,7 +48,7 @@ fn get_platform_tags(
 fn get_linux_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<platform_tags::Platform> {
+) -> miette::Result<uv_platform_tags::Platform> {
     let arch = get_arch_tags(platform)?;
 
     // Find the glibc version
@@ -61,7 +61,7 @@ fn get_linux_platform_tags(
             let (major, minor) = default_glibc_version()
                 .as_major_minor()
                 .expect("expected default glibc version to be a major.minor version");
-            Ok(platform_tags::Platform::new(
+            Ok(uv_platform_tags::Platform::new(
                 Os::Manylinux {
                     major: major as _,
                     minor: minor as _,
@@ -75,7 +75,7 @@ fn get_linux_platform_tags(
                     "expected glibc version to be a major.minor version, but got '{version}'"
                 )
             };
-            Ok(platform_tags::Platform::new(
+            Ok(uv_platform_tags::Platform::new(
                 Os::Manylinux {
                     major: major as _,
                     minor: minor as _,
@@ -90,16 +90,16 @@ fn get_linux_platform_tags(
 }
 
 /// Get windows specific platform tags
-fn get_windows_platform_tags(platform: Platform) -> miette::Result<platform_tags::Platform> {
+fn get_windows_platform_tags(platform: Platform) -> miette::Result<uv_platform_tags::Platform> {
     let arch = get_arch_tags(platform)?;
-    Ok(platform_tags::Platform::new(Os::Windows, arch))
+    Ok(uv_platform_tags::Platform::new(Os::Windows, arch))
 }
 
 /// Get macos specific platform tags
 fn get_macos_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<platform_tags::Platform> {
+) -> miette::Result<uv_platform_tags::Platform> {
     let osx_version = system_requirements
         .macos
         .clone()
@@ -110,7 +110,7 @@ fn get_macos_platform_tags(
 
     let arch = get_arch_tags(platform)?;
 
-    Ok(platform_tags::Platform::new(
+    Ok(uv_platform_tags::Platform::new(
         Os::Macos {
             major: major as _,
             minor: minor as _,
@@ -120,16 +120,16 @@ fn get_macos_platform_tags(
 }
 
 /// Get the arch tag for the specified platform
-fn get_arch_tags(platform: Platform) -> miette::Result<platform_tags::Arch> {
+fn get_arch_tags(platform: Platform) -> miette::Result<uv_platform_tags::Arch> {
     match platform.arch() {
         None => unreachable!("every platform we support has an arch"),
-        Some(Arch::X86) => Ok(platform_tags::Arch::X86),
-        Some(Arch::X86_64) => Ok(platform_tags::Arch::X86_64),
-        Some(Arch::Aarch64 | Arch::Arm64) => Ok(platform_tags::Arch::Aarch64),
-        Some(Arch::ArmV7l) => Ok(platform_tags::Arch::Armv7L),
-        Some(Arch::Ppc64le) => Ok(platform_tags::Arch::Powerpc64Le),
-        Some(Arch::Ppc64) => Ok(platform_tags::Arch::Powerpc64),
-        Some(Arch::S390X) => Ok(platform_tags::Arch::S390X),
+        Some(Arch::X86) => Ok(uv_platform_tags::Arch::X86),
+        Some(Arch::X86_64) => Ok(uv_platform_tags::Arch::X86_64),
+        Some(Arch::Aarch64 | Arch::Arm64) => Ok(uv_platform_tags::Arch::Aarch64),
+        Some(Arch::ArmV7l) => Ok(uv_platform_tags::Arch::Armv7L),
+        Some(Arch::Ppc64le) => Ok(uv_platform_tags::Arch::Powerpc64Le),
+        Some(Arch::Ppc64) => Ok(uv_platform_tags::Arch::Powerpc64),
+        Some(Arch::S390X) => Ok(uv_platform_tags::Arch::S390X),
         Some(unsupported_arch) => {
             miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
         }
@@ -160,7 +160,7 @@ fn get_implementation_name(python_record: &PackageRecord) -> miette::Result<&'st
 }
 
 fn create_tags(
-    platform: platform_tags::Platform,
+    platform: uv_platform_tags::Platform,
     python_version: (u8, u8),
     implementation_name: &str,
 ) -> miette::Result<Tags> {
