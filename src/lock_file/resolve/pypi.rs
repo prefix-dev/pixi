@@ -35,7 +35,7 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+    IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
@@ -463,23 +463,58 @@ async fn lock_pypi_packages<'a>(
         }
 
         let pypi_package_data = match dist {
+            // Ignore installed distributions
             ResolvedDist::Installed(_) => {
-                // TODO handle installed distributions
                 continue;
             }
+
             ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let best_wheel = dist.best_wheel();
-                        let url = match &best_wheel.file.url {
-                            FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
-                                Url::from_str(url.as_ref()).expect("invalid absolute url"),
-                            ),
-                            // This happens when it is relative to the non-standard index
-                            FileLocation::RelativeUrl(base, relative) => {
-                                let base = Url::from_str(base).expect("invalid base url");
-                                let url = base.join(relative).expect("could not join urls");
-                                UrlOrPath::Url(url)
+                        let url = match &best_wheel.index {
+                            // This is the case where the registry index is a PyPI index
+                            // or an URL
+                            IndexUrl::Pypi(_) | IndexUrl::Url(_) => {
+                                let url = match &best_wheel.file.url {
+                                    // Normal case
+                                    FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
+                                        Url::from_str(url.as_ref()).expect("invalid absolute url"),
+                                    ),
+                                    // This happens when it is relative to the non-standard index
+                                    FileLocation::RelativeUrl(base, relative) => {
+                                        let base = Url::from_str(base).expect("invalid base url");
+                                        let url = base.join(relative).expect("could not join urls");
+                                        UrlOrPath::Url(url)
+                                    }
+                                };
+                                url
+                            }
+                            // This is the case where the index is a `--find-links` path
+                            IndexUrl::Path(verbatim_url) => {
+                                let base = verbatim_url
+                                    .to_url()
+                                    .to_file_path()
+                                    .expect("expected a file path for index url");
+                                let url = match &best_wheel.file.url {
+                                    // Normal case
+                                    FileLocation::AbsoluteUrl(url) => {
+                                        // Convert to a relative path from the base path
+                                        let absolute = url
+                                            .to_url()
+                                            .to_file_path()
+                                            .expect("expected a file path for url");
+                                        let relative = absolute
+                                            .strip_prefix(base)
+                                            .expect("index url is not a prefix of the base path");
+                                        UrlOrPath::Path(relative.to_path_buf())
+                                    }
+                                    // This happens when it is relative to the non-standard index
+                                    FileLocation::RelativeUrl(_, relative) => {
+                                        UrlOrPath::Path(PathBuf::from(relative))
+                                    }
+                                };
+                                url
                             }
                         };
 
@@ -578,7 +613,6 @@ async fn lock_pypi_packages<'a>(
                         (url_or_path, hash, false)
                     }
                     SourceDist::Directory(dir) => {
-                        // TODO: check that `install_path` is correct
                         // Compute the hash of the package based on the source tree.
                         let hash = if dir.install_path.is_dir() {
                             Some(
