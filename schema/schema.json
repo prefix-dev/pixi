@@ -1057,6 +1057,12 @@
             "minLength": 1
           }
         },
+        "index": {
+          "title": "Index",
+          "description": "The index to fetch the package from",
+          "type": "string",
+          "minLength": 1
+        },
         "version": {
           "title": "Version",
           "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",

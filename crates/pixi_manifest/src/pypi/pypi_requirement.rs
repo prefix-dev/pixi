@@ -199,17 +199,17 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                     raw_req.extras,
                     raw_req.index,
                 ) {
-                    (Some(url), None, None, extras, index) => PyPiRequirement::Url {
+                    (Some(url), None, None, extras, None) => PyPiRequirement::Url {
                         url,
                         extras,
                         subdirectory: raw_req.subdirectory,
                     },
-                    (None, Some(path), None, extras, index) => PyPiRequirement::Path {
+                    (None, Some(path), None, extras, None) => PyPiRequirement::Path {
                         path,
                         editable: raw_req.editable,
                         extras,
                     },
-                    (None, None, Some(git), extras, index) => PyPiRequirement::Git {
+                    (None, None, Some(git), extras, None) => PyPiRequirement::Git {
                         url: ParsedGitUrl {
                             git,
                             branch: raw_req.branch,
