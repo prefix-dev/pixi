@@ -1053,6 +1053,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#trampolines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Trampolines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example-adding-a-series-of-tools-at-once" class="md-nav__link">
     <span class="md-ellipsis">
       Example: Adding a series of tools at once
@@ -1659,6 +1668,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#trampolines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Trampolines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example-adding-a-series-of-tools-at-once" class="md-nav__link">
     <span class="md-ellipsis">
       Example: Adding a series of tools at once
@@ -1942,6 +1960,14 @@ This will be added as dependencies to the <code>my-env</code> environment but wo
 <p>You can <code>remove</code> dependencies by running:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
 </span></code></pre></div></p>
+<h3 id="trampolines">Trampolines<a class="headerlink" href="#trampolines" title="Permanent link">#</a></h3>
+<p>To increase efficiency, <code>pixi</code> uses <em>trampolines</em>—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.</p>
+<p>When you execute a global install binary, a trampoline performs the following sequence of steps:</p>
+<ul>
+<li>Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., <code>python.json</code>), contains key information about how the environment should be set up. The configuration file is stored in <code>.pixi/bin/trampoline_configuration</code>.</li>
+<li>Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.</li>
+<li>When installing a new binary, a new trampoline is placed in the <code>.pixi/bin</code> directory and is hardlinked to the <code>.pixi/bin/trampoline_configuration/trampoline_bin</code>. This optimizes storage space and avoids duplication of the same trampoline.</li>
+</ul>
 <h3 id="example-adding-a-series-of-tools-at-once">Example: Adding a series of tools at once<a class="headerlink" href="#example-adding-a-series-of-tools-at-once" title="Permanent link">#</a></h3>
 <p>Without specifying an environment, you can add multiple tools at once:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
