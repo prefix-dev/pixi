@@ -83,11 +83,9 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     assert "environment_lock_file_hash" in pixi_file.read_text()
 
     # Break environment on purpose
-    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").joinpath("dummy-a*.json")
+    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").glob("dummy-a*.json")
 
-    files = glob.glob(str(dummy_a_meta_files))
-
-    for file in files:
+    for file in dummy_a_meta_files:
         path = Path(file)
         if path.exists():
             path.unlink()  # Removes the file
@@ -99,7 +97,7 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     )
 
     # Validate that the dummy-a files still don't exist
-    for file in files:
+    for file in dummy_a_meta_files:
         assert not Path(file).exists()
 
     # Run an actual re-install
@@ -108,7 +106,7 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     )
 
     # Validate the files are back
-    for file in files:
+    for file in dummy_a_meta_files:
         # All dummy-a files should be back as `install` will ignore the hash
         assert Path(file).exists()
 
@@ -138,12 +136,9 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     assert "environment_lock_file_hash" in pixi_file.read_text()
 
     # Break environment on purpose
-    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").joinpath("dummy-a*.json")
-    import glob
+    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").glob("dummy-a*.json")
 
-    files = glob.glob(str(dummy_a_meta_files))
-
-    for file in files:
+    for file in dummy_a_meta_files:
         path = Path(file)
         if path.exists():
             path.unlink()  # Removes the file
@@ -156,5 +151,5 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     )
 
     # Validate that the dummy-a files are reinstalled
-    for file in files:
+    for file in dummy_a_meta_files:
         assert Path(file).exists()
