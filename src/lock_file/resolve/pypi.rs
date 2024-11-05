@@ -476,10 +476,6 @@ enum GetUrlOrPathError {
     CannotJoin(String, String),
     #[error("expected path found: {0}")]
     ExpectedPath(String),
-    #[error("{base} should be the base of {0}", base = .1.display())]
-    NotABase(String, PathBuf),
-    #[error("{base} should be the base of {absolute}", absolute = .0.display(), base = .1.display())]
-    NotABaseDir(PathBuf, PathBuf),
 }
 
 /// Get the UrlOrPath from the index url and file location
@@ -532,46 +528,41 @@ fn get_url_or_path(
                     // not the path returned by the uv solver. Why? Because we need the path relative
                     // to the project root, **not** the path relative to the --find-links path.
                     // This is because during installation we do something like: `project_root.join(relative_path)`
-                    let relative = absolute.strip_prefix(&abs_project_root).map_err(|_| {
-                        GetUrlOrPathError::NotABase(url.to_string(), abs_project_root.to_path_buf())
-                    })?;
-                    // This is just to get a `./` in the path
-                    UrlOrPath::Path(
-                        PathBuf::from_str(RELATIVE_BASE)
+                    let relative = absolute.strip_prefix(&abs_project_root);
+                    let path = match relative {
+                        // Apparently, we can make it relative to the project root
+                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
                             .map_err(|_| {
                                 GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
                             })?
                             .join(relative.to_path_buf()),
-                    )
+                        // We can't make it relative to the project root
+                        // so we just return the absolute path
+                        Err(_) => absolute,
+                    };
+                    UrlOrPath::Path(path)
                 }
                 // This happens when it is relative to the non-standard index
-                // Not sure when this happens, but I (@tdejager) think the best approach is to
-                // convert into an absolute path, and then we can strip the project root, so we keep the relative path
-                // from the project root
+                // location on disk.
                 FileLocation::RelativeUrl(base, relative) => {
-                    // Example:
-                    // absolute: /home/user/project/dist
+                    // This is the same logic as the `AbsoluteUrl` case
+                    // basically but we just make an absolute path first
                     let absolute = PathBuf::from_str(base)
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(base.clone()))?;
-                    // relative: certifi-2024.8.30-py3-none-any.whl
                     let relative = PathBuf::from_str(relative)
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.clone()))?;
-                    // absolute: /home/user/project/dist/certifi-2024.8.30-py3-none-any.whl
                     let absolute = absolute.join(relative);
-                    // !IMPORTANT! We need to strip the base path from the absolute path
-                    let relative = absolute.strip_prefix(abs_project_root).map_err(|_| {
-                        GetUrlOrPathError::NotABaseDir(
-                            absolute.clone(),
-                            abs_project_root.to_path_buf(),
-                        )
-                    })?;
-                    UrlOrPath::Path(
-                        PathBuf::from_str(RELATIVE_BASE)
+
+                    let relative = absolute.strip_prefix(abs_project_root);
+                    let path = match relative {
+                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
                             .map_err(|_| {
                                 GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
                             })?
                             .join(relative.to_path_buf()),
-                    )
+                        Err(_) => absolute,
+                    };
+                    UrlOrPath::Path(path)
                 }
             };
             Ok(url)
