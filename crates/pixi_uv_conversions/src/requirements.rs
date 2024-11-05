@@ -14,7 +14,6 @@ use uv_distribution_filename::DistExtension;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
-use uv_pep508::Requirement;
 use uv_pep508::VerbatimUrl;
 use uv_pypi_types::RequirementSource;
 
