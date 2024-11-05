@@ -540,10 +540,10 @@ async fn lock_pypi_packages<'a>(
                                 Url::from_str(url.as_ref()).expect("invalid absolute url"),
                             ),
                             // This happens when it is relative to the non-standard index
-                            FileLocation::RelativeUrl(base, relative) => {
-                                let base = Url::from_str(base).expect("invalid base url");
-                                let url = base.join(relative).expect("could not join urls");
-                                UrlOrPath::Url(url)
+                            FileLocation::RelativeUrl(_, relative) => {
+                                // let base = Url::from_str(base).expect("invalid base url");
+                                // let url = base.join(relative).expect("could not join urls");
+                                UrlOrPath::Path(PathBuf::from(relative))
                             }
                         };
                         (url_or_path, hash, false)
