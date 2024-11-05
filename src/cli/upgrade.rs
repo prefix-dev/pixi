@@ -40,6 +40,10 @@ pub struct UpgradeSpecsArgs {
     /// The feature to update
     #[clap(long = "feature", short = 'f', default_value_t)]
     pub feature: FeatureName,
+
+    /// The packages which should be excluded
+    #[clap(long, conflicts_with = "packages")]
+    pub exclude: Option<Vec<String>>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -84,6 +88,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let match_specs = match_spec_iter
+        // Don't upgrade excluded packages
+        .filter(|(name, _)| match &args.specs.exclude {
+            None => true,
+            Some(exclude) if exclude.contains(&name.as_normalized().to_string()) => false,
+            _ => true,
+        })
         // If specific packages have been requested, only upgrade those
         .filter(|(name, _)| match &args.specs.packages {
             None => true,
@@ -115,6 +125,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
 
     let pypi_deps = pypi_deps_iter
+        // Don't upgrade excluded packages
+        .filter(|(name, _)| match &args.specs.exclude {
+            None => true,
+            Some(exclude) if exclude.contains(&name.as_normalized().to_string()) => false,
+            _ => true,
+        })
         // If specific packages have been requested, only upgrade those
         .filter(|(name, _)| match &args.specs.packages {
             None => true,
