@@ -95,7 +95,6 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     # Run simple script, which shouldn't reinstall
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "echo", "hello"],
-        ExitCode.SUCCESS,
         stdout_contains="hello",
     )
 
