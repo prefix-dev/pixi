@@ -528,14 +528,14 @@ fn get_url_or_path(
                     // not the path returned by the uv solver. Why? Because we need the path relative
                     // to the project root, **not** the path relative to the --find-links path.
                     // This is because during installation we do something like: `project_root.join(relative_path)`
-                    let relative = absolute.strip_prefix(&abs_project_root);
+                    let relative = absolute.strip_prefix(abs_project_root);
                     let path = match relative {
                         // Apparently, we can make it relative to the project root
                         Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
                             .map_err(|_| {
                                 GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
                             })?
-                            .join(relative.to_path_buf()),
+                            .join(relative),
                         // We can't make it relative to the project root
                         // so we just return the absolute path
                         Err(_) => absolute,
@@ -559,7 +559,7 @@ fn get_url_or_path(
                             .map_err(|_| {
                                 GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
                             })?
-                            .join(relative.to_path_buf()),
+                            .join(relative),
                         Err(_) => absolute,
                     };
                     UrlOrPath::Path(path)
