@@ -186,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
     } else if diff.is_empty() {
-        println!(
+        eprintln!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
         );
