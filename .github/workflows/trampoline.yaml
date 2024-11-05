@@ -1,0 +1,116 @@
+name: Update Trampoline Binary
+
+on:
+  push:
+    paths:
+      - 'crates/pixi_trampoline/**'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'crates/pixi_trampoline/**'
+
+permissions:
+  contents: write  # Allow write permissions for contents (like pushing to the repo)
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: ubuntu-latest  }
+          - { name: "Linux-aarch64", target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
+          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
+          - { name: "Windows", target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { name: "Windows-arm", target: aarch64-pc-windows-msvc, os: windows-latest }
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history so we have branch information
+
+      - name: Set up Rust
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Build trampoline binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Move trampoline binary on windows
+        if: startsWith(matrix.name, 'Windows')
+        run: |
+          mkdir -p trampolines-binaries
+          mv target/${{ matrix.target }}/release/pixi_trampoline.exe trampolines-binaries/pixi-trampoline-${{ matrix.target }}.exe
+
+      - name: Move trampoline binary on unix
+        if: startsWith(matrix.name, 'Windows') == false
+        run: |
+          mkdir -p trampolines-binaries
+          mv target/${{ matrix.target }}/release/pixi_trampoline trampolines-binaries/pixi-trampoline-${{ matrix.target }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trampoline-${{ matrix.target }}
+          path: crates/pixi_trampoline/trampolines-binaries/
+
+  aggregate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/pixi_trampoline
+    needs: build  # This ensures the aggregation job runs after the build jobs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v3
+        with:
+          path: crates/pixi_trampoline/trampolines-binaries/
+
+      - name: List downloaded files
+        run: ls -R trampolines-binaries/
+
+      - name: Move trampolines
+        run: |
+          mkdir -p trampolines
+          # Iterate through all files in trampolines directory and its subdirectories
+          find trampolines-binaries -type f  -name 'pixi-trampoline-*' -exec mv -f {} trampolines/ \;
+          # now iterate through all files in trampolines directory and compress them using zstd
+          # and remove the original file
+          # by using -f we allow overwriting the file
+          for file in trampolines/*; do
+            zstd "$file" -f
+            rm "$file"
+          done
+          ls -R trampolines/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trampolines
+          path: crates/pixi_trampoline/trampolines/
+
+
+
+      - name: Commit and push updated binaries
+        # Don't run on forks
+        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'reaf/heads')
+        run: |
+          # Set the repository to push to the repository the workflow is running on
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add trampolines/
+          git commit -m "[CI]: Update trampoline binaries for all targets"
+          # Push changes to the branch that triggered the workflow
+          BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
+          git push origin HEAD:$BRANCH

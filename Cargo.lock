@@ -3305,6 +3305,7 @@ dependencies = [
  "uv-types",
  "xxhash-rust",
  "zip 2.2.0",
+ "zstd",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 from enum import IntEnum
 from pathlib import Path
+import platform
 import subprocess
 import os
 
@@ -80,3 +81,23 @@ def verify_cli_command(
             assert substring not in stderr, f"'{substring}' unexpectedly found in stderr: {stderr}"
 
     return output
+
+
+def bat_extension(exe_name: str) -> str:
+    if platform.system() == "Windows":
+        return exe_name + ".bat"
+    else:
+        return exe_name
+
+
+def exec_extension(exe_name: str) -> str:
+    if platform.system() == "Windows":
+        return exe_name + ".exe"
+    else:
+        return exe_name
+
+
+def is_binary(path: Path) -> bool:
+    textchars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
+    with open(path, "rb") as f:
+        return bool(f.read(2048).translate(None, textchars))

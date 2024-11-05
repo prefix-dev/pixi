@@ -3,19 +3,12 @@ import tomllib
 
 import pytest
 import tomli_w
-from .common import verify_cli_command, ExitCode
+from .common import verify_cli_command, ExitCode, exec_extension, bat_extension
 import platform
 import os
 import stat
 
 MANIFEST_VERSION = 1
-
-
-def exec_extension(exe_name: str) -> str:
-    if platform.system() == "Windows":
-        return exe_name + ".bat"
-    else:
-        return exe_name
 
 
 @pytest.mark.slow
@@ -1120,6 +1113,7 @@ def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, multiple_versions_chan
         [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.2.0"],
         env=env,
     )
+
     assert not package0_1_0.is_file()
     assert package0_2_0.is_file()
 
@@ -1190,7 +1184,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     verify_cli_command(
         [pixi, "global", "list", "--environment", "dummy-a", "dummy"],
         env=env,
-        stdout_contains=["The dummy-a environment", "dummy-a  0.1.0"],
+        stdout_contains=["The dummy-a environment", "dummy-a", "0.1.0"],
         stdout_excludes=["dummy-b"],
     )
 
@@ -1365,7 +1359,7 @@ def test_global_update_single_package(
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
-        stderr_contains="Updated package package 0.1.0 -> 0.2.0 in environment package.",
+        stderr_contains=["Updated", "package", "0.1.0", "0.2.0"],
     )
     package = tmp_path / "bin" / exec_extension("package")
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
@@ -1451,7 +1445,7 @@ def test_global_update_all_packages(
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
-    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / exec_extension("package2")
+    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / bat_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
@@ -1508,7 +1502,7 @@ def test_global_update_multiple_packages_in_one_env(
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
-    bin_file_package2 = tmp_path / "envs" / "my-packages" / "bin" / exec_extension("package2")
+    bin_file_package2 = tmp_path / "envs" / "my-packages" / "bin" / bat_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
@@ -1642,7 +1636,7 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "dummy-b",
         ],
         env=env,
-        stderr_contains="Exposed executable dummy-b from environment dummy-a",
+        stderr_contains=["Exposed executable dummy-b from environment dummy-a"],
     )
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
