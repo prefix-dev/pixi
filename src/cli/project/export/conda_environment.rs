@@ -106,7 +106,9 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
 
             url_string
         }
-        PyPiRequirement::Version { version, extras } => {
+        PyPiRequirement::Version {
+            version, extras, ..
+        } => {
             format!(
                 "{name}{extras}{version}",
                 name = name.as_normalized(),
