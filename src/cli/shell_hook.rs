@@ -15,7 +15,6 @@ use crate::environment::update_prefix;
 use crate::{
     activation::get_activator,
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
-    lock_file::UpdateMode,
     project::{Environment, HasProjectRef},
     Project,
 };
@@ -114,7 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
-        UpdateMode::Validate,
+        args.prefix_update_config.update_mode(),
     )
     .await?;
 

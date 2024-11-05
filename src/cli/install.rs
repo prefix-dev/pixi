@@ -57,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &environment,
             args.lock_file_usage.into(),
             false,
-            UpdateMode::Force,
+            UpdateMode::Revalidate,
         )
         .await?;
 

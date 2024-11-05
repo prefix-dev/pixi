@@ -9,7 +9,7 @@ use std::{collections::HashMap, string::String};
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::environment::verify_prefix_location_unchanged;
-use crate::lock_file::{UpdateLockFileOptions, UpdateMode};
+use crate::lock_file::UpdateLockFileOptions;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
@@ -169,7 +169,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Ensure there is a valid prefix
                 lock_file
-                    .prefix(&executable_task.run_environment, UpdateMode::Validate)
+                    .prefix(
+                        &executable_task.run_environment,
+                        args.prefix_update_config.update_mode(),
+                    )
                     .await?;
 
                 let command_env = get_task_env(

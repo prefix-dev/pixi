@@ -17,7 +17,7 @@ pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Resul
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        UpdateMode::Force,
+        UpdateMode::Revalidate,
     )
     .await?;
     project.save()?;

@@ -122,13 +122,14 @@ pub struct LockFileDerivedData<'p> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateMode {
     /// Validate if the prefix is up-to-date.
+    /// Using a fast and simple validation method.
     /// Used for skipping the update if the prefix is already up-to-date, in activating commands.
     /// Like `pixi shell` or `pixi run`.
-    Validate,
-    /// Force a prefix install without running the validation.
+    QuickValidate,
+    /// Force a prefix install without running the short validation.
     /// Used for updating the prefix when the lock-file likely out of date.
     /// Like `pixi install` or `pixi update`.
-    Force,
+    Revalidate,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -163,7 +164,7 @@ impl<'p> LockFileDerivedData<'p> {
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the environment file
         let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::Validate {
+        if update_mode == UpdateMode::QuickValidate {
             if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
                 if environment_file.environment_lock_file_hash == hash {
                     tracing::info!(

@@ -574,7 +574,7 @@ async fn test_old_lock_install() {
         &project.default_environment(),
         LockFileUsage::Update,
         false,
-        UpdateMode::Force,
+        UpdateMode::Revalidate,
     )
     .await
     .unwrap();

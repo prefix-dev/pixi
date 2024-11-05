@@ -293,7 +293,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         && default_environment_is_affected
     {
         updated_lock_file
-            .prefix(&project.default_environment(), UpdateMode::Force)
+            .prefix(&project.default_environment(), UpdateMode::Revalidate)
             .await?;
     }
 
