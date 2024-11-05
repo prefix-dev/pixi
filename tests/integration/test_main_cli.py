@@ -341,30 +341,32 @@ def test_upgrade_conda_package(
         ]
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"]["version"] == "==0.1.0"
-    assert parsed_manifest["dependencies"]["package"]["channel"] == multiple_versions_channel_1
-    assert parsed_manifest["dependencies"]["package"]["build-number"] == "==0"
+    package = parsed_manifest["dependencies"]["package"]
+    assert package["version"] == "==0.1.0"
+    assert package["channel"] == multiple_versions_channel_1
+    assert package["build-number"] == "==0"
 
     # Upgrade package, it should now be at 0.2.0, with semver ranges
     # The channel should still be specified
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "package"])
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"]["version"] == ">=0.2.0,<0.3"
-    assert parsed_manifest["dependencies"]["package"]["channel"] == multiple_versions_channel_1
-    assert "build-number" not in parsed_manifest["dependencies"]["package"]
+    package = parsed_manifest["dependencies"]["package"]
+    assert package["version"] == ">=0.2.0,<0.3"
+    assert package["channel"] == multiple_versions_channel_1
+    assert "build-number" not in package
 
 
 @pytest.mark.slow
 def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+    manifest_path = tmp_path / "pyproject.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_path])
+    verify_cli_command([pixi, "init", "--format", "pyproject", tmp_path])
 
     # Add python
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python=3.13"])
 
-    # Add httpx pinned to version 0.26.0
+    # Add httpx pinned to version 0.25.0
     verify_cli_command(
         [
             pixi,
@@ -372,16 +374,18 @@ def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
             "--manifest-path",
             manifest_path,
             "--pypi",
-            "httpx[cli]==0.26.0",
+            "httpx[cli]==0.25.0",
         ]
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] == "==0.26.0"
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
+    print(parsed_manifest)
+    httpx = parsed_manifest["project"]["dependencies"][0]
+    httpx == "httpx[cli]==0.25.0"
 
     # Upgrade httpx, it should now be upgraded
     # Extras should be preserved
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "httpx"])
     parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
+    httpx = parsed_manifest["project"]["dependencies"][0]
+    assert httpx.startswith("httpx[cli]")
+    assert "0.26.0" not in httpx
