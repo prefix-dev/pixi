@@ -19,6 +19,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_lock::Package::{Conda, Pypi};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
@@ -169,16 +170,29 @@ impl LockedEnvironmentHash {
         platform: Platform,
     ) -> Self {
         let mut hasher = Xxh3::new();
-        let mut urls = Vec::new();
 
         if let Some(packages) = environment.packages(platform) {
             for package in packages {
-                urls.push(package.url_or_path().into_owned().to_string())
+                package
+                    .url_or_path()
+                    .into_owned()
+                    .to_string()
+                    .hash(&mut hasher);
+                match package {
+                    Conda(pack) => {
+                        if let Some(sha) = pack.package_record().sha256 {
+                            sha.hash(&mut hasher);
+                        } else if let Some(md5) = pack.package_record().md5 {
+                            md5.hash(&mut hasher);
+                        }
+                    }
+                    Pypi(pack) => {
+                        pack.is_editable().hash(&mut hasher);
+                        pack.extras().hash(&mut hasher);
+                    }
+                }
             }
         }
-        urls.sort();
-
-        urls.hash(&mut hasher);
 
         LockedEnvironmentHash(format!("{:x}", hasher.finish()))
     }
