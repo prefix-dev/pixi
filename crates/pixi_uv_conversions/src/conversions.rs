@@ -57,7 +57,7 @@ pub fn pypi_options_to_index_locations(
             .into_iter()
             .map(|url| match url {
                 rattler_lock::FindLinksUrlOrPath::Path(relative) => {
-                    VerbatimUrl::from_path(&relative, &base_path)
+                    VerbatimUrl::from_path(&relative, base_path)
                         .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative))
                 }
                 rattler_lock::FindLinksUrlOrPath::Url(url) => {
