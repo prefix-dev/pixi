@@ -57,7 +57,7 @@ test-integration-fast = { cmd = "pytest -m 'not slow' --pixi-build=debug --numpr
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
 test-specific-test = { cmd = "pytest", depends-on = ["build"] }
-update-integration-test-channels = { cmd = "python update-channels.py", cwd = "tests/integration/test_data" }
+update-integration-test-channels = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
 
 [feature.dev.dependencies]
 # Needed for the citation
