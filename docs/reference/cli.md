@@ -667,7 +667,7 @@ This command prints the activation script of an environment.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
-- `--revalidate`: Revalidate the full environment, skipping the lock file hash check. [more info](../features/environment.md#environment-installation-metadata)
+- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
 pixi shell-hook
