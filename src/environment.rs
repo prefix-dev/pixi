@@ -173,12 +173,15 @@ impl LockedEnvironmentHash {
 
         if let Some(packages) = environment.packages(platform) {
             for package in packages {
+                // Always has the url or path
                 package
                     .url_or_path()
                     .into_owned()
                     .to_string()
                     .hash(&mut hasher);
+
                 match package {
+                    // A select set of fields are used to hash the package
                     Conda(pack) => {
                         if let Some(sha) = pack.package_record().sha256 {
                             sha.hash(&mut hasher);
@@ -211,15 +214,19 @@ pub(crate) struct EnvironmentFile {
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
 }
 
+/// The path to the environment file in the `conda-meta` directory of the environment.
+fn environment_file_path(environment_dir: &Path) -> PathBuf {
+    environment_dir
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME)
+}
 /// Write information about the environment to a file in the environment
 /// directory. Used by the prefix updating to validate if it needs to be updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
-    let path = environment_dir
-        .join(consts::CONDA_META_DIR)
-        .join(consts::ENVIRONMENT_FILE_NAME);
+    let path = environment_file_path(environment_dir);
 
     let parent = path
         .parent()
@@ -236,12 +243,12 @@ pub(crate) fn write_environment_file(
     Ok(path)
 }
 
+/// Reading the environment file of the environment.
+/// Removing it if it's not valid.
 pub(crate) fn read_environment_file(
     environment_dir: &Path,
 ) -> miette::Result<Option<EnvironmentFile>> {
-    let path = environment_dir
-        .join(consts::CONDA_META_DIR)
-        .join(consts::ENVIRONMENT_FILE_NAME);
+    let path = environment_file_path(environment_dir);
 
     let contents = match std::fs::read_to_string(&path) {
         Ok(contents) => contents,
@@ -249,16 +256,25 @@ pub(crate) fn read_environment_file(
             tracing::debug!("Environment file not yet found at: {:?}", path);
             return Ok(None);
         }
-        Err(e) => return Err(e).into_diagnostic(),
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
+                path,
+                e
+            );
+            let _ = std::fs::remove_file(&path);
+            return Err(e).into_diagnostic();
+        }
     };
     let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
         Ok(env_file) => env_file,
         Err(e) => {
             tracing::debug!(
-                "Failed to parse environment file at: {:?}, error: {}",
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
                 path,
                 e
             );
+            let _ = std::fs::remove_file(&path);
             return Ok(None);
         }
     };
