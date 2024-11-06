@@ -83,9 +83,6 @@ where
     // sort all versions across all channels and platforms
     latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
 
-    // sort all versions across all channels and platforms
-    latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-
     Ok(latest_packages)
 }
 
