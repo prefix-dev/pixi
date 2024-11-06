@@ -183,10 +183,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
 
-    // Format as json?
+    // Is there something to report?
     if let Some(update_deps) = update_deps {
         let diff = update_deps.lock_file_diff;
-
+        // Format as json?
         if args.json {
             let json_diff = LockFileJsonDiff::new(&project, diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
