@@ -77,10 +77,10 @@ fn trampoline() -> miette::Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        let mut child = cmd.spawn().expect("process spawn should succeed");
+        let mut child = cmd.spawn().into_diagnostic().wrap_err("Couldn't spawn the child process")?;
 
         // Wait for the child process to complete
-        let status = child.wait().expect("failed to wait on child");
+        let status = child.wait().into_diagnostic().wrap_err("Couldn't wait for the child process")?;
 
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
