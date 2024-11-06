@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::future::{Future, IntoFuture};
 use std::io::{self, Write};
 use std::str::FromStr;
@@ -75,13 +76,23 @@ where
 
     let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
 
-    let mut latest_packages: Vec<RepoDataRecord> = repos
-        .into_iter()
-        .flat_map(|repo| repo.into_iter().cloned().collect_vec())
-        .collect();
+    let mut latest_packages: Vec<RepoDataRecord> = Vec::new();
 
-    // sort all versions across all channels and platforms
-    latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+    for repo in repos {
+        // sort records by version, get the latest one of each package
+        let records_of_repo: HashMap<String, RepoDataRecord> = repo
+            .into_iter()
+            .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+            .map(|record| {
+                (
+                    record.package_record.name.as_normalized().to_string(),
+                    record.clone(),
+                )
+            })
+            .collect();
+
+        latest_packages.extend(records_of_repo.into_values().collect_vec());
+    }
 
     // sort all versions across all channels and platforms
     latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
