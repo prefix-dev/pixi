@@ -27,7 +27,6 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
 ] }
 test = "cargo nextest run --workspace"
 test-all-fast = { depends-on = ["test", "test-integration-fast"] }
-test-export = "python tests/scripts/test-export.sh"
 test-workspace = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
@@ -135,6 +134,10 @@ python-build = ">=1.2.2,<2"
 [feature.pypi-gen.tasks]
 pypi-gen-indexes = "python tests/data/pypi-indexes/generate-indexes.py"
 
+[feature.micromamba]
+dependencies = { micromamba = "*" }
+tasks = { test-export = "bash tests/scripts/test-export.sh" }
+
 [environments]
 default = { features = [
   "build",
@@ -154,3 +157,4 @@ schema = { features = [
   "schema",
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
+test-export = { features = ["micromamba"], no-default-feature = true }
