@@ -1449,6 +1449,23 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/xz-5.2.6-h8d14728_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/yaml-0.2.5-h8ffe710_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.20.1-pyhd8ed1ab_0.conda
+  test-export:
+    channels:
+    - url: https://fast.prefix.dev/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/micromamba-2.0.3-0.tar.bz2
+      osx-64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/libcxx-19.1.3-hf95d169_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/micromamba-2.0.3-0.tar.bz2
+      osx-arm64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-19.1.3-ha82da77_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/micromamba-2.0.3-0.tar.bz2
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/micromamba-2.0.3-0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/vc-14.3-ha32ba9b_22.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.40.33810-hcc2c482_22.conda
 packages:
 - kind: conda
   name: _libgcc_mutex
@@ -3668,6 +3685,34 @@ packages:
   size: 1223212
   timestamp: 1724726420315
 - kind: conda
+  name: libcxx
+  version: 19.1.3
+  build: ha82da77_0
+  subdir: osx-arm64
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-19.1.3-ha82da77_0.conda
+  sha256: 6d062760c6439e75b9a44d800d89aff60fe3441998d87506c62dc94c50412ef4
+  md5: bf691071fba4734984231617783225bc
+  depends:
+  - __osx >=11.0
+  license: Apache-2.0 WITH LLVM-exception
+  license_family: Apache
+  size: 520771
+  timestamp: 1730314603920
+- kind: conda
+  name: libcxx
+  version: 19.1.3
+  build: hf95d169_0
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/libcxx-19.1.3-hf95d169_0.conda
+  sha256: 466f259bb13a8058fef28843977c090d21ad337b71a842ccc0407bccf8d27011
+  md5: 86801fc56d4641e3ef7a63f5d996b960
+  depends:
+  - __osx >=10.13
+  license: Apache-2.0 WITH LLVM-exception
+  license_family: Apache
+  size: 528991
+  timestamp: 1730314340106
+- kind: conda
   name: libdeflate
   version: '1.21'
   build: h2466b09_0
@@ -5410,6 +5455,66 @@ packages:
   license_family: MIT
   size: 9598
   timestamp: 1612711404414
+- kind: conda
+  name: micromamba
+  version: 2.0.3
+  build: '0'
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/micromamba-2.0.3-0.tar.bz2
+  sha256: 0a87371830650dbb4b104525617e8dab52152c56460970b4ba97aa9ff1585156
+  md5: 391edf886b87f66e10fad2b13e30271e
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  license: BSD-3-Clause AND MIT AND OpenSSL
+  license_family: BSD
+  size: 6005813
+  timestamp: 1730844231761
+- kind: conda
+  name: micromamba
+  version: 2.0.3
+  build: '0'
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/micromamba-2.0.3-0.tar.bz2
+  sha256: b408008c6a0eb0ef9796b4e0e9df23277ff534a4ee0637084f9fb9447c695ed1
+  md5: 5e4ef43827d477305bee376bea46a8fb
+  depends:
+  - __osx >=10.13
+  - libcxx >=18
+  license: BSD-3-Clause AND MIT AND OpenSSL
+  license_family: BSD
+  size: 6068265
+  timestamp: 1730844827733
+- kind: conda
+  name: micromamba
+  version: 2.0.3
+  build: '0'
+  subdir: osx-arm64
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/micromamba-2.0.3-0.tar.bz2
+  sha256: ca6d5e9a1794d7c995f699fe85ba5ce41ebe94091ce426b5fdbed3319551012a
+  md5: 7d361890e9ab3f223a37a8565dadc84b
+  depends:
+  - __osx >=11.0
+  - libcxx >=18
+  license: BSD-3-Clause AND MIT AND OpenSSL
+  license_family: BSD
+  size: 6019311
+  timestamp: 1730844429055
+- kind: conda
+  name: micromamba
+  version: 2.0.3
+  build: '0'
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/micromamba-2.0.3-0.tar.bz2
+  sha256: e462ab31620001653da0d561e1aaf42bbcebe8593edafcec30f096ab328de11f
+  md5: 9bc0461089690dbeecd1b7b509db15d2
+  depends:
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  license: BSD-3-Clause AND MIT AND OpenSSL
+  license_family: BSD
+  size: 3954473
+  timestamp: 1730846558667
 - kind: conda
   name: mike
   version: 2.0.0
@@ -8226,6 +8331,20 @@ packages:
   size: 1283972
   timestamp: 1666630199266
 - kind: conda
+  name: ucrt
+  version: 10.0.22621.0
+  build: h57928b3_1
+  build_number: 1
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
+  sha256: db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450
+  md5: 6797b005cd0f439c4c5c9ac565783700
+  constrains:
+  - vs2015_runtime >=14.29.30037
+  license: LicenseRef-MicrosoftWindowsSDK10
+  size: 559710
+  timestamp: 1728377334097
+- kind: conda
   name: ukkonen
   version: 1.0.1
   build: py312h0d7def4_4
@@ -8354,6 +8473,23 @@ packages:
   size: 17391
   timestamp: 1717709040616
 - kind: conda
+  name: vc
+  version: '14.3'
+  build: ha32ba9b_22
+  build_number: 22
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/vc-14.3-ha32ba9b_22.conda
+  sha256: 2a47c5bd8bec045959afada7063feacd074ad66b170c1ea92dd139b389fcf8fd
+  md5: 311c9ba1dfdd2895a8cb08346ff26259
+  depends:
+  - vc14_runtime >=14.38.33135
+  track_features:
+  - vc14
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 17447
+  timestamp: 1728400826998
+- kind: conda
   name: vc14_runtime
   version: 14.40.33810
   build: hcc2c482_20
@@ -8370,6 +8506,23 @@ packages:
   license_family: Proprietary
   size: 751028
   timestamp: 1724712684919
+- kind: conda
+  name: vc14_runtime
+  version: 14.40.33810
+  build: hcc2c482_22
+  build_number: 22
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.40.33810-hcc2c482_22.conda
+  sha256: 4c669c65007f88a7cdd560192f7e6d5679d191ac71610db724e18b2410964d64
+  md5: ce23a4b980ee0556a118ed96550ff3f3
+  depends:
+  - ucrt >=10.0.20348.0
+  constrains:
+  - vs2015_runtime 14.40.33810.* *_22
+  license: LicenseRef-MicrosoftVisualCpp2015-2022Runtime
+  license_family: Proprietary
+  size: 750719
+  timestamp: 1728401055788
 - kind: conda
   name: verspec
   version: 0.1.0
