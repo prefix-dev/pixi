@@ -135,3 +135,26 @@ def test_trampoline_migrate_previous_script(
     dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     assert dummy_trampoline_json.is_file()
+
+
+def test_trampoline_dot_in_exe(pixi: Path, tmp_path: Path, trampoline_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Expose binary with a dot in the name
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel_1,
+            "dummy-trampoline",
+            "--expose",
+            "exe.test=dummy-trampoline",
+        ],
+        env=env,
+    )
+
+    exe_test = tmp_path / "bin" / exec_extension("exe.test")
+    # The binary execute should succeed
+    verify_cli_command([exe_test], stdout_contains="Success:")
