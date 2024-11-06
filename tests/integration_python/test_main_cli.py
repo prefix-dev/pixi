@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, PIXI_VERSION
 import tomllib
+import json
 import pytest
 
 
@@ -405,7 +406,6 @@ def test_upgrade_json_output(pixi: Path, tmp_path: Path, multiple_versions_chann
         [pixi, "upgrade", "--manifest-path", manifest_path, "--json"],
         stdout_contains=["package", "package2", "0.1.0", "0.2.0", 'version": ', "before", "after"],
     )
-    import json
 
     data = json.loads(result.stdout)
     assert data["environment"]["default"]
