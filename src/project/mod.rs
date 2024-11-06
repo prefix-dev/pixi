@@ -14,31 +14,44 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::{Arc, OnceLock},
 };
 
 use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
+use grouped_environment::GroupedEnvironment;
 pub use has_project_ref::HasProjectRef;
-use indexmap::Equivalent;
+use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
-use pixi_config::Config;
+use pep440_rs::VersionSpecifiers;
+use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Environments, HasManifestRef, Manifest, ParsedManifest, SpecType,
+    pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, Version};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_lock::{LockFile, Package};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::activation::{initialize_env_variables, CurrentEnvVarBehavior};
+use crate::{
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    cli::cli_config::PrefixUpdateConfig,
+    diff::LockFileDiff,
+    environment::LockFileUsage,
+    load_lock_file,
+    lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext, UpdateMode},
+};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -92,6 +105,13 @@ impl EnvironmentVars {
         &self.full
     }
 }
+
+/// List of packages that are not following the semver versioning scheme
+/// but will use the minor version by default when adding a dependency.
+// Don't forget to add to the docstring if you add a package here!
+const NON_SEMVER_PACKAGES: [&str; 11] = [
+    "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
+];
 
 /// The pixi project, this main struct to interact with the project. This struct
 /// holds the `Manifest` and has functions to modify or request information from
@@ -604,6 +624,342 @@ impl Project {
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
+
+    /// Update the manifest with the given package specs, and upgrade the packages if possible
+    ///
+    /// 1. Modify the manifest with the given package specs, if no version is given, use `no-pin` strategy
+    /// 2. Update the lock file
+    /// 3. Given packages without version restrictions will get a semver restriction
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_dependencies(
+        &mut self,
+        match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
+        pypi_deps: IndexMap<PyPiPackageName, Requirement>,
+        prefix_update_config: &PrefixUpdateConfig,
+        feature_name: &FeatureName,
+        platforms: &[Platform],
+        editable: bool,
+        dry_run: bool,
+    ) -> Result<Option<UpdateDeps>, miette::Error> {
+        let mut conda_specs_to_add_constraints_for = IndexMap::new();
+        let mut pypi_specs_to_add_constraints_for = IndexMap::new();
+        let mut conda_packages = HashSet::new();
+        let mut pypi_packages = HashSet::new();
+        let channel_config = self.channel_config();
+        for (name, (spec, spec_type)) in match_specs {
+            let added = self.manifest.add_dependency(
+                &spec,
+                spec_type,
+                platforms,
+                feature_name,
+                DependencyOverwriteBehavior::Overwrite,
+                &channel_config,
+            )?;
+            if added {
+                if spec.version.is_none() {
+                    conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                }
+                conda_packages.insert(name);
+            }
+        }
+
+        for (name, spec) in pypi_deps {
+            let added = self.manifest.add_pep508_dependency(
+                &spec,
+                platforms,
+                feature_name,
+                Some(editable),
+                DependencyOverwriteBehavior::Overwrite,
+            )?;
+            if added {
+                if spec.version_or_url.is_none() {
+                    pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
+                }
+                pypi_packages.insert(name.as_normalized().clone());
+            }
+        }
+
+        // Only save to disk if not a dry run
+        if !dry_run {
+            self.save()?;
+        }
+
+        if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
+            return Ok(None);
+        }
+
+        let original_lock_file = load_lock_file(self).await?;
+        let affected_environments = self
+            .environments()
+            .iter()
+            // Filter out any environment that does not contain the feature we modified
+            .filter(|e| e.features().any(|f| f.name == *feature_name))
+            // Expand the selection to also included any environment that shares the same solve
+            // group
+            .flat_map(|e| {
+                GroupedEnvironment::from(e.clone())
+                    .environments()
+                    .collect_vec()
+            })
+            .unique()
+            .collect_vec();
+        let default_environment_is_affected =
+            affected_environments.contains(&self.default_environment());
+        tracing::debug!(
+            "environments affected by the add command: {}",
+            affected_environments.iter().map(|e| e.name()).format(", ")
+        );
+        let affect_environment_and_platforms = affected_environments
+            .into_iter()
+            // Create an iterator over all environment and platform combinations
+            .flat_map(|e| e.platforms().into_iter().map(move |p| (e.clone(), p)))
+            // Filter out any platform that is not affected by the changes.
+            .filter(|(_, platform)| platforms.is_empty() || platforms.contains(platform))
+            .map(|(e, p)| (e.name().to_string(), p))
+            .collect_vec();
+        let unlocked_lock_file = self.unlock_packages(
+            &original_lock_file,
+            conda_packages,
+            pypi_packages,
+            affect_environment_and_platforms
+                .iter()
+                .map(|(e, p)| (e.as_str(), *p))
+                .collect(),
+        );
+        let LockFileDerivedData {
+            project: _, // We don't need the project here
+            lock_file,
+            package_cache,
+            uv_context,
+            updated_conda_prefixes,
+            updated_pypi_prefixes,
+            io_concurrency_limit,
+        } = UpdateContext::builder(self)
+            .with_lock_file(unlocked_lock_file)
+            .with_no_install(prefix_update_config.no_install() || dry_run)
+            .finish()?
+            .update()
+            .await?;
+
+        let mut implicit_constraints = HashMap::new();
+        if !conda_specs_to_add_constraints_for.is_empty() {
+            let conda_constraints = self.update_conda_specs_from_lock_file(
+                &lock_file,
+                conda_specs_to_add_constraints_for,
+                affect_environment_and_platforms.clone(),
+                feature_name,
+                platforms,
+            )?;
+            implicit_constraints.extend(conda_constraints);
+        }
+
+        if !pypi_specs_to_add_constraints_for.is_empty() {
+            let pypi_constraints = self.update_pypi_specs_from_lock_file(
+                &lock_file,
+                pypi_specs_to_add_constraints_for,
+                affect_environment_and_platforms,
+                feature_name,
+                platforms,
+                editable,
+            )?;
+            implicit_constraints.extend(pypi_constraints);
+        }
+
+        // Only write to disk if not a dry run
+        if !dry_run {
+            self.save()?;
+        }
+
+        let mut updated_lock_file = LockFileDerivedData {
+            project: self,
+            lock_file,
+            package_cache,
+            updated_conda_prefixes,
+            updated_pypi_prefixes,
+            uv_context,
+            io_concurrency_limit,
+        };
+        if !prefix_update_config.no_lockfile_update && !dry_run {
+            updated_lock_file.write_to_disk()?;
+        }
+        if !prefix_update_config.no_install()
+            && !dry_run
+            && self.environments().len() == 1
+            && default_environment_is_affected
+        {
+            updated_lock_file
+                .prefix(&self.default_environment(), UpdateMode::Revalidate)
+                .await?;
+        }
+
+        let lock_file_diff =
+            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.lock_file);
+
+        Ok(Some(UpdateDeps {
+            implicit_constraints,
+            lock_file_diff,
+        }))
+    }
+
+    /// Constructs a new lock-file where some of the constraints have been removed.
+    fn unlock_packages(
+        &self,
+        lock_file: &LockFile,
+        conda_packages: HashSet<rattler_conda_types::PackageName>,
+        pypi_packages: HashSet<pep508_rs::PackageName>,
+        affected_environments: HashSet<(&str, Platform)>,
+    ) -> LockFile {
+        filter_lock_file(self, lock_file, |env, platform, package| {
+            if affected_environments.contains(&(env.name().as_str(), platform)) {
+                match package {
+                    Package::Conda(package) => {
+                        !conda_packages.contains(&package.package_record().name)
+                    }
+                    Package::Pypi(package) => !pypi_packages.contains(&package.data().package.name),
+                }
+            } else {
+                true
+            }
+        })
+    }
+
+    /// Update the conda specs of newly added packages based on the contents of the
+    /// updated lock-file.
+    fn update_conda_specs_from_lock_file(
+        &mut self,
+        updated_lock_file: &LockFile,
+        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, MatchSpec)>,
+        affect_environment_and_platforms: Vec<(String, Platform)>,
+        feature_name: &FeatureName,
+        platforms: &[Platform],
+    ) -> miette::Result<HashMap<String, String>> {
+        let mut implicit_constraints = HashMap::new();
+
+        // Determine the conda records that were affected by the add.
+        let conda_records = affect_environment_and_platforms
+            .into_iter()
+            // Get all the conda and pypi records for the combination of environments and
+            // platforms
+            .filter_map(|(env, platform)| {
+                let locked_env = updated_lock_file.environment(&env)?;
+                locked_env
+                    .conda_repodata_records_for_platform(platform)
+                    .ok()?
+            })
+            .flatten()
+            .collect_vec();
+
+        let mut pinning_strategy = self.config().pinning_strategy;
+        let channel_config = self.channel_config();
+        for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
+            // Edge case: some packages are a special case where we want to pin the minor version by default.
+            // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
+            // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
+            if NON_SEMVER_PACKAGES.contains(&name.as_normalized()) && pinning_strategy.is_none() {
+                tracing::info!(
+                    "Pinning {} to minor version by default",
+                    name.as_normalized()
+                );
+                pinning_strategy = Some(PinningStrategy::Minor);
+            }
+            let version_constraint = pinning_strategy
+                .unwrap_or_default()
+                .determine_version_constraint(conda_records.iter().filter_map(|record| {
+                    if record.package_record.name == name {
+                        Some(record.package_record.version.version())
+                    } else {
+                        None
+                    }
+                }));
+
+            if let Some(version_constraint) = version_constraint {
+                implicit_constraints
+                    .insert(name.as_source().to_string(), version_constraint.to_string());
+                let spec = MatchSpec {
+                    version: Some(version_constraint),
+                    ..spec
+                };
+                self.manifest.add_dependency(
+                    &spec,
+                    spec_type,
+                    platforms,
+                    feature_name,
+                    DependencyOverwriteBehavior::Overwrite,
+                    &channel_config,
+                )?;
+            }
+        }
+
+        Ok(implicit_constraints)
+    }
+
+    /// Update the pypi specs of newly added packages based on the contents of the
+    /// updated lock-file.
+    fn update_pypi_specs_from_lock_file(
+        &mut self,
+        updated_lock_file: &LockFile,
+        pypi_specs_to_add_constraints_for: IndexMap<PyPiPackageName, Requirement>,
+        affect_environment_and_platforms: Vec<(String, Platform)>,
+        feature_name: &FeatureName,
+        platforms: &[Platform],
+        editable: bool,
+    ) -> miette::Result<HashMap<String, String>> {
+        let mut implicit_constraints = HashMap::new();
+
+        let pypi_records = affect_environment_and_platforms
+            .into_iter()
+            // Get all the conda and pypi records for the combination of environments and
+            // platforms
+            .filter_map(|(env, platform)| {
+                let locked_env = updated_lock_file.environment(&env)?;
+                locked_env.pypi_packages_for_platform(platform)
+            })
+            .flatten()
+            .collect_vec();
+
+        let pinning_strategy = self.config().pinning_strategy.unwrap_or_default();
+
+        // Determine the versions of the packages in the lock-file
+        for (name, req) in pypi_specs_to_add_constraints_for {
+            let version_constraint = pinning_strategy.determine_version_constraint(
+                pypi_records
+                    .iter()
+                    .filter_map(|(data, _)| {
+                        if &data.name == name.as_normalized() {
+                            Version::from_str(&data.version.to_string()).ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec()
+                    .iter(),
+            );
+
+            let version_spec = version_constraint
+                .and_then(|spec| VersionSpecifiers::from_str(&spec.to_string()).ok());
+            if let Some(version_spec) = version_spec {
+                implicit_constraints.insert(name.as_source().to_string(), version_spec.to_string());
+                let req = Requirement {
+                    version_or_url: Some(VersionSpecifier(version_spec)),
+                    ..req
+                };
+                self.manifest.add_pep508_dependency(
+                    &req,
+                    platforms,
+                    feature_name,
+                    Some(editable),
+                    DependencyOverwriteBehavior::Overwrite,
+                )?;
+            }
+        }
+
+        Ok(implicit_constraints)
+    }
+}
+
+pub struct UpdateDeps {
+    pub implicit_constraints: HashMap<String, String>,
+    pub lock_file_diff: LockFileDiff,
 }
 
 impl<'source> HasManifestRef<'source> for &'source Project {
