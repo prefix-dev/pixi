@@ -50,7 +50,7 @@ use crate::{
     diff::LockFileDiff,
     environment::LockFileUsage,
     load_lock_file,
-    lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext},
+    lock_file::{filter_lock_file, LockFileDerivedData, UpdateContext, UpdateMode},
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -788,7 +788,7 @@ impl Project {
             && default_environment_is_affected
         {
             updated_lock_file
-                .prefix(&self.default_environment())
+                .prefix(&self.default_environment(), UpdateMode::Revalidate)
                 .await?;
         }
 
