@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "b059a8930497742b4f1803f919517b52",
+      "md5": "9ebab2b4bc313e986bd08a7c5e6d0e8d",
       "name": "dummy-a",
       "platform": "osx",
-      "sha256": "d5ed2d936a173deb6d59e625f2b6f52f8ff7f2201b83225bb5c2c4bed4b920cd",
-      "size": 1237,
+      "sha256": "6c7023ccd68d18a059392f5a7670ca4a81289c2dbfa60ccdb7aa68007b5a815d",
+      "size": 2694,
       "subdir": "osx-arm64",
-      "timestamp": 1730882682867,
+      "timestamp": 1730235613056,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h60d57d3_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "459d9b61cbd83823b306417fdc5e44d3",
+      "md5": "a86a13d5bfbd6b811476b24f032df667",
       "name": "dummy-b",
       "platform": "osx",
-      "sha256": "cbc8b1af3cbc320113901f7d3b0ee31885ebaac4d6d8fa4b8226613742242942",
-      "size": 1154,
+      "sha256": "e8f66e5fdc05ad52fadfaa779a0165098581a166f6cb22fa3527d2306124eadf",
+      "size": 2498,
       "subdir": "osx-arm64",
-      "timestamp": 1730882682867,
+      "timestamp": 1730235613054,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h60d57d3_0.conda": {
@@ -39,13 +39,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "9ed09c9981c8f1dc5b2d3f3b9b445259",
+      "md5": "9a6bade94fb3686945ddcec1e1ba1d64",
       "name": "dummy-c",
       "platform": "osx",
-      "sha256": "227d10c2558f17eea02d6301338f0dbb0b8561fce075518c3dde987251185fb3",
-      "size": 1155,
+      "sha256": "e56aad874108c6e0a1ba993ee5ea39a9ede2785b23d84903e3ec3e7cb50b456d",
+      "size": 2503,
       "subdir": "osx-arm64",
-      "timestamp": 1730882682867,
+      "timestamp": 1730235613057,
       "version": "0.1.0"
     },
     "dummy-d-0.1.0-h60d57d3_0.conda": {
@@ -55,13 +55,13 @@
       "depends": [
         "dummy-x"
       ],
-      "md5": "ae6dbf7c3ab36afa5002ac4a584c14f1",
+      "md5": "cfc08877b98e3daa08439dd05d473fb9",
       "name": "dummy-d",
       "platform": "osx",
-      "sha256": "609d73e95c912efd835af0e1730405e8707ba6492f56ad6e6d597a1d474e86b9",
-      "size": 1166,
+      "sha256": "f2db17b5db7452eefced7851d047853f8bee2b05459bd7def841a63998c8fe68",
+      "size": 2505,
       "subdir": "osx-arm64",
-      "timestamp": 1730882682867,
+      "timestamp": 1730235613052,
       "version": "0.1.0"
     },
     "dummy_e-0.1.0-h60d57d3_0.conda": {
@@ -69,13 +69,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "99f43eb754564b03c0b3b0246cc78ef3",
+      "md5": "38a9e5e3ff2cffc473051be0c5a65121",
       "name": "dummy_e",
       "platform": "osx",
-      "sha256": "63af46a043b6b02feb687553114561239ba46c6780bc5d07b79c5472b78bce92",
-      "size": 1153,
+      "sha256": "8dd58d6b3e2aaac27d5a67804eecae21e3d547ee0d69f3391c907c0330dd6b92",
+      "size": 2481,
       "subdir": "osx-arm64",
-      "timestamp": 1730882682867,
+      "timestamp": 1730235613049,
       "version": "0.1.0"
     }
   },
