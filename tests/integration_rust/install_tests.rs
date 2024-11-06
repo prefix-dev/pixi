@@ -6,6 +6,7 @@ use crate::common::{LockFileExt, PixiControl};
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
+use pixi::lock_file::UpdateMode;
 use pixi::Project;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -445,7 +446,6 @@ async fn test_channels_changed() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -569,9 +569,14 @@ async fn test_old_lock_install() {
         "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();
-    pixi::environment::update_prefix(&project.default_environment(), LockFileUsage::Update, false)
-        .await
-        .unwrap();
+    pixi::environment::update_prefix(
+        &project.default_environment(),
+        LockFileUsage::Update,
+        false,
+        UpdateMode::Revalidate,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         lock_str,
         std::fs::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()

@@ -1,5 +1,6 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
+use crate::lock_file::UpdateMode;
 use crate::DependencyType;
 use crate::Project;
 use clap::Parser;
@@ -98,6 +99,10 @@ pub struct PrefixUpdateConfig {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Run the complete environment validation. This will reinstall a broken environment.
+    #[arg(long)]
+    pub revalidate: bool,
 }
 impl PrefixUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
@@ -113,6 +118,15 @@ impl PrefixUpdateConfig {
     /// Decide whether to install or not.
     pub(crate) fn no_install(&self) -> bool {
         self.no_install || self.no_lockfile_update
+    }
+
+    /// Which `[UpdateMode]` to use
+    pub(crate) fn update_mode(&self) -> UpdateMode {
+        if self.revalidate {
+            UpdateMode::Revalidate
+        } else {
+            UpdateMode::QuickValidate
+        }
     }
 }
 #[derive(Parser, Debug, Default)]
