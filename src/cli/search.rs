@@ -94,6 +94,9 @@ where
         latest_packages.extend(records_of_repo.into_values().collect_vec());
     }
 
+    // sort all versions across all channels and platforms
+    latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+
     Ok(latest_packages)
 }
 
