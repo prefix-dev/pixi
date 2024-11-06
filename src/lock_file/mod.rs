@@ -7,17 +7,21 @@ mod update;
 mod utils;
 
 use miette::{IntoDiagnostic, WrapErr};
-pub use outdated::OutdatedEnvironments;
-pub use package_identifier::PypiPackageIdentifier;
+pub(crate) use outdated::OutdatedEnvironments;
+pub(crate) use package_identifier::PypiPackageIdentifier;
 use rattler_conda_types::RepoDataRecord;
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-pub use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
-pub use resolve::{
+pub(crate) use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
+pub(crate) use resolve::{
     conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
 };
-pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
-pub use update::{LockFileDerivedData, UpdateContext, UpdateLockFileOptions};
-pub use utils::filter_lock_file;
+pub use satisfiability::{
+    verify_environment_satisfiability, verify_platform_satisfiability, EnvironmentUnsat,
+    PlatformUnsat,
+};
+pub(crate) use update::{LockFileDerivedData, UpdateContext};
+pub use update::{UpdateLockFileOptions, UpdateMode};
+pub(crate) use utils::filter_lock_file;
 
 use crate::Project;
 

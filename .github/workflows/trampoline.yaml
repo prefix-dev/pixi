@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - 'crates/pixi_trampoline/**'
+      - '.github/workflows/trampoline.yaml'
+      - 'src/global/trampoline.rs'
   workflow_dispatch:
   pull_request:
     paths:
       - 'crates/pixi_trampoline/**'
+      - '.github/workflows/trampoline.yaml'
+      - 'src/global/trampoline.rs'
 
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
@@ -25,6 +29,7 @@ jobs:
         include:
           - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: ubuntu-latest  }
           - { name: "Linux-aarch64", target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+          - { name: "Linux-powerpc64", target: powerpc64-unknown-linux-gnu, os: ubuntu-latest }
           - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
           - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
           - { name: "Windows", target: x86_64-pc-windows-msvc, os: windows-latest }

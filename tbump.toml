@@ -71,6 +71,10 @@ src = "tests/integration_python/common.py"
 search = "None => \"{current_version}\","
 src = "crates/pixi_consts/src/consts.rs"
 
+[[file]]
+search = "\"pixi_version\": \"{current_version}\","
+src = "docs/features/environment.md"
+
 [[field]]
 # the name of the field
 name = "candidate"
