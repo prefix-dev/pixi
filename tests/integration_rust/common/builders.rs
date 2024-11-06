@@ -221,7 +221,7 @@ impl IntoFuture for AddBuilder {
     }
 }
 
-/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call
+/// Contains the arguments to pass to [`search::execute()`]. Call `.await` to call
 /// the CLI execute method and await the result at the same time.
 pub struct SearchBuilder {
     pub args: search::Args,

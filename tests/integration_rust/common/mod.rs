@@ -316,7 +316,7 @@ impl PixiControl {
         }
     }
 
-    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// Search and return latest package. Returns an [`SearchBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn search(&self, name: String) -> SearchBuilder {
         SearchBuilder {

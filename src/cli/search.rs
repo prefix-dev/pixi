@@ -210,7 +210,7 @@ where
         }
     }
 
-    Ok(package.and_then(|package| Some(vec![package.clone()])))
+    Ok(package.map(|package| vec![package.clone()]))
 }
 
 fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Result<()> {
