@@ -1,17 +1,3 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Write,
-    future::{ready, Future},
-    iter,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
-
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
@@ -34,12 +20,27 @@ use rattler_conda_types::{Arch, Channel, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
+use std::cmp::PartialEq;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::Write,
+    future::{ready, Future},
+    iter,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use url::Url;
 use uv_normalize::ExtraName;
 
+use crate::environment::{read_environment_file, LockedEnvironmentHash};
 use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -121,6 +122,20 @@ pub struct LockFileDerivedData<'p> {
     pub io_concurrency_limit: IoConcurrencyLimit,
 }
 
+/// The mode to use when updating a prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Validate if the prefix is up-to-date.
+    /// Using a fast and simple validation method.
+    /// Used for skipping the update if the prefix is already up-to-date, in activating commands.
+    /// Like `pixi shell` or `pixi run`.
+    QuickValidate,
+    /// Force a prefix install without running the short validation.
+    /// Used for updating the prefix when the lock-file likely out of date.
+    /// Like `pixi install` or `pixi update`.
+    Revalidate,
+}
+
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
     pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
@@ -131,22 +146,71 @@ impl<'p> LockFileDerivedData<'p> {
             .context("failed to write lock-file to disk")
     }
 
+    fn locked_environment_hash(
+        &self,
+        environment: &Environment<'p>,
+    ) -> miette::Result<LockedEnvironmentHash> {
+        let locked_environment = self
+            .lock_file
+            .environment(environment.name().as_str())
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        Ok(LockedEnvironmentHash::from_environment(
+            locked_environment,
+            environment.best_platform(),
+        ))
+    }
+
     /// Returns the up-to-date prefix for the given environment.
-    pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
-        // Save an environment file to the environment directory
+    pub async fn prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        update_mode: UpdateMode,
+    ) -> miette::Result<Prefix> {
+        // Check if the prefix is already up-to-date by validating the hash with the environment file
+        let hash = self.locked_environment_hash(environment)?;
+        if update_mode == UpdateMode::QuickValidate {
+            if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
+                if environment_file.environment_lock_file_hash == hash {
+                    tracing::info!(
+                        "Environment '{}' is up-to-date with lock file hash",
+                        environment.name().fancy_display()
+                    );
+                    return Ok(Prefix::new(environment.dir()));
+                }
+            } else {
+                tracing::debug!(
+                    "Environment file not found or parsable for '{}'",
+                    environment.name().fancy_display()
+                );
+            }
+        }
+
+        // Get the up-to-date prefix
+        let prefix = self.update_prefix(environment).await?;
+
+        // Save an environment file to the environment directory after the update.
+        // Avoiding writing the cache away before the update is done.
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
                 manifest_path: environment.project().manifest_path(),
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
+                environment_lock_file_hash: hash,
             },
         )?;
 
+        Ok(prefix)
+    }
+
+    /// Returns the up-to-date prefix for the given environment.
+    async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
 
+        tracing::info!("Updating prefix");
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
@@ -173,6 +237,7 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
+        // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = self
             .project
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)

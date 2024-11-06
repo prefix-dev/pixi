@@ -12,6 +12,7 @@ use std::{
 
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::lock_file::UpdateMode;
 use pixi::{
     cli::{
         add,
@@ -304,6 +305,7 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
                 editable: false,
             },
@@ -323,6 +325,7 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
             },
         }
@@ -418,7 +421,9 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    lock_file.prefix(&task.run_environment).await?;
+                    lock_file
+                        .prefix(&task.run_environment, UpdateMode::Revalidate)
+                        .await?;
                     let env = get_task_env(&task.run_environment, args.clean_env).await?;
                     task_env.insert(env)
                 }

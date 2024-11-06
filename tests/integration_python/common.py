@@ -4,7 +4,7 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.34.0"
+PIXI_VERSION = "0.35.0"
 
 
 class ExitCode(IntEnum):
@@ -101,3 +101,11 @@ def is_binary(path: Path) -> bool:
     textchars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
     with open(path, "rb") as f:
         return bool(f.read(2048).translate(None, textchars))
+
+
+def pixi_dir(project_root: Path) -> Path:
+    return project_root.joinpath(".pixi")
+
+
+def default_env_path(project_root: Path) -> Path:
+    return pixi_dir(project_root).joinpath("envs", "default")
