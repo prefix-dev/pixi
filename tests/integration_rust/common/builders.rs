@@ -37,7 +37,7 @@ use pixi::{
     task::TaskName,
     DependencyType,
 };
-use pixi_manifest::{EnvironmentName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, SpecType};
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use url::Url;
 
@@ -138,8 +138,8 @@ pub trait HasDependencyConfig: Sized {
             host: false,
             build: false,
             pypi: false,
-            platform: Default::default(),
-            feature: None,
+            platforms: Default::default(),
+            feature: Default::default(),
         }
     }
 
@@ -175,7 +175,7 @@ pub trait HasDependencyConfig: Sized {
     }
 
     fn set_platforms(mut self, platforms: &[Platform]) -> Self {
-        self.dependency_config().platform.extend(platforms.iter());
+        self.dependency_config().platforms.extend(platforms.iter());
         self
     }
 }
@@ -193,7 +193,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.feature = Some(feature.to_string());
+        self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
         self
     }
 }
