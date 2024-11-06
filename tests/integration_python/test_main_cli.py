@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, PIXI_VERSION
 import tomllib
@@ -408,6 +409,37 @@ def test_upgrade_json_output(pixi: Path, tmp_path: Path, multiple_versions_chann
 
     data = json.loads(result.stdout)
     assert data["environment"]["default"]
+
+
+def test_upgrade_dryrun(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+    lock_file_path = tmp_path / "pixi.lock"
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
+    )
+
+    manifest_content = manifest_path.read_text()
+    lock_file_content = lock_file_path.read_text()
+    # Rename .pixi folder, no remove to avoid remove logic.
+    os.renames(tmp_path / ".pixi", tmp_path / ".pixi_backup")
+
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
+    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
+
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--dry-run"],
+        stderr_contains=["package", "0.1.0", "0.2.0"],
+    )
+
+    # Verify the manifest, lock file and .pixi folder are not modified
+    assert manifest_path.read_text() == manifest_content
+    assert lock_file_path.read_text() == lock_file_content
+    assert not os.path.exists(tmp_path / ".pixi")
 
 
 @pytest.mark.slow

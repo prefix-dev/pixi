@@ -34,6 +34,10 @@ pub struct Args {
     /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
+
+    /// Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
+    #[clap(short = 'n', long)]
+    pub dry_run: bool,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -175,6 +179,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.specs.feature,
             &[],
             false,
+            args.dry_run,
         )
         .await?;
 

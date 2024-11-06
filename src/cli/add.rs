@@ -109,6 +109,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             (match_specs, pypi_deps)
         }
     };
+    // TODO: add dry_run logic to add
+    let dry_run = false;
 
     let update_deps = project
         .update_dependencies(
@@ -118,6 +120,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.dependency_config.feature,
             &args.dependency_config.platforms,
             args.editable,
+            dry_run,
         )
         .await?;
 

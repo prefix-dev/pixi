@@ -630,6 +630,7 @@ impl Project {
     /// 1. Modify the manifest with the given package specs, if no version is given, use `no-pin` strategy
     /// 2. Update the lock file
     /// 3. Given packages without version restrictions will get a semver restriction
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_dependencies(
         &mut self,
         match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
@@ -638,6 +639,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
@@ -676,7 +678,11 @@ impl Project {
                 pypi_packages.insert(name.as_normalized().clone());
             }
         }
-        self.save()?;
+
+        // Only save to disk if not a dry run
+        if !dry_run {
+            self.save()?;
+        }
 
         if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
             return Ok(None);
@@ -730,7 +736,7 @@ impl Project {
             io_concurrency_limit,
         } = UpdateContext::builder(self)
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(prefix_update_config.no_install())
+            .with_no_install(prefix_update_config.no_install() || dry_run)
             .finish()?
             .update()
             .await?;
@@ -759,7 +765,11 @@ impl Project {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        self.save()?;
+        // Only write to disk if not a dry run
+        if !dry_run {
+            self.save()?;
+        }
+
         let mut updated_lock_file = LockFileDerivedData {
             project: self,
             lock_file,
@@ -769,10 +779,11 @@ impl Project {
             uv_context,
             io_concurrency_limit,
         };
-        if !prefix_update_config.no_lockfile_update {
+        if !prefix_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
         }
         if !prefix_update_config.no_install()
+            && !dry_run
             && self.environments().len() == 1
             && default_environment_is_affected
         {
