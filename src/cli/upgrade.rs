@@ -6,9 +6,11 @@ use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 use miette::MietteDiagnostic;
+use miette::{Context, IntoDiagnostic};
 
+use super::cli_config::PrefixUpdateConfig;
+use crate::diff::LockFileJsonDiff;
 use pep508_rs::MarkerTree;
 use pep508_rs::Requirement;
 use pixi_manifest::FeatureName;
@@ -16,8 +18,6 @@ use pixi_manifest::PyPiRequirement;
 use pixi_manifest::SpecType;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::MatchSpec;
-
-use super::cli_config::PrefixUpdateConfig;
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -30,6 +30,10 @@ pub struct Args {
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
+
+    /// Output the changes in JSON format.
+    #[clap(long)]
+    pub json: bool,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -174,8 +178,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
 
+    // Format as json?
     if let Some(update_deps) = update_deps {
-        update_deps.lock_file_diff.print().into_diagnostic()?;
+        let diff = update_deps.lock_file_diff;
+
+        if args.json {
+            let json_diff = LockFileJsonDiff::new(&project, diff);
+            let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
+            println!("{}", json);
+        } else {
+            diff.print()
+                .into_diagnostic()
+                .context("failed to print lock-file diff")?;
+        }
+    } else {
+        eprintln!(
+            "{}All packages are already up-to-date",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
     }
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());

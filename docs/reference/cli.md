@@ -203,13 +203,14 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided all features are upgraded.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
-
+- `--json`: Output the changes in json format.
 ```shell
 pixi upgrade
 pixi upgrade numpy
 pixi upgrade numpy pandas
 pixi upgrade --manifest-path ~/myproject/pixi.toml numpy
 pixi upgrade --feature lint python
+pixi upgrade --json
 ```
 
 ## `run`

@@ -385,6 +385,31 @@ def test_upgrade_exclude(pixi: Path, tmp_path: Path, multiple_versions_channel_1
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
 
+def test_upgrade_json_output(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
+    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
+
+    # Check if json output is correct and readable
+    result = verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--json"],
+        stdout_contains=["package", "package2", "0.1.0", "0.2.0", 'version": ', "before", "after"],
+    )
+    import json
+
+    data = json.loads(result.stdout)
+    assert data["environment"]["default"]
+
+
 @pytest.mark.slow
 def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
     manifest_path = tmp_path / "pixi.toml"
