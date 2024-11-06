@@ -1,5 +1,5 @@
 recipe:
-  name: global-update-channel
+  name: multiple-versions-channel
   version: 1.0.0
 
 context:
@@ -10,6 +10,7 @@ outputs:
       version: ${{ version }}
 
     build:
+      number: 0
       script:
         - mkdir -p $PREFIX/bin
         # Expose two binaries, with and without version number

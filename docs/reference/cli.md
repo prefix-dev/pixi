@@ -189,6 +189,33 @@ pixi update --dry-run
 pixi update --no-install boto3
 ```
 
+## `upgrade`
+
+The `upgrade` command checks if there are newer versions of the dependencies and upgrades them in the [manifest file](project_configuration.md).
+`update` updates dependencies in the lock file while still fulfilling the version requirements set in the manifest.
+`upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+
+##### Arguments
+
+1. `[PACKAGES]...` The packages to upgrade, space separated. If no packages are provided, all packages will be upgraded.
+
+##### Options
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided all features are upgraded.
+- `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
+- `--json`: Output the changes in json format.
+- `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
+
+```shell
+pixi upgrade
+pixi upgrade numpy
+pixi upgrade numpy pandas
+pixi upgrade --manifest-path ~/myproject/pixi.toml numpy
+pixi upgrade --feature lint python
+pixi upgrade --json
+pixi upgrade --dry-run
+```
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
