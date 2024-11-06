@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - 'crates/pixi_trampoline/**'
+      - '.github/workflows/trampoline.yaml'
+      - 'src/global/trampoline.rs'
   workflow_dispatch:
   pull_request:
     paths:
       - 'crates/pixi_trampoline/**'
+      - '.github/workflows/trampoline.yaml'
+      - 'src/global/trampoline.rs'
 
 permissions:
   contents: write  # Allow write permissions for contents (like pushing to the repo)
