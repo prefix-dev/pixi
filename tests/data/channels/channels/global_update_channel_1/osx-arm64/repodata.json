@@ -1,0 +1,65 @@
+{
+  "info": {
+    "subdir": "osx-arm64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "package-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "65bf49140037803094927ea00d1a7b63",
+      "name": "package",
+      "platform": "osx",
+      "sha256": "41265f0165572ba6ceb2c5733f8fa500a2a92846f015333f4577cab98f14d821",
+      "size": 1237,
+      "subdir": "osx-arm64",
+      "timestamp": 1730882683331,
+      "version": "0.1.0"
+    },
+    "package-0.2.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "b3492a159f38452b118705ef7e854304",
+      "name": "package",
+      "platform": "osx",
+      "sha256": "96851c508999ca72a7d54548d0328bfbe4619cfb797ca4f0ddbce05478444396",
+      "size": 1239,
+      "subdir": "osx-arm64",
+      "timestamp": 1730882683525,
+      "version": "0.2.0"
+    },
+    "package2-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "841d2cbb31ec33865c5932b4fde3277f",
+      "name": "package2",
+      "platform": "osx",
+      "sha256": "b1b9704c43b86c517507cfeeb088c22b90afe4d0d13aef6ba91a5e12aaddb495",
+      "size": 1158,
+      "subdir": "osx-arm64",
+      "timestamp": 1730882683330,
+      "version": "0.1.0"
+    },
+    "package2-0.2.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "4e69c129c2b05cd2af183aa8b62be089",
+      "name": "package2",
+      "platform": "osx",
+      "sha256": "4a0fb25c7b0c27b1656a6f656290b124201cdff1aa9e4734cf4bdf4eaf38df1e",
+      "size": 1157,
+      "subdir": "osx-arm64",
+      "timestamp": 1730882683525,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}

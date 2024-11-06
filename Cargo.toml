@@ -1,5 +1,9 @@
 [workspace]
 members = ["crates/*"]
+# exclude pixi_trampoline as it's not possible
+# to override some of the profile settings in workspace
+# https://github.com/rust-lang/cargo/issues/8264
+exclude = ["crates/pixi_trampoline"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -123,6 +127,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "2.2.0", default-features = false }
+zstd = { version = "0.13.2", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
 pixi_config = { path = "crates/pixi_config" }
@@ -146,7 +151,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.34.0"
+version = "0.35.0"
 
 [features]
 default = ["rustls-tls"]
@@ -284,6 +289,7 @@ uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
+zstd = { workspace = true }
 
 
 [target.'cfg(unix)'.dependencies]

@@ -1,0 +1,83 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "63aabe516762edc60fd2125a48804608",
+      "name": "dummy-a",
+      "platform": "win",
+      "sha256": "f5e370e17eea2f30c2712d7fd7182cf6d32584a4ed7e6ea23ab59367824c40a4",
+      "size": 1246,
+      "subdir": "win-64",
+      "timestamp": 1730882682691,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "7108066567485324ad6878ffcfe6322f",
+      "name": "dummy-b",
+      "platform": "win",
+      "sha256": "8a73a081adf6c4ddb6d66f62b7be8be83726ff287168e505f5dabf6e598212cb",
+      "size": 1159,
+      "subdir": "win-64",
+      "timestamp": 1730882682691,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "2095877190911b58cfbc5403e4c567a3",
+      "name": "dummy-c",
+      "platform": "win",
+      "sha256": "078d295c689ff3b4fa7dac6beef706d7979f27725fb17c5a173a8ee755b778e1",
+      "size": 1157,
+      "subdir": "win-64",
+      "timestamp": 1730882682691,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "5be8b235959148e6027431e708a9140b",
+      "name": "dummy-d",
+      "platform": "win",
+      "sha256": "f336584618f41a561e6004c1e64bd3345679a838c4a011df1bbbb1d8baae143f",
+      "size": 1176,
+      "subdir": "win-64",
+      "timestamp": 1730882682691,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "3e7f9cb688e7840e0bc4816ee16a01ad",
+      "name": "dummy_e",
+      "platform": "win",
+      "sha256": "b9359b192cd8e35a302e69f640fa49db67395f0a52d3414a436ef3025dc830ce",
+      "size": 1158,
+      "subdir": "win-64",
+      "timestamp": 1730882682691,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

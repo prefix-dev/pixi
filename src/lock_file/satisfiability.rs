@@ -1250,7 +1250,7 @@ mod tests {
 
     #[rstest]
     fn test_good_satisfiability(
-        #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
@@ -1286,16 +1286,20 @@ mod tests {
     fn test_failing_satisiability() {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::from_path(path).unwrap();
-            let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-            let err = verify_lockfile_satisfiability(&project, &lock_file)
-                .expect_err("expected failing satisfiability");
+        insta::glob!(
+            "../../tests/data/non-satisfiability",
+            "*/pixi.toml",
+            |path| {
+                let project = Project::from_path(path).unwrap();
+                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+                let err = verify_lockfile_satisfiability(&project, &lock_file)
+                    .expect_err("expected failing satisfiability");
 
-            let mut s = String::new();
-            report_handler.render_report(&mut s, &err).unwrap();
-            insta::assert_snapshot!(s);
-        });
+                let mut s = String::new();
+                report_handler.render_report(&mut s, &err).unwrap();
+                insta::assert_snapshot!(s);
+            }
+        );
     }
 
     #[test]
@@ -1354,8 +1358,9 @@ mod tests {
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
                 .unwrap();
-        dbg!(&spec.version_or_url);
+
         let spec = spec.into_uv_requirement().unwrap();
+
         // This should satisfy:
         pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }

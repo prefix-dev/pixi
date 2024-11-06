@@ -1,0 +1,65 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "package-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "5e79bbc5cd9db61d680084ca3573fa20",
+      "name": "package",
+      "platform": "linux",
+      "sha256": "24e19b4d25b83fc4f7b381747ff11e52a0da0c04dfcf36ce0ba1fd78e1282f35",
+      "size": 1237,
+      "subdir": "linux-64",
+      "timestamp": 1730882683283,
+      "version": "0.1.0"
+    },
+    "package-0.2.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "d8aea0002ae5c51d17488ecf0bfa2d6c",
+      "name": "package",
+      "platform": "linux",
+      "sha256": "6858edcfc63a66585518e37d1e7c5476132f71cbf7c0561461a9264f448e1981",
+      "size": 1240,
+      "subdir": "linux-64",
+      "timestamp": 1730882683476,
+      "version": "0.2.0"
+    },
+    "package2-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "f256d49e273aa9990bed9120fa4db12e",
+      "name": "package2",
+      "platform": "linux",
+      "sha256": "d211b3a80dc2adc2e279b1ad31b30a7d82a27a82cabdf4dbfc9d393d7858be37",
+      "size": 1158,
+      "subdir": "linux-64",
+      "timestamp": 1730882683283,
+      "version": "0.1.0"
+    },
+    "package2-0.2.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "d8dd33fda32f051fe64990f89e3e1241",
+      "name": "package2",
+      "platform": "linux",
+      "sha256": "b64af15a2d0139b98d8865f8b9eab74f567836260f02c85ebf7cef6174c4fad5",
+      "size": 1159,
+      "subdir": "linux-64",
+      "timestamp": 1730882683476,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}
