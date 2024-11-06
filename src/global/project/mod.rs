@@ -1,12 +1,11 @@
 use super::common::{get_install_changes, EnvironmentUpdate};
 use super::install::find_binary_by_name;
-use super::{extract_executable_from_script, BinDir, EnvRoot, StateChange, StateChanges};
+use super::trampoline::GlobalBin;
+use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
-use crate::global::install::{
-    create_activation_script, create_executable_scripts, script_exec_mapping,
-};
+use crate::global::install::{create_executable_trampolines, script_exec_mapping};
 use crate::global::project::environment::environment_specs_in_sync;
 use crate::prefix::Executable;
 use crate::repodata::Repodata;
@@ -41,7 +40,6 @@ use rattler_conda_types::{
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_shell::shell::ShellEnum;
 use rattler_solve::resolvo::Solver;
 use rattler_solve::{SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
@@ -107,18 +105,19 @@ struct ExposedData {
 }
 
 impl ExposedData {
-    /// Constructs an `ExposedData` instance from a exposed script path.
+    /// Constructs an `ExposedData` instance from a exposed `script` or `trampoline` path.
     ///
     /// This function extracts metadata from the exposed script path, including the
     /// environment name, platform, channel, and package information, by reading
     /// the associated `conda-meta` directory.
+    /// or it looks into the trampoline manifest to extract the metadata.
     pub async fn from_exposed_path(
-        path: &Path,
+        bin: &GlobalBin,
         env_root: &EnvRoot,
         channel_config: &ChannelConfig,
     ) -> miette::Result<Self> {
-        let exposed = ExposedName::from_str(executable_from_path(path).as_str())?;
-        let executable_path = extract_executable_from_script(path).await?;
+        let exposed = bin.exposed_name();
+        let executable_path = bin.executable().await?;
 
         let executable = executable_from_path(&executable_path);
         let env_path = determine_env_path(&executable_path, env_root.path())?;
@@ -306,14 +305,14 @@ impl Project {
         let config = Config::load(env_root.path());
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
-            .files()
+            .bins()
             .await?
             .into_iter()
-            .map(|path| {
+            .map(|bin| {
                 let env_root = env_root.clone();
                 let config = config.clone();
                 async move {
-                    ExposedData::from_exposed_path(&path, &env_root, config.global_channel_config())
+                    ExposedData::from_exposed_path(&bin, &env_root, config.global_channel_config())
                         .await
                 }
             })
@@ -569,14 +568,10 @@ impl Project {
 
         // Remove all removable binaries
         for binary_path in to_remove {
-            tokio_fs::remove_file(&binary_path)
-                .await
-                .into_diagnostic()?;
+            binary_path.remove().await?;
             state_changes.insert_change(
                 env_name,
-                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
-                    &binary_path,
-                ))?),
+                StateChange::RemovedExposed(binary_path.exposed_name()),
             );
         }
 
@@ -601,13 +596,9 @@ impl Project {
         for exposed_path in to_remove {
             state_changes.insert_change(
                 env_name,
-                StateChange::RemovedExposed(ExposedName::from_str(&executable_from_path(
-                    &exposed_path,
-                ))?),
+                StateChange::RemovedExposed(exposed_path.exposed_name()),
             );
-            tokio_fs::remove_file(&exposed_path)
-                .await
-                .into_diagnostic()?;
+            exposed_path.remove().await?;
         }
 
         Ok(state_changes)
@@ -819,23 +810,12 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
-        // Determine the shell to use for the invocation script
-        let shell: ShellEnum = if cfg!(windows) {
-            rattler_shell::shell::CmdExe.into()
-        } else {
-            rattler_shell::shell::Bash.into()
-        };
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        // Construct the reusable activation script for the shell and generate an
-        // invocation script for each executable added by the package to the
-        // environment.
-        let activation_script = create_activation_script(&prefix, shell.clone())?;
 
         let prefix_records = &prefix.find_installed_packages(None).await?;
 
@@ -875,14 +855,8 @@ impl Project {
             "Exposing executables for environment {}",
             env_name.fancy_display()
         );
-        state_changes |= create_executable_scripts(
-            &script_mapping,
-            &prefix,
-            &shell,
-            activation_script,
-            env_name,
-        )
-        .await?;
+
+        state_changes |= create_executable_trampolines(&script_mapping, &prefix, env_name).await?;
 
         Ok(state_changes)
     }
@@ -896,7 +870,7 @@ impl Project {
         state_changes |= self.prune_old_environments().await?;
 
         // Remove broken scripts
-        if let Err(err) = self.remove_broken_scripts().await {
+        if let Err(err) = self.remove_broken_bins().await {
             tracing::warn!("Couldn't remove broken exposed executables: {err}")
         }
 
@@ -939,10 +913,11 @@ impl Project {
     }
 
     /// Delete scripts in the bin folder that are broken
-    pub(crate) async fn remove_broken_scripts(&self) -> miette::Result<()> {
-        for exposed_path in self.bin_dir.files().await? {
-            if extract_executable_from_script(&exposed_path)
-                .await
+    pub(crate) async fn remove_broken_bins(&self) -> miette::Result<()> {
+        for exposed_bin in self.bin_dir.bins().await? {
+            let executable = exposed_bin.executable().await;
+
+            if executable
                 .and_then(|path| {
                     if path.is_file() {
                         Ok(path)
@@ -952,9 +927,20 @@ impl Project {
                 })
                 .is_err()
             {
-                tokio_fs::remove_file(exposed_path)
+                tokio_fs::remove_file(exposed_bin.path())
                     .await
                     .into_diagnostic()?;
+
+                if exposed_bin.is_trampoline() {
+                    tokio_fs::remove_file(
+                        exposed_bin
+                            .trampoline()
+                            .expect("we checked it")
+                            .manifest_path(),
+                    )
+                    .await
+                    .into_diagnostic()?;
+                }
             }
         }
 
@@ -992,9 +978,7 @@ impl Project {
 
                     // Remove all removable binaries
                     for binary_path in to_remove {
-                        tokio_fs::remove_file(&binary_path)
-                            .await
-                            .into_diagnostic()?;
+                        binary_path.remove().await?;
                     }
                     state_changes.insert_change(&env_name, StateChange::RemovedEnvironment);
                 }
@@ -1040,6 +1024,8 @@ impl Repodata for Project {
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, io::Write};
+
+    use crate::global::trampoline::{Configuration, Trampoline};
 
     use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
@@ -1128,53 +1114,60 @@ mod tests {
         let env_name = "test".parse().unwrap();
 
         // Create non-exposed but related binary
-        let not_python = ExposedName::from_str("not-python").unwrap();
-        let non_exposed_bin = project.bin_dir.executable_script_path(&not_python);
-        let mut file = fs::File::create(&non_exposed_bin).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let path = project.env_root.path().join("test/bin/not-python");
-            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
-                .unwrap();
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&non_exposed_bin).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&non_exposed_bin, permissions)
-                .await
-                .unwrap();
-        }
-        #[cfg(windows)]
-        {
-            let path = project.env_root.path().join("test/bin/not-python.exe");
-            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
-                .unwrap();
-        }
+        let non_exposed_name = ExposedName::from_str("not-python").unwrap();
 
-        // Create a file that should be exposed
+        let non_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/not-python.exe")
+        } else {
+            project.env_root.path().join("test/bin/not-python")
+        };
+
+        tokio_fs::create_dir_all(non_exposed_env_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
+
+        let non_exposed_manifest = Configuration::new(
+            non_exposed_env_path,
+            project.env_root.path().join("test/bin"),
+            None,
+        );
+        let non_exposed_trampoline = Trampoline::new(
+            non_exposed_name.clone(),
+            project.bin_dir.path().to_path_buf(),
+            non_exposed_manifest,
+        );
+
+        // write it's trampline and manifest
+        non_exposed_trampoline.save().await.unwrap();
+
+        // Create exposed binary
         let python = ExposedName::from_str("python").unwrap();
-        let bin = project.bin_dir.executable_script_path(&python);
-        let mut file = fs::File::create(&bin).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let path = project.env_root.path().join("test/bin/python");
-            file.write_all(format!(r#""{}" "$@""#, path.to_string_lossy()).as_bytes())
-                .unwrap();
+        let python_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/python.exe")
+        } else {
+            project.env_root.path().join("test/bin/python")
+        };
 
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&bin).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&bin, permissions).await.unwrap();
-        }
-        #[cfg(windows)]
-        {
-            let path = project.env_root.path().join("test/bin/python.exe");
-            file.write_all(format!(r#"@"{}" %*"#, path.to_string_lossy()).as_bytes())
-                .unwrap();
-        }
+        tokio_fs::create_dir_all(python_exposed_env_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio_fs::File::create(&python_exposed_env_path)
+            .await
+            .unwrap();
+
+        let exposed_manifest = Configuration::new(
+            python_exposed_env_path,
+            project.env_root.path().join("test/bin"),
+            None,
+        );
+        let exposed_trampoline = Trampoline::new(
+            python,
+            project.bin_dir.path().to_path_buf(),
+            exposed_manifest,
+        );
+
+        exposed_trampoline.save().await.unwrap();
 
         // Create unrelated file
         let unrelated = project.bin_dir.path().join("unrelated");
@@ -1186,15 +1179,16 @@ mod tests {
             state_changes.changes(),
             std::collections::HashMap::from([(
                 env_name.clone(),
-                vec![StateChange::RemovedExposed(not_python)]
+                vec![StateChange::RemovedExposed(non_exposed_name)]
             )])
         );
 
         // Check if the non-exposed file was removed
-        assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 2);
-        assert!(bin.exists());
+        // it should be : exposed binary + it's manifest and non related file
+        assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 3);
+        assert!(exposed_trampoline.path().exists());
         assert!(unrelated.exists());
-        assert!(!non_exposed_bin.exists());
+        assert!(!non_exposed_trampoline.path().exists());
     }
 
     #[tokio::test]

@@ -1,0 +1,37 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-b-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "96c3e4946ceb63e79d6ffb317d1e8f12",
+      "name": "dummy-b",
+      "platform": "win",
+      "sha256": "9eb385c0188344674c70daa0a689c7e8380663aa571c1a6da4548ff7445657d3",
+      "size": 1158,
+      "subdir": "win-64",
+      "timestamp": 1730467012205,
+      "version": "0.1.0"
+    },
+    "dummy-x-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "141705c0c7ccb5fc939626b28506ce3a",
+      "name": "dummy-x",
+      "platform": "win",
+      "sha256": "288fecab26b405e29d065701be7a31cf25a87e85795f2769d75639df415eafde",
+      "size": 1158,
+      "subdir": "win-64",
+      "timestamp": 1730467012205,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

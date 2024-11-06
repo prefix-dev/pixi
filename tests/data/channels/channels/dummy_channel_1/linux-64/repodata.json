@@ -1,0 +1,83 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "65cc8c3f42bcfdda42074f23a270347a",
+      "name": "dummy-a",
+      "platform": "linux",
+      "sha256": "f25f1f03f35573f4b8e2dcd4bc183c7ad90f420196ae83db018f02a53b5b28c0",
+      "size": 1240,
+      "subdir": "linux-64",
+      "timestamp": 1730467011994,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "f9aa31cad64411828fdd6ad808eb82f3",
+      "name": "dummy-b",
+      "platform": "linux",
+      "sha256": "951ceae07a739273f7c29ca02eb9c4d824a8ce64241f08da917f1dbcda12a9a1",
+      "size": 1156,
+      "subdir": "linux-64",
+      "timestamp": 1730467011994,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "c8473921ef500b89067d19225944d809",
+      "name": "dummy-c",
+      "platform": "linux",
+      "sha256": "4f12bf588a68ca03f8fa95214c4f44bdff1126355e308416d7327011f9a6ccfb",
+      "size": 1156,
+      "subdir": "linux-64",
+      "timestamp": 1730467011994,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "5cfa4ad4404616acfe3ee044573de899",
+      "name": "dummy-d",
+      "platform": "linux",
+      "sha256": "aa06324e297af42a15601b4d566673dc1d174f5af097a073f0b1c0d3df45040c",
+      "size": 1169,
+      "subdir": "linux-64",
+      "timestamp": 1730467011994,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "61e7728d43437b0e983c982651674119",
+      "name": "dummy_e",
+      "platform": "linux",
+      "sha256": "df6b751e2e00ebf15e706411ee0b54211c419238fb5fb71f7c590d478d54dd6b",
+      "size": 1157,
+      "subdir": "linux-64",
+      "timestamp": 1730467011994,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

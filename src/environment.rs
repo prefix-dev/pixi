@@ -7,7 +7,6 @@ use crate::{
     Project,
 };
 use dialoguer::theme::ColorfulTheme;
-use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
 use fs_err as fs;
 use miette::{IntoDiagnostic, WrapErr};
@@ -33,6 +32,8 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Semaphore;
+use uv_distribution_types::{InstalledDist, Name};
+
 use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied

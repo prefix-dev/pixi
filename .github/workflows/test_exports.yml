@@ -71,4 +71,4 @@ jobs:
           run: pixi install -v
         - name: Test export
           shell: bash
-          run: bash tests/test_export.sh
+          run: pixi run test-export

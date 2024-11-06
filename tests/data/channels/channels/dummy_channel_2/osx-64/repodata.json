@@ -1,0 +1,37 @@
+{
+  "info": {
+    "subdir": "osx-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-b-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "bb859c514fb53020cf7fe5c6b032b889",
+      "name": "dummy-b",
+      "platform": "osx",
+      "sha256": "31799a5e7ca77192ba3d31925c44345c94c8c6ce18e96e72e3b7a231d40632c4",
+      "size": 1148,
+      "subdir": "osx-64",
+      "timestamp": 1730467012353,
+      "version": "0.1.0"
+    },
+    "dummy-x-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "635aee5171a783386bfb7096001b3bdb",
+      "name": "dummy-x",
+      "platform": "osx",
+      "sha256": "fc6de173d4d64bed648f5ab0009f19072c6638c3e88b93d0adfa99c052601d51",
+      "size": 1146,
+      "subdir": "osx-64",
+      "timestamp": 1730467012353,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

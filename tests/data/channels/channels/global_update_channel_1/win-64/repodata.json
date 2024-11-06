@@ -1,0 +1,65 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "package-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "92d2eff2de4b49177428e039e5cfee31",
+      "name": "package",
+      "platform": "win",
+      "sha256": "97251a7d2779237354a51853e66926884a38a8abd9fc4674b04e66b50e83e33e",
+      "size": 1238,
+      "subdir": "win-64",
+      "timestamp": 1730467012451,
+      "version": "0.1.0"
+    },
+    "package-0.2.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "813bf1b0e65d16a2dc683350f356ffe1",
+      "name": "package",
+      "platform": "win",
+      "sha256": "39b3f3397a34741f0d695b39c1147d74f007cb60c405d68678831f0d227529e9",
+      "size": 1242,
+      "subdir": "win-64",
+      "timestamp": 1730467012619,
+      "version": "0.2.0"
+    },
+    "package2-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "e4291bf68b8a894723c1b747bdfdf0fd",
+      "name": "package2",
+      "platform": "win",
+      "sha256": "92843981ba11e0941a4855a892ed408c248242891ce4e72a9e6faf99f07431b8",
+      "size": 1172,
+      "subdir": "win-64",
+      "timestamp": 1730467012451,
+      "version": "0.1.0"
+    },
+    "package2-0.2.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "49619c2359c11993877c23d4c1d15e1d",
+      "name": "package2",
+      "platform": "win",
+      "sha256": "92e2ee3f15e89e484e233ad0ff4dc188e3068c0246a1e93eddc0bff48e693da8",
+      "size": 1172,
+      "subdir": "win-64",
+      "timestamp": 1730467012619,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}

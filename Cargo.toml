@@ -1,5 +1,9 @@
 [workspace]
 members = ["crates/*"]
+# exclude pixi_trampoline as it's not possible
+# to override some of the profile settings in workspace
+# https://github.com/rust-lang/cargo/issues/8264
+exclude = ["crates/pixi_trampoline"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -23,11 +27,10 @@ concat-idents = "1.1.5"
 console = "0.15.8"
 crossbeam-channel = "0.5.12"
 csv = "1.3.0"
+dashmap = "6.1.0"
 deno_task_shell = "0.16.0"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 dunce = "1.0.4"
 fd-lock = "4.0.2"
 flate2 = "1.0.28"
@@ -42,7 +45,6 @@ ignore = "0.4.22"
 indexmap = "2.2.6"
 indicatif = "0.17.8"
 insta = "1.38.0"
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
 is_executable = "1.0.1"
 itertools = "0.13.0"
 lazy_static = "1.4.0"
@@ -52,15 +54,12 @@ minijinja = "2.1.1"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.19.0"
 parking_lot = "0.12.2"
-pep440_rs = "0.6.0"
-pep508_rs = "0.6.0"
+pep440_rs = "0.7.2"
+pep508_rs = "0.9.1"
 percent-encoding = "2.3.1"
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-pyproject-toml = "0.11.0"
+pyproject-toml = "0.13.4"
 regex = "1.10.4"
-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-reqwest = { version = "0.12.4", default-features = false }
+reqwest = { version = "0.12.9", default-features = false }
 reqwest-middleware = "0.3.0"
 reqwest-retry = "0.5.0"
 rlimit = "0.10.1"
@@ -86,15 +85,23 @@ toml_edit = "0.22.11"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 typed-path = "0.9.1"
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 
 # Rattler crates
 file_url = "0.1.4"
-rattler = { version = "0.27.16", default-features = false }
+rattler = { version = "0.28.0", default-features = false }
 rattler_cache = { version = "0.2.7", default-features = false }
-rattler_conda_types = { version = "0.28.3", default-features = false }
+rattler_conda_types = { version = "0.29.0", default-features = false }
 rattler_digest = { version = "1.0.2", default-features = false }
-rattler_lock = { version = "0.22.28", default-features = false }
-rattler_networking = { version = "0.21.4", default-features = false, features = [
+rattler_lock = { version = "0.22.29", default-features = false }
+rattler_networking = { version = "0.21.5", default-features = false, features = [
   "google-cloud-auth",
 ] }
 rattler_repodata_gateway = { version = "0.21.18", default-features = false }
@@ -103,23 +110,24 @@ rattler_solve = { version = "1.1.0", default-features = false }
 rattler_virtual_packages = { version = "1.1.7", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
-url = "=2.5.0"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
+url = "2.5.2"
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.10"
 zip = { version = "2.2.0", default-features = false }
+zstd = { version = "0.13.2", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
 pixi_config = { path = "crates/pixi_config" }
@@ -143,7 +151,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.34.0"
+version = "0.35.0"
 
 [features]
 default = ["rustls-tls"]
@@ -187,8 +195,6 @@ crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
-distribution-filename = { workspace = true }
-distribution-types = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 flate2 = { workspace = true }
@@ -199,7 +205,6 @@ humantime = { workspace = true }
 ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
-install-wheel-rs = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = [
@@ -213,11 +218,13 @@ miette = { workspace = true, features = [
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+uv-distribution-filename = { workspace = true }
+uv-distribution-types = { workspace = true }
+uv-install-wheel = { workspace = true }
 
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
-pypi-types = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
@@ -229,6 +236,9 @@ rattler_repodata_gateway = { workspace = true, features = [
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+uv-pep440 = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-pypi-types = { workspace = true }
 
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
@@ -279,6 +289,7 @@ uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
+zstd = { workspace = true }
 
 
 [target.'cfg(unix)'.dependencies]
@@ -313,22 +324,23 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
+reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
+reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 # For pyproject-toml
 # pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.0" }
-reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "5e3eaf254b5bd481c75d2710eed055f95b756913" }
+# pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
+# pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 # deno_task_shell = { path = "../deno_task_shell" }
-# rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
-# rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/default-marker-tree" }
+# rattler = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
