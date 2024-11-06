@@ -432,6 +432,8 @@ impl Manifest {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct Mapping {
     exposed_name: ExposedName,
+    // The executable_relname is a executable name possibly with a parts of a path in it to match on.
+    // e.g. `dotnet/dotnet` will find `$PREFIX/lib/dotnet/dotnet`
     executable_relname: String,
 }
 
@@ -450,13 +452,14 @@ impl Mapping {
     pub fn executable_relname(&self) -> &str {
         &self.executable_relname
     }
+
+    // Splitting the executable_relname by the last '/' and taking the last part
+    // e.g. 'nested/test_executable' -> 'test_executable'
     pub fn executable_name(&self) -> &str {
-        if let Some(executable_file_name) = Path::new(&self.executable_relname).file_name() {
-            return executable_file_name
-                .to_str()
-                .unwrap_or(&self.executable_relname);
-        };
-        &self.executable_relname
+        Path::new(&self.executable_relname)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.executable_relname)
     }
 }
 

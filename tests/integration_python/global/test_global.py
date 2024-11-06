@@ -304,12 +304,6 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
     assert not dummy1.is_file()
     assert not dummy3.is_file()
-    # extension = "exe" if os.name == "nt" else "sh"
-    # # Add nested dummy1
-    # verify_cli_command(
-    #     [pixi, "global", "expose", f"nested_dummy=nested/dummy.{extension}"],
-    #     env=env,
-    # )
 
 
 def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
