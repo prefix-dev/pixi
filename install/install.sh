@@ -61,7 +61,7 @@ trap cleanup EXIT
 
 # Test if stdout is a terminal before showing progress
 if [[ ! -t 1 ]]; then
-  CURL_OPTIONS="--silent"  # --no-progress-bar is better, but only available in 7.67+
+  CURL_OPTIONS="--silent"  # --no-progress-meter is better, but only available in 7.67+
   WGET_OPTIONS="--no-verbose"
 else
   CURL_OPTIONS="--no-silent"
