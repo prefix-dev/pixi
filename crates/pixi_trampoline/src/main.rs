@@ -36,17 +36,17 @@ fn prepend_path(extra_path: &str) -> miette::Result<String> {
     let path = env::var("PATH").into_diagnostic().wrap_err("Couldn't get 'PATH'")?;
     let mut split_path = env::split_paths(&path).collect::<Vec<_>>();
     split_path.insert(0, PathBuf::from(extra_path));
-    let new_path = env::join_paths(split_path).into_diagnostic().wrap_err("Couldn't join PATH's")?;
+    let new_path = env::join_paths(&split_path).into_diagnostic().wrap_err(format!("Couldn't join PATH's: {:?}", &split_path))?;
     Ok(new_path.to_string_lossy().into_owned())
 }
 
 fn trampoline() -> miette::Result<()> {
     // Get command-line arguments (excluding the program name)
     let args: Vec<String> = env::args().collect();
-    let current_exe = env::current_exe().expect("Failed to get current executable path");
+    let current_exe = env::current_exe().into_diagnostic().wrap_err("Couldn't get the `env::current_exe`")?;
 
     // ignore any ctrl-c signals
-    ctrlc::set_handler(move || {}).expect("Error setting Ctrl-C handler");
+    ctrlc::set_handler(move || {}).into_diagnostic().wrap_err("Couldn't set the ctrl-c handler")?;
 
     let metadata = read_metadata(&current_exe)?;
 
