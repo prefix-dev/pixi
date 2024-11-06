@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::future::{Future, IntoFuture};
 use std::io::{self, Write};
 use std::str::FromStr;

@@ -39,7 +39,7 @@ use pixi::{
     task::TaskName,
     DependencyType,
 };
-use pixi_manifest::{pecType, EnvironmentName, FeatureName};
+use pixi_manifest::{EnvironmentName, FeatureName, SpecType};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
