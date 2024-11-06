@@ -34,7 +34,7 @@ pub struct Args {
     pub package: String,
 
     #[clap(flatten)]
-    channels: ChannelsConfig,
+    pub channels: ChannelsConfig,
 
     #[clap(flatten)]
     pub project_config: ProjectConfig,
@@ -45,7 +45,7 @@ pub struct Args {
 
     /// Limit the number of search results
     #[clap(short, long)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
 }
 
 /// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
@@ -76,10 +76,23 @@ where
 
     let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
 
-    let mut latest_packages: Vec<RepoDataRecord> = repos
-        .into_iter()
-        .flat_map(|repo| repo.into_iter().cloned().collect_vec())
-        .collect();
+    let mut latest_packages: Vec<RepoDataRecord> = Vec::new();
+
+    for repo in repos {
+        // sort records by version, get the latest one of each package
+        let records_of_repo: HashMap<String, RepoDataRecord> = repo
+            .into_iter()
+            .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+            .map(|record| {
+                (
+                    record.package_record.name.as_normalized().to_string(),
+                    record.clone(),
+                )
+            })
+            .collect();
+
+        latest_packages.extend(records_of_repo.into_values().collect_vec());
+    }
 
     // sort all versions across all channels and platforms
     latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
@@ -87,7 +100,7 @@ where
     Ok(latest_packages)
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecord>>> {
     let stdout = io::stdout();
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
@@ -133,7 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // When package name filter contains * (wildcard), it will search and display a
     // list of packages matching this filter
-    if package_name_filter.contains('*') {
+    let packages = if package_name_filter.contains('*') {
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
@@ -145,17 +158,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.limit,
             stdout,
         )
-        .await?;
+        .await?
     }
     // If package name filter doesn't contain * (wildcard), it will search and display specific
     // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
 
-        search_exact_package(package_name, all_names, repodata_query_func, stdout).await?;
-    }
+        search_exact_package(package_name, all_names, repodata_query_func, stdout).await?
+    };
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Ok(packages)
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
+    execute_impl(args).await?;
     Ok(())
 }
 
@@ -164,7 +182,7 @@ async fn search_exact_package<W: Write, QF, FR>(
     all_repodata_names: Vec<PackageName>,
     repodata_query_func: QF,
     out: W,
-) -> miette::Result<()>
+) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR,
     FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
@@ -192,7 +210,7 @@ where
         }
     }
 
-    Ok(())
+    Ok(package.and_then(|package| Some(vec![package.clone()])))
 }
 
 fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Result<()> {
@@ -306,7 +324,7 @@ async fn search_package_by_wildcard<W: Write, QF, FR>(
     repodata_query_func: QF,
     limit: Option<usize>,
     out: W,
-) -> miette::Result<()>
+) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR + Clone,
     FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
@@ -368,7 +386,7 @@ where
         }
     }
 
-    Ok(())
+    Ok(Some(packages))
 }
 
 fn print_matching_packages<W: Write>(

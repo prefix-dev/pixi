@@ -10,9 +10,9 @@ use std::{
     str::FromStr,
 };
 
+use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::lock_file::UpdateMode;
 use pixi::{
     cli::{
         add,
@@ -28,6 +28,10 @@ use pixi::{
         TaskGraphError, TaskName,
     },
     Project, UpdateLockFileOptions,
+};
+use pixi::{
+    cli::{cli_config::ChannelsConfig, search},
+    lock_file::UpdateMode,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -308,6 +312,22 @@ impl PixiControl {
                     revalidate: false,
                 },
                 editable: false,
+            },
+        }
+    }
+
+    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// the command and await the result call `.await` on the return value.
+    pub fn search(&self, name: String) -> SearchBuilder {
+        SearchBuilder {
+            args: search::Args {
+                package: name,
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                platform: Platform::current(),
+                limit: None,
+                channels: ChannelsConfig::default(),
             },
         }
     }

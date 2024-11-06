@@ -33,12 +33,14 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
-    cli::{add, cli_config::DependencyConfig, init, install, project, remove, task, update},
+    cli::{
+        add, cli_config::DependencyConfig, init, install, project, remove, search, task, update,
+    },
     task::TaskName,
     DependencyType,
 };
 use pixi_manifest::{EnvironmentName, SpecType};
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
 /// Strings from an iterator
@@ -216,6 +218,21 @@ impl IntoFuture for AddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         add::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct SearchBuilder {
+    pub args: search::Args,
+}
+
+impl IntoFuture for SearchBuilder {
+    type Output = miette::Result<Option<Vec<RepoDataRecord>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        search::execute_impl(self.args).boxed_local()
     }
 }
 
