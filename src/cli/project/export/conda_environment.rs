@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/cli/project/export/test-data/testenv/pixi.toml");
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
         let project = Project::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
