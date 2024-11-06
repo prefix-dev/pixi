@@ -11,13 +11,13 @@
       "depends": [
         "jupyter-core"
       ],
-      "md5": "a5fdc7418f810e73ad0139d18808b1dc",
+      "md5": "b626270b8bdda36d26a3b88da3bc0bbd",
       "name": "jupyter",
       "platform": "osx",
-      "sha256": "7f6fab8ebfea9bf57d15ac0f3a5b333c98c3752ebfb098c788eb2b5c8d401929",
-      "size": 991,
+      "sha256": "3bc1e1d3cade00f71f6236df44664911e22c71db0d946a68aa515efb7cc54d4c",
+      "size": 988,
       "subdir": "osx-arm64",
-      "timestamp": 1730710749989,
+      "timestamp": 1730900414740,
       "version": "0.1.0"
     },
     "jupyter-core-0.1.0-h60d57d3_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h60d57d3_0",
       "build_number": 0,
       "depends": [],
-      "md5": "29eedfaa93f5b8a7782330f5ce39d228",
+      "md5": "98e6d4f9b3e77154c734874350195ff0",
       "name": "jupyter-core",
       "platform": "osx",
-      "sha256": "b822298a309b94a360be7e0fe9f490ac3146c57f4b7d1a34645b0c6bc421b003",
-      "size": 1178,
+      "sha256": "a2401df480d6a2f595bb0c06a7e744826695ee1f3de3041e91079e6f99e88803",
+      "size": 1177,
       "subdir": "osx-arm64",
-      "timestamp": 1730710749992,
+      "timestamp": 1730900414741,
       "version": "0.1.0"
     }
   },
