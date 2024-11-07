@@ -285,9 +285,9 @@ uv-git = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
+uv-requirements = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
-uv-requirements = { workspace = true}
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
@@ -355,7 +355,7 @@ reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev =
 
 
 # Change these lines if you want a patched version of uv
-[patch.'https://github.com/astral-sh/uv']
+# [patch.'https://github.com/astral-sh/uv']
 # uv-cache = { path = "../uv/crates/uv-cache" }
 # uv-pep508 = { path = "../uv/crates/uv-pep508" }
 # uv-pep440 = { path = "../uv/crates/uv-pep440" }
