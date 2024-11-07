@@ -53,7 +53,7 @@ Basic Usage:
     $ pixi add python numpy pytest
 
     Run a task:
-    $ pixi add task test 'pytest -s'
+    $ pixi task add test 'pytest -s'
     $ pixi run test
 
 Found a Bug or Have a Feature Request?
