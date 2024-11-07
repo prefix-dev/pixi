@@ -1,4 +1,4 @@
-# Pixi Global Tool Environment Installation
+# Pixi Global
 
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
