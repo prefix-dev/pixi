@@ -267,7 +267,7 @@ fn print_package_info<W: Write>(
         grouped_by_version
             .entry(&version.package_record.version)
             .or_insert_with(Vec::new)
-            .push(*version);
+            .insert(0, *version);
     }
     let other_builds = grouped_by_version.shift_remove(&package.package_record.version);
     let package_info = format!(
