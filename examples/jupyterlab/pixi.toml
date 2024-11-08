@@ -3,7 +3,8 @@ authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
 description = "Jupyter Lab examples"
 name = "jupyterlab"
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+# platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = ["osx-arm64"]
 
 [tasks]
 start = "jupyter lab"
@@ -19,3 +20,4 @@ scipy = "1.11.*"
 sympy = "1.12.*"
 # Install pip to allow users to install pip packages after the server is started.
 pip = "23.2.*"
+coreutils = ">=9.5,<10"

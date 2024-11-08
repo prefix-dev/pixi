@@ -290,6 +290,7 @@ uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
+birdcage = "0.8.1"
 
 
 [target.'cfg(unix)'.dependencies]
@@ -341,16 +342,17 @@ reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev =
 # rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
 # rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
 # rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler = { path = "../rattler/crates/rattler" }
+rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler_networking = { path = "../rattler/crates/rattler_networking" }
+rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "../rattler/crates/rattler_shell" }
+rattler_cache = { path = "../rattler/crates/rattler_cache" }
+rattler_solve = { path = "../rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+rattler_lock = { path = "../rattler/crates/rattler_lock" }
+rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
+rattler = { path = "../rattler/crates/rattler" }
 
 
 # Change these lines if you want a patched version of uv

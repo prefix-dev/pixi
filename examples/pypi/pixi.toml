@@ -25,11 +25,13 @@ black = { version = "~=24.0", extras = ["jupyter"] }
 flask = "*"
 pyboy = "==1.6.6"
 tensorflow = "==2.14.0"
+
 # sdists:
 env_test_package = "==0.0.3"
 plot-antenna = "==1.8"
 pycosat = "*"
 pyliblzfse = "*"
+
 
 [system-requirements]
 # Tensorflow on macOS arm64 requires macOS 12.0 or higher
