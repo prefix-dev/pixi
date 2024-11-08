@@ -99,7 +99,7 @@ where
         packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
     } else {
         for repo in repos {
-            packages.extend(repo.into_iter().map(|record| record.clone()).collect_vec());
+            packages.extend(repo.into_iter().cloned().collect_vec());
         }
     }
 
@@ -378,16 +378,14 @@ fn print_package_info<W: Write>(
         let version_width = grouped_by_version
             .keys()
             .map(|v| v.to_string().len())
-            .into_iter()
-            .chain(vec!["Version".len()].iter().cloned())
+            .chain(["Version".len()].iter().cloned())
             .max()
             .unwrap()
             + 1;
         let build_width = other_versions
             .iter()
             .map(|v| v.package_record.build.len())
-            .into_iter()
-            .chain(vec!["Build".len()].iter().cloned())
+            .chain(["Build".len()].iter().cloned())
             .max()
             .unwrap()
             + 1;
