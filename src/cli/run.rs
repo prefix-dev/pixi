@@ -76,24 +76,63 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut sandbox = Birdcage::new();
 
         let project_dir = project.root();
-        sandbox.add_exception(Exception::ExecuteAndRead(project_dir.to_path_buf())).unwrap();
+        sandbox
+            .add_exception(Exception::Read("/dev".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/lib".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/lib64".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/usr".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/var".into()))
+            .unwrap();
+
+        sandbox
+            .add_exception(Exception::ExecuteAndRead(project_dir.to_path_buf()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::WriteAndRead(project_dir.to_path_buf()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::WriteAndRead(
+                environment.dir().join("conda-meta"),
+            ))
+            .unwrap();
         // Initialize the sandbox; by default everything is prohibited.
         let current_exe = std::env::current_exe().unwrap();
-        sandbox.add_exception(Exception::ExecuteAndRead(current_exe.clone())).unwrap();
-        sandbox.add_exception(Exception::WriteAndRead("/tmp/".into())).unwrap();
-        sandbox.add_exception(Exception::ExecuteAndRead("/tmp/".into())).unwrap();
-        sandbox.add_exception(Exception::Read("/etc/".into())).unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead(current_exe.clone()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::WriteAndRead("/tmp/".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/tmp/".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::Read("/etc/".into()))
+            .unwrap();
 
-        sandbox.add_exception(Exception::ExecuteAndRead("/var/folders/".into())).unwrap();
-        sandbox.add_exception(Exception::ExecuteAndRead("/bin/bash".into())).unwrap();
-        sandbox.add_exception(Exception::ExecuteAndRead("/usr/bin/env".into())).unwrap();
-        sandbox.add_exception(Exception::WriteAndRead("/var/folders/".into())).unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/usr/bin/bash".into()))
+            .unwrap();
+        sandbox
+            .add_exception(Exception::ExecuteAndRead("/usr/bin/env".into()))
+            .unwrap();
         sandbox.add_exception(Exception::FullEnvironment).unwrap();
 
         let mut command = Command::new(current_exe);
         let original_args = std::env::args().collect::<Vec<_>>();
         // filter --sandbox flag
-        let original_args = original_args.iter().filter(|arg| arg.as_str() != "--sandbox").collect::<Vec<_>>();
+        let original_args = original_args
+            .iter()
+            .filter(|arg| arg.as_str() != "--sandbox")
+            .collect::<Vec<_>>();
         for arg in &original_args[1..] {
             command.arg(arg);
         }
@@ -103,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let status = child.wait().unwrap();
         exit(status.code().unwrap());
     }
-    
+
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
         command_not_found(&project, explicit_environment);
