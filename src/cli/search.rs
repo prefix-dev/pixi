@@ -5,6 +5,7 @@ use std::io::{self, Write};
 use std::str::FromStr;
 
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::default_channel_config;
@@ -54,6 +55,7 @@ async fn search_package_by_filter<F, QF, FR>(
     all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     filter_func: F,
+    only_latest: bool,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
     F: Fn(&PackageName, &PackageName) -> bool,
@@ -76,28 +78,32 @@ where
 
     let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
 
-    let mut latest_packages: Vec<RepoDataRecord> = Vec::new();
+    let mut packages: Vec<RepoDataRecord> = Vec::new();
+    if only_latest {
+        for repo in repos {
+            // sort records by version, get the latest one of each package
+            let records_of_repo: HashMap<String, RepoDataRecord> = repo
+                .into_iter()
+                .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+                .map(|record| {
+                    (
+                        record.package_record.name.as_normalized().to_string(),
+                        record.clone(),
+                    )
+                })
+                .collect();
 
-    for repo in repos {
-        // sort records by version, get the latest one of each package
-        let records_of_repo: HashMap<String, RepoDataRecord> = repo
-            .into_iter()
-            .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
-            .map(|record| {
-                (
-                    record.package_record.name.as_normalized().to_string(),
-                    record.clone(),
-                )
-            })
-            .collect();
-
-        latest_packages.extend(records_of_repo.into_values().collect_vec());
+            packages.extend(records_of_repo.into_values().collect_vec());
+        }
+        // sort all versions across all channels and platforms
+        packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+    } else {
+        for repo in repos {
+            packages.extend(repo.into_iter().map(|record| record.clone()).collect_vec());
+        }
     }
 
-    // sort all versions across all channels and platforms
-    latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-
-    Ok(latest_packages)
+    Ok(packages)
 }
 
 pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecord>>> {
@@ -193,33 +199,85 @@ where
         all_repodata_names,
         repodata_query_func,
         |pn, n| pn == n,
+        false,
     )
     .await?;
+    // Sort packages by version, build number and build string
+    let packages = packages
+        .iter()
+        .sorted_by(|a, b| {
+            Ord::cmp(
+                &(
+                    &a.package_record.version,
+                    a.package_record.build_number,
+                    &a.package_record.build,
+                ),
+                &(
+                    &b.package_record.version,
+                    b.package_record.build_number,
+                    &b.package_record.build,
+                ),
+            )
+        })
+        .cloned()
+        .collect::<Vec<RepoDataRecord>>();
 
     if packages.is_empty() {
         let normalized_package_name = package_name.as_normalized();
         return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
     }
 
-    let package = packages.last();
-    if let Some(package) = package {
-        if let Err(e) = print_package_info(package, out) {
+    let newest_package = packages.last();
+    if let Some(newest_package) = newest_package {
+        let other_versions = packages
+            .iter()
+            .filter(|p| p.package_record != newest_package.package_record)
+            .collect::<Vec<_>>();
+        if let Err(e) = print_package_info(newest_package, &other_versions, out) {
             if e.kind() != std::io::ErrorKind::BrokenPipe {
                 return Err(e).into_diagnostic();
             }
         }
     }
 
-    Ok(package.map(|package| vec![package.clone()]))
+    Ok(newest_package.map(|package| vec![package.clone()]))
 }
 
-fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Result<()> {
+fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> String {
+    let builds = builds.unwrap_or_default();
+    match builds.len() {
+        0 => String::new(),
+        1 => " (+ 1 build)".to_string(),
+        _ => format!(" (+ {} builds)", builds.len()),
+    }
+}
+
+fn print_package_info<W: Write>(
+    package: &RepoDataRecord,
+    other_versions: &Vec<&RepoDataRecord>,
+    mut out: W,
+) -> io::Result<()> {
     writeln!(out)?;
 
     let package = package.clone();
     let package_name = package.package_record.name.as_source();
     let build = &package.package_record.build;
-    let package_info = format!("{} {}", console::style(package_name), console::style(build));
+    let mut grouped_by_version = IndexMap::new();
+    for version in other_versions {
+        grouped_by_version
+            .entry(&version.package_record.version)
+            .or_insert_with(Vec::new)
+            .push(*version);
+    }
+    let other_builds = grouped_by_version.shift_remove(&package.package_record.version);
+    let package_info = format!(
+        "{}-{}-{}{}",
+        console::style(package.package_record.name.as_source()),
+        console::style(package.package_record.version.to_string()),
+        console::style(&package.package_record.build),
+        console::style(format_additional_builds_string(other_builds))
+    );
+
     writeln!(out, "{}", package_info)?;
     writeln!(out, "{}\n", "-".repeat(package_info.chars().count()))?;
 
@@ -314,6 +372,57 @@ fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Res
         writeln!(out, " - {}", dependency)?;
     }
 
+    // Print summary of older versions for package
+    if !grouped_by_version.is_empty() {
+        writeln!(out, "\nOther Versions ({}):", grouped_by_version.len())?;
+        let version_width = grouped_by_version
+            .keys()
+            .map(|v| v.to_string().len())
+            .into_iter()
+            .chain(vec!["Version".len()].iter().cloned())
+            .max()
+            .unwrap()
+            + 1;
+        let build_width = other_versions
+            .iter()
+            .map(|v| v.package_record.build.len())
+            .into_iter()
+            .chain(vec!["Build".len()].iter().cloned())
+            .max()
+            .unwrap()
+            + 1;
+        writeln!(
+            out,
+            "{:version_width$} {:build_width$}",
+            console::style("Version").bold(),
+            console::style("Build").bold(),
+            version_width = version_width,
+            build_width = build_width
+        )?;
+        let max_displayed_versions = 4;
+        let mut counter = 0;
+        for (version, builds) in grouped_by_version.iter().rev() {
+            writeln!(
+                out,
+                "{:version_width$} {:build_width$}{}",
+                console::style(version.to_string()),
+                console::style(builds[0].package_record.build.clone()),
+                console::style(format_additional_builds_string(Some(builds[1..].to_vec()))).dim(),
+                version_width = version_width,
+                build_width = build_width
+            )?;
+            counter += 1;
+            if counter == max_displayed_versions {
+                writeln!(
+                    out,
+                    "... and {} more",
+                    grouped_by_version.len() - max_displayed_versions
+                )?;
+                break;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -340,6 +449,7 @@ where
             all_package_names.clone(),
             repodata_query_func.clone(),
             |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
+            true,
         )
         .await?;
 
@@ -354,6 +464,7 @@ where
             all_package_names,
             repodata_query_func,
             |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
+            true,
         )
         .await
     })
