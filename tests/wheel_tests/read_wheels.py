@@ -27,7 +27,7 @@ class PackageSpec:
         return []
 
     @classmethod
-    def __from_toml(cls, spec: dict[str, str] | str) -> Self:
+    def __from_toml(cls, spec: dict[str, Any] | str) -> Self:
         if isinstance(spec, str):
             return cls(version=spec, extras=None, target=None, system_requirements=None)
         if isinstance(spec, dict):

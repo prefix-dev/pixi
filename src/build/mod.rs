@@ -598,6 +598,7 @@ fn source_metadata_to_records(
                     track_features: vec![],
                     legacy_bz2_md5: None,
                     legacy_bz2_size: None,
+                    python_site_packages_path: None,
 
                     // TODO(baszalmstra): Add support for these.
                     purls: None,

@@ -54,8 +54,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         // Remove specs from the manifest
+        let mut removed_dependencies = vec![];
         for spec in specs {
-            project.manifest.remove_dependency(env_name, spec)?;
+            project
+                .manifest
+                .remove_dependency(env_name, spec)
+                .map(|removed_name| removed_dependencies.push(removed_name))?;
         }
 
         // Figure out which package the exposed binaries belong to
@@ -68,7 +72,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prefix
                         .find_executables(&[record])
                         .into_iter()
-                        .filter_map(|(name, _path)| ExposedName::from_str(name.as_str()).ok())
+                        .filter_map(|executable| {
+                            ExposedName::from_str(executable.name.as_str()).ok()
+                        })
                         .for_each(|exposed_name| {
                             project
                                 .manifest
@@ -80,7 +86,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let state_changes = project.sync_environment(env_name).await?;
+        let state_changes = project
+            .sync_environment(env_name, Some(removed_dependencies))
+            .await?;
 
         project.manifest.save().await?;
         Ok(state_changes)
@@ -97,7 +105,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .wrap_err(format!("Couldn't remove packages from {}", env_name))
     {
-        Ok(ref mut state_changes) => {
+        Ok(state_changes) => {
             state_changes.report();
         }
         Err(err) => {

@@ -12,13 +12,13 @@ repos:
         entry: pixi run -e lint end-of-file-fixer
         language: system
         types: [text]
-        stages: [commit, push, manual]
+        stages: [pre-commit, pre-push, manual]
       - id: trailing-whitespace
         name: trailing-whitespace
         entry: pixi run -e lint trailing-whitespace-fixer
         language: system
         types: [text]
-        stages: [commit, push, manual]
+        stages: [pre-commit, pre-push, manual]
       # Use ruff for python examples
       - id: ruff
         name: ruff
@@ -32,6 +32,19 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # Typecheck python tests
+      - id: typecheck-python
+        name: typecheck-python
+        entry: pixi run typecheck-python
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+      - id: check-openssl
+        name: check-openssl
+        entry: pixi run check-openssl
+        language: system
+        types: [file, toml]
+        pass_filenames: false
       # typos
       - id: typos
         name: typos

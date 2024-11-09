@@ -7,20 +7,17 @@ use std::{
     str::FromStr,
 };
 
-use distribution_filename::DistExtension;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
-use pixi_uv_conversions::{as_uv_req, AsPep508Error};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_types::{
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+use pixi_uv_conversions::{
+    as_uv_req, to_normalize, to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
 };
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
     ParseMatchSpecError, ParseStrictness::Lenient, Platform,
@@ -30,14 +27,16 @@ use rattler_lock::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_distribution_filename::DistExtension;
 use uv_git::GitReference;
-use uv_normalize::{ExtraName, PackageName};
-
-use super::{PypiRecord, PypiRecordsByName};
-use crate::{
-    lock_file::records_by_name::PixiRecordsByName,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+use uv_pypi_types::{
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
+
+use super::{
+    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+};
+use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -78,8 +77,8 @@ impl Display for IndexesMismatch {
 
 #[derive(Debug, Error)]
 pub struct EditablePackagesMismatch {
-    pub expected_editable: Vec<PackageName>,
-    pub unexpected_editable: Vec<PackageName>,
+    pub expected_editable: Vec<uv_normalize::PackageName>,
+    pub unexpected_editable: Vec<uv_normalize::PackageName>,
 }
 
 #[derive(Debug, Error)]
@@ -141,13 +140,13 @@ pub enum PlatformUnsat {
     SourcePackageMismatch(String, SourceMismatchError),
 
     #[error("failed to convert the requirement for '{0}'")]
-    FailedToConvertRequirement(PackageName, #[source] Box<ParsedUrlError>),
+    FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<ParsedUrlError>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
+    UnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Box<pypi_types::Requirement>, String),
+    CondaUnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -165,7 +164,7 @@ pub enum PlatformUnsat {
     CorruptedEntry(String, ParseLockFileError),
 
     #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
-    TooManyPypiPackages(Vec<PackageName>),
+    TooManyPypiPackages(Vec<pep508_rs::PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,
@@ -176,34 +175,41 @@ pub enum PlatformUnsat {
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
-    PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
+    PythonVersionMismatch(
+        pep508_rs::PackageName,
+        VersionSpecifiers,
+        Box<pep440_rs::Version>,
+    ),
 
     #[error("when converting {0} into a pep508 requirement")]
-    AsPep508Error(PackageName, #[source] AsPep508Error),
+    AsPep508Error(pep508_rs::PackageName, #[source] AsPep508Error),
 
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, Box<pypi_types::RequirementSource>),
+    EditableDependencyOnCondaInstalledPackage(
+        uv_normalize::PackageName,
+        Box<uv_pypi_types::RequirementSource>,
+    ),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
-    DirectUrlDependencyOnCondaInstalledPackage(PackageName),
+    DirectUrlDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
     #[error("git dependency on a conda installed package '{0}' is not supported")]
-    GitDependencyOnCondaInstalledPackage(PackageName),
+    GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
     #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'")]
-    EditablePackageIsUrl(PackageName, String),
+    EditablePackageIsUrl(uv_normalize::PackageName, String),
 
     #[error("the editable package path '{0}', lock does not equal spec path '{1}' == '{2}'")]
-    EditablePackagePathMismatch(PackageName, PathBuf, PathBuf),
+    EditablePackagePathMismatch(uv_normalize::PackageName, PathBuf, PathBuf),
 
     #[error("failed to determine pypi source tree hash for {0}")]
-    FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
+    FailedToDetermineSourceTreeHash(pep508_rs::PackageName, std::io::Error),
 
     #[error("source tree hash for {0} does not match the hash in the lock-file")]
-    SourceTreeHashMismatch(PackageName, #[source] SourceTreeHashMismatch),
+    SourceTreeHashMismatch(pep508_rs::PackageName, #[source] SourceTreeHashMismatch),
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
@@ -213,6 +219,61 @@ pub enum PlatformUnsat {
 
     #[error("the input hash for '{0}' ({1}) does not match the hash in the lock-file ({2})")]
     InputHashMismatch(String, String, String),
+
+    #[error("expect pypi package name '{expected}' but found '{found}'")]
+    LockedPyPINamesMismatch { expected: String, found: String },
+
+    #[error(
+        "'{name}' with specifiers '{specifiers}' does not match the locked version '{version}' "
+    )]
+    LockedPyPIVersionsMismatch {
+        name: String,
+        specifiers: String,
+        version: String,
+    },
+
+    #[error("the direct url should start with `direct+` or `git+` but found '{0}'")]
+    LockedPyPIMalformedUrl(Url),
+
+    #[error("the spec for '{0}' required a direct url but it was not locked as such")]
+    LockedPyPIRequiresDirectUrl(String),
+
+    #[error("'{name}' has mismatching url: '{spec_url} != {lock_url}'")]
+    LockedPyPIDirectUrlMismatch {
+        name: String,
+        spec_url: String,
+        lock_url: String,
+    },
+
+    #[error("'{name}' has mismatching git url: '{spec_url} != {lock_url}'")]
+    LockedPyPIGitUrlMismatch {
+        name: String,
+        spec_url: String,
+        lock_url: String,
+    },
+
+    #[error("'{name}' has mismatching git ref: '{expected_ref} != {found_ref}'")]
+    LockedPyPIGitRefMismatch {
+        name: String,
+        expected_ref: String,
+        found_ref: String,
+    },
+
+    #[error("'{0}' expected a git url but the lock file has: '{1}'")]
+    LockedPyPIRequiresGitUrl(String, String),
+
+    #[error("'{0}' expected a path but the lock file has a url")]
+    LockedPyPIRequiresPath(String),
+
+    #[error("'{name}' expected this path {expected_path} but found {found_path}")]
+    LockedPyPIPathMismatch {
+        name: String,
+        expected_path: PathBuf,
+        found_path: PathBuf,
+    },
+
+    #[error("failed to convert between pep508 and uv types {0}")]
+    UvTypesConversionError(#[from] ConversionError),
 }
 
 impl PlatformUnsat {
@@ -235,28 +296,33 @@ impl PlatformUnsat {
 /// Convert something into a uv requirement.
 trait IntoUvRequirement {
     type E;
-    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E>;
+    fn into_uv_requirement(self) -> Result<uv_pypi_types::Requirement, Self::E>;
 }
 
-impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
-    type E = ParsedUrlError;
+impl IntoUvRequirement for pep508_rs::Requirement {
+    type E = ConversionError;
 
-    fn into_uv_requirement(self) -> Result<pypi_types::Requirement, Self::E> {
+    fn into_uv_requirement(self) -> Result<uv_pypi_types::Requirement, Self::E> {
         let parsed_url = if let Some(version_or_url) = self.version_or_url {
             match version_or_url {
-                VersionOrUrl::VersionSpecifier(version) => {
-                    Some(VersionOrUrl::VersionSpecifier(version))
-                }
-                VersionOrUrl::Url(verbatim_url) => {
+                pep508_rs::VersionOrUrl::VersionSpecifier(version) => Some(
+                    uv_pep508::VersionOrUrl::VersionSpecifier(to_uv_version_specifiers(&version)?),
+                ),
+                pep508_rs::VersionOrUrl::Url(verbatim_url) => {
                     let url_or_path =
                         UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
 
                     // it is actually a path
                     let url = match url_or_path {
                         UrlOrPath::Path(path) => {
-                            let ext = DistExtension::from_path(Path::new(path.as_str())).map_err(
-                                |e| ParsedUrlError::MissingExtensionPath(path.as_str().into(), e),
-                            )?;
+                            let ext = DistExtension::from_path(Path::new(path.as_str()))
+                                .map_err(|e| {
+                                    ParsedUrlError::MissingExtensionPath(
+                                        PathBuf::from_str(path.as_str()).expect("not a path"),
+                                        e,
+                                    )
+                                })
+                                .expect("cannot get extension");
                             let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                                 path.as_str().into(),
                                 ext,
@@ -265,29 +331,42 @@ impl IntoUvRequirement for pep508_rs::Requirement<VerbatimUrl> {
 
                             VerbatimParsedUrl {
                                 parsed_url,
-                                verbatim: verbatim_url,
+                                verbatim: uv_pep508::VerbatimUrl::from_url(
+                                    verbatim_url.raw().clone(),
+                                )
+                                .with_given(verbatim_url.given().unwrap()),
                             }
                             // Can only be an archive
                         }
                         UrlOrPath::Url(u) => VerbatimParsedUrl {
-                            parsed_url: ParsedUrl::try_from(u)?,
-                            verbatim: verbatim_url,
+                            parsed_url: ParsedUrl::try_from(u.clone())
+                                .expect("cannot convert to url"),
+                            verbatim: uv_pep508::VerbatimUrl::from_url(u),
                         },
                     };
 
-                    Some(VersionOrUrl::Url(url))
+                    Some(uv_pep508::VersionOrUrl::Url(url))
                 }
             }
         } else {
             None
         };
 
-        let converted = pep508_rs::Requirement {
-            name: self.name,
-            extras: self.extras,
-            marker: self.marker,
+        let marker = to_uv_marker_tree(&self.marker)?;
+        let converted = uv_pep508::Requirement {
+            name: uv_pep508::PackageName::new(self.name.to_string())
+                .expect("cannot normalize name"),
+            extras: self
+                .extras
+                .iter()
+                .map(|e| {
+                    uv_pep508::ExtraName::new(e.to_string()).expect("cannot convert extra name")
+                })
+                .collect(),
+            marker,
             version_or_url: parsed_url,
-            origin: self.origin,
+            // Don't think this needs to be set
+            origin: None,
         };
 
         Ok(converted.into())
@@ -465,14 +544,14 @@ enum Dependency {
         Cow<'static, str>,
     ),
     Conda(MatchSpec, Cow<'static, str>),
-    PyPi(pypi_types::Requirement, Cow<'static, str>),
+    PyPi(uv_pypi_types::Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_editable(
-    spec: &pypi_types::Requirement,
+    spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
@@ -533,19 +612,33 @@ fn seems_like_commit_sha(s: &str) -> bool {
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_requirement(
-    spec: &pypi_types::Requirement,
+    spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
-) -> bool {
-    if spec.name != locked_data.name {
-        return false;
+) -> Result<(), PlatformUnsat> {
+    if spec.name.to_string() != locked_data.name.to_string() {
+        return Err(PlatformUnsat::LockedPyPINamesMismatch {
+            expected: spec.name.to_string(),
+            found: locked_data.name.to_string(),
+        });
     }
 
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
             // In the old way we always satisfy based on version so let's keep it similar
             // here
-            specifier.contains(&locked_data.version)
+            let version_string = locked_data.version.to_string();
+            if specifier.contains(
+                &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
+            ) {
+                Ok(())
+            } else {
+                Err(PlatformUnsat::LockedPyPIVersionsMismatch {
+                    name: spec.name.clone().to_string(),
+                    specifiers: specifier.clone().to_string(),
+                    version: version_string,
+                })
+            }
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &locked_data.location {
@@ -553,7 +646,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
                 {
-                    return false;
+                    return Err(PlatformUnsat::LockedPyPIMalformedUrl(locked_url.clone()));
                 }
                 let locked_url = locked_url
                     .as_ref()
@@ -561,9 +654,19 @@ pub(crate) fn pypi_satifisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                return *spec_url.raw() == locked_url;
+                if *spec_url.raw() == locked_url {
+                    return Ok(());
+                } else {
+                    return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
+                        name: spec.name.clone().to_string(),
+                        spec_url: spec_url.raw().to_string(),
+                        lock_url: locked_url.to_string(),
+                    });
+                }
             }
-            false
+            Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(
+                spec.name.to_string(),
+            ))
         }
         RequirementSource::Git {
             repository,
@@ -575,10 +678,17 @@ pub(crate) fn pypi_satifisfies_requirement(
                 UrlOrPath::Url(url) => {
                     if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
                         let repo_is_same = locked_git_url.url.repository() == repository;
+                        if !repo_is_same {
+                            return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
+                                name: spec.name.clone().to_string(),
+                                spec_url: repository.to_string(),
+                                lock_url: locked_git_url.url.repository().to_string(),
+                            });
+                        }
                         // If the spec does not specify a revision than any will do
                         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
                         if *reference == GitReference::DefaultBranch {
-                            return repo_is_same;
+                            return Ok(());
                         }
                         // If the spec has a short commit than we can do a partial match
                         // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
@@ -590,34 +700,58 @@ pub(crate) fn pypi_satifisfies_requirement(
                                 if let GitReference::FullCommit(sha) =
                                     locked_git_url.url.reference()
                                 {
-                                    return repo_is_same && sha.starts_with(branch_or_tag);
+                                    if sha.starts_with(branch_or_tag) {
+                                        return Ok(());
+                                    } else {
+                                        return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                            name: spec.name.clone().to_string(),
+                                            expected_ref: branch_or_tag.to_string(),
+                                            found_ref: sha.to_string(),
+                                        });
+                                    }
                                 }
                             }
                         }
 
                         // If the spec does specify a revision than the revision must match
-                        return repo_is_same && locked_git_url.url.reference() == reference;
+                        if locked_git_url.url.reference() == reference {
+                            return Ok(());
+                        } else {
+                            return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                name: spec.name.clone().to_string(),
+                                expected_ref: reference.to_string(),
+                                found_ref: locked_git_url.url.reference().to_string(),
+                            });
+                        }
                     }
-                    false
+                    Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                        spec.name.to_string(),
+                        url.to_string(),
+                    ))
                 }
-                UrlOrPath::Path(_) => false,
+                UrlOrPath::Path(path) => {
+                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                        spec.name.to_string(),
+                        path.to_string(),
+                    ))
+                }
             }
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &locked_data.location {
+                let locked_path = Path::new(locked_path.as_str());
                 // sometimes the path is relative, so we need to join it with the project root
-                let absolute_path = if locked_path.is_absolute() {
-                    Cow::Borrowed(Path::new(locked_path.as_str()))
-                } else {
-                    Cow::Owned(project_root.join(Path::new(locked_path.as_str())))
-                };
-                if install_path != &absolute_path {
-                    return false;
+                if &project_root.join(locked_path) != install_path {
+                    return Err(PlatformUnsat::LockedPyPIPathMismatch {
+                        name: spec.name.clone().to_string(),
+                        expected_path: install_path.clone(),
+                        found_path: project_root.join(locked_path),
+                    });
                 }
-                return true;
+                return Ok(());
             }
-            false
+            Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()))
         }
     }
 }
@@ -707,7 +841,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
     };
 
     // Determine the pypi packages provided by the locked conda packages.
-    let locked_conda_pypi_packages = locked_pixi_records.by_pypi_name();
+    let locked_conda_pypi_packages = locked_pixi_records
+        .by_pypi_name()
+        .map_err(From::from)
+        .map_err(Box::new)?;
 
     // Keep a list of all conda packages that we have already visisted
     let mut conda_packages_visited = HashSet::new();
@@ -808,7 +945,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         ));
                     }
 
-                    if !identifier.satisfies(&requirement) {
+                    if !identifier
+                        .satisfies(&requirement)
+                        .map_err(From::from)
+                        .map_err(Box::new)?
+                    {
                         // The record does not match the spec, the lock-file is inconsistent.
                         return Err(Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
                             Box::new(requirement.clone()),
@@ -816,7 +957,12 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         )));
                     }
                     FoundPackage::Conda(*repodata_idx)
-                } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
+                } else if let Some(idx) = locked_pypi_environment.index_by_name(
+                    &to_normalize(&requirement.name)
+                        .map_err(|err| ConversionError::NameConversion(err))
+                        .map_err(From::from)
+                        .map_err(Box::new)?,
+                ) {
                     let record = &locked_pypi_environment.records[idx];
                     if requirement.is_editable() {
                         pypi_satifisfies_editable(&requirement, &record.0, project_root)?;
@@ -828,12 +974,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
-                        if !pypi_satifisfies_requirement(&requirement, &record.0, project_root) {
-                            return Err(Box::new(PlatformUnsat::UnsatisfiableRequirement(
-                                Box::new(requirement),
-                                source.into_owned(),
-                            )));
-                        }
+                        pypi_satifisfies_requirement(&requirement, &record.0, project_root)?;
                         FoundPackage::PyPi(idx, requirement.extras)
                     }
                 } else {
@@ -913,17 +1054,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     // Ensure that the record matches the currently selected interpreter.
                     if let Some(python_version) = &record.0.requires_python {
-                        if !python_version
-                            .contains(&marker_environment.python_full_version().version)
-                        {
+                        let marker_version = pep440_rs::Version::from_str(
+                            &marker_environment.python_full_version().version.to_string(),
+                        )
+                        .expect("cannot parse version");
+                        if !python_version.contains(&marker_version) {
                             return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
                                 python_version.clone(),
-                                marker_environment
-                                    .python_full_version()
-                                    .version
-                                    .clone()
-                                    .into(),
+                                marker_version.into(),
                             )));
                         }
                     }
@@ -931,12 +1070,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    let requirement = requirement.clone().into_uv_requirement().map_err(|e| {
-                        Box::new(PlatformUnsat::FailedToConvertRequirement(
-                            record.0.name.clone(),
-                            Box::new(e),
-                        ))
-                    })?;
+                    let requirement = requirement
+                        .clone()
+                        .into_uv_requirement()
+                        .map_err(From::from)
+                        .map_err(Box::new)?;
                     // Skip this requirement if it does not apply.
                     if !requirement.evaluate_markers(Some(marker_environment), &extras) {
                         continue;
@@ -983,7 +1121,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .records
         .iter()
         .filter(|record| record.0.editable)
-        .map(|record| record.0.name.clone())
+        .map(|record| {
+            uv_normalize::PackageName::new(record.0.name.to_string()).expect("cannot convert name")
+        })
         .collect::<HashSet<_>>();
     let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
     let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);
@@ -1056,7 +1196,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
 enum FoundPackage {
     Conda(usize),
-    PyPi(usize, Vec<ExtraName>),
+    PyPi(usize, Vec<uv_pep508::ExtraName>),
 }
 
 fn find_matching_package(
@@ -1232,7 +1372,7 @@ impl Display for EditablePackagesMismatch {
 
         fn format_package_list(
             f: &mut std::fmt::Formatter<'_>,
-            packages: &[PackageName],
+            packages: &[uv_normalize::PackageName],
         ) -> std::fmt::Result {
             for (idx, package) in packages.iter().enumerate() {
                 if idx == packages.len() - 1 && idx > 0 {
@@ -1276,6 +1416,7 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
+    use tokio::runtime::Handle;
 
     use super::*;
     use crate::Project;
@@ -1320,10 +1461,10 @@ mod tests {
         Ok(())
     }
 
-    #[rstest]
+    #[rstest::rstest]
     #[tokio::test]
     async fn test_good_satisfiability(
-        #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
@@ -1349,11 +1490,8 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_example_satisfiability(
-        #[files("examples/*/pixi.toml")]
-        #[exclude("cpp-sdl")]
-        manifest_path: PathBuf,
-    ) {
+    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+    async fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
@@ -1377,14 +1515,22 @@ mod tests {
             .unwrap();
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        let project = Project::from_path(&manifest_path).unwrap();
-        let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-        let err = verify_lockfile_satisfiability(&project, &lock_file)
-            .await
-            .expect_err("expected failing satisfiability");
-        let mut s = String::new();
-        report_handler.render_report(&mut s, &err).unwrap();
-        insta::assert_snapshot!(format!("failing_satisiability@{name}"), s);
+        insta::glob!(
+            "../../tests/data/non-satisfiability",
+            "*/pixi.toml",
+            |path| {
+                let handle = Handle::current();
+                let project = Project::from_path(path).unwrap();
+                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+                let err = handle
+                    .block_on(verify_lockfile_satisfiability(&project, &lock_file))
+                    .expect_err("expected failing satisfiability");
+
+                let mut s = String::new();
+                report_handler.render_report(&mut s, &err).unwrap();
+                insta::assert_snapshot!(s);
+            }
+        );
     }
 
     #[test]
@@ -1407,32 +1553,20 @@ mod tests {
             .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
         let non_matching_spec =
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")
                 .unwrap()
                 .into_uv_requirement()
                 .unwrap();
         // This should not
-        assert!(!pypi_satifisfies_requirement(
-            &non_matching_spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
         // Removing the rev from the Requirement should satisfy any revision
         let spec = pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg")
             .unwrap()
             .into_uv_requirement()
             .unwrap();
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            &project_root
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the
@@ -1452,14 +1586,11 @@ mod tests {
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
-                .unwrap()
-                .into_uv_requirement()
                 .unwrap();
+
+        let spec = spec.into_uv_requirement().unwrap();
+
         // This should satisfy:
-        assert!(pypi_satifisfies_requirement(
-            &spec,
-            &locked_data,
-            Path::new("")
-        ));
+        pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 }

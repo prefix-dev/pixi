@@ -3,17 +3,19 @@ use std::{
     str::FromStr,
 };
 
-use distribution_filename::DistExtension;
-use pep508_rs::VerbatimUrl;
+// use pep440_rs::VersionSpecifiers;
 use pixi_manifest::{
-    pypi::{pypi_requirement::ParsedGitUrl, GitRev},
+    pypi::{pypi_requirement::ParsedGitUrl, GitRev, VersionOrStar},
     PyPiRequirement,
 };
-use pypi_types::RequirementSource;
 use thiserror::Error;
 use url::Url;
+use uv_distribution_filename::DistExtension;
 use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep440::VersionSpecifiers;
+use uv_pep508::VerbatimUrl;
+use uv_pypi_types::RequirementSource;
 
 use super::to_git_reference;
 
@@ -38,6 +40,15 @@ fn create_uv_url(
     url.parse()
 }
 
+fn to_version_specificers(
+    version: &VersionOrStar,
+) -> Result<VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
+    match version {
+        VersionOrStar::Version(v) => VersionSpecifiers::from_str(&v.to_string()),
+        VersionOrStar::Star => Ok(VersionSpecifiers::from_iter(vec![])),
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum AsPep508Error {
     #[error("error while canonicalizing {path}")]
@@ -55,9 +66,11 @@ pub enum AsPep508Error {
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
     #[error("error while canonicalizing {0}")]
-    VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
+    VerabatimUrlError(#[from] uv_pep508::VerbatimUrlError),
     #[error("error in extension parsing")]
-    ExtensionError(#[from] distribution_filename::ExtensionError),
+    ExtensionError(#[from] uv_distribution_filename::ExtensionError),
+    #[error("error in parsing version specificers")]
+    VersionSpecifiersError(#[from] uv_pep440::VersionSpecifiersParseError),
 }
 
 /// Convert into a `pypi_types::Requirement`, which is an uv extended
@@ -66,13 +79,13 @@ pub fn as_uv_req(
     req: &PyPiRequirement,
     name: &str,
     project_root: &Path,
-) -> Result<pypi_types::Requirement, AsPep508Error> {
+) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
     let name = PackageName::new(name.to_owned())?;
     let source = match req {
         PyPiRequirement::Version { version, .. } => {
             // TODO: implement index later
             RequirementSource::Registry {
-                specifier: version.clone().into(),
+                specifier: to_version_specificers(version)?,
                 index: None,
             }
         }
@@ -161,14 +174,18 @@ pub fn as_uv_req(
             ext: DistExtension::from_path(url.path())?,
         },
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
-            specifier: version.clone().into(),
+            specifier: to_version_specificers(version)?,
             index: None,
         },
     };
 
-    Ok(pypi_types::Requirement {
+    Ok(uv_pypi_types::Requirement {
         name: name.clone(),
-        extras: req.extras().to_vec(),
+        extras: req
+            .extras()
+            .iter()
+            .map(|e| uv_pep508::ExtraName::new(e.to_string()).expect("conversion failed"))
+            .collect(),
         marker: Default::default(),
         source,
         origin: None,

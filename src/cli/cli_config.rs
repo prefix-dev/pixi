@@ -1,5 +1,6 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
+use crate::lock_file::UpdateMode;
 use crate::DependencyType;
 use crate::Project;
 use clap::Parser;
@@ -98,6 +99,10 @@ pub struct PrefixUpdateConfig {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Run the complete environment validation. This will reinstall a broken environment.
+    #[arg(long)]
+    pub revalidate: bool,
 }
 impl PrefixUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
@@ -113,6 +118,15 @@ impl PrefixUpdateConfig {
     /// Decide whether to install or not.
     pub(crate) fn no_install(&self) -> bool {
         self.no_install || self.no_lockfile_update
+    }
+
+    /// Which `[UpdateMode]` to use
+    pub(crate) fn update_mode(&self) -> UpdateMode {
+        if self.revalidate {
+            UpdateMode::Revalidate
+        } else {
+            UpdateMode::QuickValidate
+        }
     }
 }
 #[derive(Parser, Debug, Default)]
@@ -137,12 +151,12 @@ pub struct DependencyConfig {
     pub pypi: bool,
 
     /// The platform(s) for which the dependency should be modified
-    #[arg(long, short)]
-    pub platform: Vec<Platform>,
+    #[arg(long = "platform", short)]
+    pub platforms: Vec<Platform>,
 
     /// The feature for which the dependency should be modified
-    #[arg(long, short)]
-    pub feature: Option<String>,
+    #[clap(long, short, default_value_t)]
+    pub feature: FeatureName,
 }
 
 impl DependencyConfig {
@@ -157,11 +171,7 @@ impl DependencyConfig {
             DependencyType::CondaDependency(SpecType::Run)
         }
     }
-    pub(crate) fn feature_name(&self) -> FeatureName {
-        self.feature
-            .clone()
-            .map_or(FeatureName::Default, FeatureName::Named)
-    }
+
     pub(crate) fn display_success(
         &self,
         operation: &str,
@@ -193,14 +203,14 @@ impl DependencyConfig {
         }
 
         // Print something if we've modified for platforms
-        if !self.platform.is_empty() {
+        if !self.platforms.is_empty() {
             eprintln!(
                 "{operation} these only for platform(s): {}",
-                console::style(self.platform.iter().join(", ")).bold()
+                console::style(self.platforms.iter().join(", ")).bold()
             )
         }
         // Print something if we've modified for features
-        if let Some(feature) = &self.feature {
+        if let FeatureName::Named(feature) = &self.feature {
             {
                 eprintln!(
                     "{operation} these only for feature: {}",

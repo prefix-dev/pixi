@@ -84,14 +84,14 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for mapping in &args.mappings {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        state_changes |= project.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name, None).await?;
         project.manifest.save().await?;
         Ok(state_changes)
     }
 
     let mut project_modified = project_original.clone();
     match apply_changes(&args, &mut project_modified).await {
-        Ok(mut state_changes) => {
+        Ok(state_changes) => {
             project_modified.manifest.save().await?;
             state_changes.report();
             Ok(())
@@ -120,7 +120,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         project
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
-        state_changes |= project.sync_environment(env_name).await?;
+        state_changes |= project.sync_environment(env_name, None).await?;
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -137,7 +137,6 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         .collect_vec();
 
     let mut last_updated_project = project_original;
-    let mut state_changes = StateChanges::default();
     for mapping in exposed_mappings {
         let (exposed_name, env_name) = mapping?;
         let mut project = last_updated_project.clone();
@@ -145,11 +144,10 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             .await
             .wrap_err_with(|| format!("Couldn't remove exposed name {exposed_name}"))
         {
-            Ok(sc) => {
-                state_changes |= sc;
+            Ok(state_changes) => {
+                state_changes.report();
             }
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(&env_name, &last_updated_project)
                     .await
                     .wrap_err_with(|| {
@@ -163,6 +161,5 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         }
         last_updated_project = project;
     }
-    state_changes.report();
     Ok(())
 }

@@ -1,11 +1,11 @@
-use std::{env, io::IsTerminal};
-
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
-use pixi_progress::{self, global_multi_progress};
+use pixi_consts::consts;
+use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
@@ -34,13 +34,14 @@ pub mod shell_hook;
 pub mod task;
 pub mod tree;
 pub mod update;
+pub mod upgrade;
 pub mod upload;
 
 #[derive(Parser, Debug)]
 #[command(
-    version,
-    about = "
-Pixi [version 0.33.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+    version(consts::PIXI_VERSION),
+    about = format!("
+Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
@@ -51,7 +52,7 @@ Basic Usage:
     $ pixi add python numpy pytest
 
     Run a task:
-    $ pixi add task test 'pytest -s'
+    $ pixi task add test 'pytest -s'
     $ pixi run test
 
 Found a Bug or Have a Feature Request?
@@ -61,7 +62,7 @@ Need Help?
 Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
-"
+", consts::PIXI_VERSION)
 )]
 #[clap(arg_required_else_help = true)]
 struct Args {
@@ -78,9 +79,19 @@ struct Args {
     #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
 
-    /// Hide all progress bars
+    /// Hide all progress bars, always turned on if stderr is not a terminal.
     #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
     no_progress: bool,
+}
+impl Args {
+    /// Whether to show progress bars or not, based on the terminal and the user's preference.
+    fn no_progress(&self) -> bool {
+        if !std::io::stderr().is_terminal() {
+            true
+        } else {
+            self.no_progress
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -95,6 +106,7 @@ pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Update(update::Args),
+    Upgrade(upgrade::Args),
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
@@ -185,7 +197,7 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled_stderr(use_colors);
 
     // Hide all progress bars if the user requested it.
-    if args.no_progress {
+    if args.no_progress() {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
@@ -282,6 +294,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
+        Command::Upgrade(cmd) => upgrade::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
     }

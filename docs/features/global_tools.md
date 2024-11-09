@@ -150,6 +150,17 @@ You can `remove` dependencies by running:
 pixi global remove --environment my-env package-a package-b
 ```
 
+### Trampolines
+
+To increase efficiency, `pixi` uses *trampolines*—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.
+
+When you execute a global install binary, a trampoline performs the following sequence of steps:
+
+* Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., `python.json`), contains key information about how the environment should be set up. The configuration file is stored in `.pixi/bin/trampoline_configuration`.
+* Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
+* When installing a new binary, a new trampoline is placed in the `.pixi/bin` directory and is hardlinked to the `.pixi/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
+
+
 ### Example: Adding a series of tools at once
 Without specifying an environment, you can add multiple tools at once:
 ```shell
@@ -172,7 +183,7 @@ Creating two separate non-interfering environments, while exposing only the mini
 ### Example: Creating a Data Science Sandbox Environment
 You can create an environment with multiple tools using the following command:
 ```shell
-pixi global install --environment data-science --expose jupyter=jupyter --expose ipython=ipython jupyter numpy pandas matplotlib ipython
+pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
 ```
 This command generates the following entry in the manifest:
 ```toml
@@ -203,4 +214,46 @@ channels = ["conda-forge"]
 platforms = ["osx-64"]
 dependencies = { python = "*" }
 # ...
+```
+
+
+## Potential Future Features
+
+### PyPI support
+
+We could support packages from PyPI via a command like this:
+
+```
+pixi global install --pypi flask
+```
+
+### Lock file
+
+A lock file is less important for global tools.
+However, there is demand for it, and users that don't care about it should not be negatively impacted
+
+### Multiple manifests
+
+We could go for one default manifest, but also parse other manifests in the same directory.
+The only requirement to be parsed as manifest is a `.toml` extension
+In order to modify those with the `CLI` one would have to add an option `--manifest` to select the correct one.
+
+- pixi-global.toml: Default
+- pixi-global-company-tools.toml
+- pixi-global-from-my-dotfiles.toml
+
+It is unclear whether the first implementation already needs to support this.
+At the very least we should put the manifest into its own folder like `~/.pixi/global/manifests/pixi-global.toml`
+
+### No activation
+
+The current `pixi global install` features `--no-activation`.
+When this flag is set, `CONDA_PREFIX` and `PATH` will not be set when running the exposed executable.
+This is useful when installing Python package managers or shells.
+
+Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:
+
+```toml
+[envs.pip.exposed]
+pip = { executable = "pip", activation = false }
 ```

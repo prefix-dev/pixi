@@ -1,9 +1,8 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
@@ -18,8 +17,9 @@ use pixi_config::{self, Config, ConfigCli};
 ///
 /// Example:
 /// - pixi global install starship nushell ripgrep bat
-/// - pixi global install --environment science jupyter polars
+/// - pixi global install jupyter --with polars
 /// - pixi global install --expose python3.8=python python=3.8
+/// - pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -49,6 +49,11 @@ pub struct Args {
     /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
     #[arg(long)]
     expose: Vec<Mapping>,
+
+    /// Add additional dependencies to the environment.
+    /// Their executables will not be exposed.
+    #[arg(long)]
+    with: Vec<MatchSpec>,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -82,10 +87,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let multiple_envs = env_names.len() > 1;
 
     if !args.expose.is_empty() && env_names.len() != 1 {
-        miette::bail!("Can't add exposed mappings for more than one environment");
+        miette::bail!("Can't add exposed mappings with `--exposed` for more than one environment");
     }
 
-    let mut state_changes = StateChanges::default();
+    if !args.with.is_empty() && env_names.len() != 1 {
+        miette::bail!("Can't add packages with `--with` for more than one environment");
+    }
+
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
@@ -95,29 +103,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .clone()
                 .into_iter()
                 .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                .collect()
+                .map(|(_, spec)| spec)
+                .collect_vec()
         } else {
-            specs.clone()
+            specs
+                .clone()
+                .into_iter()
+                .map(|(_, spec)| spec)
+                .collect_vec()
         };
         let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, specs, &mut project)
+        match setup_environment(env_name, &args, &specs, &mut project)
             .await
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
-            Ok(sc) => {
-                match sc.has_changed() {
-                    true => env_changes
+            Ok(state_changes) => {
+                if state_changes.has_changed() {
+                    env_changes
                         .changes
-                        .insert(env_name.clone(), EnvState::Installed),
-                    false => env_changes.changes.insert(
+                        .insert(env_name.clone(), EnvState::Installed)
+                } else {
+                    env_changes.changes.insert(
                         env_name.clone(),
                         EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
-                    ),
+                    )
                 };
-                state_changes |= sc;
             }
             Err(err) => {
-                state_changes.report();
                 revert_environment_after_error(env_name, &last_updated_project)
                     .await
                     .wrap_err("Couldn't install packages. Reverting also failed.")?;
@@ -142,7 +154,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: IndexMap<PackageName, MatchSpec>,
+    specs: &[MatchSpec],
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -164,7 +176,7 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for (_package_name, spec) in &specs {
+    for spec in specs.iter().chain(&args.with) {
         project.manifest.add_dependency(
             env_name,
             spec,
@@ -185,16 +197,25 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    project.install_environment(env_name).await?;
+    let _ = project.install_environment(env_name).await?;
+
+    let with_package_names = args
+        .with
+        .iter()
+        .map(|spec| {
+            spec.name
+                .clone()
+                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
 
     // Sync exposed binaries
-    let expose_type = ExposedType::from_mappings(args.expose.clone());
+    let expose_type = ExposedType::new(args.expose.clone(), with_package_names);
 
     project.sync_exposed_names(env_name, expose_type).await?;
 
     // Figure out added packages and their corresponding versions
-    let specs = specs.values().cloned().collect_vec();
-    state_changes |= project.added_packages(specs.as_slice(), env_name).await?;
+    state_changes |= project.added_packages(specs, env_name).await?;
 
     // Expose executables of the new environment
     state_changes |= project

@@ -42,6 +42,14 @@ the user to the package manager they should be using to update pixi.
 PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
 ```
 
+#### Custom version
+
+You can specify a custom version string to be used in the `--version` output by setting the `PIXI_VERSION` environment variable during the build.
+
+```shell
+PIXI_VERSION="HEAD-123456" cargo build --locked --profile dist
+```
+
 ## Shell completion
 
 After building pixi you can generate shell autocompletion scripts by running

@@ -1,4 +1,7 @@
-use super::{extract_executable_from_script, EnvironmentName, ExposedName, Mapping};
+use super::trampoline::{GlobalBin, Trampoline};
+use super::{EnvironmentName, ExposedName, Mapping};
+use crate::prefix::Executable;
+
 use ahash::HashSet;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -11,11 +14,14 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::home_path;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
+use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
+    RepoDataRecord, Version,
 };
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::iter::Peekable;
 use std::str::FromStr;
 use std::{
     io::Read,
@@ -49,17 +55,21 @@ impl BinDir {
 
     /// Asynchronously retrieves all files in the binary executable directory.
     ///
-    /// This function reads the directory specified by `self.0` and collects all
+    /// This function reads the directory specified by `self.0` and try to collect all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of file paths or an error if the directory can't be read.
-    pub(crate) async fn files(&self) -> miette::Result<Vec<PathBuf>> {
+    /// vector of `GlobalBin`or an error if the directory can't be read.
+    pub(crate) async fn bins(&self) -> miette::Result<Vec<GlobalBin>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() && path.is_executable() && is_text(&path)? {
-                files.push(path);
+            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
+                let trampoline = Trampoline::try_from(path).await?;
+                files.push(GlobalBin::Trampoline(trampoline));
+            } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
+                // If the file is not a binary, it's a script
+                files.push(GlobalBin::Script(path));
             }
         }
 
@@ -75,12 +85,12 @@ impl BinDir {
     ///
     /// This function constructs the path to the executable script by joining the
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
-    /// Windows, it sets the file extension to `.bat`.
-    pub(crate) fn executable_script_path(&self, exposed_name: &ExposedName) -> PathBuf {
+    /// Windows, it sets the file extension to `.exe`.
+    pub(crate) fn executable_trampoline_path(&self, exposed_name: &ExposedName) -> PathBuf {
         // Add .bat to the windows executable
         let exposed_name = if cfg!(windows) {
             // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
-            format!("{}.bat", exposed_name)
+            format!("{}.exe", exposed_name)
         } else {
             exposed_name.to_string()
         };
@@ -168,12 +178,6 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(buffer[..bytes_read].contains(&0))
 }
 
-/// Checks if given path points to a text file by calling `is_binary`.
-/// If that returns `false`, then it is a text file and vice-versa.
-pub(crate) fn is_text(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    Ok(!is_binary(file_path)?)
-}
-
 /// Finds the package record from the `conda-meta` directory.
 pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
     let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
@@ -206,7 +210,9 @@ pub(crate) enum NotChangedReason {
 impl std::fmt::Display for NotChangedReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NotChangedReason::AlreadyInstalled => write!(f, "already installed"),
+            NotChangedReason::AlreadyInstalled => {
+                write!(f, "{}", NotChangedReason::AlreadyInstalled.as_str())
+            }
         }
     }
 }
@@ -256,6 +262,83 @@ pub(crate) struct EnvChanges {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstallChange {
+    Installed(Version),
+    Upgraded(Version, Version),
+    TransitiveUpgraded(Version, Version),
+    Reinstalled(Version),
+    Removed,
+}
+
+impl InstallChange {
+    pub fn is_transitive(&self) -> bool {
+        matches!(self, InstallChange::TransitiveUpgraded(_, _))
+    }
+    pub fn is_removed(&self) -> bool {
+        matches!(self, InstallChange::Removed)
+    }
+
+    pub fn version_fancy_display(&self) -> StyledObject<String> {
+        let version_style = console::Style::new().blue();
+        let default_style = console::Style::new();
+
+        match self {
+            InstallChange::Installed(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Upgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::TransitiveUpgraded(old, new) => default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            )),
+            InstallChange::Reinstalled(version) => version_style.apply_to(version.to_string()),
+            InstallChange::Removed => version_style.apply_to("".to_string()),
+        }
+    }
+}
+
+/// Tracks changes made to the environment
+/// after installing packages.
+/// It also contain what packages were in environment before the update.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[must_use]
+pub(crate) struct EnvironmentUpdate {
+    package_changes: HashMap<PackageName, InstallChange>,
+    current_packages: Vec<PackageName>,
+}
+
+impl EnvironmentUpdate {
+    pub fn new(
+        package_changes: HashMap<PackageName, InstallChange>,
+        current_packages: Vec<PackageName>,
+    ) -> Self {
+        Self {
+            package_changes,
+            current_packages,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.package_changes.is_empty()
+    }
+
+    pub fn changes(&self) -> &HashMap<PackageName, InstallChange> {
+        &self.package_changes
+    }
+
+    pub fn current_packages(&self) -> &Vec<PackageName> {
+        &self.current_packages
+    }
+
+    pub fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
+        self.current_packages.extend(packages);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub(crate) enum StateChange {
     AddedExposed(ExposedName),
@@ -264,7 +347,7 @@ pub(crate) enum StateChange {
     AddedPackage(PackageRecord),
     AddedEnvironment,
     RemovedEnvironment,
-    UpdatedEnvironment,
+    UpdatedEnvironment(EnvironmentUpdate),
 }
 
 #[must_use]
@@ -312,6 +395,24 @@ impl StateChanges {
         self.changes
     }
 
+    fn accumulate_changes<F, T>(
+        iter: &mut Peekable<std::slice::Iter<StateChange>>,
+        filter_fn: F,
+        init_value: Option<T>,
+    ) -> Vec<T>
+    where
+        F: Fn(Option<&StateChange>) -> Option<T>,
+    {
+        let mut changes = init_value.into_iter().collect::<Vec<T>>();
+
+        while let Some(next) = filter_fn(iter.peek().cloned()) {
+            changes.push(next);
+            iter.next();
+        }
+
+        changes
+    }
+
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
         self.changes = self
@@ -331,10 +432,10 @@ impl StateChanges {
             .collect()
     }
 
-    pub(crate) fn report(&mut self) {
+    pub(crate) fn report(mut self) {
         self.prune();
 
-        for (env_name, changes_for_env) in &self.changes {
+        for (env_name, changes_for_env) in self.changes {
             // If there are no changes for the environment, skip it
             if changes_for_env.is_empty() {
                 continue;
@@ -344,12 +445,18 @@ impl StateChanges {
 
             while let Some(change) = iter.next() {
                 match change {
-                    StateChange::AddedExposed(exposed) => {
-                        let mut exposed_names = vec![exposed.clone()];
-                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
-                            exposed_names.push(next_exposed.clone());
-                            iter.next();
-                        }
+                    StateChange::AddedExposed(first_name) => {
+                        let mut exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(first_name.clone()),
+                        );
+
+                        exposed_names.sort();
+
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Exposed executable {} from environment {}.",
@@ -368,20 +475,44 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::RemovedExposed(exposed) => {
-                        eprintln!(
-                            "{}Removed exposed executable {} from environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            exposed.fancy_display(),
-                            env_name.fancy_display()
+                    StateChange::RemovedExposed(removed) => {
+                        let mut exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(removed.clone()),
                         );
+                        exposed_names.sort();
+                        if exposed_names.len() == 1 {
+                            eprintln!(
+                                "{}Removed exposed executable {} from environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                exposed_names[0].fancy_display(),
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Removed exposed executables from environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for exposed_name in exposed_names {
+                                eprintln!("   - {}", exposed_name.fancy_display());
+                            }
+                        }
                     }
                     StateChange::UpdatedExposed(exposed) => {
-                        let mut exposed_names = vec![exposed.clone()];
-                        while let Some(StateChange::AddedExposed(next_exposed)) = iter.peek() {
-                            exposed_names.push(next_exposed.clone());
-                            iter.next();
-                        }
+                        let mut exposed_names = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::UpdatedExposed(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(exposed.clone()),
+                        );
+                        exposed_names.sort();
                         if exposed_names.len() == 1 {
                             eprintln!(
                                 "{}Updated executable {} of environment {}.",
@@ -401,13 +532,39 @@ impl StateChanges {
                         }
                     }
                     StateChange::AddedPackage(pkg) => {
-                        eprintln!(
-                            "{}Added package {}={} to environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            console::style(pkg.name.as_normalized()).green(),
-                            console::style(&pkg.version).blue(),
-                            env_name.fancy_display()
+                        let mut added_pkgs = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedPackage(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(pkg.clone()),
                         );
+
+                        added_pkgs.sort_by(|pkg1, pkg2| pkg1.name.cmp(&pkg2.name));
+
+                        if added_pkgs.len() == 1 {
+                            eprintln!(
+                                "{}Added package {}={} to environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                console::style(pkg.name.as_normalized()).green(),
+                                console::style(&pkg.version).blue(),
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Added packages of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for pkg in added_pkgs {
+                                eprintln!(
+                                    "   - {}={}",
+                                    console::style(pkg.name.as_normalized()).green(),
+                                    console::style(&pkg.version).blue(),
+                                );
+                            }
+                        }
                     }
                     StateChange::AddedEnvironment => {
                         eprintln!(
@@ -423,14 +580,86 @@ impl StateChanges {
                             env_name.fancy_display()
                         );
                     }
-                    StateChange::UpdatedEnvironment => {
-                        eprintln!(
-                            "{}Updated environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
+                    StateChange::UpdatedEnvironment(update_change) => {
+                        StateChanges::report_update_changes(&env_name, update_change);
                     }
                 }
+            }
+        }
+    }
+
+    pub(crate) fn report_update_changes(
+        env_name: &EnvironmentName,
+        environment_update: &EnvironmentUpdate,
+    ) {
+        // Check if there are any changes
+        if environment_update.is_empty() {
+            eprintln!(
+                "{}Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display(),
+            );
+            return;
+        }
+
+        // Separate top-level and transitive changes
+        let mut top_level_changes: Vec<(&PackageName, &InstallChange)> = Vec::new();
+        let mut transitive_changes = Vec::new();
+
+        let env_dependencies = environment_update.current_packages();
+
+        for (package_name, change) in environment_update.changes() {
+            if env_dependencies.contains(package_name) && !change.is_transitive() {
+                top_level_changes.push((package_name, change));
+            } else if change.is_transitive() {
+                transitive_changes.push((package_name, change));
+            }
+        }
+
+        top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+
+        let was_removed = top_level_changes
+            .iter()
+            .find_map(|(_, change)| change.is_removed().then_some(|| true))
+            .is_some();
+
+        let message = if was_removed { "Removed" } else { "Updated" };
+
+        // Output messages based on the type of changes
+        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
+            eprintln!(
+                "{}Updated environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
+            eprintln!(
+                "{}Environment {} was already up-to-date.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() == 1 {
+            eprintln!(
+                "{}{} package {} {} in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                message,
+                console::style(top_level_changes[0].0.as_normalized()).green(),
+                top_level_changes[0].1.version_fancy_display(),
+                env_name.fancy_display()
+            );
+        } else if top_level_changes.len() > 1 {
+            eprintln!(
+                "{}{} packages in environment {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                message,
+                env_name.fancy_display()
+            );
+            for (package, install_change) in top_level_changes {
+                eprintln!(
+                    "    - {} {}",
+                    console::style(package.as_normalized()).green(),
+                    install_change.version_fancy_display()
+                );
             }
         }
     }
@@ -475,16 +704,18 @@ pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
-) -> miette::Result<(IndexSet<PathBuf>, IndexSet<ExposedName>)> {
-    // Get all paths to the binaries from the scripts in the bin directory.
-    let locally_exposed = bin_dir.files().await?;
-    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|path| {
-        let path = path.clone();
+) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
+    // Get all paths to the binaries from trampolines or scripts in the bin directory.
+    let locally_exposed = bin_dir.bins().await?;
+    let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
+        let global_bin = global_bin.clone();
+        let path = global_bin.path().clone();
         async move {
-            extract_executable_from_script(&path)
+            global_bin
+                .executable()
                 .await
                 .ok()
-                .map(|exec| (path, exec))
+                .map(|exec| (path, exec, global_bin))
         }
     }))
     .await
@@ -495,7 +726,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Filter out all binaries that are related to the environment
     let related = executable_paths
         .into_iter()
-        .filter(|(_, exec)| exec.starts_with(env_dir.path()))
+        .filter(|(_, exec, _)| exec.starts_with(env_dir.path()))
         .collect_vec();
 
     fn match_mapping(mapping: &Mapping, exposed: &Path, executable: &Path) -> bool {
@@ -506,27 +737,27 @@ pub(crate) async fn get_expose_scripts_sync_status(
     // Get all related expose scripts not required by the environment manifest
     let to_remove = related
         .iter()
-        .filter_map(|(exposed, executable)| {
+        .filter_map(|(exposed, executable, bin_type)| {
             if mappings
                 .iter()
                 .any(|mapping| match_mapping(mapping, exposed, executable))
+                && bin_type.is_trampoline()
             {
                 None
             } else {
-                Some(exposed)
+                Some(bin_type)
             }
         })
         .cloned()
-        .collect::<IndexSet<PathBuf>>();
+        .collect_vec();
 
     // Get all required exposed binaries that are not yet exposed
     let to_add = mappings
         .iter()
         .filter_map(|mapping| {
-            if related
-                .iter()
-                .any(|(exposed, executable)| match_mapping(mapping, exposed, executable))
-            {
+            if related.iter().any(|(exposed, executable, bin)| {
+                match_mapping(mapping, exposed, executable) && bin.is_trampoline()
+            }) {
                 None
             } else {
                 Some(mapping.exposed_name().clone())
@@ -539,10 +770,13 @@ pub(crate) async fn get_expose_scripts_sync_status(
 
 /// Check if all binaries were exposed, or if the user selected a subset of them.
 pub fn check_all_exposed(
-    env_binaries: &IndexMap<PackageName, Vec<(String, PathBuf)>>,
+    env_binaries: &IndexMap<PackageName, Vec<Executable>>,
     exposed_mapping_binaries: &IndexSet<Mapping>,
 ) -> bool {
-    let mut env_binaries_names_iter = env_binaries.values().flatten().map(|(name, _)| name);
+    let mut env_binaries_names_iter = env_binaries
+        .values()
+        .flatten()
+        .map(|executable| executable.name.clone());
 
     let exposed_binaries_names: HashSet<&str> = exposed_mapping_binaries
         .iter()
@@ -555,8 +789,69 @@ pub fn check_all_exposed(
     auto_exposed
 }
 
+pub(crate) fn get_install_changes(
+    install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
+) -> HashMap<PackageName, InstallChange> {
+    install_transaction
+        .operations
+        .into_iter()
+        .map(|transaction| match transaction {
+            TransactionOperation::Install(package) => {
+                let pkg_name = package.package_record.name;
+
+                (
+                    pkg_name,
+                    InstallChange::Installed(package.package_record.version.version().clone()),
+                )
+            }
+            TransactionOperation::Change { old, new } => {
+                let old_pkg_version = old.repodata_record.package_record.version;
+                let new_pkg_version = new.package_record.version;
+
+                let pkg_name = new.package_record.name;
+
+                let same_base_version = old_pkg_version == new_pkg_version;
+
+                let change = if same_base_version {
+                    InstallChange::TransitiveUpgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
+                } else {
+                    InstallChange::Upgraded(
+                        old_pkg_version.version().clone(),
+                        new_pkg_version.version().clone(),
+                    )
+                };
+
+                (pkg_name, change)
+            }
+            TransactionOperation::Reinstall(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                (
+                    pkg_name,
+                    InstallChange::Reinstalled(
+                        package
+                            .repodata_record
+                            .package_record
+                            .version
+                            .version()
+                            .clone(),
+                    ),
+                )
+            }
+            TransactionOperation::Remove(package) => {
+                let pkg_name = package.repodata_record.package_record.name;
+                (pkg_name, InstallChange::Removed)
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::global::trampoline::Configuration;
+
     use super::*;
     use rstest::rstest;
     use std::str::FromStr;
@@ -647,10 +942,10 @@ mod tests {
         let path = PathBuf::from("/home/user/.pixi/bin");
         let bin_dir = BinDir(path.clone());
         let exposed_name = ExposedName::from_str(exposed_name).unwrap();
-        let executable_script_path = bin_dir.executable_script_path(&exposed_name);
+        let executable_script_path = bin_dir.executable_trampoline_path(&exposed_name);
 
         if cfg!(windows) {
-            let expected = format!("{}.bat", exposed_name);
+            let expected = format!("{}.exe", exposed_name);
             assert_eq!(executable_script_path, path.join(expected));
         } else {
             assert_eq!(executable_script_path, path.join(exposed_name.to_string()));
@@ -658,7 +953,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_expose_scripts_sync_status() {
+    async fn test_get_expose_scripts_sync_status_for_legacy_scripts() {
         let tmp_home_dir = tempfile::tempdir().unwrap();
         let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
         let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
@@ -686,7 +981,10 @@ mod tests {
         assert!(to_remove.is_empty());
         assert_eq!(to_add.len(), 1);
 
-        // Add a script to the bin directory
+        // Add a legacy script to the bin directory
+        // even if it's should be exposed and it's pointing to correct executable
+        // it is an old script
+        // we need to remove it and replace with trampoline
         let script_path = if cfg!(windows) {
             bin_dir.path().join("test.bat")
         } else {
@@ -727,18 +1025,83 @@ mod tests {
                 .unwrap();
         };
 
+        let (mut to_remove, mut to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+                .await
+                .unwrap();
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert!(to_add.pop().unwrap().to_string() == "test");
+
+        // Test to_remove when nothing should be exposed
+        let (mut to_remove, to_add) =
+            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+                .await
+                .unwrap();
+
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert!(to_add.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_expose_scripts_sync_status_for_trampolines() {
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        // Test empty
+        let exposed = IndexSet::new();
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
         assert!(to_add.is_empty());
 
-        // Test to_remove
-        let (to_remove, to_add) =
+        // Test with exposed
+        let mut exposed = IndexSet::new();
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("test").unwrap(),
+            "test".to_string(),
+        ));
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.is_empty());
+        assert_eq!(to_add.len(), 1);
+
+        // add a trampoline
+        let original_exe = if cfg!(windows) {
+            env_dir.path().join("bin/test.exe")
+        } else {
+            env_dir.path().join("bin/test")
+        };
+
+        let manifest = Configuration::new(original_exe, bin_dir.path().join("bin"), None);
+        let trampoline = Trampoline::new(
+            ExposedName::from_str("test").unwrap(),
+            bin_dir.path().to_path_buf(),
+            manifest,
+        );
+
+        trampoline.save().await.unwrap();
+
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+
+        assert!(to_remove.is_empty());
+        assert!(to_add.is_empty());
+
+        // Test to_remove when nothing should be exposed
+        let (mut to_remove, to_add) =
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
-        assert_eq!(to_remove.len(), 1);
+
+        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
         assert!(to_add.is_empty());
     }
 }

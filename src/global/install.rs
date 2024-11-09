@@ -1,24 +1,22 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
-    global::{BinDir, StateChange},
+    global::{
+        trampoline::{Configuration, Trampoline},
+        BinDir, StateChange,
+    },
+    prefix::Executable,
     prefix::Prefix,
 };
-use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
-    shell::{Shell, ShellEnum},
-};
-use regex::Regex;
-use std::path::Path;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
+
+use fs_err::tokio as tokio_fs;
 
 /// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
 ///
@@ -36,48 +34,23 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 pub(crate) fn script_exec_mapping<'a>(
     exposed_name: &ExposedName,
     entry_point: &str,
-    mut executables: impl Iterator<Item = &'a (String, PathBuf)>,
+    mut executables: impl Iterator<Item = &'a Executable>,
     bin_dir: &BinDir,
     env_dir: &EnvDir,
 ) -> miette::Result<ScriptExecMapping> {
     executables
-        .find(|(executable_name, _)| *executable_name == entry_point)
-        .map(|(_, executable_path)| ScriptExecMapping {
-            global_script_path: bin_dir.executable_script_path(exposed_name),
-            original_executable: executable_path.clone(),
+        .find(|executable| executable.name == entry_point)
+        .map(|executable| ScriptExecMapping {
+            global_script_path: bin_dir.executable_trampoline_path(exposed_name),
+            original_executable: executable.path.clone(),
         })
         .ok_or_else(|| {
             miette::miette!(
                 "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
                 env_dir.path().display(),
-                executables.map(|(name, _)| name).collect_vec()
+                executables.map(|exec| exec.name.clone()).collect_vec()
             )
         })
-}
-
-/// Create the environment activation script
-pub(crate) fn create_activation_script(
-    prefix: &Prefix,
-    shell: ShellEnum,
-) -> miette::Result<String> {
-    let activator =
-        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
-    let result = activator
-        .activation(ActivationVariables {
-            conda_prefix: None,
-            path: None,
-            path_modification_behavior: PathModificationBehavior::Prepend,
-        })
-        .into_diagnostic()?;
-
-    // Add a shebang on unix based platforms
-    let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
-    } else {
-        result.script.contents().into_diagnostic()?
-    };
-
-    Ok(script)
 }
 
 /// Mapping from the global script location to an executable in a package
@@ -88,136 +61,107 @@ pub struct ScriptExecMapping {
     pub original_executable: PathBuf,
 }
 
-/// Returns the string to add for all arguments passed to the script
-fn get_catch_all_arg(shell: &ShellEnum) -> &str {
-    match shell {
-        ShellEnum::CmdExe(_) => "%*",
-        ShellEnum::PowerShell(_) => "@args",
-        _ => "\"$@\"",
-    }
-}
-
-/// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable.
-pub(crate) async fn create_executable_scripts(
+/// Create the executables trampolines by running the activation scripts,
+/// recording this information in the trampoline metadata,
+/// and saving both the trampoline and the metadata.
+pub(crate) async fn create_executable_trampolines(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
-    shell: &ShellEnum,
-    activation_script: String,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
+    #[derive(Debug)]
     enum AddedOrChanged {
         Unchanged,
         Added,
         Changed,
+        Migrated,
     }
 
     let mut state_changes = StateChanges::default();
+
+    let activation_variables = prefix.run_activation().await?;
 
     for ScriptExecMapping {
         global_script_path,
         original_executable,
     } in mapped_executables
     {
-        let mut script = activation_script.clone();
-        shell
-            .run_command(
-                &mut script,
-                [
-                    format!(
-                        "\"{}\"",
-                        prefix.root().join(original_executable).to_string_lossy()
-                    )
-                    .as_str(),
-                    get_catch_all_arg(shell),
-                ],
-            )
-            .expect("should never fail");
+        let exe = prefix.root().join(original_executable);
+        let path = prefix
+            .root()
+            .join(original_executable.parent().ok_or_else(|| {
+                miette::miette!(
+                    "Cannot find parent directory of '{}'",
+                    original_executable.display()
+                )
+            })?);
+        let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
 
-        if matches!(shell, ShellEnum::CmdExe(_)) {
-            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the
-            // script and to prevent leaking environment variables into the
-            // parent shell (e.g. PATH would grow longer and longer)
-            script = format!(
-                "@echo off\nsetlocal\n{}\nset exitcode=%ERRORLEVEL%\nendlocal\nexit %exitcode%",
-                script.trim()
-            );
-        }
+        let json_path = Configuration::trampoline_configuration(global_script_path);
 
-        let added_or_changed = if global_script_path.exists() {
-            match tokio_fs::read_to_string(global_script_path).await {
-                Ok(previous_script) if previous_script != script => AddedOrChanged::Changed,
-                Ok(_) => AddedOrChanged::Unchanged,
-                Err(_) => AddedOrChanged::Changed,
-            }
-        } else {
-            AddedOrChanged::Added
-        };
-
-        if matches!(
-            added_or_changed,
-            AddedOrChanged::Changed | AddedOrChanged::Added
-        ) {
-            tokio_fs::write(&global_script_path, script)
+        // Check if an old bash script is present and remove it
+        let mut changed = if global_script_path.exists()
+            && !Trampoline::is_trampoline(global_script_path).await?
+        {
+            tokio_fs::remove_file(global_script_path)
                 .await
                 .into_diagnostic()?;
-        }
+            AddedOrChanged::Migrated
+        } else if !global_script_path.exists() {
+            AddedOrChanged::Added
+        } else {
+            AddedOrChanged::Unchanged
+        };
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(global_script_path, std::fs::Permissions::from_mode(0o755))
-                .into_diagnostic()?;
-        }
+        // Read previous metadata if it exists and update `changed` accordingly
+        if matches!(changed, AddedOrChanged::Unchanged) {
+            if json_path.exists() {
+                let previous_manifest_data_bytes = tokio_fs::read_to_string(&json_path)
+                    .await
+                    .into_diagnostic()?;
+
+                let previous_manifest_metadata: Configuration =
+                    serde_json::from_str(&previous_manifest_data_bytes).into_diagnostic()?;
+
+                changed = if previous_manifest_metadata == metadata {
+                    AddedOrChanged::Unchanged
+                } else {
+                    AddedOrChanged::Changed
+                };
+            } else {
+                changed = AddedOrChanged::Added;
+            }
+        };
 
         let executable_name = executable_from_path(global_script_path);
         let exposed_name = ExposedName::from_str(&executable_name)?;
-        match added_or_changed {
+
+        let global_script_path_parent = global_script_path.parent().ok_or_else(|| {
+            miette::miette!(
+                "Cannot find parent directory of '{}'",
+                original_executable.display()
+            )
+        })?;
+
+        let trampoline = Trampoline::new(
+            exposed_name.clone(),
+            global_script_path_parent.to_path_buf(),
+            metadata,
+        );
+
+        match changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
+                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
             }
-            AddedOrChanged::Changed => {
+            AddedOrChanged::Changed | AddedOrChanged::Migrated => {
+                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
     }
     Ok(state_changes)
-}
-
-/// Extracts the executable path from a script file.
-///
-/// This function reads the content of the script file and attempts to extract
-/// the path of the executable it references. It is used to determine
-/// the actual binary path from a wrapper script.
-pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Result<PathBuf> {
-    // Read the script file into a string
-    let script_content = tokio_fs::read_to_string(script).await.into_diagnostic()?;
-
-    // Compile the regex pattern
-    #[cfg(unix)]
-    const PATTERN: &str = r#""([^"]+)" "\$@""#;
-    // The pattern includes `"?` to also find old pixi global installations.
-    #[cfg(windows)]
-    const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
-
-    // Apply the regex to the script content
-    if let Some(caps) = RE.captures(&script_content) {
-        if let Some(matched) = caps.get(1) {
-            return Ok(PathBuf::from(matched.as_str()));
-        }
-    }
-    tracing::debug!(
-        "Failed to extract executable path from script {}",
-        script_content
-    );
-
-    // Return an error if the executable path couldn't be extracted
-    miette::bail!(
-        "Failed to extract executable path from script {}",
-        script.display()
-    )
 }
 
 /// Warn user on dangerous package installations, interactive yes no prompt
@@ -352,7 +296,7 @@ pub(crate) fn local_environment_matches_spec(
 pub async fn find_binary_by_name(
     prefix: &Prefix,
     package_name: &PackageName,
-) -> miette::Result<Option<(String, PathBuf)>> {
+) -> miette::Result<Option<Executable>> {
     let installed_packages = prefix.find_installed_packages(None).await?;
     for package in &installed_packages {
         let executables = prefix.find_executables(&[package.clone()]);
@@ -360,7 +304,7 @@ pub async fn find_binary_by_name(
         // Check if any of the executables match the package name
         if let Some(executable) = executables
             .iter()
-            .find(|(name, _)| name.as_str() == package_name.as_normalized())
+            .find(|executable| executable.name.as_str() == package_name.as_normalized())
         {
             return Ok(Some(executable.clone()));
         }
@@ -370,7 +314,6 @@ pub async fn find_binary_by_name(
 
 #[cfg(test)]
 mod tests {
-    use fs_err as fs;
     use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
@@ -486,6 +429,9 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
+        use crate::global::trampoline::GlobalBin;
+        use std::fs;
+        use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
 @SET "CONDA_PREFIX=C:\Users\USER\.pixi/envs\hyperfine"
@@ -495,7 +441,8 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_without_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let script_global_bin = GlobalBin::Script(script_path);
+        let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
             Path::new("C:\\Users\\USER\\.pixi/envs\\hyperfine\\bin/hyperfine.exe")
@@ -509,16 +456,20 @@ mod tests {
         let script_path = Path::new("pydoc.bat");
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_with_quote).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
-            Path::new("C:\\Users\\USER\\.pixi\\envs\\python\\Scripts/pydoc.exe")
+            Path::new("C:\\Users\\USER\\.pixi\\envs\\hyperfine\\bin/hyperfine.exe")
         );
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn test_extract_executable_from_script_unix() {
+        use std::{fs, path::Path};
+
+        use crate::global::trampoline::GlobalBin;
+
         let script = r#"#!/bin/sh
 export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
 export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
@@ -528,7 +479,8 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script).unwrap();
-        let executable_path = extract_executable_from_script(&script_path).await.unwrap();
+        let script_global_bin = GlobalBin::Script(script_path);
+        let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
             Path::new("/home/user/.pixi/envs/nushell/bin/nu")

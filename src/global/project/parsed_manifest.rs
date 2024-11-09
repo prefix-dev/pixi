@@ -403,8 +403,19 @@ mod tests {
         "#;
         let manifest = ParsedManifest::from_toml_str(contents);
 
+        fn remove_ansi_escape_sequences(input: &str) -> String {
+            use regex::Regex;
+            let re = Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]").unwrap();
+            re.replace_all(input, "").to_string()
+        }
+        // Because this error is using `fancy_display`, we need to remove the ANSI escape sequences
+        // before comparing the error message. In CI an interactive tty is not available so the result
+        // will be different when running it locally, it seems :shrug:
+        //
+        // Might be better for the error implement `Diagnostic`
         assert!(manifest.is_err());
-        assert_snapshot!(manifest.unwrap_err());
+        let err = format!("{}", manifest.unwrap_err());
+        assert_snapshot!(remove_ansi_escape_sequences(&err));
     }
 
     #[test]

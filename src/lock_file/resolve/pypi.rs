@@ -9,28 +9,21 @@ use std::{
     sync::Arc,
 };
 
-use distribution_types::{
-    BuiltDist, Diagnostic, Dist, FileLocation, HashPolicy, InstalledDist, InstalledRegistryDist,
-    Name, Resolution, ResolvedDist, SourceDist,
-};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
-use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
-use pep508_rs::{VerbatimUrl, VersionOrUrl};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    as_uv_req, isolated_names_to_packages, names_to_build_isolation,
-    pypi_options_to_index_locations, to_index_strategy,
+    as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
+    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use pypi_types::{HashAlgorithm, HashDigest, RequirementSource, VerbatimParsedUrl};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
@@ -38,15 +31,20 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, Overrides};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
+use uv_distribution_types::{
+    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
+    InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+};
 use uv_git::GitResolver;
-use uv_normalize::PackageName;
+use uv_install_wheel::linker::LinkMode;
+use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver, ResolverMarkers,
+    Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -107,7 +105,7 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 /// relative
 ///
 /// I think this has to do with the order of UV processing the requirements
-fn process_uv_path_url(path_url: &VerbatimUrl) -> Utf8TypedPathBuf {
+fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> Utf8TypedPathBuf {
     let given = path_url.given().expect("path should have a given url");
     if given.starts_with("file://") {
         let path = path_url
@@ -123,53 +121,10 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> Utf8TypedPathBuf {
     }
 }
 
-type CondaPythonPackages = HashMap<PackageName, (PixiRecord, PypiPackageIdentifier)>;
-
-/// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced
-/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
-fn convert_uv_requirements_to_pep508<'req>(
-    requires_dist: impl Iterator<Item = &'req pep508_rs::Requirement<VerbatimParsedUrl>>,
-) -> Vec<pep508_rs::Requirement> {
-    // Convert back top PEP508 Requirement<VerbatimUrl>
-    requires_dist
-        .map(|r| pep508_rs::Requirement {
-            name: r.name.clone(),
-            extras: r.extras.clone(),
-            version_or_url: r.version_or_url.clone().map(|v| match v {
-                VersionOrUrl::VersionSpecifier(v) => VersionOrUrl::VersionSpecifier(v),
-                VersionOrUrl::Url(u) => VersionOrUrl::Url(u.verbatim),
-            }),
-            marker: r.marker.clone(),
-            origin: r.origin.clone(),
-        })
-        .collect()
-}
-
-fn uv_pypi_types_requirement_to_pep508<'req>(
-    requirements: impl Iterator<Item = &'req pypi_types::Requirement>,
-) -> Vec<pep508_rs::Requirement> {
-    requirements
-        .map(|requirement| pep508_rs::Requirement {
-            name: requirement.name.clone(),
-            extras: requirement.extras.clone(),
-            version_or_url: match requirement.source.clone() {
-                RequirementSource::Registry { specifier, .. } => {
-                    Some(VersionOrUrl::VersionSpecifier(specifier))
-                }
-                RequirementSource::Url { url, .. }
-                | RequirementSource::Git { url, .. }
-                | RequirementSource::Directory { url, .. }
-                | RequirementSource::Path { url, .. } => Some(VersionOrUrl::Url(url)),
-            },
-            marker: requirement.marker.clone(),
-            origin: requirement.origin.clone(),
-        })
-        .collect()
-}
+type CondaPythonPackages = HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>;
 
 /// Prints the number of overridden uv PyPI package requests
-fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
+fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
     if !package_requests.is_empty() {
         // Print package requests in form of (PackageName, NumRequest)
         let package_requests = package_requests
@@ -187,7 +142,7 @@ fn print_overridden_requests(package_requests: &HashMap<PackageName, u32>) {
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
+    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[PypiRecord],
@@ -220,7 +175,13 @@ pub async fn resolve_pypi(
                 },
             )
         })
-        .map_ok(|(record, p)| (p.name.as_normalized().clone(), (record.clone(), p)))
+        .map_ok(|(record, p)| {
+            (
+                uv_normalize::PackageName::new(p.name.as_normalized().to_string())
+                    .expect("cannot convert to package name"),
+                (record.clone(), p),
+            )
+        })
         .collect::<Result<HashMap<_, _>, _>>()
         .into_diagnostic()
         .context("failed to extract python packages from conda metadata")?;
@@ -293,7 +254,11 @@ pub async fn resolve_pypi(
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &context.cache);
         let entries = client
-            .fetch(index_locations.flat_index())
+            .fetch(
+                index_locations
+                    .flat_indexes()
+                    .map(uv_distribution_types::Index::url),
+            )
             .await
             .into_diagnostic()
             .wrap_err("failed to query find-links locations")?;
@@ -322,6 +287,7 @@ pub async fn resolve_pypi(
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
     tracing::debug!("using build-isolation: {:?}", build_isolation);
 
+    let dependency_metadata = DependencyMetadata::default();
     let options = Options {
         index_strategy,
         ..Options::default()
@@ -330,20 +296,24 @@ pub async fn resolve_pypi(
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
-        &[],
+        Constraints::default(),
         &interpreter,
         &index_locations,
         &flat_index,
+        &dependency_metadata,
+        // TODO: could use this later to add static metadata
         &build_dispatch_in_memory_index,
         &git_resolver,
+        &context.capabilities,
         &context.in_flight,
         IndexStrategy::default(),
         &config_settings,
-        // BuildIsolation::Shared(&env),
         build_isolation,
         LinkMode::default(),
         &context.build_options,
+        &context.hash_strategy,
         None,
+        LowerBound::default(),
         context.source_strategy,
         context.concurrency,
     )
@@ -354,8 +324,10 @@ pub async fn resolve_pypi(
         .values()
         .map(|(_, p)| {
             // Create pep440 version from the conda version
-            let specifier = VersionSpecifier::from_version(Operator::Equal, p.version.clone())
-                .expect("invalid version specifier");
+            let specifier = uv_pep440::VersionSpecifier::from_version(
+                uv_pep440::Operator::Equal,
+                to_uv_version(&p.version)?,
+            )?;
 
             // Only one requirement source and we just assume that's a PyPI source
             let source = RequirementSource::Registry {
@@ -363,15 +335,16 @@ pub async fn resolve_pypi(
                 index: None,
             };
 
-            pypi_types::Requirement {
-                name: p.name.as_normalized().clone(),
+            Ok::<_, ConversionError>(uv_pypi_types::Requirement {
+                name: to_uv_normalize(p.name.as_normalized())?,
                 extras: vec![],
                 marker: Default::default(),
                 source,
                 origin: None,
-            }
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
@@ -382,24 +355,26 @@ pub async fn resolve_pypi(
             let (package_data, _) = record;
             // Fake being an InstalledRegistryDist
             let installed = InstalledRegistryDist {
-                name: package_data.name.clone(),
-                version: package_data.version.clone(),
+                name: to_uv_normalize(&package_data.name)?,
+                version: to_uv_version(&package_data.version)?,
                 // This is not used, so we can just set it to a random value
                 path: PathBuf::new().join("does_not_exist"),
+                cache_info: None,
             };
-            Preference::from_installed(&InstalledDist::Registry(installed))
+            Ok(Preference::from_installed(&InstalledDist::Registry(
+                installed,
+            )))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, ConversionError>>()
+        .into_diagnostic()?;
 
+    let resolver_env = ResolverEnvironment::specific(marker_environment.into());
     let manifest = Manifest::new(
         requirements,
         Constraints::from_requirements(constraints.iter().cloned()),
         Overrides::default(),
         Default::default(),
-        Preferences::from_iter(
-            preferences,
-            &ResolverMarkers::SpecificEnvironment(marker_environment.clone().into()),
-        ),
+        Preferences::from_iter(preferences, &resolver_env),
         None,
         None,
         uv_resolver::Exclusions::None,
@@ -407,16 +382,15 @@ pub async fn resolve_pypi(
     );
 
     let interpreter_version = interpreter.python_version();
-    let python_specifier =
-        VersionSpecifier::from_version(Operator::EqualStar, interpreter_version.clone())
-            .into_diagnostic()
-            .context("error creating version specifier for python version")?;
-    let requires_python =
-        uv_resolver::RequiresPython::from_specifiers(&VersionSpecifiers::from(python_specifier))
-            .into_diagnostic()
-            .context("error creating requires-python for solver")?;
-
-    let markers = ResolverMarkers::SpecificEnvironment(marker_environment.into());
+    let python_specifier = uv_pep440::VersionSpecifier::from_version(
+        uv_pep440::Operator::EqualStar,
+        interpreter_version.clone(),
+    )
+    .into_diagnostic()
+    .context("error creating version specifier for python version")?;
+    let requires_python = uv_resolver::RequiresPython::from_specifiers(
+        &uv_pep440::VersionSpecifiers::from(python_specifier),
+    );
 
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
@@ -426,11 +400,12 @@ pub async fn resolve_pypi(
         ),
         &flat_index,
         Some(&tags),
-        Some(&requires_python),
-        AllowedYanks::from_manifest(&manifest, &markers, options.dependency_mode),
+        &requires_python,
+        AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
         &context.build_options,
+        &context.capabilities,
     );
     let package_requests = Rc::new(RefCell::new(Default::default()));
     let provider = CondaResolverProvider {
@@ -448,10 +423,12 @@ pub async fn resolve_pypi(
         manifest,
         options,
         &context.hash_strategy,
-        markers,
+        resolver_env,
         &PythonRequirement::from_python_version(&interpreter, &python_version),
         &resolver_in_memory_index,
         &git_resolver,
+        &context.capabilities,
+        &index_locations,
         provider,
         EmptyInstalledPackages,
     )
@@ -480,6 +457,7 @@ pub async fn resolve_pypi(
         &build_dispatch,
         &registry_client,
         resolution,
+        &context.capabilities,
         context.concurrency.downloads,
     )
     .await
@@ -491,6 +469,7 @@ async fn lock_pypi_packages<'a>(
     build_dispatch: &BuildDispatch<'a>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
+    index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
@@ -538,14 +517,21 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 let metadata = registry_client
-                    .wheel_metadata(dist)
+                    .wheel_metadata(dist, index_capabilities)
                     .await
                     .expect("failed to get wheel metadata");
                 PypiPackageData {
-                    name: metadata.name,
-                    version: metadata.version,
-                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter()),
-                    requires_python: metadata.requires_python,
+                    name: pep508_rs::PackageName::new(metadata.name.to_string())
+                        .expect("cannot convert name"),
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .expect("cannot convert version"),
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r))
+                        .transpose()
+                        .into_diagnostic()?,
+                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
+                        .into_diagnostic()?,
                     editable: false,
                     location,
                     hash,
@@ -635,14 +621,17 @@ async fn lock_pypi_packages<'a>(
                 };
 
                 PypiPackageData {
-                    name: metadata.name,
-                    version: metadata.version,
-                    // TODO make another conversion function
-                    requires_dist: uv_pypi_types_requirement_to_pep508(
-                        metadata.requires_dist.iter(),
-                    ),
-                    requires_python: metadata.requires_python,
+                    name: to_normalize(&metadata.name).into_diagnostic()?,
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .expect("cannot convert version"),
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r))
+                        .transpose()
+                        .into_diagnostic()?,
                     location,
+                    requires_dist: to_requirements(metadata.requires_dist.iter())
+                        .into_diagnostic()?,
                     hash,
                     editable,
                 }

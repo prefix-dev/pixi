@@ -12,7 +12,7 @@ use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
 
@@ -169,7 +169,7 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         spec: &MatchSpec,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<PackageName> {
         // Determine the name of the package to add
         let (Some(name), _spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
@@ -200,7 +200,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(())
+        Ok(name)
     }
 
     /// Sets the platform of a specific environment in the manifest
@@ -472,19 +472,25 @@ impl FromStr for Mapping {
 pub enum ExposedType {
     #[default]
     All,
-    Subset(Vec<Mapping>),
+    Filter(Vec<PackageName>),
+    Mappings(Vec<Mapping>),
 }
 
 impl ExposedType {
-    pub fn from_mappings(mappings: Vec<Mapping>) -> Self {
-        match mappings.is_empty() {
-            true => Self::All,
-            false => Self::Subset(mappings),
+    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
+        if !mappings.is_empty() {
+            return Self::Mappings(mappings);
+        }
+
+        if filter.is_empty() {
+            Self::All
+        } else {
+            Self::Filter(filter)
         }
     }
 
     pub fn subset() -> Self {
-        Self::Subset(Default::default())
+        Self::Mappings(Default::default())
     }
 }
 

@@ -1,14 +1,14 @@
-use std::{
-    collections::HashMap,
-    convert::identity,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    sync::Arc,
+use crate::{
+    install_pypi,
+    lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
 };
-
 use dialoguer::theme::ColorfulTheme;
-use distribution_types::{InstalledDist, Name};
 use fancy_display::FancyDisplay;
+use fs_err as fs;
 use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -24,22 +24,25 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
+use rattler_lock::Package::{Conda, Pypi};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind},
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::Semaphore;
 use url::Url;
 
-use crate::{
-    build::{BuildContext, BuildReporter},
-    install_pypi,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
-    rlimit::try_increase_rlimit_to_sensible,
-    Project,
-};
+use crate::build::{BuildContext, BuildReporter};
+use uv_distribution_types::{InstalledDist, Name};
+
+use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -93,7 +96,7 @@ async fn prefix_location_changed(
         .report(false)
         .default(true)
         .interact_opt()
-        .map_or(None, identity);
+        .map_or(None, std::convert::identity);
     if user_value == Some(true) {
         await_in_progress("removing old environment", |_| {
             tokio::fs::remove_dir_all(environment_dir)
@@ -111,13 +114,22 @@ async fn prefix_location_changed(
     }
 }
 
+// Write the contents to the file at the given path.
+fn write_file<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    // Verify existence of parent
+    if let Some(parent) = path.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, contents)
+}
+
 /// Create the prefix location file.
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file_path = environment_dir
         .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
-    tracing::info!("Creating prefix file at: {}", prefix_file_path.display());
 
     let parent_dir = prefix_file_path.parent().ok_or_else(|| {
         miette::miette!(
@@ -129,18 +141,17 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     if parent_dir.exists() {
         let contents = parent_dir.to_string_lossy();
 
-        let path = Path::new(&prefix_file_path);
         // Read existing contents to determine if an update is necessary
-        if path.exists() {
-            let existing_contents = std::fs::read_to_string(path).into_diagnostic()?;
+        if prefix_file_path.exists() {
+            let existing_contents = fs::read_to_string(&prefix_file_path).into_diagnostic()?;
             if existing_contents == contents {
                 tracing::info!("No update needed for the prefix file.");
                 return Ok(());
             }
         }
 
-        // Write new contents to the prefix file
-        std::fs::write(path, &*contents).into_diagnostic()?;
+        write_file(&prefix_file_path, contents.as_bytes()).into_diagnostic()?;
+
         tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
@@ -151,43 +162,76 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     let history_file = environment_dir.join("conda-meta").join("history");
 
-    tracing::info!(
-        "Checking if history file exists: {}",
-        history_file.display()
-    );
+    tracing::info!("Verify history file exists: {}", history_file.display());
 
-    let binding = history_file.clone();
-    let parent = binding
-        .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
-
-    if parent.exists() && !history_file.exists() {
-        tracing::info!("Creating history file: {}", history_file.display());
-        std::fs::write(
-            history_file,
-            "// not relevant for pixi but for `conda run -p`",
-        )
-        .into_diagnostic()?;
-    }
-    Ok(())
+    write_file(
+        history_file,
+        "// not relevant for pixi but for `conda run -p`",
+    )
+    .into_diagnostic()
 }
 
+#[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockedEnvironmentHash(String);
+impl LockedEnvironmentHash {
+    pub(crate) fn from_environment(
+        environment: rattler_lock::Environment,
+        platform: Platform,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+
+        if let Some(packages) = environment.packages(platform) {
+            for package in packages {
+                // Always has the url or path
+                package.location().to_owned().to_string().hash(&mut hasher);
+
+                match package {
+                    // A select set of fields are used to hash the package
+                    Conda(pack) => {
+                        if let Some(sha) = pack.package_record().sha256 {
+                            sha.hash(&mut hasher);
+                        } else if let Some(md5) = pack.package_record().md5 {
+                            md5.hash(&mut hasher);
+                        }
+                    }
+                    Pypi(pack) => {
+                        pack.is_editable().hash(&mut hasher);
+                        pack.extras().hash(&mut hasher);
+                    }
+                }
+            }
+        }
+
+        LockedEnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+/// Information about the environment that was used to create the environment.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
+    /// The path to the manifest file that was used to create the environment.
     pub(crate) manifest_path: PathBuf,
+    /// The name of the environment.
     pub(crate) environment_name: String,
+    /// The version of the pixi that was used to create the environment.
     pub(crate) pixi_version: String,
+    /// The hash of the lock file that was used to create the environment.
+    pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
+}
+
+/// The path to the environment file in the `conda-meta` directory of the environment.
+fn environment_file_path(environment_dir: &Path) -> PathBuf {
+    environment_dir
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME)
 }
 /// Write information about the environment to a file in the environment
-/// directory. This can be useful for other tools that only know the environment
-/// directory to find the original project.
+/// directory. Used by the prefix updating to validate if it needs to be updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
-    let path = environment_dir
-        .join("conda-meta")
-        .join(consts::ENVIRONMENT_FILE_NAME);
+    let path = environment_file_path(environment_dir);
 
     let parent = path
         .parent()
@@ -204,10 +248,50 @@ pub(crate) fn write_environment_file(
     Ok(path)
 }
 
+/// Reading the environment file of the environment.
+/// Removing it if it's not valid.
+pub(crate) fn read_environment_file(
+    environment_dir: &Path,
+) -> miette::Result<Option<EnvironmentFile>> {
+    let path = environment_file_path(environment_dir);
+
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            tracing::debug!("Environment file not yet found at: {:?}", path);
+            return Ok(None);
+        }
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
+                path,
+                e
+            );
+            let _ = std::fs::remove_file(&path);
+            return Err(e).into_diagnostic();
+        }
+    };
+    let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
+        Ok(env_file) => env_file,
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
+                path,
+                e
+            );
+            let _ = std::fs::remove_file(&path);
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(env_file))
+}
+
 /// Runs the following checks to make sure the project is in a sane state:
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
+///     4. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
@@ -221,6 +305,39 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
             old_pixi_env_dir.display(),
             consts::ENVIRONMENTS_DIR
         );
+    }
+
+    ensure_pixi_directory_and_gitignore(project.pixi_dir().as_path()).await?;
+
+    Ok(())
+}
+
+/// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
+/// If the directory doesn't exist, create it.
+/// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
+    let gitignore_path = pixi_dir.join(".gitignore");
+
+    // Create the `.pixi/` directory if it doesn't exist
+    if !pixi_dir.exists() {
+        tokio::fs::create_dir_all(&pixi_dir)
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .pixi/ directory at {}",
+                pixi_dir.display()
+            ))?;
+    }
+
+    // Create or check the .gitignore file
+    if !gitignore_path.exists() {
+        tokio::fs::write(&gitignore_path, "*\n")
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .gitignore file at {}",
+                gitignore_path.display()
+            ))?;
     }
 
     Ok(())
@@ -267,6 +384,7 @@ pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
+    update_mode: UpdateMode,
 ) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
@@ -291,7 +409,7 @@ pub async fn update_prefix(
 
     // Get the locked environment from the lock-file.
     if !no_install {
-        lock_file.prefix(environment).await?;
+        lock_file.prefix(environment, update_mode).await?;
     }
     Ok(())
 }

@@ -660,20 +660,21 @@ impl Manifest {
         self.parsed.default_feature_mut()
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not
+    /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
     pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
         Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
-        self.parsed
-            .features
-            .get_mut(name)
-            .ok_or_else(|| miette!("Feature `{name}` does not exist"))
+        self.parsed.features.get_mut(name).ok_or_else(|| {
+            miette!(
+                "Feature {} does not exist",
+                consts::FEATURE_STYLE.apply_to(name)
+            )
+        })
     }
 
-    /// Returns the mutable feature with the given name or `None` if it does not
-    /// exist.
+    /// Returns the mutable feature with the given name
     pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
         self.parsed
             .features

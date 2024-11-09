@@ -1,3 +1,31 @@
+use barrier_cell::BarrierCell;
+use fancy_display::FancyDisplay;
+use futures::TryStreamExt;
+use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use indexmap::{IndexMap, IndexSet};
+use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use itertools::Itertools;
+use miette::Report;
+use miette::{Diagnostic, Error, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use pixi_config::get_cache_dir;
+use pixi_consts::consts;
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
+use pixi_progress::global_multi_progress;
+use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_uv_conversions::{
+    to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
+    ConversionError,
+};
+use pypi_mapping::{self, Reporter};
+use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{
+    Arch, Channel, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform, RepoDataRecord,
+};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::ChannelPriority;
+use std::cmp::PartialEq;
 use std::{
     collections::{HashMap, HashSet},
     future::{ready, Future},
@@ -6,42 +34,15 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use barrier_cell::BarrierCell;
-use fancy_display::FancyDisplay;
-use futures::{
-    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
-};
-use indexmap::IndexSet;
-use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
-use pixi_config::get_cache_dir;
-use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
-use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
-use pypi_mapping::{self};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    Arch, GenericVirtualPackage, MatchSpec, PackageName, ParseStrictness, Platform,
-};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
-use super::{
-    records_by_name::PixiRecordsByName,
-    reporter::{GatewayProgressReporter, SolveProgressBar},
-    update,
-    utils::IoConcurrencyLimit,
-    OutdatedEnvironments, PypiRecord, PypiRecordsByName, UvResolutionContext,
-};
+use crate::environment::{read_environment_file, LockedEnvironmentHash};
+use crate::lock_file::reporter::{GatewayProgressReporter, SolveProgressBar};
+use crate::lock_file::PypiRecord;
+use crate::repodata::Repodata;
 use crate::{
     activation::CurrentEnvVarBehavior,
     build::{BuildContext, GlobHashCache},
@@ -56,9 +57,12 @@ use crate::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         Environment, HasProjectRef,
     },
-    repodata::Repodata,
     Project,
 };
+
+use super::outdated::OutdatedEnvironments;
+use super::utils::IoConcurrencyLimit;
+use super::{PixiRecordsByName, PypiRecordsByName, UvResolutionContext};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -69,7 +73,7 @@ impl Project {
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update::update_lock_file(self, options).await
+        self::update_lock_file(self, options).await
     }
 }
 
@@ -127,6 +131,20 @@ pub struct LockFileDerivedData<'p> {
     pub glob_hash_cache: GlobHashCache,
 }
 
+/// The mode to use when updating a prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Validate if the prefix is up-to-date.
+    /// Using a fast and simple validation method.
+    /// Used for skipping the update if the prefix is already up-to-date, in activating commands.
+    /// Like `pixi shell` or `pixi run`.
+    QuickValidate,
+    /// Force a prefix install without running the short validation.
+    /// Used for updating the prefix when the lock-file likely out of date.
+    /// Like `pixi install` or `pixi update`.
+    Revalidate,
+}
+
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
     pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
@@ -137,22 +155,71 @@ impl<'p> LockFileDerivedData<'p> {
             .context("failed to write lock-file to disk")
     }
 
+    fn locked_environment_hash(
+        &self,
+        environment: &Environment<'p>,
+    ) -> miette::Result<LockedEnvironmentHash> {
+        let locked_environment = self
+            .lock_file
+            .environment(environment.name().as_str())
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
+        Ok(LockedEnvironmentHash::from_environment(
+            locked_environment,
+            environment.best_platform(),
+        ))
+    }
+
     /// Returns the up-to-date prefix for the given environment.
-    pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
-        // Save an environment file to the environment directory
+    pub async fn prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        update_mode: UpdateMode,
+    ) -> miette::Result<Prefix> {
+        // Check if the prefix is already up-to-date by validating the hash with the environment file
+        let hash = self.locked_environment_hash(environment)?;
+        if update_mode == UpdateMode::QuickValidate {
+            if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
+                if environment_file.environment_lock_file_hash == hash {
+                    tracing::info!(
+                        "Environment '{}' is up-to-date with lock file hash",
+                        environment.name().fancy_display()
+                    );
+                    return Ok(Prefix::new(environment.dir()));
+                }
+            } else {
+                tracing::debug!(
+                    "Environment file not found or parsable for '{}'",
+                    environment.name().fancy_display()
+                );
+            }
+        }
+
+        // Get the up-to-date prefix
+        let prefix = self.update_prefix(environment).await?;
+
+        // Save an environment file to the environment directory after the update.
+        // Avoiding writing the cache away before the update is done.
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
                 manifest_path: environment.project().manifest_path(),
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
+                environment_lock_file_hash: hash,
             },
         )?;
 
+        Ok(prefix)
+    }
+
+    /// Returns the up-to-date prefix for the given environment.
+    async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+        // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
 
+        tracing::info!("Updating prefix");
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
@@ -179,6 +246,7 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
+        // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = self
             .project
             .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
@@ -1729,7 +1797,7 @@ async fn spawn_solve_conda_environment_task(
 
             // Update the locked records by filtering out any source records. These will be
             // locked again every time.
-            let source_package_records: HashSet<PackageName> = source_repodata
+            let source_package_records: HashSet<rattler_conda_types::PackageName> = source_repodata
                 .iter()
                 .flat_map(|record| record.records.iter())
                 .map(|record| record.package_record.name.clone())
@@ -1831,7 +1899,7 @@ async fn spawn_extract_environment_task(
     }
 
     // Convert all the conda records to package identifiers.
-    let conda_package_identifiers = grouped_repodata_records.by_pypi_name();
+    let conda_package_identifiers = grouped_repodata_records.by_pypi_name().into_diagnostic()?;
 
     #[derive(Clone, Eq, PartialEq, Hash)]
     enum PackageName {
@@ -1858,12 +1926,16 @@ async fn spawn_extract_environment_task(
     let mut pypi_package_names = HashSet::new();
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
+        let uv_name = to_uv_normalize(&name).into_diagnostic()?;
         for req in reqs {
             for extra in req.extras().iter() {
-                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra.clone()))));
+                pypi_package_names.insert(PackageName::Pypi((
+                    uv_name.clone(),
+                    Some(to_uv_extra_name(extra).into_diagnostic()?),
+                )));
             }
         }
-        pypi_package_names.insert(PackageName::Pypi((name, None)));
+        pypi_package_names.insert(PackageName::Pypi((uv_name, None)));
     }
 
     // Compute the Pypi marker environment. Only do this if we have pypi
@@ -1888,7 +1960,8 @@ async fn spawn_extract_environment_task(
                 .by_name(&name)
                 .map(PackageRecord::Conda),
             PackageName::Pypi((name, extra)) => {
-                if let Some(found_record) = grouped_pypi_records.by_name(&name) {
+                let pep_name = to_normalize(&name).into_diagnostic()?;
+                if let Some(found_record) = grouped_pypi_records.by_name(&pep_name) {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
                     Some(PackageRecord::Conda(found_record))
@@ -1922,26 +1995,40 @@ async fn spawn_extract_environment_task(
             }
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies
-                let extras = extra.map(|extra| vec![extra]).unwrap_or_default();
+                let extras = extra
+                    .map(|extra| Ok::<_, ConversionError>(vec![to_extra_name(&extra)?]))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
+
                 for req in record.0.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
-                        if !req.evaluate_markers(marker_env, &extras) {
+                        // let marker_str = marker_env.to_string();
+                        let pep_marker = to_marker_environment(marker_env).into_diagnostic()?;
+
+                        if !req.evaluate_markers(&pep_marker, &extras) {
                             continue;
                         }
                     }
+                    let uv_name = to_uv_normalize(&req.name).into_diagnostic()?;
 
                     // Add the package to the queue
                     for extra in req.extras.iter() {
-                        if queued_names
-                            .insert(PackageName::Pypi((req.name.clone(), Some(extra.clone()))))
-                        {
-                            queue.push(PackageName::Pypi((req.name.clone(), Some(extra.clone()))));
+                        let extra_name = to_uv_extra_name(extra).into_diagnostic()?;
+                        if queued_names.insert(PackageName::Pypi((
+                            uv_name.clone(),
+                            Some(extra_name.clone()),
+                        ))) {
+                            queue.push(PackageName::Pypi((
+                                uv_name.clone(),
+                                Some(extra_name.clone()),
+                            )));
                         }
                     }
 
                     // Also add the dependency without any extras
-                    queue.push(PackageName::Pypi((req.name.clone(), None)));
+                    queue.push(PackageName::Pypi((uv_name, None)));
                 }
 
                 // Insert the record if it is not already present
@@ -2032,13 +2119,18 @@ async fn spawn_solve_pypi_task(
 
         let start = Instant::now();
 
+        let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+            .into_iter()
+            .map(|(name, requirement)| Ok((to_uv_normalize(name.as_normalized())?, requirement)))
+            .collect::<Result<_, ConversionError>>()
+            .into_diagnostic()?;
+
+        let index_map = IndexMap::from_iter(dependencies);
+
         let records = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
-            dependencies
-                .into_iter()
-                .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
-                .collect(),
+            index_map,
             system_requirements,
             &pixi_records,
             &locked_pypi_records,

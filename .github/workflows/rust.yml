@@ -128,35 +128,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/setup-cross-toolchain-action@v1
+      - uses: prefix-dev/setup-pixi@v0.8.1
         with:
-          target: ${{ matrix.target }}
-
+          cache: true
       - uses: Swatinem/rust-cache@v2
-
-      - name: Show version information (Rust, cargo, GCC)
-        shell: bash
-        run: |
-          gcc --version || true
-          rustup -V
-          rustup toolchain list
-          cargo -V
-          rustc -V
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
-
-      - uses: rui314/setup-mold@v1
-
-      - name: "Cargo nextest"
-        run: >-
-          cargo nextest run
-          --workspace
-          --retries 2
-          --no-default-features --features rustls-tls --features slow_integration_tests
-          --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow
+          workspaces: ". -> target-pixi"
+          key: ${{ hashFiles('pixi.lock') }}
+      - name: Test pixi
+        run: pixi run test-slow
 
   build:
     name: Build Binary | ${{ matrix.name }}

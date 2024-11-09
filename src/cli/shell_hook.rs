@@ -10,12 +10,12 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::project::HasProjectRef;
+use crate::activation::CurrentEnvVarBehavior;
+use crate::environment::update_prefix;
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
-    environment::update_prefix,
-    project::Environment,
+    activation::get_activator,
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    project::{Environment, HasProjectRef},
     Project,
 };
 
@@ -113,6 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
+        args.prefix_update_config.update_mode(),
     )
     .await?;
 
@@ -184,17 +185,5 @@ mod tests {
             .unwrap();
         assert!(script.contains(&format!("$env.{path_var_name} = ")));
         assert!(script.contains("$env.CONDA_PREFIX = "));
-    }
-
-    #[tokio::test]
-    async fn test_environment_json() {
-        let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = Project::discover().unwrap();
-        let environment = project.default_environment();
-        let json_env = generate_environment_json(&environment).await.unwrap();
-        assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\":\"default\""));
-        assert!(json_env.contains("\"CONDA_PREFIX\":"));
-        assert!(json_env.contains(&format!("\"{path_var_name}\":")));
     }
 }
