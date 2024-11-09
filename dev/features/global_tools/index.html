@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-global-tool-environment-installation" class="md-skip">
+        <a href="#pixi-global" class="md-skip">
           Skip to content
         </a>
       
@@ -1007,6 +1007,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-global-manifest" class="md-nav__link">
     <span class="md-ellipsis">
       The Global Manifest
@@ -1035,9 +1044,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exposed" class="md-nav__link">
+  <a href="#automatic-exposed" class="md-nav__link">
     <span class="md-ellipsis">
-      Exposed
+      Automatic Exposed
     </span>
   </a>
   
@@ -1622,6 +1631,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-global-manifest" class="md-nav__link">
     <span class="md-ellipsis">
       The Global Manifest
@@ -1650,9 +1668,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exposed" class="md-nav__link">
+  <a href="#automatic-exposed" class="md-nav__link">
     <span class="md-ellipsis">
-      Exposed
+      Automatic Exposed
     </span>
   </a>
   
@@ -1782,36 +1800,70 @@
   
 
 
-<h1 id="pixi-global-tool-environment-installation">Pixi Global Tool Environment Installation<a class="headerlink" href="#pixi-global-tool-environment-installation" title="Permanent link">#</a></h1>
+<h1 id="pixi-global">Pixi Global<a class="headerlink" href="#pixi-global" title="Permanent link">#</a></h1>
+<div style="text-align:center">
+ <video autoplay muted loop>
+  <source src="https://private-user-images.githubusercontent.com/30049909/384045396-f4bdc7d6-9abe-43f0-8103-8499c6d25ccb.webm?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzExNzI2NTIsIm5iZiI6MTczMTE3MjM1MiwicGF0aCI6Ii8zMDA0OTkwOS8zODQwNDUzOTYtZjRiZGM3ZDYtOWFiZS00M2YwLTgxMDMtODQ5OWM2ZDI1Y2NiLndlYm0_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjQxMTA5JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI0MTEwOVQxNzEyMzJaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT04NjUzYjg0ZmYyMGEwMGRjNzZlOTQ0NmVhYjViNGIxYTJiMTljODM3YTM1NmMxNTY4NGEyYzU5ZmMzN2ExOWUxJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.gRA74jW7K47x1n4K99lHeM3kOhwjhw5eDs5IjEW_khY" type="video/webm" />
+  <p>Pixi global demo</p>
+ </video>
+</div>
+
 <p>With <code>pixi global</code>, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system <code>PATH</code>, allowing you to run them from the command line.</p>
+<h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
+<p>Running the following command installs <a href="https://prefix-dev.github.io/rattler-build/latest/"><code>rattler-build</code></a> on your system.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>rattler-build
+</span></code></pre></div>
+<p>What's great about <code>pixi global</code> is that, by default, it isolates each package in its own environment, exposing only the necessary entry points.
+This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages.
+This behavior is quite similar to that of <a href="https://pipx.pypa.io/latest/installation/"><code>pipx</code></a>.</p>
+<p>However, there are times when you may want multiple dependencies in the same environment.
+For instance, while <code>ipython</code> is really useful on its own, it becomes much more useful when <code>numpy</code> and <code>matplotlib</code> are available when using it.</p>
+<p>Let's execute the following command:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ipython<span class="w"> </span>--with<span class="w"> </span>numpy<span class="w"> </span>--with<span class="w"> </span>matplotlib
+</span></code></pre></div>
+<p><code>numpy</code> exposes executables, but since it's added via <code>--with</code> it's executables are not being exposed.</p>
+<p>Importing <code>numpy</code> and <code>matplotlib</code> now works as expected.
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ipython<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import numpy; import matplotlib&#39;</span>
+</span></code></pre></div></p>
+<p>At some point, you might want to install multiple versions of the same package on your system.
+Since they will be all available on the system <code>PATH</code>, they need to be exposed under different names.</p>
+<p>Let's check out the following command:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="nv">py3</span><span class="o">=</span>python<span class="w"> </span><span class="s2">&quot;python=3.12&quot;</span>
+</span></code></pre></div></p>
+<p>By specifying <code>--expose</code> we specified that we want to expose the executable <code>python</code> under the name <code>py3</code>.
+The package <code>python</code> has more executables, but since we specified <code>--exposed</code> they are not auto-exposed.</p>
+<p>You can run <code>py3</code> to start the python interpreter.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>py3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(&#39;Hello World&#39;)&quot;</span>
+</span></code></pre></div></p>
 <h2 id="the-global-manifest">The Global Manifest<a class="headerlink" href="#the-global-manifest" title="Permanent link">#</a></h2>
 <p>Since <code>v0.33.0</code> pixi has a new manifest file that will be created in the global directory.
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.</p>
-<p>A simple version looks like this:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[envs.vim]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">vimdiff</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;vimdiff&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;vim&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">[envs.gh]</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">gh</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">gh</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;gh&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">[envs.python]</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10,&lt;3.11&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python310</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (3)!</span>
+<p>Running the commands from the section before results in the following manifest:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">[envs.rattler-build]</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rattler-build&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">[envs.ipython]</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">numpy</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">matplotlib</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython3&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="k">[envs.python]</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">py3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (2)!</span>
 </span></code></pre></div></p>
 <ol>
 <li>Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.</li>
-<li>The exposed binaries are the ones that will be available in the system path. <code>vim</code> has multiple and all of them are exposed.</li>
-<li>Here python is exposed as <code>python310</code> to avoid conflicts with other python installations. You can give it any name you want.</li>
+<li>The exposed binaries are the ones that will be available in the system path. In this case, <code>python</code> is exposed under the name <code>py3</code>.</li>
 </ol>
 <h3 id="manifest-locations">Manifest locations<a class="headerlink" href="#manifest-locations" title="Permanent link">#</a></h3>
-<p>The manifest can be found at the following locations depending on your operation system.</p>
+<p>The manifest can be found at the following locations depending on your operating system.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1893,72 +1945,57 @@ The manifest can be edited, synced, checked in to a version control system, and 
 <p>The channels are the conda channels that will be used to search for the packages.
 There is a priority to these, so the first one will have the highest priority, if a package is not found in that channel the next one will be used.
 For example, running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install --channel conda-forge --channel bioconda snakemake
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global install --channel conda-forge --channel bioconda snakemake
 </span></code></pre></div>
 Results in the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[envs.snakemake]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">]</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;snakemake&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[envs.snakemake]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">snakemake</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;snakemake&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div></p>
 <p>More information on channels can be found <a href="../../advanced/channel_priority/">here</a>.</p>
-<h3 id="exposed">Exposed<a class="headerlink" href="#exposed" title="Permanent link">#</a></h3>
-<p>The exposed binaries are the ones that will be available in the system <code>PATH</code>.
-This is useful when the package has multiple binaries, but you want to get a select few, or you want to expose it with a different name.
-For example, the <code>python</code> package has multiple binaries, but you only want to expose the interpreter as <code>py3</code>.
-Running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi global expose add --environment python py3=python3
-</span></code></pre></div>
-will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[envs.python]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10,&lt;3.11&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">py3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python3&quot;</span><span class="w"> </span><span class="p">}</span>
-</span></code></pre></div>
-Now you can run <code>py3</code> to start the python interpreter.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>py3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(&#39;Hello World&#39;)&quot;</span>
-</span></code></pre></div></p>
+<h3 id="automatic-exposed">Automatic Exposed<a class="headerlink" href="#automatic-exposed" title="Permanent link">#</a></h3>
 <p>There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
 Even if the binary name is only exposed through dependencies of the package
 For example, running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global install ansible
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi global install ansible
 </span></code></pre></div>
 will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[envs.ansible]</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ansible&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[envs.ansible]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ansible&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span></code></pre></div></p>
 <ol>
 <li>The <code>ansible</code> binary is exposed even though it is installed by a dependency of <code>ansible</code>, the <code>ansible-core</code> package.</li>
 </ol>
 <h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
 <p>Dependencies are the <strong>Conda</strong> packages that will be installed into your environment. For example, running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi global install &quot;python&lt;3.12&quot;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi global install &quot;python&lt;3.12&quot;
 </span></code></pre></div>
 creates the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[envs.vim]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&lt;3.12&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># ...</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[envs.vim]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&lt;3.12&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># ...</span>
 </span></code></pre></div>
 Typically, you'd specify just the tool you're installing, but you can add more packages if needed.
 Defining the environment to install into will allow you to add multiple dependencies at once.
 For example, running:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>git<span class="w"> </span>vim<span class="w"> </span>python
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>git<span class="w"> </span>vim<span class="w"> </span>python
 </span></code></pre></div>
 will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[envs.my-env]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># ...</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[envs.my-env]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># ...</span>
 </span></code></pre></div></p>
 <p>You can <code>add</code> a dependency to an existing environment by running:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
 </span></code></pre></div>
 This will be added as dependencies to the <code>my-env</code> environment but won't auto expose the binaries from the new packages.</p>
 <p>You can <code>remove</code> dependencies by running:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
 </span></code></pre></div></p>
 <h3 id="trampolines">Trampolines<a class="headerlink" href="#trampolines" title="Permanent link">#</a></h3>
 <p>To increase efficiency, <code>pixi</code> uses <em>trampolines</em>—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.</p>
@@ -1966,57 +2003,57 @@ This will be added as dependencies to the <code>my-env</code> environment but wo
 <ul>
 <li>Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., <code>python.json</code>), contains key information about how the environment should be set up. The configuration file is stored in <code>.pixi/bin/trampoline_configuration</code>.</li>
 <li>Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.</li>
-<li>When installing a new binary, a new trampoline is placed in the <code>.pixi/bin</code> directory and is hardlinked to the <code>.pixi/bin/trampoline_configuration/trampoline_bin</code>. This optimizes storage space and avoids duplication of the same trampoline.</li>
+<li>When installing a new binary, a new trampoline is placed in the <code>.pixi/bin</code> directory and is hard-linked to the <code>.pixi/bin/trampoline_configuration/trampoline_bin</code>. This optimizes storage space and avoids duplication of the same trampoline.</li>
 </ul>
 <h3 id="example-adding-a-series-of-tools-at-once">Example: Adding a series of tools at once<a class="headerlink" href="#example-adding-a-series-of-tools-at-once" title="Permanent link">#</a></h3>
 <p>Without specifying an environment, you can add multiple tools at once:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
 </span></code></pre></div>
 This command generates the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[envs.pixi-pack]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">dependencies</span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-pack&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">[envs.rattler-build]</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rattler-build&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[envs.pixi-pack]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">dependencies</span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-pack&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="k">[envs.rattler-build]</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rattler-build&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 Creating two separate non-interfering environments, while exposing only the minimum required binaries.</p>
 <h3 id="example-creating-a-data-science-sandbox-environment">Example: Creating a Data Science Sandbox Environment<a class="headerlink" href="#example-creating-a-data-science-sandbox-environment" title="Permanent link">#</a></h3>
 <p>You can create an environment with multiple tools using the following command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>--expose<span class="w"> </span>jupyter<span class="w"> </span>--expose<span class="w"> </span>ipython<span class="w"> </span>jupyter<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>matplotlib<span class="w"> </span>ipython
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>--expose<span class="w"> </span>jupyter<span class="w"> </span>--expose<span class="w"> </span>ipython<span class="w"> </span>jupyter<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>matplotlib<span class="w"> </span>ipython
 </span></code></pre></div>
 This command generates the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[envs.data-science]</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;jupyter&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[envs.data-science]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;jupyter&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 In this setup, both <code>jupyter</code> and <code>ipython</code> are exposed from the <code>data-science</code> environment, allowing you to run:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>&gt;<span class="w"> </span>ipython
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Or</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>&gt;<span class="w"> </span>jupyter<span class="w"> </span>lab
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>&gt;<span class="w"> </span>ipython
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Or</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>&gt;<span class="w"> </span>jupyter<span class="w"> </span>lab
 </span></code></pre></div>
 These commands will be available globally, making it easy to access your preferred tools without switching environments.</p>
 <h3 id="example-install-packages-for-a-different-platform">Example: Install packages for a different platform<a class="headerlink" href="#example-install-packages-for-a-different-platform" title="Permanent link">#</a></h3>
 <p>You can install packages for a different platform using the <code>--platform</code> flag.
 This is useful when you want to install packages for a different platform, such as <code>osx-64</code> packages on <code>osx-arm64</code>.
 For example, running this on <code>osx-arm64</code>:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>python
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>python
 </span></code></pre></div>
 will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[envs.python]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># ...</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[envs.python]</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># ...</span>
 </span></code></pre></div></p>
 <h2 id="potential-future-features">Potential Future Features<a class="headerlink" href="#potential-future-features" title="Permanent link">#</a></h2>
 <h3 id="pypi-support">PyPI support<a class="headerlink" href="#pypi-support" title="Permanent link">#</a></h3>
 <p>We could support packages from PyPI via a command like this:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi global install --pypi flask
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi global install --pypi flask
 </span></code></pre></div>
 <h3 id="lock-file">Lock file<a class="headerlink" href="#lock-file" title="Permanent link">#</a></h3>
 <p>A lock file is less important for global tools.
@@ -2037,8 +2074,8 @@ At the very least we should put the manifest into its own folder like <code>~/.p
 When this flag is set, <code>CONDA_PREFIX</code> and <code>PATH</code> will not be set when running the exposed executable.
 This is useful when installing Python package managers or shells.</p>
 <p>Assuming that this needs to be set per mapping, one way to expose this functionality would be to allow the following:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[envs.pip.exposed]</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">pip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">executable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pip&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">activation</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[envs.pip.exposed]</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">pip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">executable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pip&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">activation</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 
 
