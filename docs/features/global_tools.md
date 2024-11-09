@@ -1,39 +1,93 @@
 # Pixi Global
 
+<div style="text-align:center">
+ <video autoplay muted loop>
+  <source src="https://private-user-images.githubusercontent.com/30049909/384045396-f4bdc7d6-9abe-43f0-8103-8499c6d25ccb.webm?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzExNzI2NTIsIm5iZiI6MTczMTE3MjM1MiwicGF0aCI6Ii8zMDA0OTkwOS8zODQwNDUzOTYtZjRiZGM3ZDYtOWFiZS00M2YwLTgxMDMtODQ5OWM2ZDI1Y2NiLndlYm0_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjQxMTA5JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI0MTEwOVQxNzEyMzJaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT04NjUzYjg0ZmYyMGEwMGRjNzZlOTQ0NmVhYjViNGIxYTJiMTljODM3YTM1NmMxNTY4NGEyYzU5ZmMzN2ExOWUxJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.gRA74jW7K47x1n4K99lHeM3kOhwjhw5eDs5IjEW_khY" type="video/webm" />
+  <p>Pixi global demo</p>
+ </video>
+</div>
+
+
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
 
+
+## Basic Usage
+
+Running the following command installs [`rattler-build`](https://prefix-dev.github.io/rattler-build/latest/) on your system.
+
+```bash
+pixi global install rattler-build
+```
+
+What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points.
+This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages.
+This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
+
+However, there are times when you may want multiple dependencies in the same environment.
+For instance, while `ipython` is really useful on its own, it becomes much more useful when `numpy` and `matplotlib` are available when using it.
+
+Let's execute the following command:
+
+```bash
+pixi global install ipython --with numpy --with matplotlib
+```
+
+`numpy` exposes executables, but since it's added via `--with` it's executables are not being exposed.
+
+Importing `numpy` and `matplotlib` now works as expected.
+```bash
+ipython -c 'import numpy; import matplotlib'
+```
+
+At some point, you might want to install multiple versions of the same package on your system.
+Since they will be all available on the system `PATH`, they need to be exposed under different names.
+
+Let's check out the following command:
+```bash
+pixi global install --expose py3=python "python=3.12"
+```
+
+By specifying `--expose` we specified that we want to expose the executable `python` under the name `py3`.
+The package `python` has more executables, but since we specified `--exposed` they are not auto-exposed.
+
+You can run `py3` to start the python interpreter.
+```shell
+py3 -c "print('Hello World')"
+```
+
 ## The Global Manifest
+
 Since `v0.33.0` pixi has a new manifest file that will be created in the global directory.
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.
 
-
-A simple version looks like this:
+Running the commands from the section before results in the following manifest:
 ```toml
-[envs.vim]
-channels = ["conda-forge"]
-dependencies = { vim = "*" } # (1)!
-exposed = { vimdiff = "vimdiff", vim = "vim" } # (2)!
+version = 1
 
-[envs.gh]
+[envs.rattler-build]
 channels = ["conda-forge"]
-dependencies = { gh = "*" }
-exposed = { gh = "gh" }
+dependencies = { rattler-build = "*" }
+exposed = { rattler-build = "rattler-build" }
+
+[envs.ipython]
+channels = ["conda-forge"]
+dependencies = { ipython = "*", numpy = "*", matplotlib = "*" }
+exposed = { ipython = "ipython", ipython3 = "ipython3" }
 
 [envs.python]
 channels = ["conda-forge"]
-dependencies = { python = ">=3.10,<3.11" }
-exposed = { python310 = "python" } # (3)!
+dependencies = { python = "3.12.*" } # (1)!
+exposed = { py3 = "python" } # (2)!
 ```
 
 1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
-2. The exposed binaries are the ones that will be available in the system path. `vim` has multiple and all of them are exposed.
-3. Here python is exposed as `python310` to avoid conflicts with other python installations. You can give it any name you want.
+2. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
 
 ### Manifest locations
 
-The manifest can be found at the following locations depending on your operation system.
+The manifest can be found at the following locations depending on your operating system.
 
 === "Linux"
 
@@ -77,25 +131,7 @@ exposed = { snakemake = "snakemake" }
 
 More information on channels can be found [here](../advanced/channel_priority.md).
 
-### Exposed
-The exposed binaries are the ones that will be available in the system `PATH`.
-This is useful when the package has multiple binaries, but you want to get a select few, or you want to expose it with a different name.
-For example, the `python` package has multiple binaries, but you only want to expose the interpreter as `py3`.
-Running:
-```
-pixi global expose add --environment python py3=python3
-```
-will create the following entry in the manifest:
-```toml
-[envs.python]
-channels = ["conda-forge"]
-dependencies = { python = ">=3.10,<3.11" }
-exposed = { py3 = "python3" }
-```
-Now you can run `py3` to start the python interpreter.
-```shell
-py3 -c "print('Hello World')"
-```
+### Automatic Exposed
 
 There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
 Even if the binary name is only exposed through dependencies of the package
@@ -158,7 +194,7 @@ When you execute a global install binary, a trampoline performs the following se
 
 * Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., `python.json`), contains key information about how the environment should be set up. The configuration file is stored in `.pixi/bin/trampoline_configuration`.
 * Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
-* When installing a new binary, a new trampoline is placed in the `.pixi/bin` directory and is hardlinked to the `.pixi/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
+* When installing a new binary, a new trampoline is placed in the `.pixi/bin` directory and is hard-linked to the `.pixi/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
 
 
 ### Example: Adding a series of tools at once
