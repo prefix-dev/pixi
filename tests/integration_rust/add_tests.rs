@@ -544,7 +544,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()
@@ -559,7 +559,7 @@ async fn pinning_dependency() {
     let foobar_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("foobar")
         .cloned()
@@ -574,7 +574,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()

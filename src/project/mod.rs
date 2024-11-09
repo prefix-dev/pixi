@@ -911,14 +911,18 @@ impl Project {
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
+        let affect_environment_and_platforms = affect_environment_and_platforms
+            .iter()
+            .filter_map(|(env, platform)| {
+                updated_lock_file.environment(&env).map(|e| (e, *platform))
+            })
+            .collect_vec();
+
         let pypi_records = affect_environment_and_platforms
-            .into_iter()
             // Get all the conda and pypi records for the combination of environments and
             // platforms
-            .filter_map(|(env, platform)| {
-                let locked_env = updated_lock_file.environment(&env)?;
-                locked_env.pypi_packages_for_platform(platform)
-            })
+            .iter()
+            .filter_map(|(env, platform)| env.pypi_packages_for_platform(platform.clone()))
             .flatten()
             .collect_vec();
 

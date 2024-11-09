@@ -1508,29 +1508,17 @@ mod tests {
     async fn test_failing_satisiability(
         #[files("tests/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
-        let name = manifest_path
-            .parent()
-            .and_then(Path::file_stem)
-            .and_then(OsStr::to_str)
-            .unwrap();
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        insta::glob!(
-            "../../tests/data/non-satisfiability",
-            "*/pixi.toml",
-            |path| {
-                let handle = Handle::current();
-                let project = Project::from_path(path).unwrap();
-                let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-                let err = handle
-                    .block_on(verify_lockfile_satisfiability(&project, &lock_file))
-                    .expect_err("expected failing satisfiability");
+        let project = Project::from_path(&manifest_path).unwrap();
+        let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
+        let err = verify_lockfile_satisfiability(&project, &lock_file)
+            .await
+            .expect_err("expected failing satisfiability");
 
-                let mut s = String::new();
-                report_handler.render_report(&mut s, &err).unwrap();
-                insta::assert_snapshot!(s);
-            }
-        );
+        let mut s = String::new();
+        report_handler.render_report(&mut s, &err).unwrap();
+        insta::assert_snapshot!(s);
     }
 
     #[test]

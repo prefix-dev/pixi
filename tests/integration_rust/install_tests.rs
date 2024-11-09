@@ -19,28 +19,8 @@ use std::{
     str::FromStr,
 };
 
-use common::{LockFileExt, PixiControl};
-use pixi::{
-    cli::{
-        cli_config::{PrefixUpdateConfig, ProjectConfig},
-        run,
-        run::Args,
-        LockFileUsageArgs,
-    },
-    environment::LockFileUsage,
-    Project,
-};
-use pixi_config::{Config, DetachedEnvironments};
-use pixi_consts::consts;
-use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use uv_python::PythonEnvironment;
-
-use crate::common::{
-    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
-    package_database::{Package, PackageDatabase},
-};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
