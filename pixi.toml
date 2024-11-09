@@ -15,20 +15,22 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 python = "3.12.*"
 
 [tasks]
-build = "cargo build --release"
 build-debug = "cargo build"
+build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 install = "cargo install --path . --locked"
-install-as = { cmd = "python scripts/install.py", depends-on = ["build"] }
+install-as = { cmd = "python scripts/install.py", depends-on = [
+  "build-release",
+] }
 pypi-proxy = "python scripts/pypi-proxy.py"
 release = "python scripts/release.py"
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
-  "build",
+  "build-release",
 ] }
-test = "cargo nextest run --workspace"
-test-all-fast = { depends-on = ["test", "test-integration-fast"] }
-test-export = "python tests/scripts/test-export.sh"
-test-workspace = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
+test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
+test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
+test-fast = "cargo nextest run --workspace"
+test-slow = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 
@@ -42,22 +44,24 @@ rich = ">=13.7.1,<14"
 tomli-w = ">=1.0,<2"
 
 [feature.pytest.tasks]
+test-common-wheels = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", depends-on = [
+  "build-release",
+] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
-test-common-wheels-dev = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", depends-on = [
-  "build",
-] }
 test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose tests/integration_python"
-test-integration-dev = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration_python", depends-on = [
-  "build",
-] }
 test-integration-fast = { cmd = "pytest -m 'not slow' --pixi-build=debug --numprocesses=auto --durations=10 tests/integration_python", depends-on = [
   "build-debug",
+] }
+test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=10 tests/integration_python", depends-on = [
+  "build-release",
 ] }
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
-test-specific-test = { cmd = "pytest", depends-on = ["build"] }
-update-test-channels = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
+test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
+# Update one test channel by passing on key of `mappings.toml`
+# e.g. "trampoline/trampoline_2.yaml"
+update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
 
 [feature.dev.dependencies]
 # Needed for the citation
@@ -135,6 +139,10 @@ python-build = ">=1.2.2,<2"
 [feature.pypi-gen.tasks]
 pypi-gen-indexes = "python tests/data/pypi-indexes/generate-indexes.py"
 
+[feature.micromamba]
+dependencies = { micromamba = "*" }
+tasks = { test-export = "bash tests/scripts/test-export.sh" }
+
 [environments]
 default = { features = [
   "build",
@@ -154,3 +162,4 @@ schema = { features = [
   "schema",
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
+test-export = { features = ["micromamba"], no-default-feature = true }
