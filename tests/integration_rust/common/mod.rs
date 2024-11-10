@@ -312,6 +312,7 @@ impl PixiControl {
                     revalidate: false,
                 },
                 editable: false,
+                location: None,
             },
         }
     }

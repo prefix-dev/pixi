@@ -257,6 +257,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )?;
         }
         project.save()?;

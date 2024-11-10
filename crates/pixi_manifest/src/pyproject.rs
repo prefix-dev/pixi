@@ -5,7 +5,7 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, Project};
+use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 use thiserror::Error;
@@ -165,11 +165,10 @@ impl PyProjectManifest {
             return Some(
                 pyproject_authors
                     .iter()
-                    .filter_map(|contact| match (contact.name(), contact.email()) {
-                        (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
-                        (Some(name), None) => Some(name.to_string()),
-                        (None, Some(email)) => Some(email.to_string()),
-                        (None, None) => None,
+                    .map(|contact| match contact {
+                        Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
+                        Contact::Name { name } => name.clone(),
+                        Contact::Email { email } => email.clone(),
                     })
                     .collect(),
             );
@@ -190,6 +189,11 @@ impl PyProjectManifest {
     /// table
     fn optional_dependencies(&self) -> Option<IndexMap<String, Vec<Requirement>>> {
         self.project().and_then(|p| p.optional_dependencies.clone())
+    }
+
+    /// Returns dependency groups from the `[dependency-groups]` table
+    fn dependency_groups(&self) -> Option<Result<IndexMap<String, Vec<Requirement>>, Pep735Error>> {
+        self.dependency_groups.as_ref().map(|dg| dg.resolve())
     }
 
     /// Builds a list of pixi environments from pyproject groups of extra
@@ -226,6 +230,8 @@ impl PyProjectManifest {
 pub enum PyProjectToManifestError {
     #[error("Unsupported pep508 requirement: '{0}'")]
     DependencyError(Requirement, #[source] DependencyError),
+    #[error(transparent)]
+    DependencyGroupError(#[from] Pep735Error),
 }
 
 impl TryFrom<PyProjectManifest> for ParsedManifest {
@@ -289,32 +295,37 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
             }
         }
 
-        // For each extra group, create a feature of the same name if it does not exist,
-        // and add pypi dependencies from project.optional-dependencies,
-        // filtering out self-references
-        if let Some(extras) = item.optional_dependencies() {
-            let project_name = item.package_name();
-            for (extra, reqs) in extras {
-                let feature_name = FeatureName::Named(extra.to_string());
-                let target = manifest
-                    .features
-                    .entry(feature_name.clone())
-                    .or_insert_with(move || Feature::new(feature_name))
-                    .targets
-                    .default_mut();
-                for requirement in reqs.iter() {
-                    // filter out any self references in groups of extra dependencies
-                    if project_name.as_ref() != Some(&requirement.name) {
-                        target
-                            .try_add_pep508_dependency(
-                                requirement,
-                                None,
-                                DependencyOverwriteBehavior::Error,
-                            )
-                            .map_err(|err| {
-                                PyProjectToManifestError::DependencyError(requirement.clone(), err)
-                            })?;
-                    }
+        // Define an iterator over both optional dependencies and dependency groups
+        let groups = item
+            .optional_dependencies()
+            .into_iter()
+            .chain(item.dependency_groups().transpose()?)
+            .flat_map(|map| map.into_iter());
+
+        // For each group of optional dependency or dependency group,
+        // create a feature of the same name if it does not exist,
+        // and add pypi dependencies, filtering out self-references in optional dependencies
+        let project_name = item.package_name();
+        for (group, reqs) in groups {
+            let feature_name = FeatureName::Named(group.to_string());
+            let target = manifest
+                .features
+                .entry(feature_name.clone())
+                .or_insert_with(move || Feature::new(feature_name))
+                .targets
+                .default_mut();
+            for requirement in reqs.iter() {
+                // filter out any self references in groups of extra dependencies
+                if project_name.as_ref() != Some(&requirement.name) {
+                    target
+                        .try_add_pep508_dependency(
+                            requirement,
+                            None,
+                            DependencyOverwriteBehavior::Error,
+                        )
+                        .map_err(|err| {
+                            PyProjectToManifestError::DependencyError(requirement.clone(), err)
+                        })?;
                 }
             }
         }
@@ -534,6 +545,7 @@ mod tests {
                 &FeatureName::Default,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )
             .unwrap();
 
@@ -557,6 +569,7 @@ mod tests {
                 &FeatureName::Named("test".to_string()),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )
             .unwrap();
         assert!(manifest

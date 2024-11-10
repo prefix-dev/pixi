@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use indexmap::IndexMap;
 use pixi_manifest::FeatureName;
 
@@ -37,18 +37,28 @@ use crate::{
 ///
 /// Mixing `--platform` and `--build`/`--host` flags is supported
 ///
-/// The `--pypi` option will add the package as a pypi dependency. This can not
+/// The `--pypi` option will add the package as a pypi dependency. This cannot
 /// be mixed with the conda dependencies
 /// - `pixi add --pypi boto3`
 /// - `pixi add --pypi "boto3==version"
 ///
 /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native
-/// `project.optional-dependencies` table if a feature is specified:
+/// `dependency-groups` table if a feature is specified:
 /// - `pixi add --pypi boto3` will add `boto3` to the `project.dependencies`
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
-///   `project.dependencies.aws` array
+///   `dependency-groups.aws` array
+///
+/// Note that if `--platform` or `--editable` are specified, the pypi dependency
+/// will be added to the `tool.pixi.pypi-dependencies` table instead as native
+/// arrays have no support for platform-specific or editable dependencies.
+///
+/// Specifying `--location` to `pixi` will force adding the pypi dependency
+/// to the `tool.pixi.pypi-dependencies` table. Specifying `--location` to
+/// `optional-dependencies` will force adding the pypi dependency
+/// to the `project.optional-dependencies` table (this will only have an effect
+/// if a non-default feature is also specified).
 ///
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
@@ -73,6 +83,29 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    /// Where to add the pypi requirement to the manifest
+    #[arg(long, requires = "pypi")]
+    pub location: Option<PypiDependencyLocation>,
+}
+
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum PypiDependencyLocation {
+    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
+    Pixi,
+    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    OptionalDependencies,
+}
+
+impl From<PypiDependencyLocation> for pixi_manifest::PypiDependencyLocation {
+    fn from(val: PypiDependencyLocation) -> Self {
+        match val {
+            PypiDependencyLocation::Pixi => pixi_manifest::PypiDependencyLocation::Pixi,
+            PypiDependencyLocation::OptionalDependencies => {
+                pixi_manifest::PypiDependencyLocation::OptionalDependencies
+            }
+        }
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -112,6 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: add dry_run logic to add
     let dry_run = false;
 
+    let location = args.location.map(|l| l.into());
     let update_deps = project
         .update_dependencies(
             match_specs,
@@ -120,6 +154,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.dependency_config.feature,
             &args.dependency_config.platforms,
             args.editable,
+            &location,
             dry_run,
         )
         .await?;
