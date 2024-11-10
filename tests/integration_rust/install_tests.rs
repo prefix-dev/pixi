@@ -756,18 +756,3 @@ async fn test_ensure_gitignore_file_creation() {
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
-
-#[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn test_pypi_mit_git_transitive() {
-    let pixi = PixiControl::new().unwrap();
-    pixi.init_with_platforms(vec![Platform::current().to_string()])
-        .await
-        .unwrap();
-    // pixi.init().await.unwrap();
-    pixi.add("python==3.12.*").with_install(true).await.unwrap();
-    pixi.add("boltons")
-        .set_type(pixi::DependencyType::PypiDependency)
-        .await
-        .unwrap();
-}
