@@ -2,7 +2,7 @@
 
 <div style="text-align:center">
  <video autoplay muted loop>
-  <source src="https://private-user-images.githubusercontent.com/30049909/384045396-f4bdc7d6-9abe-43f0-8103-8499c6d25ccb.webm?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzExODY1NTAsIm5iZiI6MTczMTE4NjI1MCwicGF0aCI6Ii8zMDA0OTkwOS8zODQwNDUzOTYtZjRiZGM3ZDYtOWFiZS00M2YwLTgxMDMtODQ5OWM2ZDI1Y2NiLndlYm0_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjQxMTA5JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI0MTEwOVQyMTA0MTBaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT0yNGJkOWI3ODY4OThlMTVhM2YzMDYyMDRlNzIwMzQ1NTI0ODgwZGM0MGQyZjMxM2FhY2Y2ZDIwYTRlZTY0OTlmJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.ImmcMaOhPA1fQgZ7Rc8hSR6BcBYLX1NcWq07UgwX4dU" type="video/webm" />
+  <source src="https://github.com/user-attachments/assets/e94dc06f-75ae-4aa0-8830-7cb190d3f367" type="video/webm" />
   <p>Pixi global demo</p>
  </video>
 </div>
