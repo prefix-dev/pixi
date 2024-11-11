@@ -8,9 +8,11 @@ use super::AddRemoveArgs;
 
 pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Result<()> {
     // Add the channels to the manifest
-    project
-        .manifest
-        .add_channels(args.prioritized_channels(), &args.feature_name())?;
+    project.manifest.add_channels(
+        args.prioritized_channels(),
+        &args.feature_name(),
+        args.prepend,
+    )?;
 
     // TODO: Update all environments touched by the features defined.
     update_prefix(
