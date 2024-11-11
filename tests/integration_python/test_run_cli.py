@@ -159,12 +159,14 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
 
 # only run on linux
 @pytest.mark.slow
-@pytest.mark.skipif(sys.platform != "linux", reason="Only run on linux")
 def test_pypi_git_deps(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     test_data = Path(__file__).parent.parent / "data/pixi_tomls/pip_git_dep.toml"
+    manifest = tmp_path.joinpath("pixi.toml")
+    toml = test_data.read_text()
+    manifest.write_text(toml)
 
     # Run the installation
     verify_cli_command(
-        [pixi, "install", "--manifest-path", test_data],
+        [pixi, "install", "--manifest-path", manifest],
         ExitCode.SUCCESS,
     )
