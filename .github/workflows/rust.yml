@@ -258,10 +258,11 @@ jobs:
           BIN_PATH="target/${{ matrix.target }}/${CARGO_PROFILE}/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
-          echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
-          echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
-          echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
-
+          {
+          echo "BIN_PATH=${BIN_PATH}"
+          echo "BIN_NAME=${BIN_NAME}"
+          echo "EXE_SUFFIX=${EXE_SUFFIX}"
+          } >> $GITHUB_OUTPUT
       - name: Build msi Installer
         if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
@@ -297,7 +298,8 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
 
           # create temporary keychain
-          export KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          export KEYCHAIN_PASSWORD
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -327,7 +329,6 @@ jobs:
 
           # notarize binary
           xcrun notarytool submit pixi.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
-
       - name: Create tarball
         id: package
         shell: bash
