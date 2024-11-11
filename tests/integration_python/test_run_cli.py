@@ -155,10 +155,8 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     for file in dummy_a_meta_files:
         assert Path(file).exists()
 
-
-# only run on linux
 @pytest.mark.slow
-def test_pypi_git_deps(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_pypi_git_deps(pixi: Path, tmp_path: Path) -> None:
     test_data = Path(__file__).parent.parent / "data/pixi_tomls/pip_git_dep.toml"
     manifest = tmp_path.joinpath("pixi.toml")
     toml = test_data.read_text()
