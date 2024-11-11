@@ -196,15 +196,14 @@ impl PyProjectManifest {
         self.dependency_groups.as_ref().map(|dg| dg.resolve())
     }
 
-    /// Builds a list of pixi environments from pyproject groups of extra
-    /// dependencies:
-    ///  - one environment is created per group of extra, with the same name as
-    ///    the group of extra
-    ///  - each environment includes the feature of the same name as the group
-    ///    of extra
+    /// Builds a list of pixi environments from pyproject groups of optional
+    /// dependencies and/or dependency groups:
+    ///  - one environment is created per group with the same name
+    ///  - each environment includes the feature of the same name
     ///  - it will also include other features inferred from any self references
-    ///    to other groups of extras
-    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
+    ///    to other groups of optional dependencies (but won't for dependency groups,
+    ///    as recursion between groups is resolved upstream)
+    pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
         let mut environments = HashMap::new();
         if let Some(extras) = self.optional_dependencies() {
             let pname = self.package_name();
@@ -222,7 +221,18 @@ impl PyProjectManifest {
                 environments.insert(extra.replace('_', "-").clone(), features);
             }
         }
-        environments
+
+        if let Some(groups) = self.dependency_groups().transpose()? {
+            for group in groups.into_keys() {
+                let normalised = group.replace('_', "-");
+                // Nothing to do if a group of optional dependencies has the same name as the dependency group
+                if environments.contains_key(&normalised) {
+                    environments.insert(normalised.clone(), vec![normalised]);
+                }
+            }
+        }
+
+        Ok(environments)
     }
 }
 
