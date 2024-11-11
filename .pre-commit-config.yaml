@@ -32,6 +32,13 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # GitHub Actions
+      - id: actionlint
+        name: Lint GitHub Actions workflow files
+        language: system
+        entry: pixi run -e lint actionlint
+        types: [yaml]
+        files: ^\.github/workflows/
       # Typecheck python tests
       - id: typecheck-python
         name: typecheck-python

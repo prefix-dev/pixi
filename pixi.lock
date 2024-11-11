@@ -881,6 +881,7 @@ environments:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/actionlint-1.7.4-hb9d3cd8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-1.17.0-py312h06ac9bb_1.conda
@@ -946,6 +947,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.20.1-pyhd8ed1ab_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/actionlint-1.7.4-hd79239c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ca-certificates-2024.8.30-h8857fd0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/cffi-1.17.0-py312hf857d28_1.conda
@@ -1003,6 +1005,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-0.2.5-h0d85af4_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.20.1-pyhd8ed1ab_0.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/actionlint-1.7.4-h5505292_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ca-certificates-2024.8.30-hf0a4a13_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cffi-1.17.0-py312h0fad829_1.conda
@@ -1060,6 +1063,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-0.2.5-h3422bc3_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.20.1-pyhd8ed1ab_0.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/actionlint-1.7.4-h2466b09_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/bzip2-1.0.8-h2466b09_7.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ca-certificates-2024.8.30-h56e8100_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cffi-1.17.0-py312h4389bb4_1.conda
@@ -1510,6 +1514,68 @@ packages:
   license_family: GPL
   size: 20798
   timestamp: 1720621358501
+- kind: conda
+  name: actionlint
+  version: 1.7.4
+  build: h2466b09_0
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/actionlint-1.7.4-h2466b09_0.conda
+  sha256: 4bf1c9370415136610aa99603bc6cf2403ab8aebcec54427ba01e395410563c5
+  md5: c1b6b21fdaed39bc0ba0f8067db88a3e
+  depends:
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  license: MIT
+  license_family: MIT
+  size: 1804586
+  timestamp: 1730743220374
+- kind: conda
+  name: actionlint
+  version: 1.7.4
+  build: h5505292_0
+  subdir: osx-arm64
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/actionlint-1.7.4-h5505292_0.conda
+  sha256: 70cc5a33b7a73d638769a6f4721bff32cc8f38359f464b25bfccf56a839513a1
+  md5: cee2822980a166152536b435d45c6eb7
+  depends:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 1545787
+  timestamp: 1730742896293
+- kind: conda
+  name: actionlint
+  version: 1.7.4
+  build: hb9d3cd8_0
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/actionlint-1.7.4-hb9d3cd8_0.conda
+  sha256: ce74b8358f26e6e72ab07fd7d85554f00865dc02ea52ae806f037f0de69096cf
+  md5: a8ec6e2623fa4c5f0f43cacc9448ddd2
+  depends:
+  - __glibc >=2.17
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=13
+  license: MIT
+  license_family: MIT
+  size: 1753018
+  timestamp: 1730742808033
+- kind: conda
+  name: actionlint
+  version: 1.7.4
+  build: hd79239c_0
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/actionlint-1.7.4-hd79239c_0.conda
+  sha256: c3ba5ff5fabd584b6c29a18a436924cc76a688f58e3a9da103d7274e2f4bc013
+  md5: 16ce00fb139a02a3248e2da260d7cb2a
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx>=10.12
+  license: MIT
+  license_family: MIT
+  size: 1684031
+  timestamp: 1730743027785
 - kind: conda
   name: annotated-types
   version: 0.7.0

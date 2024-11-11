@@ -70,6 +70,7 @@ cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
+actionlint = ">=1.7.4,<2"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
 ruff = ">=0.4.8,<0.5"
