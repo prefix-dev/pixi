@@ -3,18 +3,18 @@ name: Update Trampoline Binary
 on:
   push:
     paths:
-      - 'crates/pixi_trampoline/**'
-      - '.github/workflows/trampoline.yaml'
-      - 'src/global/trampoline.rs'
+      - "crates/pixi_trampoline/**"
+      - ".github/workflows/trampoline.yaml"
+      - "src/global/trampoline.rs"
   workflow_dispatch:
   pull_request:
     paths:
-      - 'crates/pixi_trampoline/**'
-      - '.github/workflows/trampoline.yaml'
-      - 'src/global/trampoline.rs'
+      - "crates/pixi_trampoline/**"
+      - ".github/workflows/trampoline.yaml"
+      - "src/global/trampoline.rs"
 
 permissions:
-  contents: write  # Allow write permissions for contents (like pushing to the repo)
+  contents: write # Allow write permissions for contents (like pushing to the repo)
   pull-requests: write
 
 jobs:
@@ -27,13 +27,33 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { name: "Linux-x86_64", target: x86_64-unknown-linux-musl, os: ubuntu-latest  }
-          - { name: "Linux-aarch64", target: aarch64-unknown-linux-musl, os: ubuntu-latest }
-          - { name: "Linux-powerpc64", target: powerpc64-unknown-linux-gnu, os: ubuntu-latest }
-          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
-          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 }
-          - { name: "Windows", target: x86_64-pc-windows-msvc, os: windows-latest }
-          - { name: "Windows-arm", target: aarch64-pc-windows-msvc, os: windows-latest }
+          - name: "Linux-x86_64"
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+
+          - name: "Linux-aarch64"
+            target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+
+          - name: "Linux-powerpc64"
+            target: powerpc64-unknown-linux-gnu
+            os: ubuntu-latest
+
+          - name: "macOS-x86"
+            target: x86_64-apple-darwin
+            os: macos-13
+
+          - name: "macOS-arm"
+            target: aarch64-apple-darwin
+            os: macos-14
+
+          - name: "Windows"
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+          - name: "Windows-arm"
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
 
     steps:
       - name: Checkout code
@@ -62,7 +82,7 @@ jobs:
           mv target/${{ matrix.target }}/release/pixi_trampoline trampolines-binaries/pixi-trampoline-${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: trampoline-${{ matrix.target }}
           path: crates/pixi_trampoline/trampolines-binaries/
@@ -72,13 +92,13 @@ jobs:
     defaults:
       run:
         working-directory: crates/pixi_trampoline
-    needs: build  # This ensures the aggregation job runs after the build jobs
+    needs: build # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Download all binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: crates/pixi_trampoline/trampolines-binaries/
 
@@ -100,12 +120,10 @@ jobs:
           ls -R trampolines/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: trampolines
           path: crates/pixi_trampoline/trampolines/
-
-
 
       - name: Commit and push updated binaries
         # Don't run on forks
@@ -117,5 +135,5 @@ jobs:
           git add trampolines/
           git commit -m "[CI]: Update trampoline binaries for all targets"
           # Push changes to the branch that triggered the workflow
-          BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
+          BRANCH=${GITHUB_REF#refs/heads/}
           git push origin HEAD:$BRANCH
