@@ -1,5 +1,4 @@
 from pathlib import Path
-import sys
 import pytest
 from .common import verify_cli_command, ExitCode, default_env_path
 
