@@ -952,6 +952,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90eeab0aa92f3f9b4e87f258c72b139c207d251f9cbc1080a0086b86a8870dd3"
+dependencies = [
+ "nix",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3301,6 +3311,7 @@ dependencies = [
  "uv-pep508",
  "uv-pypi-types",
  "uv-python",
+ "uv-requirements",
  "uv-resolver",
  "uv-types",
  "xxhash-rust",
@@ -6000,6 +6011,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uv-console"
+version = "0.0.1"
+source = "git+https://github.com/astral-sh/uv?tag=0.4.30#61ed2a236ade13703fd6cd3271e2c4d627398f38"
+dependencies = [
+ "console",
+ "ctrlc",
+]
+
+[[package]]
 name = "uv-dirs"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.4.30#61ed2a236ade13703fd6cd3271e2c4d627398f38"
@@ -6446,12 +6466,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "uv-requirements"
+version = "0.1.0"
+source = "git+https://github.com/astral-sh/uv?tag=0.4.30#61ed2a236ade13703fd6cd3271e2c4d627398f38"
+dependencies = [
+ "anyhow",
+ "configparser",
+ "console",
+ "fs-err 2.11.0",
+ "futures",
+ "rustc-hash",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+ "url",
+ "uv-cache-key",
+ "uv-client",
+ "uv-configuration",
+ "uv-console",
+ "uv-distribution",
+ "uv-distribution-filename",
+ "uv-distribution-types",
+ "uv-fs",
+ "uv-git",
+ "uv-normalize",
+ "uv-pep508",
+ "uv-pypi-types",
+ "uv-requirements-txt",
+ "uv-resolver",
+ "uv-types",
+ "uv-warnings",
+ "uv-workspace",
+]
+
+[[package]]
 name = "uv-requirements-txt"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.4.30#61ed2a236ade13703fd6cd3271e2c4d627398f38"
 dependencies = [
  "fs-err 2.11.0",
  "regex",
+ "reqwest",
+ "reqwest-middleware",
  "thiserror",
  "tracing",
  "unscanny",
@@ -6472,6 +6529,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.4.30#61ed2a236ade13703fd6cd3271e2c4d627398f38"
 dependencies = [
  "anyhow",
+ "clap",
  "dashmap",
  "either",
  "futures",
