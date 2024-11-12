@@ -3639,20 +3639,20 @@ packages:
 - kind: pypi
   name: python-library-gcp-keyring
   version: 0.1.1
-  path: .
-  sha256: f67751c74249b5c1de8fe9223179a3b61b909fc83dd35fb64190c0575a37e425
-  requires_dist:
-  - rich
-  requires_python: '>=3.11'
-  editable: true
-- kind: pypi
-  name: python-library-gcp-keyring
-  version: 0.1.1
   url: https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/python-library-gcp-keyring/python_library_gcp_keyring-0.1.1-py3-none-any.whl#sha256=4268ce40bbcbe4a8d3d96e9182378c589ccce254896a83346ce8746359b4295d
   sha256: 4268ce40bbcbe4a8d3d96e9182378c589ccce254896a83346ce8746359b4295d
   requires_dist:
   - rich
   requires_python: '>=3.11'
+- kind: pypi
+  name: python-library-gcp-keyring
+  version: 0.1.2
+  path: .
+  sha256: b94c1c3763b0ab1a3155a49712b635bafe67ff1c58b151178c4591ed0affda4f
+  requires_dist:
+  - rich
+  requires_python: '>=3.11'
+  editable: true
 - kind: conda
   name: python_abi
   version: '3.13'
