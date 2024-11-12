@@ -656,7 +656,7 @@ pub async fn update_python_distributions(
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &uv_context.cache);
-        let indexes = index_locations.indexes().map(|index| index.url());
+        let indexes = index_locations.flat_indexes().map(|index| index.url());
         let entries = client.fetch(indexes).await.into_diagnostic()?;
         FlatIndex::from_entries(
             entries,

@@ -523,13 +523,17 @@ impl Manifest {
         &mut self,
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
+        prepend: bool,
     ) -> miette::Result<()> {
-        // Get current and new platforms for the feature
+        // First collect all the new channels
+        let to_add: IndexSet<_> = channels.into_iter().collect();
+
+        // Get the current channels and update them
         let current = match feature_name {
             FeatureName::Default => &mut self.parsed.project.channels,
             FeatureName::Named(_) => self.get_or_insert_feature_mut(feature_name).channels_mut(),
         };
-        let to_add: IndexSet<_> = channels.into_iter().collect();
+
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
         let new_channels: IndexSet<_> = new
             .clone()
@@ -540,16 +544,25 @@ impl Manifest {
         // clear channels with modified priority
         current.retain(|c| !new_channels.contains(&c.channel));
 
-        // Add the updated channels to the manifest
-        current.extend(new.clone());
-        let current_clone = current.clone();
+        // Create the final channel list in the desired order
+        let final_channels = if prepend {
+            let mut new_set = new.clone();
+            new_set.extend(current.iter().cloned());
+            new_set
+        } else {
+            let mut new_set = current.clone();
+            new_set.extend(new.clone());
+            new_set
+        };
 
-        // Then to the TOML document
+        // Update both the parsed channels and the TOML document
+        *current = final_channels.clone();
+
+        // Update the TOML document
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        // clear and recreate from current list
         channels.clear();
-        for channel in current_clone.iter() {
-            channels.push(Value::from(channel.clone()));
+        for channel in final_channels {
+            channels.push(Value::from(channel));
         }
 
         Ok(())
@@ -1429,7 +1442,7 @@ platforms = ["linux-64", "win-64"]
 [dependencies]
 
 [feature.test.dependencies]
-        "#;
+    "#;
 
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
@@ -1438,13 +1451,13 @@ platforms = ["linux-64", "win-64"]
         let conda_forge =
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::Default)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
         let nvidia = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("nvidia")));
         manifest
-            .add_channels([nvidia.clone()], &cuda_feature)
+            .add_channels([nvidia.clone()], &cuda_feature, false)
             .unwrap();
 
         let test_feature = FeatureName::Named("test".to_string());
@@ -1455,6 +1468,7 @@ platforms = ["linux-64", "win-64"]
                     PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("test2"))),
                 ],
                 &test_feature,
+                false,
             )
             .unwrap();
 
@@ -1470,7 +1484,7 @@ platforms = ["linux-64", "win-64"]
 
         // Try to add again, should not add more channels
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::Default)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert_eq!(
@@ -1499,10 +1513,12 @@ platforms = ["linux-64", "win-64"]
             .into_iter()
             .collect::<IndexSet<_>>()
         );
+
         // Try to add again, should not add more channels
         manifest
-            .add_channels([nvidia.clone()], &cuda_feature)
+            .add_channels([nvidia.clone()], &cuda_feature, false)
             .unwrap();
+
         assert_eq!(
             manifest
                 .parsed
@@ -1549,8 +1565,9 @@ platforms = ["linux-64", "win-64"]
             priority: None,
         };
         manifest
-            .add_channels([custom_channel.clone()], &FeatureName::Default)
+            .add_channels([custom_channel.clone()], &FeatureName::Default, false)
             .unwrap();
+
         assert!(manifest
             .parsed
             .project
@@ -1564,8 +1581,9 @@ platforms = ["linux-64", "win-64"]
             priority: Some(12i32),
         };
         manifest
-            .add_channels([prioritized_channel1.clone()], &FeatureName::Default)
+            .add_channels([prioritized_channel1.clone()], &FeatureName::Default, false)
             .unwrap();
+
         assert!(manifest
             .parsed
             .project
@@ -1578,8 +1596,9 @@ platforms = ["linux-64", "win-64"]
             priority: Some(-12i32),
         };
         manifest
-            .add_channels([prioritized_channel2.clone()], &FeatureName::Default)
+            .add_channels([prioritized_channel2.clone()], &FeatureName::Default, false)
             .unwrap();
+
         assert!(manifest
             .parsed
             .project
@@ -2261,5 +2280,51 @@ bar = "*"
                 Err(e) => println!("{:?}", e),
             }
         }
+    }
+
+    #[test]
+    fn test_prepend_channels() {
+        let contents = r#"
+            [project]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = []
+        "#;
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
+
+        // Add pytorch channel with prepend=true
+        let pytorch = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("pytorch")));
+        manifest
+            .add_channels([pytorch.clone()], &FeatureName::Default, true)
+            .unwrap();
+
+        // Verify pytorch is first in the list
+        assert_eq!(
+            manifest
+                .parsed
+                .project
+                .channels
+                .iter()
+                .next()
+                .unwrap()
+                .channel,
+            pytorch.channel
+        );
+
+        // Add another channel without prepend
+        let bioconda = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("bioconda")));
+        manifest
+            .add_channels([bioconda.clone()], &FeatureName::Default, false)
+            .unwrap();
+
+        // Verify order is still pytorch, conda-forge, bioconda
+        let channels: Vec<_> = manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
     }
 }
