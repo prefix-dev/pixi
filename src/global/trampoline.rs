@@ -354,9 +354,14 @@ impl Trampoline {
             .into_diagnostic()?;
         }
 
-        // Create a hard link to the shared trampoline binary
-        if !self.path().exists() {
-            tokio::fs::hard_link(self.trampoline_path(), self.path())
+        // If the path doesn't exist yet, create a hard link to the shared trampoline binary
+        // If creating a hard link doesn't succeed, try copying
+        if !self.path().exists()
+            && tokio_fs::hard_link(self.trampoline_path(), self.path())
+                .await
+                .is_err()
+        {
+            tokio_fs::copy(self.trampoline_path(), self.path())
                 .await
                 .into_diagnostic()?;
         }
