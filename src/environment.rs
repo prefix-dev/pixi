@@ -233,15 +233,27 @@ pub(crate) fn write_environment_file(
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    std::fs::create_dir_all(parent).into_diagnostic()?;
-
-    // Using json as it's easier to machine read it.
-    let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-    std::fs::write(&path, contents).into_diagnostic()?;
-
-    tracing::debug!("Wrote environment file to: {:?}", path);
-
-    Ok(path)
+    match std::fs::create_dir_all(parent).into_diagnostic() {
+        Ok(_) => {
+            // Using json as it's easier to machine read it.
+            let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
+            match std::fs::write(&path, contents).into_diagnostic() {
+                Ok(_) => {
+                    tracing::debug!("Wrote environment file to: {:?}", path);
+                }
+                Err(e) => tracing::debug!(
+                    "Unable to write environment file to: {:?} => {:?}",
+                    path,
+                    e.root_cause().to_string()
+                ),
+            };
+            Ok(path)
+        }
+        Err(e) => {
+            tracing::debug!("Unable to create conda-meta folder to: {:?}", path);
+            Err(e)
+        }
+    }
 }
 
 /// Reading the environment file of the environment.

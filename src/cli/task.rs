@@ -423,7 +423,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     let tasks: HashMap<TaskName, Task> = task_names
                         .into_iter()
                         .filter_map(|task_name| {
-                            env.task(&task_name, None)
+                            env.task(&task_name, Some(env.best_platform()))
                                 .ok()
                                 .map(|task| (task_name, task.clone()))
                         })

@@ -1210,6 +1210,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
 - `--feature <FEATURE> (-f)`: The feature for which the channel is added.
+- `--prepend`: Prepend the channel to the list of channels.
 
 ```
 pixi project channel add robostack
@@ -1218,6 +1219,7 @@ pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
 pixi project channel add --feature cuda nvidia
+pixi project channel add --prepend pytorch
 ```
 
 ### `project channel list`
