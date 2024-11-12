@@ -88,7 +88,7 @@ Congratulations you have ROS 2 running on your machine with pixi!
     ```
     Now you can control the turtle with the arrow keys on your keyboard.
 
-![Turtlesim control](https://private-user-images.githubusercontent.com/12893423/319520632-c80c5054-3335-49c7-9671-92bd8702708b.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTIyMjI2MDQsIm5iZiI6MTcxMjIyMjMwNCwicGF0aCI6Ii8xMjg5MzQyMy8zMTk1MjA2MzItYzgwYzUwNTQtMzMzNS00OWM3LTk2NzEtOTJiZDg3MDI3MDhiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA0MDQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNDA0VDA5MTgyNFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWI1MjU0ZGY0ZjQ1OTg4ZjYyNTE1Y2I2MmYwNWU5YzQwYzFlNGExMzkyNDhjOGY4N2I4NDQ5ZTA3MzI4MzhiNDAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.4dD3FdMZ7VBRPTLcnSPlWsSWkx4pgjKq24NEL-TnW0g)
+![Turtlesim control](https://github.com/user-attachments/assets/9424c44b-b7c0-48f4-8e7d-501131e9e9e5)
 
 ## Add a custom Python node
 
