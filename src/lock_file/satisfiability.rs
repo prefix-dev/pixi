@@ -17,7 +17,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
+    CondaUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
     ParseMatchSpecError, ParseStrictness::Lenient, Platform, RepoDataRecord,
 };
 use rattler_lock::{
@@ -321,25 +321,25 @@ pub fn verify_environment_satisfiability(
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
     let config = environment.project().channel_config();
-    let channels: Vec<Url> = grouped_env
+    let channels: Vec<CondaUrl> = grouped_env
         .channels()
         .into_iter()
         .map(|channel| {
             channel
                 .clone()
                 .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
+                .map(|channel| channel.base_url.clone())
         })
         .try_collect()?;
 
-    let locked_channels: Vec<Url> = locked_environment
+    let locked_channels: Vec<CondaUrl> = locked_environment
         .channels()
         .iter()
         .map(|c| {
             NamedChannelOrUrl::from_str(&c.url)
                 .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
                 .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
+                .map(|channel| channel.base_url.clone())
         })
         .try_collect()?;
     if !channels.eq(&locked_channels) {
