@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::sync::Arc;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;
@@ -111,24 +110,50 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Only upgrade version specs
         .filter_map(|(name, req)| match req {
             PixiSpec::DetailedVersion(version_spec) => {
-                let channel = version_spec
-                    .channel
-                    .and_then(|c| c.into_channel(&project.channel_config()).ok())
-                    .map(Arc::new);
+                let mut nameless_match_spec = version_spec
+                    .try_into_nameless_match_spec(&project.channel_config())
+                    .ok()?;
+                // If it is a detailed spec, always unset version
+                nameless_match_spec.version = None;
+
+                // If the package as specifically requested, unset more fields
+                if let Some(packages) = &args.specs.packages {
+                    if packages.contains(&name.as_normalized().to_string()) {
+                        // If the build contains a wildcard, keep it
+                        nameless_match_spec.build = if let Some(build) = nameless_match_spec.build {
+                            println!("build: {:?} as string: {}", build, build);
+                            if build.to_string().contains("*") {
+                                Some(build)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        nameless_match_spec.build_number = None;
+                        nameless_match_spec.md5 = None;
+                        nameless_match_spec.sha256 = None;
+                        // These are still to sensitive to be unset, so skipping these for now
+                        // nameless_match_spec.url = None;
+                        // nameless_match_spec.file_name = None;
+                        // nameless_match_spec.channel = None;
+                        // nameless_match_spec.subdir = None;
+                    }
+                }
+
                 Some((
                     name.clone(),
                     (
-                        MatchSpec {
-                            name: Some(name),
-                            channel,
-                            ..Default::default()
-                        },
+                        MatchSpec::from_nameless(nameless_match_spec, Some(name)),
                         spec_type,
                     ),
                 ))
             }
             PixiSpec::Version(_) => Some((name.clone(), (MatchSpec::from(name), spec_type))),
-            _ => None,
+            _ => {
+                tracing::debug!("skipping non-version spec {:?}", req);
+                None
+            }
         })
         .collect();
 
@@ -152,6 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 Requirement {
                     name: name.as_normalized().clone(),
                     extras,
+                    // TODO: Add marker support here to avoid overwriting existing markers
                     marker: MarkerTree::default(),
                     origin: None,
                     version_or_url: None,
