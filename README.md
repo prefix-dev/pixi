@@ -13,6 +13,7 @@
 ![License][license-badge]
 [![Project Chat][chat-badge]][chat-url]
 [![Pixi Badge][pixi-badge]][pixi-url]
+[![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20pixi%20Guru-006BFF?style=flat-square)](https://gurubase.io/g/pixi)
 
 
 [license-badge]: https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square
