@@ -16,7 +16,7 @@ use pixi_manifest::FeatureName;
 use pixi_manifest::PyPiRequirement;
 use pixi_manifest::SpecType;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{MatchSpec, StringMatcher};
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -121,11 +121,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     if packages.contains(&name.as_normalized().to_string()) {
                         // If the build contains a wildcard, keep it
                         nameless_match_spec.build = if let Some(build) = nameless_match_spec.build {
-                            println!("build: {:?} as string: {}", build, build);
-                            if build.to_string().contains("*") {
-                                Some(build)
-                            } else {
-                                None
+                            match build {
+                                StringMatcher::Glob(_) | StringMatcher::Regex(_) => Some(build),
+                                _ => None,
                             }
                         } else {
                             None
