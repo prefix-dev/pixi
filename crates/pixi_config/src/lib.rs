@@ -19,7 +19,7 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::{Gateway, SourceConfig};
 #[cfg(feature = "rattler_repodata_gateway")]
 use reqwest_middleware::ClientWithMiddleware;
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serialize};
 use url::Url;
 
 pub fn default_channel_config() -> ChannelConfig {
@@ -133,21 +133,58 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
-    pub default: RepodataChannelConfig,
+    default: RepodataChannelConfig,
 
     #[serde(flatten)]
-    pub per_channel: HashMap<Url, RepodataChannelConfig>,
+    per_channel: HashMap<Url, RepodataChannelConfig>,
+}
+impl RepodataConfig {}
+
+/// Custom Deserialize to ensure `post_deserialize` is called to merge the default and per_channel configs.
+impl<'de> Deserialize<'de> for RepodataConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Helper struct for deserialization to avoid recursion
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct RawRepodataConfig {
+            #[serde(flatten)]
+            default: RepodataChannelConfig,
+            #[serde(flatten)]
+            per_channel: HashMap<Url, RepodataChannelConfig>,
+        }
+        let raw_config = RawRepodataConfig::deserialize(deserializer)?;
+
+        let mut config = RepodataConfig {
+            default: raw_config.default,
+            per_channel: raw_config.per_channel,
+        };
+
+        config.post_deserialize();
+        Ok(config)
+    }
 }
 
 impl RepodataConfig {
+    /// Merge the default `RepodataChannelConfig` into the per_channel ones.
+    fn post_deserialize(&mut self) {
+        for (_url, channel_config) in self.per_channel.iter_mut() {
+            *channel_config = channel_config.merge(self.default.clone());
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.default.is_empty() && self.per_channel.is_empty()
     }
 
+    /// Merge the given RepodataConfig into the current one.
+    /// `other` is mutable to allow for moving the values out of it.
     pub fn merge(&self, mut other: Self) -> Self {
         let mut per_channel: HashMap<_, _> = self
             .per_channel
@@ -209,6 +246,7 @@ impl From<RepodataChannelConfig> for SourceConfig {
             jlap_enabled: !value.disable_jlap.unwrap_or(false),
             zstd_enabled: !value.disable_zstd.unwrap_or(false),
             bz2_enabled: !value.disable_bzip2.unwrap_or(false),
+            // TODO: Change sharded repodata default to true, when enough testing has been done.
             sharded_enabled: !value.disable_sharded.unwrap_or(true),
             cache_action: Default::default(),
         }
@@ -1398,5 +1436,53 @@ UNUSED = "unused"
             .collect::<Vec<_>>()
             .join("\n");
         insta::assert_snapshot!(results);
+    }
+
+    #[test]
+    fn test_repodata_config() {
+        let toml = r#"
+            [repodata-config]
+            disable-jlap = true
+            disable-bzip2 = true
+            disable-zstd = true
+            disable-sharded = true
+
+            [repodata-config."https://prefix.dev/conda-forge"]
+            disable-jlap = false
+            disable-bzip2 = false
+            disable-zstd = false
+            disable-sharded = false
+
+            [repodata-config."https://conda.anaconda.org/conda-forge"]
+            disable-jlap = false
+            disable-bzip2 = false
+            disable-zstd = false
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_jlap, Some(true));
+        assert_eq!(repodata_config.default.disable_bzip2, Some(true));
+        assert_eq!(repodata_config.default.disable_zstd, Some(true));
+        assert_eq!(repodata_config.default.disable_sharded, Some(true));
+
+        let per_channel = repodata_config.clone().per_channel;
+        assert_eq!(per_channel.len(), 2);
+
+        let prefix_config = per_channel
+            .get(&Url::from_str("https://prefix.dev/conda-forge").unwrap())
+            .unwrap();
+        assert_eq!(prefix_config.disable_jlap, Some(false));
+        assert_eq!(prefix_config.disable_bzip2, Some(false));
+        assert_eq!(prefix_config.disable_zstd, Some(false));
+        assert_eq!(prefix_config.disable_sharded, Some(false));
+
+        let anaconda_config = per_channel
+            .get(&Url::from_str("https://conda.anaconda.org/conda-forge").unwrap())
+            .unwrap();
+        assert_eq!(anaconda_config.disable_jlap, Some(false));
+        assert_eq!(anaconda_config.disable_bzip2, Some(false));
+        assert_eq!(anaconda_config.disable_zstd, Some(false));
+        // disable-sharded is not set so the default repodata-config should be used
+        assert_eq!(anaconda_config.disable_sharded, Some(true));
     }
 }
