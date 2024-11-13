@@ -11,9 +11,11 @@ use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use pixi_consts::consts;
+#[cfg(feature = "rattler_repodata_gateway")]
+use rattler_conda_types::CondaUrl;
 use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
-    ChannelConfig, CondaUrl, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
 #[cfg(feature = "rattler_repodata_gateway")]
 use rattler_repodata_gateway::{Gateway, SourceConfig};
@@ -243,6 +245,7 @@ impl RepodataChannelConfig {
     }
 }
 
+#[cfg(feature = "rattler_repodata_gateway")]
 impl From<RepodataChannelConfig> for SourceConfig {
     fn from(value: RepodataChannelConfig) -> Self {
         SourceConfig {
