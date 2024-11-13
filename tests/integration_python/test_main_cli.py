@@ -505,3 +505,46 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
     assert "1.*" not in numpy_pypi
     numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
     assert numpy_conda != "1.*"
+
+
+@pytest.mark.slow
+def test_upgrade_dependency_location(pixi: Path, tmp_path: Path) -> None:
+    # Test based on https://github.com/prefix-dev/pixi/issues/2470
+    # Making sure pixi places the upgraded package in the correct location
+    manifest_path = tmp_path / "pyproject.toml"
+    pyproject = """
+    [project]
+    dependencies = []
+    name = "test-upgrade"
+    requires-python = ">= 3.11"
+
+    [tool.pixi.project]
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+
+    [tool.pixi.pypi-dependencies]
+    polars = "==0.*"
+    """
+
+    manifest_path.write_text(pyproject)
+
+    # Upgrade numpy, both conda and pypi should be upgraded
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path],
+        stderr_contains=["polars"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    # Check that the requires-python is modified
+    requires_python = parsed_manifest["project"]["requires-python"]
+    assert "3.11" not in requires_python
+
+    # Check that `tool.pixi.dependencies.python` doesn't exist
+    assert "python" not in parsed_manifest.get("tool", {}).get("pixi", {}).get("dependencies", {})
+
+    # Check that the pypi-dependency is upgraded
+    polars_pypi = parsed_manifest["tool"]["pixi"]["pypi-dependencies"]["polars"]
+    assert polars_pypi
+    assert polars_pypi != "==0.*"
+
+    # Check that the pypi-dependency doesn't exist in the project dependencies
+    assert "polars" not in parsed_manifest["project"]["dependencies"]
