@@ -505,3 +505,84 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
     assert "1.*" not in numpy_pypi
     numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
     assert numpy_conda != "1.*"
+
+
+def test_upgrade_keep_info(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            f"{multiple_versions_channel_1}::package3==0.1.0=ab*",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
+    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
+    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
+
+    # Upgrade all, it should now be at 0.2.0, with the build intact
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path],
+        stderr_contains=["package3", "0.1.0", "0.2.0"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    # Update version
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    # Keep build
+    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
+    # Keep channel
+    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
+
+    # Upgrade package3, it should now be at 0.2.0, with the build intact because it has a wildcard
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    # Update version
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    # Keep build
+    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
+    # Keep channel
+    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
+
+
+def test_upgrade_remove_info(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            f"{multiple_versions_channel_1}::package3==0.1.0=abc",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
+    assert "abc" in parsed_manifest["dependencies"]["package3"]["build"]
+    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
+
+    # Upgrade package3, it should now be at 0.2.0, without the build but with the channel
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    # Update version
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    # Keep channel
+    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
+    # Remove build
+    assert "build" not in parsed_manifest["dependencies"]["package3"]
