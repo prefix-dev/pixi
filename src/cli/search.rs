@@ -563,8 +563,20 @@ mod tests {
     };
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
+    #[rstest::fixture]
+    fn build_string() -> &'static str {
+        match Platform::current() {
+            Platform::Osx64 => "h0dc7051",
+            Platform::OsxArm64 => "h60d57d3",
+            Platform::Linux64 => "hb0f4dca",
+            Platform::Win64 => "h9490d1a",
+            _ => panic!("Unsupported platform for test"),
+        }
+    }
+
+    #[rstest::rstest]
     #[tokio::test]
-    async fn test_search_multiple_versions() {
+    async fn test_search_multiple_versions(build_string: &str) {
         let args = Args {
             package: "package".to_string(),
             channels: ChannelsConfig {
@@ -581,11 +593,12 @@ mod tests {
         assert!(result.len() == 1);
         let output = String::from_utf8(out).unwrap();
         assert!(output.contains("Other Versions (1)"));
-        assert!(output.contains("0.1.0    h60d57d3_0"));
+        assert!(output.contains(&format!("0.1.0    {}", build_string)));
     }
 
+    #[rstest::rstest]
     #[tokio::test]
-    async fn test_search_multiple_build_strings() {
+    async fn test_search_multiple_build_strings(build_string: &str) {
         let args = Args {
             package: "package".to_string(),
             channels: ChannelsConfig {
@@ -601,10 +614,11 @@ mod tests {
         let result = execute_impl(args, &mut out).await.unwrap().unwrap();
         let output = String::from_utf8(out).unwrap();
         assert!(result.len() == 1);
-        assert!(output.contains("package-0.2.0-h60d57d3_1 (+ 1 build)"));
+        assert!(output.contains(&format!("package-0.2.0-{}_1 (+ 1 build)", build_string)));
         assert!(output.contains("Other Versions (1)"));
         assert!(output.contains(&format!(
-            "0.1.0    h60d57d3_1 {}",
+            "0.1.0    {}_1 {}",
+            build_string,
             console::style(" (+ 1 build)").dim()
         )));
     }
