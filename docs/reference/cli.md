@@ -217,9 +217,11 @@ pixi upgrade --dry-run
 ```
 
 !!! note
-    The `upgrade` command will only update `version`s, except when you specify the exact package name,
-    then it will also update the following fields: `build`, `build_number`, `md5`, `sha265`.
-    A `build` with a wildcard `*` will always be reused in the upgrade, the same goes for `channel`, `file_name`, `url`, and `subdir`.
+    The `pixi upgrade` command will only update `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
+
+    Then it will also update the following fields: `version`, `build`, `build_number`, `md5`, `sha265`.
+
+    Except a `build` field with a wildcard `*` will always be reused in the upgrade, the same goes for `channel`, `file_name`, `url`, and `subdir`.
 
 ## `run`
 
