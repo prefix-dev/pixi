@@ -106,8 +106,10 @@ where
     Ok(packages)
 }
 
-pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let stdout = io::stdout();
+pub async fn execute_impl<W: Write>(
+    args: Args,
+    out: &mut W,
+) -> miette::Result<Option<Vec<RepoDataRecord>>> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     // Resolve channels from project / CLI args
@@ -162,7 +164,7 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
             all_names,
             repodata_query_func,
             args.limit,
-            stdout,
+            out,
         )
         .await?
     }
@@ -171,7 +173,7 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
 
-        search_exact_package(package_name, all_names, repodata_query_func, stdout).await?
+        search_exact_package(package_name, all_names, repodata_query_func, out).await?
     };
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
@@ -179,7 +181,8 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    execute_impl(args).await?;
+    let mut out = io::stdout();
+    execute_impl(args, &mut out).await?;
     Ok(())
 }
 
@@ -187,7 +190,7 @@ async fn search_exact_package<W: Write, QF, FR>(
     package_name: PackageName,
     all_repodata_names: Vec<PackageName>,
     repodata_query_func: QF,
-    out: W,
+    out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR,
@@ -255,7 +258,7 @@ fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> Stri
 fn print_package_info<W: Write>(
     package: &RepoDataRecord,
     other_versions: &Vec<&RepoDataRecord>,
-    mut out: W,
+    out: &mut W,
 ) -> io::Result<()> {
     writeln!(out)?;
 
@@ -430,7 +433,7 @@ async fn search_package_by_wildcard<W: Write, QF, FR>(
     all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     limit: Option<usize>,
-    out: W,
+    out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR + Clone,
@@ -500,7 +503,7 @@ where
 
 fn print_matching_packages<W: Write>(
     packages: &[RepoDataRecord],
-    mut out: W,
+    out: &mut W,
     limit: Option<usize>,
 ) -> io::Result<()> {
     writeln!(
@@ -550,4 +553,59 @@ fn print_matching_packages<W: Write>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::{
+        cli_config::{ChannelsConfig, ProjectConfig},
+        search::{execute_impl, Args},
+    };
+    use rattler_conda_types::{NamedChannelOrUrl, Platform};
+
+    #[tokio::test]
+    async fn test_search_multiple_versions() {
+        let args = Args {
+            package: "package".to_string(),
+            channels: ChannelsConfig {
+                channels: vec![NamedChannelOrUrl::Path(
+                    "./tests/data/channels/channels/multiple_versions_channel_1".into(),
+                )],
+            },
+            project_config: ProjectConfig::default(),
+            platform: Platform::current(),
+            limit: None,
+        };
+        let mut out = Vec::new();
+        let result = execute_impl(args, &mut out).await.unwrap().unwrap();
+        assert!(result.len() == 1);
+        let output = String::from_utf8(out).unwrap();
+        assert!(output.contains("Other Versions (1)"));
+        assert!(output.contains("0.1.0    h60d57d3_0"));
+    }
+
+    #[tokio::test]
+    async fn test_search_multiple_build_strings() {
+        let args = Args {
+            package: "package".to_string(),
+            channels: ChannelsConfig {
+                channels: vec![NamedChannelOrUrl::Path(
+                    "./tests/data/channels/channels/multiple_build_strings_channel_1".into(),
+                )],
+            },
+            project_config: ProjectConfig::default(),
+            platform: Platform::current(),
+            limit: None,
+        };
+        let mut out = Vec::new();
+        let result = execute_impl(args, &mut out).await.unwrap().unwrap();
+        let output = String::from_utf8(out).unwrap();
+        assert!(result.len() == 1);
+        assert!(output.contains("package-0.2.0-h60d57d3_1 (+ 1 build)"));
+        assert!(output.contains("Other Versions (1)"));
+        assert!(output.contains(&format!(
+            "0.1.0    h60d57d3_1 {}",
+            console::style(" (+ 1 build)").dim()
+        )));
+    }
 }

@@ -35,7 +35,7 @@ pub struct ChannelsConfig {
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
-    channels: Vec<NamedChannelOrUrl>,
+    pub channels: Vec<NamedChannelOrUrl>,
 }
 
 impl ChannelsConfig {
