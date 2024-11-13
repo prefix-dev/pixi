@@ -596,9 +596,8 @@ mod tests {
         assert!(output.contains(&format!("0.1.0    {}", build_string)));
     }
 
-    #[rstest::rstest]
     #[tokio::test]
-    async fn test_search_multiple_build_strings(build_string: &str) {
+    async fn test_search_multiple_build_strings() {
         let args = Args {
             package: "package".to_string(),
             channels: ChannelsConfig {
@@ -607,18 +606,17 @@ mod tests {
                 )],
             },
             project_config: ProjectConfig::default(),
-            platform: Platform::current(),
+            platform: Platform::OsxArm64,
             limit: None,
         };
         let mut out = Vec::new();
         let result = execute_impl(args, &mut out).await.unwrap().unwrap();
         let output = String::from_utf8(out).unwrap();
         assert!(result.len() == 1);
-        assert!(output.contains(&format!("package-0.2.0-{}_1 (+ 1 build)", build_string)));
+        assert!(output.contains("package-0.2.0-h60d57d3_1 (+ 1 build)"));
         assert!(output.contains("Other Versions (1)"));
         assert!(output.contains(&format!(
-            "0.1.0    {}_1 {}",
-            build_string,
+            "0.1.0    h60d57d3_1 {}",
             console::style(" (+ 1 build)").dim()
         )));
     }
