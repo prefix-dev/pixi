@@ -206,15 +206,18 @@ impl RepodataConfig {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
     /// Disable JLAP compression for repodata.
+    #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
+    #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
+    #[serde(alias = "disable_zstd")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_zstd: Option<bool>,
     /// Disable the use of sharded repodata
