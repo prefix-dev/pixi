@@ -10,9 +10,9 @@ use std::{
     str::FromStr,
 };
 
+use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::lock_file::UpdateMode;
 use pixi::{
     cli::{
         add,
@@ -28,6 +28,10 @@ use pixi::{
         TaskGraphError, TaskName,
     },
     Project, UpdateLockFileOptions,
+};
+use pixi::{
+    cli::{cli_config::ChannelsConfig, search},
+    lock_file::UpdateMode,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -312,6 +316,22 @@ impl PixiControl {
         }
     }
 
+    /// Search and return latest package. Returns an [`SearchBuilder`].
+    /// the command and await the result call `.await` on the return value.
+    pub fn search(&self, name: String) -> SearchBuilder {
+        SearchBuilder {
+            args: search::Args {
+                package: name,
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                platform: Platform::current(),
+                limit: None,
+                channels: ChannelsConfig::default(),
+            },
+        }
+    }
+
     /// Remove dependencies from the project. Returns a [`RemoveBuilder`].
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
@@ -340,6 +360,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }
@@ -353,6 +374,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }

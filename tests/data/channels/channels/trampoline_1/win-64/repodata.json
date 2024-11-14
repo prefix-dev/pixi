@@ -9,13 +9,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "7306456e8f73515ea178635bc267e773",
+      "md5": "231a9110ff4cd7021a5e6f3708045ab6",
       "name": "dummy-trampoline",
       "platform": "win",
-      "sha256": "7911e2c3e5b3d412c4ce75d9020424283eb1604cc87f361d5646901ab0a2996b",
-      "size": 1603,
+      "sha256": "78d7357684cff33081f8197a92ddeaa95c109cebaef605b536d21740035dcaff",
+      "size": 1602,
       "subdir": "win-64",
-      "timestamp": 1730882683987,
+      "timestamp": 1730898133481,
       "version": "0.1.0"
     }
   },

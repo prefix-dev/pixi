@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.35.0
+# Version: v0.36.0
 
 __wrap__() {
 
@@ -61,10 +61,10 @@ trap cleanup EXIT
 
 # Test if stdout is a terminal before showing progress
 if [[ ! -t 1 ]]; then
-  CURL_OPTIONS="--no-progress-meter"
+  CURL_OPTIONS="--silent"  # --no-progress-meter is better, but only available in 7.67+
   WGET_OPTIONS="--no-verbose"
 else
-  CURL_OPTIONS="--progress-bar"
+  CURL_OPTIONS="--no-silent"
   WGET_OPTIONS="--show-progress"
 fi
 

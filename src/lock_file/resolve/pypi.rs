@@ -41,6 +41,7 @@ use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
+use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverEnvironment,
@@ -371,16 +372,39 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     let resolver_env = ResolverEnvironment::specific(marker_environment.into());
+
+    let constraints = Constraints::from_requirements(constraints.iter().cloned());
+    let lookahead_index = InMemoryIndex::default();
+    let lookaheads = LookaheadResolver::new(
+        &requirements,
+        &constraints,
+        &Overrides::default(),
+        &[],
+        &context.hash_strategy,
+        &lookahead_index,
+        DistributionDatabase::new(
+            &registry_client,
+            &build_dispatch,
+            context.concurrency.downloads,
+        ),
+    )
+    .with_reporter(UvReporter::new(
+        UvReporterOptions::new().with_existing(pb.clone()),
+    ))
+    .resolve(&resolver_env)
+    .await
+    .into_diagnostic()?;
+
     let manifest = Manifest::new(
         requirements,
-        Constraints::from_requirements(constraints.iter().cloned()),
+        constraints,
         Overrides::default(),
         Default::default(),
         Preferences::from_iter(preferences, &resolver_env),
         None,
         None,
         uv_resolver::Exclusions::None,
-        Vec::new(),
+        lookaheads,
     );
 
     let interpreter_version = interpreter.python_version();
