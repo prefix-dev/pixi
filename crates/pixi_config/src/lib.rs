@@ -1450,7 +1450,6 @@ UNUSED = "unused"
         assert_eq!(anaconda_config.disable_jlap, Some(false));
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
-        // disable-sharded is not set so the default repodata-config should be used
-        assert_eq!(anaconda_config.disable_sharded, Some(true));
+        assert_eq!(anaconda_config.disable_sharded, None);
     }
 }
