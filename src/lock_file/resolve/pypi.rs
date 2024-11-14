@@ -213,21 +213,24 @@ pub async fn resolve_pypi(
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
-    // Construct an interpreter from the conda environment.
+    // We need to setup both an interpreter and a requires_python specifier.
+    // The interpreter is used to (potentially) build the wheel, and the requires_python specifier is used
+    // to determine the python version of the wheel.
+    // So make sure the interpreter does not touch the solve partgs of this function
     let interpreter_version = python_record
         .version()
         .as_major_minor()
-        .expect("version should be set");
-    let python_specifier = uv_pep440::VersionSpecifier::from_version(
-        uv_pep440::Operator::EqualStar,
-        uv_pep440::Version::from_str(&format!(
-            "{}.{}",
-            interpreter_version.0, interpreter_version.1
-        ))
-        .expect("could not parse version"),
-    )
+        .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
+    let pep_version = uv_pep440::Version::from_str(&format!(
+        "{}.{}",
+        interpreter_version.0, interpreter_version.1
+    ))
     .into_diagnostic()
-    .context("error creating version specifier for python version")?;
+    .context("error parsing pep440 version for python interpreter")?;
+    let python_specifier =
+        uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
+            .into_diagnostic()
+            .context("error creating version specifier for python version")?;
     let requires_python = uv_resolver::RequiresPython::from_specifiers(
         &uv_pep440::VersionSpecifiers::from(python_specifier),
     );
@@ -235,10 +238,13 @@ pub async fn resolve_pypi(
         .into_diagnostic()
         .wrap_err("failed to query python interpreter")?;
     tracing::debug!(
-        "using Python Interpreter (should be assumed for building only): {}",
+        "using python interpreter (should be assumed for building only): {}",
         interpreter.key()
     );
-    tracing::info!("using requires python specifier: {}", requires_python);
+    tracing::info!(
+        "using requires python specifier (this may differ from the above): {}",
+        requires_python
+    );
 
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
