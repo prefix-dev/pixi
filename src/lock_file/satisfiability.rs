@@ -729,12 +729,10 @@ pub(crate) fn pypi_satifisfies_requirement(
                         url.to_string(),
                     ))
                 }
-                UrlOrPath::Path(path) => {
-                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
-                        spec.name.to_string(),
-                        path.to_string(),
-                    ))
-                }
+                UrlOrPath::Path(path) => Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                    spec.name.to_string(),
+                    path.to_string(),
+                )),
             }
         }
         RequirementSource::Path { install_path, .. }

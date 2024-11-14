@@ -55,6 +55,21 @@ pub struct ToolContext {
     pub channels: Vec<Channel>,
 }
 
+impl Clone for ToolContext {
+    fn clone(&self) -> Self {
+        let gateway_config = ChannelConfig {
+            default: self.gateway_config.default.clone(),
+            per_channel: self.gateway_config.per_channel.clone(),
+        };
+
+        Self {
+            gateway_config,
+            client: self.client.clone(),
+            channels: self.channels.clone(),
+        }
+    }
+}
+
 impl ToolContext {
     pub fn new(
         gateway_config: ChannelConfig,
@@ -84,6 +99,10 @@ pub struct ToolCache {
 pub enum ToolCacheError {
     #[error("could not resolve '{}', {1}", .0.display())]
     Instantiate(PathBuf, which::Error),
+    #[error("could not install isolated tool '{}'", .0.as_display())]
+    Install(miette::Report),
+    #[error("could not determine default cache dir '{}'", .0.as_display())]
+    CacheDir(miette::Report),
 }
 
 /// Describes the specification of the tool. This can be used to cache tool
@@ -152,95 +171,15 @@ impl ToolCache {
 
         let tool: CachedTool = match spec {
             CacheableToolSpec::Isolated(spec) => {
-                // Don't isolate yet we are just pretending
-
-                let cache_dir = pixi_config::get_cache_dir().unwrap();
-
-                // collect existing dirs
-                // and check if matchspec can satisfy the existing cache
-
-                // construct the gateway
-                // construct a new config
-                let config = ChannelConfig {
-                    default: self.context.gateway_config.default.clone(),
-                    per_channel: self.context.gateway_config.per_channel.clone(),
-                };
-
-                let gateway = Gateway::builder()
-                    .with_client(self.context.client.clone())
-                    .with_cache_dir(cache_dir.join(CONDA_REPODATA_CACHE_DIR))
-                    .with_channel_config(config)
-                    .finish();
-
-                let repodata = gateway
-                    .query(
-                        self.context.channels.clone(),
-                        [Platform::current(), Platform::NoArch],
-                        spec.specs.clone(),
-                    )
-                    .recursive(true)
-                    .execute()
-                    .await
-                    .unwrap();
-
-                // Determine virtual packages of the current platform
-                let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
-                    .unwrap()
-                    .iter()
-                    .cloned()
-                    .map(GenericVirtualPackage::from)
-                    .collect();
-
-                let solved_records = Solver
-                    .solve(SolverTask {
-                        specs: spec.specs.clone(),
-                        virtual_packages,
-                        ..SolverTask::from_iter(&repodata)
-                    })
-                    .unwrap();
-
-                let cache = EnvironmentHash::new(
-                    spec.command.clone(),
-                    spec.specs,
-                    self.context
-                        .channels
-                        .iter()
-                        .map(|c| c.base_url().to_string())
-                        .collect(),
-                );
-
-                let cached_dir = cache_dir.join(CACHED_BUILD_ENVS_DIR).join(cache.name());
-
-                // Install the environment
-                Installer::new()
-                    .with_download_client(self.context.client.clone())
-                    .with_package_cache(PackageCache::new(
-                        cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-                    ))
-                    .install(&cached_dir, solved_records)
-                    .await
-                    .unwrap();
-
-                // get the activation scripts
-                let activator =
-                    Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current())
-                        .unwrap();
-
-                let activation_scripts = activator
-                    .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
-                    .unwrap();
-
-                IsolatedTool::new(spec.command, cached_dir, activation_scripts).into()
+                let cache_dir =
+                    pixi_config::get_cache_dir().map_err(|e| ToolCacheError::CacheDir(e))?;
+                CachedTool::Isolated(
+                    spec.install(&cache_dir, self.context.clone())
+                        .await
+                        .map_err(|e| ToolCacheError::Install(e))?,
+                )
             }
-            CacheableToolSpec::System(spec) => {
-                // let exec = if spec.command.is_absolute() {
-                //     spec.command.clone()
-                // } else {
-                //     which::which(&spec.command)
-                //         .map_err(|e| ToolCacheError::Instantiate(spec.command.clone(), e))?
-                // };
-                SystemTool::new(spec.command.to_string_lossy().to_string()).into()
-            }
+            CacheableToolSpec::System(spec) => SystemTool::new(spec.command).into(),
         };
 
         cache_entry.insert(tool.clone());

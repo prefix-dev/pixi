@@ -1,4 +1,5 @@
 use crate::{
+    build::BuildError,
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -727,7 +728,7 @@ pub async fn update_prefix_conda(
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<Url>,
-    build_channels: Vec<Channel>,
+    build_channels: Option<Vec<Channel>>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
@@ -737,7 +738,6 @@ pub async fn update_prefix_conda(
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
-    eprintln!("IN UPDATE PREFIX CONDA");
 
     let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
         .into_iter()
@@ -771,11 +771,15 @@ pub async fn update_prefix_conda(
                 per_channel: gateway_config.per_channel.clone(),
             };
             async move {
+                let build_channels = build_channels.clone().ok_or_else(|| {
+                    BuildError::BackendError(miette::miette!("no build section").into())
+                })?;
+
                 build_context
                     .build_source_record(
                         &record,
                         channels,
-                        build_channels.to_vec(),
+                        build_channels,
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),

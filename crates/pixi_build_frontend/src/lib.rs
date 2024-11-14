@@ -29,7 +29,7 @@ pub enum BackendOverride {
     Spec(MatchSpec),
 
     /// Overwrite the backend with a specific tool.
-    Path(PathBuf),
+    System(String),
 
     /// Use the given IO for the backend.
     Io(InProcessBackend),

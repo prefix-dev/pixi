@@ -5,7 +5,7 @@ use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, Tr
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
-use miette::Report;
+use miette::{miette, Report};
 use miette::{Diagnostic, Error, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
@@ -370,12 +370,9 @@ impl<'p> LockFileDerivedData<'p> {
             .project()
             .manifest()
             .build_section()
-            .ok_or_else(|| miette::miette!("No build section defined here"))?
-            .channels(&self.project.channel_config())
+            .map(|section| section.channels(&self.project.channel_config()))
+            .transpose()
             .into_diagnostic()?;
-
-        eprintln!("build dep channel urls {:?}", build_dep_channel_urls);
-
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
@@ -1699,8 +1696,8 @@ async fn spawn_solve_conda_environment_task(
         .project()
         .manifest()
         .build_section()
-        .ok_or_else(|| miette::miette!("build section not found"))?
-        .channels(&channel_config)
+        .map(|section| section.channels(&channel_config))
+        .transpose()
         .into_diagnostic()?;
 
     tokio::spawn(
@@ -1744,6 +1741,10 @@ async fn spawn_solve_conda_environment_task(
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
+                let build_channels = build_channels
+                    .clone()
+                    .ok_or_else(|| miette!("build section is not defined"))?;
+
                 // Create a metadata reporter if it doesn't exist yet.
                 let metadata_reporter = metadata_progress.get_or_insert_with(|| {
                     Arc::new(CondaMetadataProgress::new(
@@ -2222,8 +2223,8 @@ async fn spawn_create_prefix_task(
         .project()
         .manifest()
         .build_section()
-        .ok_or_else(|| miette::miette!("build section is missing"))?
-        .channels(&group.project().channel_config())
+        .map(|section| section.channels(&group.project().channel_config()))
+        .transpose()
         .into_diagnostic()?;
 
     // Spawn a task to determine the currently installed packages.

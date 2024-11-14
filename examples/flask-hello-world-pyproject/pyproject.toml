@@ -42,7 +42,9 @@ hatchling = "*"
 [tool.pixi.build]
 build-backend = "pixi-build-python"
 channels = [
-  "https://repo.prefix.dev/graf",
-  "https://fast.prefix.dev/conda-forge",
+  "wrong_channel",
+
+  #   "https://repo.prefix.dev/graf",
+  #   "https://fast.prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-python"]
