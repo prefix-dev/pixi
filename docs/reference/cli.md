@@ -201,7 +201,7 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 
 ##### Options
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided all features are upgraded.
+- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided the default feature will be used.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
