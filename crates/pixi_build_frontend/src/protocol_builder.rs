@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use rattler_conda_types::ChannelConfig;
-use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
     conda_build_protocol, pixi_protocol,

@@ -3,10 +3,10 @@ use fancy_display::FancyDisplay;
 use futures::TryStreamExt;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{miette, Report};
-use miette::{Diagnostic, Error, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -16,14 +16,12 @@ use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
     ConversionError,
 };
-use pypi_mapping::{self, Reporter};
-use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
+use pypi_mapping::{self};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    Arch, Channel, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{ChannelConfig, Gateway, RepoData};
+use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::PartialEq;
@@ -40,7 +38,6 @@ use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
-use crate::cli::config;
 use crate::environment::{read_environment_file, LockedEnvironmentHash};
 use crate::lock_file::reporter::{GatewayProgressReporter, SolveProgressBar};
 use crate::lock_file::PypiRecord;
@@ -1868,7 +1865,7 @@ async fn spawn_solve_conda_environment_task(
             if has_pypi_dependencies {
                 pb.set_message("extracting pypi packages");
                 pypi_mapping::amend_pypi_purls(
-                    client.into(),
+                    client,
                     &pypi_name_mapping_location,
                     records.iter_mut().filter_map(PixiRecord::as_binary_mut),
                     Some(pb.purl_amend_reporter()),

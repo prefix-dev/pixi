@@ -191,6 +191,10 @@ CondaPackageName = NonEmptyStr
 # The Build section #
 #####################
 class BuildSection(StrictBaseModel):
+    channels: list[Channel] = Field(
+        None,
+        description="The `conda` channels that will be used to get build dependencies",
+    )
     dependencies: list[MatchSpec] = Field(
         None, description="The dependencies for the build backend"
     )

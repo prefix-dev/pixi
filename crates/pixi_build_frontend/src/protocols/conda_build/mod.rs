@@ -8,7 +8,6 @@ use std::{
 use miette::Diagnostic;
 pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
-use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 
 use crate::{

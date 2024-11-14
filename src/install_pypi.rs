@@ -19,7 +19,7 @@ use pixi_uv_conversions::{
     to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_conda_types::Platform;
 use rattler_lock::{
     PackageHashes, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
 };

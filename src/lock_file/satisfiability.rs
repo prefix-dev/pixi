@@ -957,7 +957,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     FoundPackage::Conda(*repodata_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(
                     &to_normalize(&requirement.name)
-                        .map_err(|err| ConversionError::NameConversion(err))
+                        .map_err(ConversionError::NameConversion)
                         .map_err(From::from)
                         .map_err(Box::new)?,
                 ) {
@@ -1414,7 +1414,6 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use tokio::runtime::Handle;
 
     use super::*;
     use crate::Project;

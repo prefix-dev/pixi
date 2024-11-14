@@ -1,10 +1,7 @@
 mod cache;
 mod spec;
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::PathBuf};
 
 pub use cache::{ToolCache, ToolCacheError, ToolContext};
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};

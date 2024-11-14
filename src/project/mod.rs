@@ -914,7 +914,7 @@ impl Project {
         let affect_environment_and_platforms = affect_environment_and_platforms
             .iter()
             .filter_map(|(env, platform)| {
-                updated_lock_file.environment(&env).map(|e| (e, *platform))
+                updated_lock_file.environment(env).map(|e| (e, *platform))
             })
             .collect_vec();
 
@@ -922,7 +922,7 @@ impl Project {
             // Get all the conda and pypi records for the combination of environments and
             // platforms
             .iter()
-            .filter_map(|(env, platform)| env.pypi_packages_for_platform(platform.clone()))
+            .filter_map(|(env, platform)| env.pypi_packages_for_platform(*platform))
             .flatten()
             .collect_vec();
 
@@ -1183,6 +1183,7 @@ mod tests {
         foo = "1.0"
 
         [build]
+        channels = []
         dependencies = []
         build-backend = "foobar"
 

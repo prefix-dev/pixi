@@ -12,7 +12,6 @@ use pixi_consts::consts;
 use pixi_manifest::Manifest;
 pub use protocol::{InitializeError, Protocol};
 use rattler_conda_types::ChannelConfig;
-use reqwest_middleware::ClientWithMiddleware;
 pub(crate) use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use which::Error;

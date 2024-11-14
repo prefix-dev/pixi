@@ -37,7 +37,6 @@ def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
     )
 
     # really make sure that conda package was built
-    # finda a conda package
     package_to_be_built = next(manifest_path.parent.glob("*.conda"))
 
     assert package_to_be_built.exists()

@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use futures::TryFutureExt;
 use jsonrpsee::{
@@ -117,7 +117,6 @@ impl Protocol {
     ) -> Result<Self, InitializeError> {
         match tool.try_into_executable() {
             Ok(tool) => {
-                eprintln!("Spawning tool: {:?}", tool.executable());
                 // Spawn the tool and capture stdin/stdout.
                 let mut process = tokio::process::Command::from(tool.command())
                     .stdout(std::process::Stdio::piped())
@@ -126,9 +125,6 @@ impl Protocol {
                     .spawn()?;
 
                 let backend_identifier = tool.executable().clone();
-                // .file_stem()
-                // .and_then(OsStr::to_str)
-                // .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
 
                 // Acquire the stdin/stdout handles.
                 let stdin = process

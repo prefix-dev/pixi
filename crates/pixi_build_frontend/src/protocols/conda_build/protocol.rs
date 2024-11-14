@@ -57,11 +57,6 @@ impl Protocol {
             conda_render_executable
         };
 
-        // let conda_render_executable = if let Some(ext) = tool.executable().extension() {
-        //     conda_render_executable.with_extension(ext)
-        // } else {
-        //     conda_render_executable
-        // };
         let conda_render_tool = tool.with_executable(conda_render_executable);
 
         // TODO: Properly pass channels

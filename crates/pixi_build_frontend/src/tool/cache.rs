@@ -1,52 +1,15 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    path::PathBuf,
-};
+use std::{hash::Hash, path::PathBuf};
 
 use dashmap::{DashMap, Entry};
-use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{Channel, GenericVirtualPackage, MatchSpec, Platform};
-use rattler_repodata_gateway::{ChannelConfig, Gateway};
-use rattler_shell::{
-    activation::{ActivationVariables, Activator},
-    shell::ShellEnum,
-};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use reqwest_middleware::{reqwest::Client, ClientWithMiddleware};
+use rattler_conda_types::Channel;
+use rattler_repodata_gateway::ChannelConfig;
+use reqwest_middleware::ClientWithMiddleware;
 
 use super::IsolatedTool;
 use crate::{
     tool::{SystemTool, Tool, ToolSpec},
     IsolatedToolSpec, SystemToolSpec,
 };
-
-#[derive(Hash)]
-pub struct EnvironmentHash {
-    pub command: String,
-    pub specs: Vec<MatchSpec>,
-    pub channels: Vec<String>,
-}
-
-impl EnvironmentHash {
-    pub(crate) fn new(command: String, specs: Vec<MatchSpec>, channels: Vec<String>) -> Self {
-        Self {
-            command,
-            specs,
-            channels,
-        }
-    }
-
-    /// Returns the name of the environment.
-    pub(crate) fn name(&self) -> String {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        let hash = hasher.finish();
-        format!("{}-{:x}", &self.command, hash)
-    }
-}
 
 #[derive(Default, Debug)]
 pub struct ToolContext {
@@ -91,7 +54,11 @@ impl ToolContext {
 /// (nichita): it can also be seen as a way to create tools itself
 #[derive(Default, Debug)]
 pub struct ToolCache {
+    /// The cache of tools.
     pub cache: DashMap<CacheableToolSpec, CachedTool>,
+    /// The context for the tools.
+    /// It contains necessary details
+    /// for the tools to be resolved and installed
     pub context: ToolContext,
 }
 
@@ -156,7 +123,7 @@ impl ToolCache {
 
     /// Instantiate a tool from a specification.
     ///
-    /// If the tool is not already cached, it will be created and cached.
+    /// If the tool is not already cached, it will be created, installed and cached.
     pub async fn instantiate(&self, spec: ToolSpec) -> Result<Tool, ToolCacheError> {
         let spec = match spec {
             ToolSpec::Io(ipc) => return Ok(Tool::Io(ipc)),
@@ -171,12 +138,11 @@ impl ToolCache {
 
         let tool: CachedTool = match spec {
             CacheableToolSpec::Isolated(spec) => {
-                let cache_dir =
-                    pixi_config::get_cache_dir().map_err(|e| ToolCacheError::CacheDir(e))?;
+                let cache_dir = pixi_config::get_cache_dir().map_err(ToolCacheError::CacheDir)?;
                 CachedTool::Isolated(
                     spec.install(&cache_dir, self.context.clone())
                         .await
-                        .map_err(|e| ToolCacheError::Install(e))?,
+                        .map_err(ToolCacheError::Install)?,
                 )
             }
             CacheableToolSpec::System(spec) => SystemTool::new(spec.command).into(),
@@ -189,16 +155,15 @@ impl ToolCache {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
 
-    use futures::channel;
     use pixi_config::Config;
     use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness};
     use reqwest_middleware::ClientWithMiddleware;
 
     use super::ToolCache;
     use crate::{
-        tool::{IsolatedTool, SystemTool, Tool, ToolContext, ToolSpec},
+        tool::{ToolContext, ToolSpec},
         IsolatedToolSpec,
     };
 

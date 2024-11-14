@@ -1,7 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
 use pixi_manifest::BuildSection;
+use pixi_utils::EnvironmentHash;
 use rattler::{install::Installer, package_cache::PackageCache};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
 use rattler_repodata_gateway::Gateway;
@@ -14,7 +15,7 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 
 use crate::{BackendOverride, InProcessBackend};
 
-use super::{cache::EnvironmentHash, IsolatedTool, ToolContext};
+use super::{IsolatedTool, ToolContext};
 
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.
@@ -60,6 +61,7 @@ impl IsolatedToolSpec {
         }
     }
 
+    /// Installed the tool in the isolated environment.
     pub async fn install(
         &self,
         cache_dir: &Path,
@@ -120,7 +122,7 @@ impl IsolatedToolSpec {
             .await
             .unwrap();
 
-        // get the activation scripts
+        // Get the activation scripts
         let activator =
             Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current()).unwrap();
 

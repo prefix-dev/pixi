@@ -18,6 +18,7 @@ version = "0.1.0"
 
 [build]
 build-backend = "pixi-build-python"
+channels = ["https://repo.prefix.dev/pixi-build-backends"]
 dependencies = ["pixi-build-python *"]
 
 
