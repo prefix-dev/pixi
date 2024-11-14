@@ -14,7 +14,7 @@ use crate::{
 /// The frontend for building packages.
 pub struct BuildFrontend {
     /// The cache for tools. This is used to avoid re-installing tools.
-    pub tool_cache: Arc<ToolCache>,
+    tool_cache: Arc<ToolCache>,
 
     /// The channel configuration used by the frontend
     channel_config: ChannelConfig,
@@ -76,7 +76,7 @@ impl BuildFrontend {
     }
 
     /// Sets the tool context
-    pub fn with_tool_config(self, context: ToolContext) -> Self {
+    pub fn with_tool_context(self, context: ToolContext) -> Self {
         let tool_cache = ToolCache {
             cache: self.tool_cache.cache.clone(),
             context,

@@ -114,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
-        .with_tool_config(tool_config)
+        .with_tool_context(tool_config)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
             build_tool_override: backend_override,

@@ -117,6 +117,8 @@ impl ToolCache {
         }
     }
 
+    #[cfg(test)]
+    /// Set the context for the tool cache.
     pub fn with_context(self, context: ToolContext) -> Self {
         Self { context, ..self }
     }

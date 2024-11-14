@@ -261,7 +261,7 @@ impl BuildContext {
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
             .with_cache_dir(self.cache_dir.clone())
-            .with_tool_config(tool_config)
+            .with_tool_context(tool_config)
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
                 build_tool_override: Default::default(),
@@ -505,7 +505,7 @@ impl BuildContext {
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
-            .with_tool_config(tool_config)
+            .with_tool_context(tool_config)
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
                 build_tool_override: Default::default(),
