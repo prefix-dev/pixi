@@ -11,17 +11,13 @@ use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use pixi_consts::consts;
-#[cfg(feature = "rattler_repodata_gateway")]
-use rattler_conda_types::CondaUrl;
 use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
-#[cfg(feature = "rattler_repodata_gateway")]
 use rattler_repodata_gateway::{Gateway, SourceConfig};
-#[cfg(feature = "rattler_repodata_gateway")]
 use reqwest_middleware::ClientWithMiddleware;
-use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serialize};
+use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
 pub fn default_channel_config() -> ChannelConfig {
@@ -135,7 +131,7 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
@@ -144,43 +140,8 @@ pub struct RepodataConfig {
     #[serde(flatten)]
     per_channel: HashMap<Url, RepodataChannelConfig>,
 }
-impl RepodataConfig {}
-
-/// Custom Deserialize to ensure `post_deserialize` is called to merge the default and per_channel configs.
-impl<'de> Deserialize<'de> for RepodataConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Helper struct for deserialization to avoid recursion
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct RawRepodataConfig {
-            #[serde(flatten)]
-            default: RepodataChannelConfig,
-            #[serde(flatten)]
-            per_channel: HashMap<Url, RepodataChannelConfig>,
-        }
-        let raw_config = RawRepodataConfig::deserialize(deserializer)?;
-
-        let mut config = RepodataConfig {
-            default: raw_config.default,
-            per_channel: raw_config.per_channel,
-        };
-
-        config.post_deserialize();
-        Ok(config)
-    }
-}
 
 impl RepodataConfig {
-    /// Merge the default `RepodataChannelConfig` into the per_channel ones.
-    fn post_deserialize(&mut self) {
-        for (_url, channel_config) in self.per_channel.iter_mut() {
-            *channel_config = channel_config.merge(self.default.clone());
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.default.is_empty() && self.per_channel.is_empty()
     }
@@ -245,7 +206,6 @@ impl RepodataChannelConfig {
     }
 }
 
-#[cfg(feature = "rattler_repodata_gateway")]
 impl From<RepodataChannelConfig> for SourceConfig {
     fn from(value: RepodataChannelConfig) -> Self {
         SourceConfig {
@@ -554,23 +514,26 @@ impl From<ConfigCli> for Config {
     }
 }
 
-#[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
         rattler_repodata_gateway::ChannelConfig::from(&config)
     }
 }
 
-#[cfg(feature = "rattler_repodata_gateway")]
 impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: &Config) -> Self {
-        let default = config.repodata_config.default.clone().into();
+        let repodata_config = &config.repodata_config;
+        let default = repodata_config.default.clone().into();
 
-        let per_channel = config
-            .repodata_config
+        let per_channel = repodata_config
             .per_channel
             .iter()
-            .map(|(url, config)| (CondaUrl::from(url.clone()), config.clone().into()))
+            .map(|(url, config)| {
+                (
+                    url.clone(),
+                    config.merge(repodata_config.default.clone()).into(),
+                )
+            })
             .collect();
 
         rattler_repodata_gateway::ChannelConfig {
@@ -1001,7 +964,6 @@ impl Config {
     }
 
     /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
-    #[cfg(feature = "rattler_repodata_gateway")]
     pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
         // Determine the cache directory and fall back to sane defaults otherwise.
         let cache_dir = get_cache_dir().unwrap_or_else(|e| {

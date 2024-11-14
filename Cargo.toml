@@ -241,7 +241,7 @@ uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
 fs-err = { workspace = true, features = ["tokio"] }
-pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
+pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
