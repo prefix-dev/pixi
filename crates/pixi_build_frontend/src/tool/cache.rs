@@ -11,13 +11,22 @@ use crate::{
     IsolatedToolSpec, SystemToolSpec,
 };
 
+/// The tool context,
+/// containing client, channels and gateway configuration
+/// that will be used to resolve and install tools.
+
 #[derive(Default, Debug)]
 pub struct ToolContext {
+    /// The gateway configuration used to fetch repodata.
     pub gateway_config: ChannelConfig,
+    /// Authenticated client to use for fetching repodata.
     pub client: ClientWithMiddleware,
+    /// The channels to use for resolving tools.
     pub channels: Vec<Channel>,
 }
 
+/// gateway::ChannelConfig does not implement Clone currently
+/// so we need to implement it manually
 impl Clone for ToolContext {
     fn clone(&self) -> Self {
         let gateway_config = ChannelConfig {
@@ -34,6 +43,7 @@ impl Clone for ToolContext {
 }
 
 impl ToolContext {
+    /// Create a new tool context.
     pub fn new(
         gateway_config: ChannelConfig,
         client: ClientWithMiddleware,
