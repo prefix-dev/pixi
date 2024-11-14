@@ -47,8 +47,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .manifest
                     .remove_pypi_dependency(
                         name,
-                        &dependency_config.platform,
-                        &dependency_config.feature_name(),
+                        &dependency_config.platforms,
+                        &dependency_config.feature,
                     )
                     .wrap_err(format!(
                         "failed to remove PyPI dependency: '{}'",
@@ -63,8 +63,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .remove_dependency(
                         name,
                         spec_type,
-                        &dependency_config.platform,
-                        &dependency_config.feature_name(),
+                        &dependency_config.platforms,
+                        &dependency_config.feature,
                     )
                     .wrap_err(format!(
                         "failed to remove dependency: '{}'",

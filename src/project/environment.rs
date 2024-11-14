@@ -128,6 +128,25 @@ impl<'p> Environment<'p> {
             return Platform::Osx64;
         }
 
+        // If the current platform is win-arm64 and the environment supports win-64,
+        // return win-64.
+        if current.is_windows() && self.platforms().contains(&Platform::Win64) {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.project.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
+                    );
+                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                    fs::create_dir_all(warn_folder).and_then(|_| {
+                        std::fs::File::create(emulation_warn)
+                    }).ok();
+                }
+            });
+            return Platform::Win64;
+        }
+
         if self.platforms().len() == 1 {
             // Take the first platform and see if it is a WASM one.
             if let Some(platform) = self.platforms().iter().next() {

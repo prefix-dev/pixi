@@ -1105,14 +1105,14 @@ def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: 
 
 
 @pytest.mark.skipif(platform.system() == "Windows", reason="Not reliable on Windows")
-def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
     package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
-        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
         env=env,
     )
     assert package0_1_0.is_file()
@@ -1121,7 +1121,7 @@ def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, global_update_channel_
     # Install the same package but with a different version
     # The old version should be removed and the new version should be installed without error.
     verify_cli_command(
-        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.2.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.2.0"],
         env=env,
     )
 
@@ -1350,7 +1350,7 @@ def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channe
 
 
 def test_global_update_single_package(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     # Test update with no environments
@@ -1361,7 +1361,7 @@ def test_global_update_single_package(
 
     # Test update of a single package
     verify_cli_command(
-        [pixi, "global", "install", "--channel", global_update_channel_1, "package 0.1.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package 0.1.0"],
         env=env,
     )
     # Replace the version with a "*"
@@ -1408,7 +1408,7 @@ def test_global_update_single_package_with_transient_dependency(
 
 
 def test_global_update_all_packages(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
@@ -1418,7 +1418,7 @@ def test_global_update_all_packages(
             "global",
             "install",
             "--channel",
-            global_update_channel_1,
+            multiple_versions_channel_1,
             "package2==0.1.0",
             "package==0.1.0",
         ],
@@ -1461,7 +1461,7 @@ def test_global_update_all_packages(
 
 
 def test_global_update_multiple_packages_in_one_env(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
@@ -1471,7 +1471,7 @@ def test_global_update_multiple_packages_in_one_env(
             "global",
             "install",
             "--channel",
-            global_update_channel_1,
+            multiple_versions_channel_1,
             "--environment",
             "my-packages",
             "package2==0.1.0",
@@ -1517,14 +1517,14 @@ def test_global_update_multiple_packages_in_one_env(
     assert "0.2.0" in bin_file_package2.read_text()
 
 
-def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1: str) -> None:
+def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
     package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
-        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
         env=env,
     )
     assert package0_1_0.is_file()
@@ -1554,7 +1554,7 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, global_update_channel_1
 
 
 def test_pixi_update_subset_expose(
-    pixi: Path, tmp_path: Path, global_update_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
@@ -1562,7 +1562,7 @@ def test_pixi_update_subset_expose(
     package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
-        [pixi, "global", "install", "--channel", global_update_channel_1, "package==0.1.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
         env=env,
     )
     assert package0_1_0.is_file()

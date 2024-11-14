@@ -9,13 +9,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "5709cf019ed8a09cba89336be06def6c",
+      "md5": "d7bc95b275a95933afdcfc8b43485ea6",
       "name": "dummy-b",
       "platform": "win",
-      "sha256": "614e86b48c42c561eb2a34ef6edc969cad150c6e1158a4f279c53d1bc43d66a7",
+      "sha256": "8665d5f04c8149ab3c8b0860a183c2193de796fdfbf536be6b168fa9e36f3604",
       "size": 1157,
       "subdir": "win-64",
-      "timestamp": 1730900411760,
+      "timestamp": 1730898132483,
       "version": "0.1.0"
     },
     "dummy-x-0.1.0-h9490d1a_0.conda": {
@@ -23,13 +23,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "a23a9b6385a56cb1ef39e019669ed6ba",
+      "md5": "5b55c726ced58cc0b00c24b5e0dceb22",
       "name": "dummy-x",
       "platform": "win",
-      "sha256": "0170b7e5e0716f56f2df5a4f85e96ce05dbde8b41613f9d616bb80ee528eff87",
+      "sha256": "a59d0e871826438b2d8abbdec0ec4429b40442b58e966c3dd21656ded2d87f4d",
       "size": 1159,
       "subdir": "win-64",
-      "timestamp": 1730900411758,
+      "timestamp": 1730898132483,
       "version": "0.1.0"
     }
   },

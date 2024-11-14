@@ -136,7 +136,7 @@ jobs:
           workspaces: ". -> target-pixi"
           key: ${{ hashFiles('pixi.lock') }}
       - name: Test pixi
-        run: pixi run test-workspace
+        run: pixi run test-slow
 
   build:
     name: Build Binary | ${{ matrix.name }}
@@ -146,30 +146,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {
-              name: "Linux-x86_64",
-              target: x86_64-unknown-linux-musl,
-              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
-            }
-          - {
-              name: "Linux-aarch64",
-              target: aarch64-unknown-linux-musl,
-              os: ubuntu-latest,
-            }
-
-          - { name: "macOS-x86", target: x86_64-apple-darwin, os: macos-13 }
-          - { name: "macOS-arm", target: aarch64-apple-darwin, os: macos-14 } # macOS-14 is the ARM chipset
-
-          - {
-              name: "Windows",
-              target: x86_64-pc-windows-msvc,
-              os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
-            }
-          - {
-              name: "Windows-arm",
-              target: aarch64-pc-windows-msvc,
-              os: windows-latest,
-            }
+          - name: "Linux-x86_64"
+            target: x86_64-unknown-linux-musl
+            os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'ubuntu-latest' || '8core_ubuntu_latest_runner' }}"
+          - name: "Linux-aarch64"
+            target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          - name: "macOS-x86"
+            target: x86_64-apple-darwin
+            os: macos-13
+          - name: "macOS-arm"
+            target: aarch64-apple-darwin
+            os: macos-14
+          - name: "Windows"
+            target: x86_64-pc-windows-msvc
+            os: "${{ contains(github.event.pull_request.labels.*.name, 'ci:free') && 'windows-latest' || '16core_windows_latest_runner' }}"
+          - name: "Windows-arm"
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
@@ -208,12 +202,6 @@ jobs:
         env:
           # cargo-wix does not require static crt
           RUSTFLAGS: ""
-
-      - name: Ensure cache directory exists
-        shell: bash
-        if: matrix.os == 'ubuntu-20.04' && matrix.use-cross
-        run: |
-          mkdir -p ${XDG_CACHE_HOME}
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -270,10 +258,11 @@ jobs:
           BIN_PATH="target/${{ matrix.target }}/${CARGO_PROFILE}/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
-          echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
-          echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
-          echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
-
+          {
+          echo "BIN_PATH=${BIN_PATH}"
+          echo "BIN_NAME=${BIN_NAME}"
+          echo "EXE_SUFFIX=${EXE_SUFFIX}"
+          } >> $GITHUB_OUTPUT
       - name: Build msi Installer
         if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
@@ -309,7 +298,8 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
 
           # create temporary keychain
-          export KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          export KEYCHAIN_PASSWORD
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -339,7 +329,6 @@ jobs:
 
           # notarize binary
           xcrun notarytool submit pixi.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
-
       - name: Create tarball
         id: package
         shell: bash
