@@ -212,6 +212,6 @@ mod tests {
 
         let exec = tool.as_executable().unwrap();
 
-        let output = exec.command().arg("hello").spawn().unwrap();
+        exec.command().arg("hello").spawn().unwrap();
     }
 }
