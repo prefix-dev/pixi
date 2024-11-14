@@ -1943,7 +1943,6 @@ async fn spawn_solve_pypi_task(
                     "missing python interpreter from environment"
                 )
             })?;
-        tracing::warn!("{:?}", &python_path);
 
         let start = Instant::now();
 
