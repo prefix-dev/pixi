@@ -75,7 +75,7 @@ impl BuildFrontend {
         }
     }
 
-    /// Sets the tool configuration
+    /// Sets the tool context
     pub fn with_tool_config(self, context: ToolContext) -> Self {
         let tool_cache = ToolCache {
             cache: self.tool_cache.cache.clone(),
