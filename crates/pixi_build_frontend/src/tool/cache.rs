@@ -212,10 +212,6 @@ mod tests {
 
         let exec = tool.as_executable().unwrap();
 
-        eprintln!("{:?}", exec);
-
         let output = exec.command().arg("hello").spawn().unwrap();
-
-        eprintln!("{:?}", output);
     }
 }
