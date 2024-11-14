@@ -3577,10 +3577,18 @@ dependencies = [
  "jsonrpsee",
  "miette 7.2.0",
  "pixi_build_types",
+ "pixi_config",
  "pixi_consts",
  "pixi_manifest",
+ "pixi_utils",
+ "rattler",
  "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "rattler_virtual_packages",
  "regex",
+ "reqwest-middleware",
  "rstest",
  "serde",
  "serde_json",
@@ -3636,7 +3644,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
- "rattler_cache 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_cache",
  "url",
 ]
 
@@ -4185,7 +4193,7 @@ dependencies = [
  "memmap2 0.9.5",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.8 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4195,7 +4203,7 @@ dependencies = [
  "regex",
  "reqwest",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "simple_spawn_blocking",
  "smallvec",
  "tempfile",
  "thiserror",
@@ -4203,34 +4211,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "rattler_cache"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e57222ac28f224f675de54452b239f532e4f55ea36836526ae75e5a73cce01"
-dependencies = [
- "anyhow",
- "dashmap",
- "digest",
- "dirs",
- "fs4",
- "futures",
- "fxhash",
- "itertools 0.13.0",
- "parking_lot 0.12.3",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "reqwest",
- "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -4253,7 +4233,7 @@ dependencies = [
  "rattler_package_streaming",
  "reqwest",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "simple_spawn_blocking",
  "thiserror",
  "tokio",
  "tracing",
@@ -4440,7 +4420,7 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.8 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4451,7 +4431,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/conda/rattler?branch=feat/pixi-build)",
+ "simple_spawn_blocking",
  "superslice",
  "tempfile",
  "thiserror",
@@ -5503,15 +5483,6 @@ dependencies = [
  "num-traits",
  "thiserror",
  "time",
-]
-
-[[package]]
-name = "simple_spawn_blocking"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
-dependencies = [
- "tokio",
 ]
 
 [[package]]

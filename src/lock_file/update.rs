@@ -23,8 +23,9 @@ use rattler_conda_types::{
     Arch, Channel, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform, RepoDataRecord,
 };
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_repodata_gateway::{ChannelConfig, Gateway, RepoData};
 use rattler_solve::ChannelPriority;
+use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::PartialEq;
 use std::{
     collections::{HashMap, HashSet},
@@ -39,6 +40,7 @@ use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
+use crate::cli::config;
 use crate::environment::{read_environment_file, LockedEnvironmentHash};
 use crate::lock_file::reporter::{GatewayProgressReporter, SolveProgressBar};
 use crate::lock_file::PypiRecord;
@@ -364,6 +366,16 @@ impl<'p> LockFileDerivedData<'p> {
             .channel_urls(&self.project.channel_config())
             .into_diagnostic()?;
 
+        let build_dep_channel_urls = environment
+            .project()
+            .manifest()
+            .build_section()
+            .ok_or_else(|| miette::miette!("No build section defined here"))?
+            .channels(&self.project.channel_config())
+            .into_diagnostic()?;
+
+        eprintln!("build dep channel urls {:?}", build_dep_channel_urls);
+
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
@@ -379,6 +391,7 @@ impl<'p> LockFileDerivedData<'p> {
                 .map(GenericVirtualPackage::from)
                 .collect(),
             channel_urls,
+            build_dep_channel_urls,
             platform,
             &format!(
                 "{} environment '{}'",
@@ -392,6 +405,7 @@ impl<'p> LockFileDerivedData<'p> {
             "",
             self.io_concurrency_limit.clone().into(),
             self.build_context.clone(),
+            environment.project().config().into(),
         )
         .await?;
 
@@ -1125,7 +1139,7 @@ impl<'p> UpdateContext<'p> {
                     project.repodata_gateway().clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),
-                    project.client().clone(),
+                    project.authenticated_client().clone(),
                     channel_priority,
                     self.build_context.clone(),
                 )
@@ -1654,7 +1668,7 @@ async fn spawn_solve_conda_environment_task(
     repodata_gateway: Gateway,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     channel_priority: ChannelPriority,
     build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
@@ -1678,6 +1692,16 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
+
+    let config = group.project().config().clone();
+
+    let build_channels = group
+        .project()
+        .manifest()
+        .build_section()
+        .ok_or_else(|| miette::miette!("build section not found"))?
+        .channels(&channel_config)
+        .into_diagnostic()?;
 
     tokio::spawn(
         async move {
@@ -1713,6 +1737,9 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
+            let build_channels = &build_channels;
+            let config = &config;
+
             let mut metadata_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
@@ -1729,12 +1756,15 @@ async fn spawn_solve_conda_environment_task(
                         .extract_source_metadata(
                             source_spec,
                             &channel_urls,
+                            build_channels.clone(),
                             platform,
                             virtual_packages.clone(),
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
                             build_id,
+                            config.into(),
+                            client.clone(),
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(
@@ -2182,9 +2212,18 @@ async fn spawn_create_prefix_task(
 ) -> miette::Result<TaskResult> {
     let group_name = group.name().clone();
     let prefix = group.prefix();
+    let config = group.project().config();
     let client = group.project().authenticated_client().clone();
     let channels = group
         .channel_urls(&group.project().channel_config())
+        .into_diagnostic()?;
+
+    let build_channels = group
+        .project()
+        .manifest()
+        .build_section()
+        .ok_or_else(|| miette::miette!("build section is missing"))?
+        .channels(&group.project().channel_config())
         .into_diagnostic()?;
 
     // Spawn a task to determine the currently installed packages.
@@ -2207,6 +2246,7 @@ async fn spawn_create_prefix_task(
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
+        let config = config.clone();
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
@@ -2219,6 +2259,7 @@ async fn spawn_create_prefix_task(
                 pixi_records.records.clone(),
                 build_virtual_packages,
                 channels,
+                build_channels,
                 Platform::current(),
                 &format!(
                     "{} python environment to solve pypi packages for '{}'",
@@ -2232,6 +2273,7 @@ async fn spawn_create_prefix_task(
                 "  ",
                 io_concurrency_limit.into(),
                 build_context,
+                config.into(),
             )
             .await?;
             let end = Instant::now();

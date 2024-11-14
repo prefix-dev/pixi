@@ -7,6 +7,7 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 
 [build]
 build-backend = "pixi-build-cmake"
+channels = ["https://prefix.dev/graf", "https://fast.prefix.dev/conda-forge"]
 dependencies = ["pixi-build-cmake"]
 
 [tasks.start]

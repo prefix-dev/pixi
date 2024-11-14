@@ -8,6 +8,7 @@ use std::{
 use miette::Diagnostic;
 pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 
 use crate::{
@@ -96,8 +97,8 @@ impl ProtocolBuilder {
         }
     }
 
-    pub fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
-        let tool = tool.instantiate(self.backend_spec)?;
+    pub async fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
+        let tool = tool.instantiate(self.backend_spec).await?;
         Ok(Protocol {
             _channel_config: self.channel_config,
             tool,

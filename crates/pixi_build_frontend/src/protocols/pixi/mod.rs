@@ -12,6 +12,7 @@ use pixi_consts::consts;
 use pixi_manifest::Manifest;
 pub use protocol::{InitializeError, Protocol};
 use rattler_conda_types::ChannelConfig;
+use reqwest_middleware::ClientWithMiddleware;
 pub(crate) use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use which::Error;
@@ -122,7 +123,12 @@ impl ProtocolBuilder {
         let tool_spec = self
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
-        let tool = tool.instantiate(tool_spec).map_err(FinishError::Tool)?;
+
+        let tool = tool
+            .instantiate(tool_spec)
+            .await
+            .map_err(FinishError::Tool)?;
+
         Ok(Protocol::setup(
             self.source_dir,
             self.manifest.path,

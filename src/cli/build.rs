@@ -84,8 +84,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Instantiate a protocol for the source directory.
     let channel_config = project.channel_config();
+    let channels = project
+        .manifest()
+        .build_section()
+        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?
+        .channels(&channel_config)
+        .into_diagnostic()?;
+
+    let tool_config = pixi_build_frontend::ToolContext {
+        gateway_config: project.config().into(),
+        client: project.authenticated_client().clone(),
+        channels,
+    };
+
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
+        .with_tool_config(tool_config)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
             build_tool_override: Default::default(),
@@ -94,6 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
+
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
     let pixi_dir = &project.pixi_dir();

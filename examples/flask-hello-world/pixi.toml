@@ -11,3 +11,11 @@ start = "python -m flask run --port=5050"
 
 [dependencies]
 flask = "2.*"
+
+[build]
+build-backend = "pixi-build-python"
+channels = [
+  "file:///Users/graf/projects/oss/pixi-build-backends/output",
+  "https://fast.prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]

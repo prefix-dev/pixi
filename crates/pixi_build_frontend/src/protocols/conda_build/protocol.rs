@@ -50,12 +50,18 @@ impl Protocol {
 
         // Construct a new tool that can be used to invoke conda-render instead of the
         // original tool.
-        let conda_render_executable = tool.executable().with_file_name("conda-render");
-        let conda_render_executable = if let Some(ext) = tool.executable().extension() {
-            conda_render_executable.with_extension(ext)
+        let conda_render_executable = String::from("conda-render");
+        let conda_render_executable = if cfg!(windows) {
+            format!("{}.exe", conda_render_executable)
         } else {
             conda_render_executable
         };
+
+        // let conda_render_executable = if let Some(ext) = tool.executable().extension() {
+        //     conda_render_executable.with_extension(ext)
+        // } else {
+        //     conda_render_executable
+        // };
         let conda_render_tool = tool.with_executable(conda_render_executable);
 
         // TODO: Properly pass channels

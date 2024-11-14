@@ -21,7 +21,9 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 flask-hello-world-pyproject = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
-flask = "2.*"
+# flask = "2.*"
+flask-hello-world-pyproject = { path = "." }
+
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
@@ -35,3 +37,12 @@ test = "pytest -v tests/*"
 
 [tool.pixi.host-dependencies]
 hatchling = "*"
+
+
+[tool.pixi.build]
+build-backend = "pixi-build-python"
+channels = [
+  "https://repo.prefix.dev/graf",
+  "https://fast.prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]
