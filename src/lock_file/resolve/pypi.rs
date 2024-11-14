@@ -40,7 +40,7 @@ use uv_distribution_types::{
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
-use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
+use uv_python::{Interpreter, PythonEnvironment};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -50,7 +50,8 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        package_identifier, resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
+        package_identifier, records_by_name::HasNameVersion,
+        resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
         PypiPackageIdentifier, PypiRecord, UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
@@ -213,11 +214,31 @@ pub async fn resolve_pypi(
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
     // Construct an interpreter from the conda environment.
+    let interpreter_version = python_record
+        .version()
+        .as_major_minor()
+        .expect("version should be set");
+    let python_specifier = uv_pep440::VersionSpecifier::from_version(
+        uv_pep440::Operator::EqualStar,
+        uv_pep440::Version::from_str(&format!(
+            "{}.{}",
+            interpreter_version.0, interpreter_version.1
+        ))
+        .expect("could not parse version"),
+    )
+    .into_diagnostic()
+    .context("error creating version specifier for python version")?;
+    let requires_python = uv_resolver::RequiresPython::from_specifiers(
+        &uv_pep440::VersionSpecifiers::from(python_specifier),
+    );
     let interpreter = Interpreter::query(python_location, &context.cache)
         .into_diagnostic()
         .wrap_err("failed to query python interpreter")?;
-
-    tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
+    tracing::debug!(
+        "using Python Interpreter (should be assumed for building only): {}",
+        interpreter.key()
+    );
+    tracing::info!("using requires python specifier: {}", requires_python);
 
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
@@ -229,6 +250,7 @@ pub async fn resolve_pypi(
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
             .index_strategy(index_strategy)
+            .markers(&marker_environment)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
@@ -351,7 +373,7 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
 
-    let resolver_env = ResolverEnvironment::specific(marker_environment.into());
+    let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
     let lookahead_index = InMemoryIndex::default();
@@ -387,17 +409,6 @@ pub async fn resolve_pypi(
         lookaheads,
     );
 
-    let interpreter_version = interpreter.python_version();
-    let python_specifier = uv_pep440::VersionSpecifier::from_version(
-        uv_pep440::Operator::EqualStar,
-        interpreter_version.clone(),
-    )
-    .into_diagnostic()
-    .context("error creating version specifier for python version")?;
-    let requires_python = uv_resolver::RequiresPython::from_specifiers(
-        &uv_pep440::VersionSpecifiers::from(python_specifier),
-    );
-
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
@@ -423,14 +434,13 @@ pub async fn resolve_pypi(
     // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
     // one. As we have noted in the comment above.
     let resolver_in_memory_index = InMemoryIndex::default();
-    let python_version = PythonVersion::from_str(&interpreter_version.to_string())
-        .expect("could not get version from interpreter");
+
     let resolution = Resolver::new_custom_io(
         manifest,
         options,
         &context.hash_strategy,
         resolver_env,
-        &PythonRequirement::from_python_version(&interpreter, &python_version),
+        &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         &resolver_in_memory_index,
         &git_resolver,
         &context.capabilities,
