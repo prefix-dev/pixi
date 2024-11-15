@@ -2868,6 +2868,16 @@ It will only update the lock file if the dependencies in the <a href="../project
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>pixi<span class="w"> </span>upgrade<span class="w"> </span>--json
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>pixi<span class="w"> </span>upgrade<span class="w"> </span>--dry-run
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code>pixi upgrade</code> command will only update <code>version</code>s, except when you specify the exact package name (<code>pixi upgrade numpy</code>).</p>
+<p>Then it will remove all fields, apart from:
+- <code>build</code> field containing a wildcard <code>*</code>
+- <code>channel</code>
+- <code>file_name</code>
+- <code>url</code>
+- <code>subdir</code>.</p>
+</div>
 <h2 id="run"><code>run</code><a class="headerlink" href="#run" title="Permanent link">#</a></h2>
 <p>The <code>run</code> commands first checks if the environment is ready to use.
 When you didn't run <code>pixi install</code> the run command will do that for you.
