@@ -3,10 +3,10 @@ use fancy_display::FancyDisplay;
 use futures::TryStreamExt;
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
-use indicatif::{HumanBytes, ProgressBar, ProgressState};
+use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::Report;
-use miette::{Diagnostic, Error, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -17,11 +17,9 @@ use pixi_uv_conversions::{
     ConversionError,
 };
 use pypi_mapping::{self, Reporter};
-use pypi_modifiers::{pypi_marker_env::determine_marker_environment, pypi_tags::is_python_record};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    Arch, Channel, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
@@ -1709,7 +1707,11 @@ async fn spawn_solve_conda_environment_task(
             // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
-                .map(|c| c.clone().into_base_url(&channel_config))
+                .map(|c| {
+                    c.clone()
+                        .into_base_url(&channel_config)
+                        .map(|ch| ch.url().clone())
+                })
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 

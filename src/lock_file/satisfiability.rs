@@ -19,7 +19,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
     ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
@@ -389,25 +389,19 @@ pub fn verify_environment_satisfiability(
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
     let config = environment.project().channel_config();
-    let channels: Vec<Url> = grouped_env
+    let channels: Vec<ChannelUrl> = grouped_env
         .channels()
         .into_iter()
-        .map(|channel| {
-            channel
-                .clone()
-                .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
-        })
+        .map(|channel| channel.clone().into_base_url(&config))
         .try_collect()?;
 
-    let locked_channels: Vec<Url> = locked_environment
+    let locked_channels: Vec<ChannelUrl> = locked_environment
         .channels()
         .iter()
         .map(|c| {
             NamedChannelOrUrl::from_str(&c.url)
                 .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
-                .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
+                .into_base_url(&config)
         })
         .try_collect()?;
     if !channels.eq(&locked_channels) {
@@ -729,12 +723,10 @@ pub(crate) fn pypi_satifisfies_requirement(
                         url.to_string(),
                     ))
                 }
-                UrlOrPath::Path(path) => {
-                    return Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
-                        spec.name.to_string(),
-                        path.to_string(),
-                    ))
-                }
+                UrlOrPath::Path(path) => Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                    spec.name.to_string(),
+                    path.to_string(),
+                )),
             }
         }
         RequirementSource::Path { install_path, .. }
@@ -959,7 +951,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     FoundPackage::Conda(*repodata_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(
                     &to_normalize(&requirement.name)
-                        .map_err(|err| ConversionError::NameConversion(err))
+                        .map_err(ConversionError::NameConversion)
                         .map_err(From::from)
                         .map_err(Box::new)?,
                 ) {

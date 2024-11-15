@@ -201,7 +201,7 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 
 ##### Options
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided all features are upgraded.
+- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided the default feature will be used.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
@@ -215,6 +215,16 @@ pixi upgrade --feature lint python
 pixi upgrade --json
 pixi upgrade --dry-run
 ```
+
+!!! note
+    The `pixi upgrade` command will only update `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
+
+    Then it will remove all fields, apart from:
+    - `build` field containing a wildcard `*`
+    - `channel`
+    - `file_name`
+    - `url`
+    - `subdir`.
 
 ## `run`
 
@@ -324,6 +334,7 @@ pixi exec --force-reinstall -s ipython -s py-rattler ipython
 Removes dependencies from the [manifest file](project_configuration.md).
 
 If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+
 - the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
 - pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
 
