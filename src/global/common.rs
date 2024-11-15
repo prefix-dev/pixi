@@ -998,7 +998,7 @@ mod tests {
         #[cfg(windows)]
         {
             for script_name in script_names {
-                let script_path = bin_dir.path().join(format!("{}.bat", script_name));
+                let script_path = bin_dir.path().join(format!("{}.exe", script_name));
                 let script = format!(
                     r#"
             @"{}" %*
@@ -1043,10 +1043,7 @@ mod tests {
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
                 .await
                 .unwrap();
-        assert_eq!(
-            to_remove.pop().unwrap().exposed_name().to_string(),
-            "nested_test"
-        );
+        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
         assert_eq!(to_add.pop().unwrap().to_string(), "nested_test");
 
         // Test to_remove when nothing should be exposed
@@ -1055,10 +1052,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert_eq!(
-            to_remove.pop().unwrap().exposed_name().to_string(),
-            "nested_test"
-        );
+        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
         assert!(to_add.is_empty());
     }
 
