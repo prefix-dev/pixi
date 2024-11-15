@@ -396,7 +396,7 @@ pub fn verify_environment_satisfiability(
             channel
                 .clone()
                 .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
+                .map(|channel| channel.base_url.url().clone())
         })
         .try_collect()?;
 
@@ -407,7 +407,7 @@ pub fn verify_environment_satisfiability(
             NamedChannelOrUrl::from_str(&c.url)
                 .unwrap_or_else(|_err| NamedChannelOrUrl::Name(c.url.clone()))
                 .into_channel(&config)
-                .map(|channel| channel.base_url().clone())
+                .map(|channel| channel.base_url.url().clone())
         })
         .try_collect()?;
     if !channels.eq(&locked_channels) {

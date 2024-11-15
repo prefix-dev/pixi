@@ -461,6 +461,7 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
                 jlap_enabled: !config.disable_jlap.unwrap_or(false),
                 zstd_enabled: !config.disable_zstd.unwrap_or(false),
                 bz2_enabled: !config.disable_bzip2.unwrap_or(false),
+                sharded_enabled: false,
                 cache_action: Default::default(),
             })
             .unwrap_or_default();

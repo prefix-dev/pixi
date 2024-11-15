@@ -55,7 +55,11 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
         self.channels()
             .into_iter()
             .cloned()
-            .map(|channel| channel.into_base_url(channel_config))
+            .map(|channel| {
+                channel
+                    .into_base_url(channel_config)
+                    .map(|ch| ch.url().clone())
+            })
             .collect()
     }
 

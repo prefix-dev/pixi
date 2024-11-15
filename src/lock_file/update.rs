@@ -1709,7 +1709,11 @@ async fn spawn_solve_conda_environment_task(
             // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
-                .map(|c| c.clone().into_base_url(&channel_config))
+                .map(|c| {
+                    c.clone()
+                        .into_base_url(&channel_config)
+                        .map(|ch| ch.url().clone())
+                })
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
