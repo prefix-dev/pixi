@@ -99,3 +99,42 @@ It is recommended to rename the environments to something unique.
 Logs are written to `~/.cache/pixi-pycharm.log`.
 You can use them to debug problems.
 Please attach the logs when [filing a bug report](https://github.com/pavelzw/pixi-pycharm/issues/new?template=bug-report.md).
+
+## Install as an optional dependency
+
+In some cases, you might only want to install `pixi-pycharm` on your local dev-machines but not in production.
+To achieve this, we can use [multiple environments](../features/multi_environment.md).
+
+```toml
+[project]
+name = "multi-env"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["numpy"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.feature.lint.dependencies]
+ruff =  "*"
+
+[tool.pixi.feature.dev.dependencies]
+pixi-pycharm = "*"
+
+[tool.pixi.environments]
+# The production environment is the default feature set.
+# Adding a solve group to make sure the same versions are used in the `default` and `prod` environments.
+prod = { solve-group = "main" }
+
+# Setup the default environment to include the dev features.
+# By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
+default = { features = ["dev"], solve-group = "main" }
+
+# The lint environment doesn't need the default feature set but only the `lint` feature 
+# and thus can also be excluded from the solve group.
+lint = { features = ["lint"], no-default-feature = true }
+```
+
+Now you as a user can run `pixi shell`, which will start the default environment.
+In production, you then just run `pixi run -e prod COMMAND`, and the minimal prod environment is installed.
