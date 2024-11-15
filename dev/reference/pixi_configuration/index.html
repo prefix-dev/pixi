@@ -2010,6 +2010,11 @@ The default is <code>semver</code> but you can set the following:</p>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">disable-jlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.jlap</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">disable-bzip2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="c1"># don&#39;t try to download repodata.json.bz2</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">disable-zstd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.json.zst</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">disable-sharded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download sharded repodata</span>
+</span></code></pre></div></p>
+<p>The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[repodata-config.</span><span class="s2">&quot;https://prefix.dev&quot;</span><span class="k">]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">disable-sharded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div></p>
 <h3 id="pypi-config"><code>pypi-config</code><a class="headerlink" href="#pypi-config" title="Permanent link">#</a></h3>
 <p>To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:</p>
@@ -2018,13 +2023,13 @@ The default is <code>semver</code> but you can set the following:</p>
 <li><code>extra-index-urls</code>: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a <code>pixi init</code>.</li>
 <li><code>keyring-provider</code>: Allows the use of the <a href="https://pypi.org/project/keyring/">keyring</a> python package to store and retrieve credentials.</li>
 </ul>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[pypi-config]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Main index url</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># list of additional urls</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://pypi.org/simple2&quot;</span><span class="p">]</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># can be &quot;subprocess&quot; or &quot;disabled&quot;</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[pypi-config]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Main index url</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># list of additional urls</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://pypi.org/simple2&quot;</span><span class="p">]</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># can be &quot;subprocess&quot; or &quot;disabled&quot;</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>index-url</code> and <code>extra-index-urls</code> are <em>not</em> globals</p>
@@ -2042,10 +2047,10 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/&quot;</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/&quot;</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.</p>
@@ -2053,10 +2058,10 @@ Channels that are not currently mirrored on prefix.dev will fail in the above ex
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
