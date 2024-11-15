@@ -990,7 +990,7 @@ mod tests {
         assert_eq!(to_add.len(), 2);
 
         // Add a legacy script to the bin directory
-        // even if it's should be exposed and it's pointing to correct executable
+        // even if it should be exposed and it's pointing to correct executable
         // it is an old script
         // we need to remove it and replace with trampoline
         let script_names = ["test", "nested_test"];
@@ -998,7 +998,7 @@ mod tests {
         #[cfg(windows)]
         {
             for script_name in script_names {
-                let script_path = bin_dir.path().join(format!("{}.exe", script_name));
+                let script_path = bin_dir.path().join(format!("{}.bat", script_name));
                 let script = format!(
                     r#"
             @"{}" %*
@@ -1039,20 +1039,23 @@ mod tests {
             }
         };
 
-        let (mut to_remove, mut to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
-                .await
-                .unwrap();
-        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
-        assert_eq!(to_add.pop().unwrap().to_string(), "nested_test");
+        // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
+        assert_eq!(to_remove.len(), 2);
+        assert_eq!(to_add.len(), 2);
 
         // Test to_remove when nothing should be exposed
-        let (mut to_remove, to_add) =
+        // it should remove all the legacy scripts and add nothing
+        let (to_remove, to_add) =
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
 
-        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
+        assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
+        assert_eq!(to_remove.len(), 2);
         assert!(to_add.is_empty());
     }
 
