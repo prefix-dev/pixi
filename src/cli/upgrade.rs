@@ -120,13 +120,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if let Some(packages) = &args.specs.packages {
                     if packages.contains(&name.as_normalized().to_string()) {
                         // If the build contains a wildcard, keep it
-                        nameless_match_spec.build = if let Some(build) = nameless_match_spec.build {
-                            match build {
-                                StringMatcher::Glob(_) | StringMatcher::Regex(_) => Some(build),
-                                _ => None,
-                            }
-                        } else {
-                            None
+                        nameless_match_spec.build = match nameless_match_spec.build {
+                            Some(
+                                build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_),
+                            ) => Some(build),
+                            _ => None,
                         };
                         nameless_match_spec.build_number = None;
                         nameless_match_spec.md5 = None;
