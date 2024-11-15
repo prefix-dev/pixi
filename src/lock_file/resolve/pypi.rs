@@ -216,7 +216,7 @@ pub async fn resolve_pypi(
     // We need to setup both an interpreter and a requires_python specifier.
     // The interpreter is used to (potentially) build the wheel, and the requires_python specifier is used
     // to determine the python version of the wheel.
-    // So make sure the interpreter does not touch the solve partgs of this function
+    // So make sure the interpreter does not touch the solve parts of this function
     let interpreter_version = python_record
         .version()
         .as_major_minor()
