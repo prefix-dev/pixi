@@ -19,7 +19,7 @@ use pixi_manifest::SpecType;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::MatchSpec;
 
-/// Update dependencies as recorded in the local lock file
+/// Update the version of packages to the latest possible version, disregarding the manifest version constraints
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
