@@ -44,6 +44,7 @@ If this is not the case then all the commands that use the environment will auto
 On environment installation, pixi will write a small file to the environment that contains some metadata about installation.
 This file is called `pixi` and is located in the `conda-meta` folder of the environment.
 This file contains the following information:
+
 - `manifest_path`: The path to the manifest file that describes the project used to create this environment
 - `environment_name`: The name of the environment
 - `pixi_version`: The version of pixi that was used to create this environment

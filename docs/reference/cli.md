@@ -324,6 +324,7 @@ pixi exec --force-reinstall -s ipython -s py-rattler ipython
 Removes dependencies from the [manifest file](project_configuration.md).
 
 If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+
 - the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
 - pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
 

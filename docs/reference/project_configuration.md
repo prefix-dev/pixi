@@ -174,12 +174,13 @@ Options:
     Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
     We strongly recommend not to switch the default.
-- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
-  Care should be taken when using this option.
-  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
-  This can cause hard to debug ABI incompatibilities.
 
-  We strongly discourage using this option.
+- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
+   Care should be taken when using this option.
+   Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
+   This can cause hard to debug ABI incompatibilities.
+
+   We strongly discourage using this option.
 
 ```toml
 channel-priority = "disabled"
@@ -761,6 +762,7 @@ test = {features = ["test"]}
 ```
 
 When an environment comprises several features (including the default feature):
+
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
 - The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.

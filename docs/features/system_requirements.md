@@ -87,14 +87,14 @@ This can be particularly useful when working on systems that do not meet the pro
 You can override virtual packages by setting the following environment variables:
 
 - `CONDA_OVERRIDE_CUDA`
-    - Description: Sets the CUDA version.
-    - Usage Example: `CONDA_OVERRIDE_CUDA=11`
+  - Description: Sets the CUDA version.
+  - Usage Example: `CONDA_OVERRIDE_CUDA=11`
 - `CONDA_OVERRIDE_GLIBC`
-    - Description: Sets the glibc version.
-    - Usage Example: `CONDA_OVERRIDE_GLIBC=2.28`
+  - Description: Sets the glibc version.
+  - Usage Example: `CONDA_OVERRIDE_GLIBC=2.28`
 - `CONDA_OVERRIDE_OSX`
-    - Description: Sets the macOS version.
-    - Usage Example: `CONDA_OVERRIDE_OSX=13.0`
+  - Description: Sets the macOS version.
+  - Usage Example: `CONDA_OVERRIDE_OSX=13.0`
 
 ## Additional Resources
 
