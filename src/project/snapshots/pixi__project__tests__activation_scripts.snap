@@ -5,13 +5,9 @@ snapshot_kind: text
 ---
 = Linux64
 Cargo.toml
-pixi.toml
-pixi.lock
 
 = Win64
 Cargo.lock
-pixi.toml
-pixi.lock
 
 = OsxArm64
 pixi.toml

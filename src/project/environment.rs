@@ -229,7 +229,9 @@ impl<'p> Environment<'p> {
     /// are defined for the environment.
     pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
-            .flat_map(|f| f.activation_scripts(platform))
+            .filter_map(|f| f.activation_scripts(platform))
+            .flatten()
+            .cloned()
             .collect()
     }
 
@@ -500,11 +502,7 @@ mod tests {
         );
         assert_eq!(
             foo_env.activation_scripts(Some(Platform::Linux64)),
-            vec![
-                "foo.bat".to_string(),
-                "linux.bat".to_string(),
-                "default.bat".to_string()
-            ]
+            vec!["foo.bat".to_string(), "linux.bat".to_string()]
         );
     }
 
