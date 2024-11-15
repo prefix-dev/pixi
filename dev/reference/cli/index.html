@@ -2976,9 +2976,11 @@ Run <code>pixi info</code> to find the cache directory.</p>
 </span></code></pre></div>
 <h2 id="remove"><code>remove</code><a class="headerlink" href="#remove" title="Permanent link">#</a></h2>
 <p>Removes dependencies from the <a href="../project_configuration/">manifest file</a>.</p>
-<p>If the project manifest is a <code>pyproject.toml</code>, removing a pypi dependency with the <code>--pypi</code> flag will remove it from either
-- the native pyproject <code>project.dependencies</code> array or the native <code>project.optional-dependencies</code> table (if a feature is specified)
-- pixi <code>pypi-dependencies</code> tables of the default or a named feature (if a feature is specified)</p>
+<p>If the project manifest is a <code>pyproject.toml</code>, removing a pypi dependency with the <code>--pypi</code> flag will remove it from either</p>
+<ul>
+<li>the native pyproject <code>project.dependencies</code> array or the native <code>project.optional-dependencies</code> table (if a feature is specified)</li>
+<li>pixi <code>pypi-dependencies</code> tables of the default or a named feature (if a feature is specified)</li>
+</ul>
 <h5 id="arguments_6">Arguments<a class="headerlink" href="#arguments_6" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;DEPS&gt;...</code>: List of dependencies you wish to remove from the project.</li>

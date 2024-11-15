@@ -2227,16 +2227,18 @@ Example:</p>
 <p>This is the setting for the priority of the channels in the solver step.</p>
 <p>Options:</p>
 <ul>
-<li>
-<p><code>strict</code>: <strong>Default</strong>, The channels are used in the order they are defined in the <code>channels</code> list.
+<li><code>strict</code>: <strong>Default</strong>, The channels are used in the order they are defined in the <code>channels</code> list.
     Only packages from the first channel that has the package are used.
     This ensures that different variants for a single package are not mixed from different channels.
-    Using packages from different incompatible channels like <code>conda-forge</code> and <code>main</code> can lead to hard to debug ABI incompatibilities.</p>
-<p>We strongly recommend not to switch the default.
-- <code>disabled</code>: There is no priority, all package variants from all channels will be set per package name and solved as one.
-Care should be taken when using this option.
-Since package variants can come from <em>any</em> channel when you use this mode, packages might not be compatible.
-This can cause hard to debug ABI incompatibilities.</p>
+    Using packages from different incompatible channels like <code>conda-forge</code> and <code>main</code> can lead to hard to debug ABI incompatibilities.<p>We strongly recommend not to switch the default.</p>
+</li>
+</ul>
+<ul>
+<li>
+<p><code>disabled</code>: There is no priority, all package variants from all channels will be set per package name and solved as one.
+   Care should be taken when using this option.
+   Since package variants can come from <em>any</em> channel when you use this mode, packages might not be compatible.
+   This can cause hard to debug ABI incompatibilities.</p>
 <p>We strongly discourage using this option.</p>
 </li>
 </ul>
@@ -2713,12 +2715,14 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 <div class="language-toml highlight"><span class="filename">Simplest example expanded</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="k">[environments]</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]}</span>
 </span></code></pre></div>
-<p>When an environment comprises several features (including the default feature):
-- The <code>activation</code> and <code>tasks</code> of the environment are the union of the <code>activation</code> and <code>tasks</code> of all its features.
-- The <code>dependencies</code> and <code>pypi-dependencies</code> of the environment are the union of the <code>dependencies</code> and <code>pypi-dependencies</code> of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The <code>system-requirements</code> of the environment is the union of the <code>system-requirements</code> of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
-- The <code>channels</code> of the environment is the union of the <code>channels</code> of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project <code>platforms</code> to all platforms it can support across its environments.</p>
+<p>When an environment comprises several features (including the default feature):</p>
+<ul>
+<li>The <code>activation</code> and <code>tasks</code> of the environment are the union of the <code>activation</code> and <code>tasks</code> of all its features.</li>
+<li>The <code>dependencies</code> and <code>pypi-dependencies</code> of the environment are the union of the <code>dependencies</code> and <code>pypi-dependencies</code> of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.</li>
+<li>The <code>system-requirements</code> of the environment is the union of the <code>system-requirements</code> of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.</li>
+<li>The <code>channels</code> of the environment is the union of the <code>channels</code> of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.</li>
+<li>The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project <code>platforms</code> to all platforms it can support across its environments.</li>
+</ul>
 <h2 id="global-configuration">Global configuration<a class="headerlink" href="#global-configuration" title="Permanent link">#</a></h2>
 <p>The global configuration options are documented in the <a href="../pixi_configuration/">global configuration</a> section.</p>
 

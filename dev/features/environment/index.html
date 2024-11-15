@@ -1725,11 +1725,13 @@ If this is not the case then all the commands that use the environment will auto
 <h3 id="environment-installation-metadata">Environment Installation Metadata<a class="headerlink" href="#environment-installation-metadata" title="Permanent link">#</a></h3>
 <p>On environment installation, pixi will write a small file to the environment that contains some metadata about installation.
 This file is called <code>pixi</code> and is located in the <code>conda-meta</code> folder of the environment.
-This file contains the following information:
-- <code>manifest_path</code>: The path to the manifest file that describes the project used to create this environment
-- <code>environment_name</code>: The name of the environment
-- <code>pixi_version</code>: The version of pixi that was used to create this environment
-- <code>environment_lock_file_hash</code>: The hash of the <code>pixi.lock</code> file that was used to create this environment</p>
+This file contains the following information:</p>
+<ul>
+<li><code>manifest_path</code>: The path to the manifest file that describes the project used to create this environment</li>
+<li><code>environment_name</code>: The name of the environment</li>
+<li><code>pixi_version</code>: The version of pixi that was used to create this environment</li>
+<li><code>environment_lock_file_hash</code>: The hash of the <code>pixi.lock</code> file that was used to create this environment</li>
+</ul>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;manifest_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/home/user/dev/pixi/pixi.toml&quot;</span><span class="p">,</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;environment_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
