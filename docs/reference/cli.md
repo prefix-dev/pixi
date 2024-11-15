@@ -216,6 +216,16 @@ pixi upgrade --json
 pixi upgrade --dry-run
 ```
 
+!!! note
+    The `pixi upgrade` command will only update `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
+
+    Then it will remove all fields, apart from:
+    - `build` field containing a wildcard `*`
+    - `channel`
+    - `file_name`
+    - `url`
+    - `subdir`.
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
