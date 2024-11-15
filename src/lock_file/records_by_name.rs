@@ -1,12 +1,15 @@
+use super::package_identifier::ConversionError;
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use pep508_rs::PackageName;
+use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
-use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::{RepoDataRecord, VersionWithSource};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
-pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
+pub(crate) type RepoDataRecordsByName = DependencyRecordsByName<RepoDataRecord>;
+pub(crate) type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
 pub(crate) trait HasNameVersion {
@@ -22,10 +25,10 @@ pub(crate) trait HasNameVersion {
 }
 
 impl HasNameVersion for PypiRecord {
-    type N = uv_normalize::PackageName;
+    type N = PackageName;
     type V = pep440_rs::Version;
 
-    fn name(&self) -> &uv_normalize::PackageName {
+    fn name(&self) -> &PackageName {
         &self.0.name
     }
     fn version(&self) -> &Self::V {
@@ -33,10 +36,10 @@ impl HasNameVersion for PypiRecord {
     }
 }
 impl HasNameVersion for RepoDataRecord {
-    type N = PackageName;
+    type N = rattler_conda_types::PackageName;
     type V = VersionWithSource;
 
-    fn name(&self) -> &PackageName {
+    fn name(&self) -> &rattler_conda_types::PackageName {
         &self.package_record.name
     }
     fn version(&self) -> &Self::V {
@@ -46,8 +49,8 @@ impl HasNameVersion for RepoDataRecord {
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<D: HasNameVersion> {
-    pub records: Vec<D>,
+pub(crate) struct DependencyRecordsByName<D: HasNameVersion> {
+    pub(crate) records: Vec<D>,
     by_name: HashMap<D::N, usize>,
 }
 
@@ -162,7 +165,10 @@ impl RepoDataRecordsByName {
     /// extracted from.
     pub(crate) fn by_pypi_name(
         &self,
-    ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
+    ) -> Result<
+        HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)>,
+        ConversionError,
+    > {
         self.records
             .iter()
             .enumerate()
@@ -173,12 +179,10 @@ impl RepoDataRecordsByName {
             })
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {
-                    (
-                        identifier.name.as_normalized().clone(),
-                        (identifier, idx, record),
-                    )
+                    let name = to_uv_normalize(identifier.name.as_normalized())?;
+                    Ok((name, (identifier, idx, record)))
                 })
             })
-            .collect()
+            .collect::<Result<HashMap<_, _>, ConversionError>>()
     }
 }

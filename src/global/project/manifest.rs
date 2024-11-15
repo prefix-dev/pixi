@@ -169,7 +169,7 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         spec: &MatchSpec,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<PackageName> {
         // Determine the name of the package to add
         let (Some(name), _spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
@@ -200,7 +200,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(())
+        Ok(name)
     }
 
     /// Sets the platform of a specific environment in the manifest

@@ -165,10 +165,10 @@ impl PyProjectManifest {
             return Some(
                 pyproject_authors
                     .iter()
-                    .filter_map(|contact| match (&contact.name, &contact.email) {
+                    .filter_map(|contact| match (contact.name(), contact.email()) {
                         (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
-                        (Some(name), None) => Some(name.clone()),
-                        (None, Some(email)) => Some(email.clone()),
+                        (Some(name), None) => Some(name.to_string()),
+                        (None, Some(email)) => Some(email.to_string()),
                         (None, None) => None,
                     })
                     .collect(),

@@ -13,21 +13,21 @@ jobs:
       matrix:
         arch:
           # Linux
-          - {
-              target: x86_64-unknown-linux-musl,
-              os: 8core_ubuntu_latest_runner,
-              name: "Linux",
-            }
+          - target: x86_64-unknown-linux-musl
+            os: 8core_ubuntu_latest_runner
+            name: "Linux"
           # MacOS
-          - { target: x86_64-apple-darwin, os: macos-13, name: "MacOS-x86" }
-          - { target: aarch64-apple-darwin, os: macos-14, name: "MacOS-Arm" } # macOS-14 is the ARM chipset
+          - target: x86_64-apple-darwin
+            os: macos-13
+            name: "MacOS-x86"
+          - target: aarch64-apple-darwin
+            os: macos-14
+            name: "MacOS-Arm" # macOS-14 is the ARM chipset
           # Windows
-          - {
-              target: x86_64-pc-windows-msvc,
-              os: windows-latest,
-              extension: .exe,
-              name: "Windows",
-            }
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            extension: .exe
+            name: "Windows"
         repository:
           - Deltares/Ribasim
           - quantco/polarify
@@ -147,7 +147,7 @@ jobs:
         run: pixi install -v
       - name: Test examples
         shell: bash
-        run: bash tests/test_examples.sh
+        run: bash tests/scripts/test-examples.sh
 
   # Run integration tests that test the command line
   # pixi interface

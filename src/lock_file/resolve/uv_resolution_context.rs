@@ -3,6 +3,7 @@ use std::sync::Arc;
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
 use uv_configuration::{BuildOptions, Concurrency, SourceStrategy};
+use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
 use crate::Project;
@@ -20,6 +21,7 @@ pub struct UvResolutionContext {
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub source_strategy: SourceStrategy,
+    pub capabilities: IndexCapabilities,
 }
 
 impl UvResolutionContext {
@@ -54,6 +56,7 @@ impl UvResolutionContext {
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,
+            capabilities: IndexCapabilities::default(),
         })
     }
 }

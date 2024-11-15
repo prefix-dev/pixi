@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use distribution_types::CachedDist;
 use rattler_conda_types::PrefixRecord;
+use uv_distribution_types::CachedDist;
 use uv_python::PythonEnvironment;
 
 use crate::install_wheel::get_wheel_info;

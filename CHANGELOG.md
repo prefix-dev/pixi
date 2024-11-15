@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.36.0] - 2024-11-07
+#### ✨ Highlights
+
+- You can now `pixi upgrade` your project dependencies.
+- We've done a performance improvement on the prefix validation check, thus faster `pixi run` startup times.
+
+#### Added
+
+- Add powerpc64le target to trampoline by @ruben-arts in [#2419](https://github.com/prefix-dev/pixi/pull/2419)
+- Add trampoline tests again by @Hofer-Julian in [#2420](https://github.com/prefix-dev/pixi/pull/2420)
+- Add `pixi upgrade` by @Hofer-Julian in [#2368](https://github.com/prefix-dev/pixi/pull/2368)
+- Add platform fallback win-64 for win-arm64 by @chawyehsu in [#2427](https://github.com/prefix-dev/pixi/pull/2427)
+- Add `--prepend` option for `pixi project channel add` by @mrswastik-robot in [#2447](https://github.com/prefix-dev/pixi/pull/2447)
+
+#### Documentation
+
+- Fix cli basic usage example by @lucascolley in [#2432](https://github.com/prefix-dev/pixi/pull/2432)
+- Update python tutorial by @LiamConnors in [#2452](https://github.com/prefix-dev/pixi/pull/2452)
+- Improve `pixi global` docs by @Hofer-Julian in [#2437](https://github.com/prefix-dev/pixi/pull/2437)
+
+#### Fixed
+
+- Use `--silent` instead of `--no-progress-meter` for old `curl` by @jaimergp in [#2428](https://github.com/prefix-dev/pixi/pull/2428)
+- Search should return latest package across all platforms by @nichmor in [#2424](https://github.com/prefix-dev/pixi/pull/2424)
+- Trampoline unwraps by @ruben-arts in [#2422](https://github.com/prefix-dev/pixi/pull/2422)
+- PyPI Index usage (regression in v0.35.0) by @tdejager in [#2465](https://github.com/prefix-dev/pixi/pull/2465)
+- PyPI git dependencies (regression in v0.35.0) by @wolfv in [#2438](https://github.com/prefix-dev/pixi/pull/2438)
+- Tolerate pixi file errors (regression in v0.35.0) by @jvenant in [#2457](https://github.com/prefix-dev/pixi/pull/2457)
+- Make sure tasks are fetched for best platform by @jjjermiah in [#2446](https://github.com/prefix-dev/pixi/pull/2446)
+
+#### Performance
+
+- Quick prefix validation check by @ruben-arts in [#2400](https://github.com/prefix-dev/pixi/pull/2400)
+
+#### New Contributors
+* @jvenant made their first contribution in [#2457](https://github.com/prefix-dev/pixi/pull/2457)
+* @mrswastik-robot made their first contribution in [#2447](https://github.com/prefix-dev/pixi/pull/2447)
+* @LiamConnors made their first contribution in [#2452](https://github.com/prefix-dev/pixi/pull/2452)
+
+
+### [0.35.0] - 2024-11-05
+#### ✨ Highlights
+
+`pixi global` now exposed binaries are not scripts anymore but actual executables.
+Resulting in significant speedup and better compatibility with other tools.
+
+#### Added
+
+- Add language packages with minor pinning by default by @ruben-arts in [#2310](https://github.com/prefix-dev/pixi/pull/2310)
+- Add grouping for exposing and removing by @nichmor in [#2387](https://github.com/prefix-dev/pixi/pull/2387)
+- Add trampoline for pixi global by @Hofer-Julian and @nichmor in [#2381](https://github.com/prefix-dev/pixi/pull/2381)
+- Adding SCM option for init command by @alvgaona in [#2342](https://github.com/prefix-dev/pixi/pull/2342)
+- Create `.pixi/.gitignore` containing `*` by @maresb in [#2361](https://github.com/prefix-dev/pixi/pull/2361)
+
+#### Changed
+
+- Use the same package cache folder by @nichmor in [#2335](https://github.com/prefix-dev/pixi/pull/2335)zx
+- Disable progress in non tty by @ruben-arts in [#2308](https://github.com/prefix-dev/pixi/pull/2308)
+- Improve global install reporting by @Hofer-Julian in [#2395](https://github.com/prefix-dev/pixi/pull/2395)
+- Suggest fix in platform error message by @maurosilber in [#2404](https://github.com/prefix-dev/pixi/pull/2404)
+- Upgrading uv to `0.4.30` by @tdejager in [#2372](https://github.com/prefix-dev/pixi/pull/2372)
+
+#### Documentation
+
+- Add pybind11 example by @alvgaona in [#2324](https://github.com/prefix-dev/pixi/pull/2324)
+- Replace build with uv in pybind11 example by @alvgaona in [#2341](https://github.com/prefix-dev/pixi/pull/2341)
+- Fix incorrect statement about env location by @opcode81 in [#2370](https://github.com/prefix-dev/pixi/pull/2370)
+
+#### Fixed
+
+- Global update reporting by @Hofer-Julian in [#2352](https://github.com/prefix-dev/pixi/pull/2352)
+- Correctly display unrequested environments on `task list` by @jjjermiah in [#2402](https://github.com/prefix-dev/pixi/pull/2402)
+
+#### Refactor
+
+- Use built in string methods by @KGrewal1 in [#2348](https://github.com/prefix-dev/pixi/pull/2348)
+- Reorganize integration tests by @Hofer-Julian in [#2408](https://github.com/prefix-dev/pixi/pull/2408)
+- Reimplement barrier cell on OnceLock by @KGrewal1 in [#2347](https://github.com/prefix-dev/pixi/pull/2347)
+
+#### New Contributors
+* @maurosilber made their first contribution in [#2404](https://github.com/prefix-dev/pixi/pull/2404)
+* @opcode81 made their first contribution in [#2370](https://github.com/prefix-dev/pixi/pull/2370)
+* @alvgaona made their first contribution in [#2342](https://github.com/prefix-dev/pixi/pull/2342)
+
 ### [0.34.0] - 2024-10-21
 #### ✨ Highlights
 
