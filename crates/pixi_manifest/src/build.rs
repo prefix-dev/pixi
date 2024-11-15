@@ -1,5 +1,6 @@
 //! Defines the build section for the pixi manifest.
 use rattler_conda_types::MatchSpec;
+use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
@@ -17,6 +18,9 @@ pub struct BuildSection {
 
     /// The command to start the build backend
     pub build_backend: String,
+
+    /// The channels to use for fetching build tools
+    pub channels: Vec<NamedChannelOrUrl>,
 }
 
 #[cfg(test)]
@@ -26,6 +30,7 @@ mod tests {
     #[test]
     fn deserialize_build() {
         let toml = r#"
+            channels = ["conda-forge"]
             dependencies = ["pixi-build-python > 12"]
             build-backend = "pixi-build-python"
             "#;
