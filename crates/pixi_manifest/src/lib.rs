@@ -11,6 +11,7 @@ mod has_manifest_ref;
 mod manifests;
 mod metadata;
 mod parsed_manifest;
+mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod solve_group;

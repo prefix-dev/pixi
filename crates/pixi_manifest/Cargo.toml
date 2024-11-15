@@ -20,6 +20,7 @@ pixi_spec = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
+serde-value = { workspace = true }
 serde_with = { workspace = true }
 spdx = { workspace = true }
 strsim = { workspace = true }
