@@ -1183,6 +1183,7 @@ mod tests {
         foo = "1.0"
 
         [build]
+        channels = []
         dependencies = []
         build-backend = "foobar"
 
