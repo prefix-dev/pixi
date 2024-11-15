@@ -1043,8 +1043,11 @@ mod tests {
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
                 .await
                 .unwrap();
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
-        assert!(to_add.pop().unwrap().to_string() == "test");
+        assert_eq!(
+            to_remove.pop().unwrap().exposed_name().to_string(),
+            "nested_test"
+        );
+        assert_eq!(to_add.pop().unwrap().to_string(), "nested_test");
 
         // Test to_remove when nothing should be exposed
         let (mut to_remove, to_add) =
@@ -1052,7 +1055,10 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert_eq!(
+            to_remove.pop().unwrap().exposed_name().to_string(),
+            "nested_test"
+        );
         assert!(to_add.is_empty());
     }
 
@@ -1114,9 +1120,9 @@ mod tests {
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
-        assert_eq!(to_remove.len(), 2);
+        assert_eq!(to_remove.len(), 1);
 
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
         assert!(to_add.is_empty());
     }
 }

@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "9e3022e5b3092c45015196ed3a679bca",
+      "md5": "c598fd6ed009dca4bc37fe4eb1319f5b",
       "name": "dummy-a",
       "platform": "linux",
-      "sha256": "602570943a8b4856bd4a6ad04c3ddea01d0a165cf5c0299fce45f7641ac2ac8e",
-      "size": 1242,
+      "sha256": "7219c91393d544094906964f3888ce5f30309bea3eb3a40b843943ce157996a7",
+      "size": 1326,
       "subdir": "linux-64",
-      "timestamp": 1730898132208,
+      "timestamp": 1731663830205,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-hb0f4dca_0.conda": {

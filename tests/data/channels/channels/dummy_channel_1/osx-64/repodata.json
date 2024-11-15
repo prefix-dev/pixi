@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "f0b93ffa2b933543088e14481cff1c6c",
+      "md5": "39591dfc6532bd88442eb8076ef4eff8",
       "name": "dummy-a",
       "platform": "osx",
-      "sha256": "ed8a1ae490eff14a210b1949a2e99cdc1a0bf8309f641f4ee5008520817fea06",
-      "size": 1241,
+      "sha256": "c089c13afb7ea46f9b2e3849c1cf8d1d889b21d03d51956e234b43786efa4c2a",
+      "size": 1325,
       "subdir": "osx-64",
-      "timestamp": 1730898132397,
+      "timestamp": 1731663830333,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h0dc7051_0.conda": {
