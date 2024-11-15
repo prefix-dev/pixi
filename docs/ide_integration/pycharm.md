@@ -131,7 +131,7 @@ prod = { solve-group = "main" }
 # By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
 default = { features = ["dev"], solve-group = "main" }
 
-# The lint environment doesn't need the default feature set but only the `lint` feature 
+# The lint environment doesn't need the default feature set but only the `lint` feature
 # and thus can also be excluded from the solve group.
 lint = { features = ["lint"], no-default-feature = true }
 ```
