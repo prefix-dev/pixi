@@ -226,7 +226,7 @@ impl PyProjectManifest {
             for group in groups.into_keys() {
                 let normalised = group.replace('_', "-");
                 // Nothing to do if a group of optional dependencies has the same name as the dependency group
-                if environments.contains_key(&normalised) {
+                if !environments.contains_key(&normalised) {
                     environments.insert(normalised.clone(), vec![normalised]);
                 }
             }

@@ -65,12 +65,6 @@ Note that if `--platform` or `--editable` are specified, the pypi dependency
 will be added to the `tool.pixi.pypi-dependencies` table instead as native
 arrays have no support for platform-specific or editable dependencies.
 
-Specifying `--location` to `pixi` will force adding the pypi dependency
-to the `tool.pixi.pypi-dependencies` table. Specifying `--location` to
-`optional-dependencies` will force adding the pypi dependency
-to the `project.optional-dependencies` table (this will only have an effect
-if a non-default feature is also specified).
-
 These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
 
 ##### Arguments
@@ -90,7 +84,6 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 - `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
-- `--location`: Specifies where to add the pypi dependency to the manifest; only used in combination with `--pypi`.
 
 ```shell
 pixi add numpy # (1)!
