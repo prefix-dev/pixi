@@ -2871,12 +2871,14 @@ It will only update the lock file if the dependencies in the <a href="../project
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The <code>pixi upgrade</code> command will only update <code>version</code>s, except when you specify the exact package name (<code>pixi upgrade numpy</code>).</p>
-<p>Then it will remove all fields, apart from:
-- <code>build</code> field containing a wildcard <code>*</code>
-- <code>channel</code>
-- <code>file_name</code>
-- <code>url</code>
-- <code>subdir</code>.</p>
+<p>Then it will remove all fields, apart from:</p>
+<ul>
+<li><code>build</code> field containing a wildcard <code>*</code></li>
+<li><code>channel</code></li>
+<li><code>file_name</code></li>
+<li><code>url</code></li>
+<li><code>subdir</code>.</li>
+</ul>
 </div>
 <h2 id="run"><code>run</code><a class="headerlink" href="#run" title="Permanent link">#</a></h2>
 <p>The <code>run</code> commands first checks if the environment is ready to use.
