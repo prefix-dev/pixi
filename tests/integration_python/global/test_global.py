@@ -280,7 +280,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "--environment=test",
             "dummy1=dummy-a",
             "dummy3=dummy-a",
-            "nested_dummy=nested/dummy",
+            "nested/dummy",
         ],
         env=env,
     )

@@ -12,7 +12,7 @@ use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
 use pixi_manifest::{PrioritizedChannel, TomlManifest};
 use pixi_spec::PixiSpec;
-use pixi_utils::strip_executable_extension;
+use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
@@ -475,7 +475,12 @@ impl FromStr for Mapping {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         // If we can't parse exposed_name=executable_relname, assume input=input
         let (exposed_name, executable_relname) = input.split_once('=').unwrap_or((input, input));
-        let exposed_name = ExposedName::from_str(exposed_name)?;
+
+        // Make sure we expose only the executable name, even with nested paths.
+        // e.g. lib/bin/exec.exe -> exec
+        let exposed_name = executable_from_path(Path::new(exposed_name));
+        let exposed_name = ExposedName::from_str(exposed_name.as_str())?;
+
         Ok(Mapping::new(exposed_name, executable_relname.to_string()))
     }
 }
