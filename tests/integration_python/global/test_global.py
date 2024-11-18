@@ -260,7 +260,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy1 = tmp_path / "bin" / exec_extension("dummy1")
     dummy3 = tmp_path / "bin" / exec_extension("dummy3")
-    nested_dummy = tmp_path / "bin" / exec_extension("nested_dummy")
+    nested_dummy = tmp_path / "bin" / exec_extension("dummy")
 
     # Add dummy-a with simple syntax
     verify_cli_command(
@@ -280,6 +280,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "--environment=test",
             "dummy1=dummy-a",
             "dummy3=dummy-a",
+            # Test nested expose without naming it through cli, as it should become the name of the executable
             "nested/dummy",
         ],
         env=env,
