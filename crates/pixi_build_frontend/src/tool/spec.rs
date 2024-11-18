@@ -1,12 +1,9 @@
-use std::path::Path;
-
 use miette::IntoDiagnostic;
-use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
+use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_manifest::BuildSection;
 use pixi_utils::EnvironmentHash;
 use rattler::{install::Installer, package_cache::PackageCache};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
-use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,

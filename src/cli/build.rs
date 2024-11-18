@@ -95,10 +95,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .channels(&channel_config)
         .into_diagnostic()?;
 
-    let tool_config = pixi_build_frontend::ToolContext::builder()
+    let tool_config = pixi_build_frontend::ToolContext::builder(channels)
         .with_gateway_config(project.config().into())
         .with_client(project.authenticated_client().clone())
-        .with_channels(channels)
         .build();
 
     let build_section = project

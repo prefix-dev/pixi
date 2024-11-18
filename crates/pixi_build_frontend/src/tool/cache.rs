@@ -19,19 +19,13 @@ pub struct ToolContextBuilder {
     cache_dir: PathBuf,
 }
 
-impl Default for ToolContextBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ToolContextBuilder {
     /// Create a new tool context builder.
-    pub fn new() -> Self {
+    pub fn new(channels: Vec<Channel>) -> Self {
         Self {
+            channels,
             gateway_config: ChannelConfig::default(),
             client: ClientWithMiddleware::default(),
-            channels: Vec::new(),
             cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
         }
     }
@@ -43,12 +37,6 @@ impl ToolContextBuilder {
 
     pub fn with_client(mut self, client: ClientWithMiddleware) -> Self {
         self.client = client;
-        self
-    }
-
-    #[must_use]
-    pub fn with_channels(mut self, channels: Vec<Channel>) -> Self {
-        self.channels = channels;
         self
     }
 
@@ -114,9 +102,9 @@ impl ToolContext {
         }
     }
 
-    /// Create a new tool context builder.
-    pub fn builder() -> ToolContextBuilder {
-        ToolContextBuilder::new()
+    /// Create a new tool context builder with the given channels.
+    pub fn builder(channels: Vec<Channel>) -> ToolContextBuilder {
+        ToolContextBuilder::new(channels)
     }
 }
 
@@ -256,10 +244,9 @@ mod tests {
             .map(|c| c.into_channel(&channel_config).unwrap())
             .collect();
 
-        let tool_context = ToolContext::builder()
+        let tool_context = ToolContext::builder(channels)
             .with_gateway_config(gateway_config)
             .with_client(auth_client.clone())
-            .with_channels(channels)
             .build();
 
         let cache = cache.with_context(tool_context);

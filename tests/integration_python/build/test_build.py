@@ -17,7 +17,8 @@ def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
         [
             pixi,
             "add",
-            "boltons" "--manifest-path",
+            "boltons",
+            "--manifest-path",
             manifest_path,
         ],
     )
@@ -26,8 +27,11 @@ def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
     parsed_manifest["tool"]["pixi"]["host-dependencies"] = {"hatchling": "*"}
     parsed_manifest["tool"]["pixi"]["build"] = {
         "build-backend": "pixi-build-python",
-        "channels": ["https://prefix.dev/graf", "https://fast.prefix.dev/conda-forge"],
-        "dependencies": ["pixi-build-python", "hatchling"],
+        "channels": [
+            "https://fast.prefix.dev/pixi-build-backends",
+            "https://fast.prefix.dev/conda-forge",
+        ],
+        "dependencies": ["pixi-build-python"],
     }
 
     manifest_path.write_text(tomli_w.dumps(parsed_manifest))

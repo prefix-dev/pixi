@@ -251,10 +251,9 @@ impl BuildContext {
             }
         }
 
-        let tool_config = ToolContext::builder()
+        let tool_config = ToolContext::builder(build_channels.to_vec())
             .with_gateway_config(gateway_config)
             .with_client(authenticated_client.clone())
-            .with_channels(build_channels.to_vec())
             .build();
 
         // Instantiate a protocol for the source directory.
@@ -500,10 +499,9 @@ impl BuildContext {
             }
         }
         // tool config
-        let tool_config = ToolContext::builder()
+        let tool_config = ToolContext::builder(build_channels)
             .with_gateway_config(gateway_config)
             .with_client(client)
-            .with_channels(build_channels)
             .build();
 
         // Instantiate a protocol for the source directory.
