@@ -1295,7 +1295,11 @@ mod tests {
             package_record: package_record.clone(),
             file_name: "doesnt_matter.conda".to_string(),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
-            channel: format!("{}{}", channel_config.channel_alias.clone(), "test-channel"),
+            channel: Some(format!(
+                "{}{}",
+                channel_config.channel_alias.clone(),
+                "test-channel"
+            )),
         };
         let prefix_record = PrefixRecord::from_repodata_record(
             repodata_record,
@@ -1321,7 +1325,7 @@ mod tests {
             package_record: package_record.clone(),
             file_name: "doesnt_matter.conda".to_string(),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
-            channel: "https://test-channel.com/idk".to_string(),
+            channel: Some("https://test-channel.com/idk".to_string()),
         };
         let prefix_record = PrefixRecord::from_repodata_record(
             repodata_record,

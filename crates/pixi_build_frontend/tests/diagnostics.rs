@@ -108,6 +108,7 @@ async fn test_missing_backend() {
         [build]
         dependencies = []
         build-backend = "non-existing"
+        channels = []
         "#,
     )
     .await

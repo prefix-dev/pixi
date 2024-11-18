@@ -1416,7 +1416,6 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use tokio::runtime::Handle;
 
     use super::*;
     use crate::Project;
@@ -1443,13 +1442,13 @@ mod tests {
             let locked_env = lock_file
                 .environment(env.name().as_str())
                 .ok_or_else(|| LockfileUnsat::EnvironmentMissing(env.name().to_string()))?;
-            verify_environment_satisfiability(&env, &locked_env)
+            verify_environment_satisfiability(&env, locked_env)
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
                 verify_platform_satisfiability(
                     &env,
-                    &locked_env,
+                    locked_env,
                     platform,
                     project.root(),
                     Default::default(),
