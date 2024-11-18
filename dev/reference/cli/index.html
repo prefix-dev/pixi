@@ -2718,13 +2718,16 @@ It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignor
 </span></code></pre></div>
 <h2 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">#</a></h2>
 <p>Adds dependencies to the <a href="../project_configuration/">manifest file</a>.
-It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
+It will only add dependencies compatible with the rest of the dependencies in the project.
 <a href="../../features/multi_platform_configuration/">More info</a> on multi-platform configuration.</p>
-<p>If the project manifest is a <code>pyproject.toml</code>, adding a pypi dependency will add it to the native pyproject <code>project.dependencies</code> array, or to the native <code>project.optional-dependencies</code> table if a feature is specified:</p>
+<p>If the project manifest is a <code>pyproject.toml</code>, by default, adding a pypi dependency will add it to the native <code>project.dependencies</code> array, or to the native <code>dependency-groups</code> table if a feature is specified:</p>
 <ul>
 <li><code>pixi add --pypi boto3</code> would add <code>boto3</code> to the <code>project.dependencies</code> array</li>
-<li><code>pixi add --pypi boto3 --feature aws</code> would add <code>boto3</code> to the <code>project.dependencies.aws</code> array</li>
+<li><code>pixi add --pypi boto3 --feature aws</code> would add <code>boto3</code> to the <code>dependency-groups.aws</code> array</li>
 </ul>
+<p>Note that if <code>--platform</code> or <code>--editable</code> are specified, the pypi dependency
+will be added to the <code>tool.pixi.pypi-dependencies</code> table instead as native
+arrays have no support for platform-specific or editable dependencies.</p>
 <p>These dependencies will be read by pixi as if they had been added to the pixi <code>pypi-dependencies</code> tables of the default or a named feature.</p>
 <h5 id="arguments_1">Arguments<a class="headerlink" href="#arguments_1" title="Permanent link">#</a></h5>
 <ol>
@@ -2742,7 +2745,7 @@ It will only add if the package with its version constraint is able to work with
 <li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform for which the dependency should be added. (Allowed to be used more than once)</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the dependency should be added.</li>
-<li><code>--editable</code>: Specifies an editable dependency, only use in combination with <code>--pypi</code>.</li>
+<li><code>--editable</code>: Specifies an editable dependency; only used in combination with <code>--pypi</code>.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span><span class="s2">&quot;pytorch&gt;=1.8&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
