@@ -32,7 +32,7 @@ impl BuildSection {
     pub fn channels_url(&self, config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
         self.channels
             .iter()
-            .map(|c| c.clone().into_base_url(config))
+            .map(|c| c.clone().into_base_url(config).map(|c| c.url().clone()))
             .collect()
     }
 
@@ -52,6 +52,7 @@ mod tests {
     #[test]
     fn deserialize_build() {
         let toml = r#"
+            channels = ["conda-forge"]
             dependencies = ["pixi-build-python > 12"]
             build-backend = "pixi-build-python"
             "#;

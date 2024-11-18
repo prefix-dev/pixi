@@ -360,6 +360,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }
@@ -373,6 +374,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }

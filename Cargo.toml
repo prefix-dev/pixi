@@ -116,17 +116,19 @@ file_url = "0.1.4"
 # rattler_solve = { version = "1.1.0", default-features = false }
 # rattler_virtual_packages = { version = "1.1.7", default-features = false }
 
-rattler = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_cache = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_digest = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_lock = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_networking = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_shell = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_solve = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+rattler = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_cache = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false, features = [
+  "google-cloud-auth",
+] }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.2"
@@ -173,7 +175,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.35.0"
+version = "0.36.0"
 
 [features]
 default = ["rustls-tls"]
@@ -265,12 +267,11 @@ uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
-fs-err = { workspace = true, features = ["tokio"] }
-
 dirs = "5.0.1"
+fs-err = { workspace = true, features = ["tokio"] }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
-pixi_config = { workspace = true, features = ["rattler_repodata_gateway"] }
+pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_glob = { workspace = true }
@@ -317,6 +318,7 @@ uv-git = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
+uv-requirements = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
@@ -377,37 +379,38 @@ rattler_solve = { git = "https://github.com/conda/rattler", branch = "feat/pixi-
 rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
 
 #file_url = { path = "../rattler/crates/file_url" }
+#rattler = { path = "../rattler/crates/rattler" }
+#rattler_cache = { path = "../rattler/crates/rattler_cache" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
+#rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
+#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
 #rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
 #rattler_shell = { path = "../rattler/crates/rattler_shell" }
 #rattler_solve = { path = "../rattler/crates/rattler_solve" }
 #rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler = { path = "../rattler/crates/rattler" }
-
 
 # Change these lines if you want a patched version of uv
 # [patch.'https://github.com/astral-sh/uv']
-# pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-build = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-cache = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-client = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-configuration = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-git = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-installer = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# uv-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# distribution-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# platform-tags = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# pypi-types = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
-# requirements-txt = { git = "https://github.com/astral-sh/uv", rev = "65b17f6e81125064ea04c5cfef685516ab660cf5" }
+# uv-cache = { path = "../uv/crates/uv-cache" }
+# uv-pep508 = { path = "../uv/crates/uv-pep508" }
+# uv-pep440 = { path = "../uv/crates/uv-pep440" }
+# uv-cache-info = { path = "../uv/crates/uv-cache-info" }
+# uv-client = { path = "../uv/crates/uv-client" }
+# uv-configuration = { path = "../uv/crates/uv-configuration" }
+# uv-git = { path = "../uv/crates/uv-git" }
+# uv-dispatch = { path = "../uv/crates/uv-dispatch" }
+# uv-distribution = { path = "../uv/crates/uv-distribution" }
+# uv-installer = { path = "../uv/crates/uv-installer" }
+# uv-normalize = { path = "../uv/crates/uv-normalize" }
+# uv-resolver = { path = "../uv/crates/uv-resolver" }
+# uv-types = { path = "../uv/crates/uv-types" }
+# uv-distribution-filename = { path = "../uv/crates/uv-distribution-filename" }
+# uv-distribution-types = { path = "../uv/crates/uv-distribution-types" }
+# uv-install-wheel = { path = "../uv/crates/uv-install-wheel" }
+# uv-platform-tags = { path = "../uv/crates/uv-platform-tags" }
+# uv-pypi-types = { path = "../uv/crates/uv-pypi-types" }
+# uv-requirements = { path = "../uv/crates/uv-requirements" }
+# uv-requirements-txt = { path = "../uv/crates/uv-requirements-txt" }
+# uv-python = { path = "../uv/crates/uv-python" }

@@ -85,7 +85,7 @@ pub async fn create_exec_prefix(
         .channels
         .resolve_from_config(config)?
         .iter()
-        .map(|c| c.base_url().to_string())
+        .map(|c| c.base_url.to_string())
         .collect();
 
     let environment_hash = EnvironmentHash::new(command.clone(), specs, channels);

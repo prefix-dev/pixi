@@ -348,12 +348,19 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
             .filter_map(|a| a.env.as_ref())
-            .next()
+            .fold(IndexMap::new(), |mut acc, x| {
+                for (k, v) in x {
+                    if !acc.contains_key(k) {
+                        acc.insert(k.clone(), v.clone());
+                    }
+                }
+                acc
+            })
     }
 
     /// Returns true if the feature contains any reference to a pypi

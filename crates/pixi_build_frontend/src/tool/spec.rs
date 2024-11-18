@@ -95,7 +95,7 @@ impl IsolatedToolSpec {
             context
                 .channels
                 .iter()
-                .map(|c| c.base_url().to_string())
+                .map(|c| c.base_url.to_string())
                 .collect(),
         );
 

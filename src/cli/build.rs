@@ -172,7 +172,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .default_environment()
                         .channels()
                         .iter()
-                        .map(|&c| c.clone().into_base_url(&channel_config))
+                        .map(|&c| {
+                            c.clone()
+                                .into_base_url(&channel_config)
+                                .map(|ch| ch.url().clone())
+                        })
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?,
                 ),
