@@ -18,7 +18,7 @@ use crate::{
 pub struct ToolContext {
     /// The gateway configuration that is used to fetch repodata.
     pub gateway_config: ChannelConfig,
-    /// Authenticated client to use for fetching repodata.
+    /// Authenticated client used to fetch repodata.
     pub client: ClientWithMiddleware,
     /// The channels to use for resolving tools.
     pub channels: Vec<Channel>,
