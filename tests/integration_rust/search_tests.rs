@@ -104,7 +104,7 @@ async fn test_search_multiple_versions() {
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
-    name = "test-solve-group"
+    name = "test-multiple-versions"
     channels = ["{channel}"]
     platforms = ["{platform}"]
 
