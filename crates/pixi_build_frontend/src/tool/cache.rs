@@ -76,7 +76,6 @@ impl ToolContextBuilder {
 /// The tool context,
 /// containing client, channels and gateway configuration
 /// that will be used to resolve and install tools.
-
 #[derive(Default, Clone)]
 pub struct ToolContext {
     // Authentication client to use for fetching repodata.
