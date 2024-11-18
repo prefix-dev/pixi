@@ -1,27 +1,27 @@
 use std::{
-    borrow::Cow,
     collections::HashSet,
     io::{stderr, Write},
 };
 
-use crate::Project;
 use ahash::HashMap;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackage, LockedPackageRef};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
 
+use crate::Project;
+
 // Represents the differences between two sets of packages.
 #[derive(Default, Clone)]
 pub struct PackagesDiff {
-    pub added: Vec<rattler_lock::Package>,
-    pub removed: Vec<rattler_lock::Package>,
-    pub changed: Vec<(rattler_lock::Package, rattler_lock::Package)>,
+    pub added: Vec<LockedPackage>,
+    pub removed: Vec<LockedPackage>,
+    pub changed: Vec<(LockedPackage, LockedPackage)>,
 }
 
 impl PackagesDiff {
@@ -59,11 +59,15 @@ impl LockFileDiff {
                     .into_iter()
                     .flatten()
                     .partition_map(|p| match p {
-                        rattler_lock::Package::Conda(p) => {
-                            Either::Left((p.package_record().name.clone(), p))
-                        }
-                        rattler_lock::Package::Pypi(p) => {
-                            Either::Right((p.package_data().name.clone(), p))
+                        LockedPackageRef::Conda(conda_package_data) => Either::Left((
+                            conda_package_data.record().name.clone(),
+                            conda_package_data,
+                        )),
+                        LockedPackageRef::Pypi(pypi_package_data, pypi_env_data) => {
+                            Either::Right((
+                                pypi_package_data.name.clone(),
+                                (pypi_package_data, pypi_env_data),
+                            ))
                         }
                     });
 
@@ -72,28 +76,32 @@ impl LockFileDiff {
                 // Find new and changed packages
                 for package in packages {
                     match package {
-                        Package::Conda(p) => {
-                            let name = &p.package_record().name;
+                        LockedPackageRef::Conda(data) => {
+                            let name = &data.record().name;
                             match previous_conda_packages.remove(name) {
-                                Some(previous) if previous.location() != p.location() => {
+                                Some(previous) if previous.location() != data.location() => {
                                     diff.changed
-                                        .push((Package::Conda(previous), Package::Conda(p)));
+                                        .push((previous.clone().into(), data.clone().into()));
                                 }
                                 None => {
-                                    diff.added.push(Package::Conda(p));
+                                    diff.added.push(data.clone().into());
                                 }
                                 _ => {}
                             }
                         }
-                        Package::Pypi(p) => {
-                            let name = &p.package_data().name;
+                        LockedPackageRef::Pypi(data, env) => {
+                            let name = &data.name;
                             match previous_pypi_packages.remove(name) {
-                                Some(previous) if previous.location() != p.location() => {
-                                    diff.changed
-                                        .push((Package::Pypi(previous), Package::Pypi(p)));
+                                Some((previous_data, previous_env))
+                                    if previous_data.location != data.location =>
+                                {
+                                    diff.changed.push((
+                                        (previous_data.clone(), previous_env.clone()).into(),
+                                        (data.clone(), env.clone()).into(),
+                                    ));
                                 }
                                 None => {
-                                    diff.added.push(Package::Pypi(p));
+                                    diff.added.push((data.clone(), env.clone()).into());
                                 }
                                 _ => {}
                             }
@@ -103,10 +111,10 @@ impl LockFileDiff {
 
                 // Determine packages that were removed
                 for (_, p) in previous_conda_packages {
-                    diff.removed.push(Package::Conda(p));
+                    diff.removed.push(p.clone().into());
                 }
-                for (_, p) in previous_pypi_packages {
-                    diff.removed.push(Package::Pypi(p));
+                for (_, (data, env)) in previous_pypi_packages {
+                    diff.removed.push((data.clone(), env.clone()).into());
                 }
 
                 environment_diff.insert(platform, diff);
@@ -123,14 +131,7 @@ impl LockFileDiff {
             {
                 let mut diff = PackagesDiff::default();
                 for package in packages {
-                    match package {
-                        Package::Conda(p) => {
-                            diff.removed.push(Package::Conda(p));
-                        }
-                        Package::Pypi(p) => {
-                            diff.removed.push(Package::Pypi(p));
-                        }
-                    }
+                    diff.removed.push(package.into());
                 }
                 environment_diff.insert(platform, diff);
             }
@@ -153,14 +154,7 @@ impl LockFileDiff {
             for (platform, packages) in environment.packages_by_platform() {
                 let mut diff = PackagesDiff::default();
                 for package in packages {
-                    match package {
-                        Package::Conda(p) => {
-                            diff.removed.push(Package::Conda(p));
-                        }
-                        Package::Pypi(p) => {
-                            diff.removed.push(Package::Pypi(p));
-                        }
-                    }
+                    diff.removed.push(package.into());
                 }
                 environment_diff.insert(platform, diff);
             }
@@ -253,21 +247,19 @@ impl LockFileDiff {
         Ok(())
     }
 
-    fn format_changes(packages: &PackagesDiff) -> Vec<(Cow<'_, str>, String)> {
+    fn format_changes(packages: &PackagesDiff) -> Vec<(&str, String)> {
         enum Change<'i> {
-            Added(&'i Package),
-            Removed(&'i Package),
-            Changed(&'i Package, &'i Package),
+            Added(&'i LockedPackage),
+            Removed(&'i LockedPackage),
+            Changed(&'i LockedPackage, &'i LockedPackage),
         }
 
-        fn format_package_identifier(package: &Package) -> String {
+        fn format_package_identifier(package: &LockedPackage) -> String {
             match package {
-                Package::Conda(p) => format!(
-                    "{} {}",
-                    &p.package_record().version.as_str(),
-                    &p.package_record().build
-                ),
-                Package::Pypi(p) => p.package_data().version.to_string(),
+                LockedPackage::Conda(p) => {
+                    format!("{} {}", &p.record().version.as_str(), &p.record().build)
+                }
+                LockedPackage::Pypi(p, _) => p.version.to_string(),
             }
         }
 
@@ -288,8 +280,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("+").green(),
                     match p {
-                        Package::Conda(_) => consts::CondaEmoji.to_string(),
-                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
+                        LockedPackage::Conda(_) => consts::CondaEmoji.to_string(),
+                        LockedPackage::Pypi(..) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -301,8 +293,8 @@ impl LockFileDiff {
                     "{} {} {}\t{}\t\t",
                     console::style("-").red(),
                     match p {
-                        Package::Conda(_) => consts::CondaEmoji.to_string(),
-                        Package::Pypi(_) => consts::PypiEmoji.to_string(),
+                        LockedPackage::Conda(_) => consts::CondaEmoji.to_string(),
+                        LockedPackage::Pypi(..) => consts::PypiEmoji.to_string(),
                     },
                     p.name(),
                     format_package_identifier(p)
@@ -319,9 +311,9 @@ impl LockFileDiff {
 
                 let name = previous.name();
                 let line = match (previous, current) {
-                    (Package::Conda(previous), Package::Conda(current)) => {
-                        let previous = previous.package_record();
-                        let current = current.package_record();
+                    (LockedPackage::Conda(previous), LockedPackage::Conda(current)) => {
+                        let previous = previous.record();
+                        let current = current.record();
 
                         format!(
                             "{} {} {}\t{} {}\t->\t{} {}",
@@ -334,10 +326,7 @@ impl LockFileDiff {
                             choose_style(current.build.as_str(), previous.build.as_str()),
                         )
                     }
-                    (Package::Pypi(previous), Package::Pypi(current)) => {
-                        let previous = previous.package_data();
-                        let current = current.package_data();
-
+                    (LockedPackage::Pypi(previous, _), LockedPackage::Pypi(current, _)) => {
                         format!(
                             "{} {} {}\t{}\t->\t{}",
                             console::style("~").yellow(),
@@ -406,64 +395,64 @@ impl LockFileJsonDiff {
                     .unwrap_or_default();
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {
-                    Package::Conda(pkg) => JsonPackageDiff {
-                        name: pkg.package_record().name.as_normalized().to_string(),
+                    LockedPackage::Conda(pkg) => JsonPackageDiff {
+                        name: pkg.record().name.as_normalized().to_string(),
                         before: None,
                         after: Some(serde_json::to_value(&pkg).unwrap()),
                         ty: JsonPackageType::Conda,
-                        explicit: conda_dependencies.contains_key(&pkg.package_record().name),
+                        explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
-                    Package::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.package_data().name.as_dist_info_name().into_owned(),
+                    LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
+                        name: pkg.name.as_dist_info_name().into_owned(),
                         before: None,
                         after: Some(serde_json::to_value(&pkg).unwrap()),
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.package_data().name),
+                        explicit: pypi_dependencies.contains_key(&pkg.name),
                     },
                 });
 
                 let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
-                    Package::Conda(pkg) => JsonPackageDiff {
-                        name: pkg.package_record().name.as_normalized().to_string(),
+                    LockedPackage::Conda(pkg) => JsonPackageDiff {
+                        name: pkg.record().name.as_normalized().to_string(),
                         before: Some(serde_json::to_value(&pkg).unwrap()),
                         after: None,
                         ty: JsonPackageType::Conda,
-                        explicit: conda_dependencies.contains_key(&pkg.package_record().name),
+                        explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
 
-                    Package::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.package_data().name.as_dist_info_name().into_owned(),
+                    LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
+                        name: pkg.name.as_dist_info_name().into_owned(),
                         before: Some(serde_json::to_value(&pkg).unwrap()),
                         after: None,
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.package_data().name),
+                        explicit: pypi_dependencies.contains_key(&pkg.name),
                     },
                 });
 
                 let changed_diffs = packages_diff.changed.into_iter().map(|(old, new)| match (old, new) {
-                    (Package::Conda(old), Package::Conda(new)) =>
+                    (LockedPackage::Conda(old), LockedPackage::Conda(new)) =>
                         {
                             let before = serde_json::to_value(&old).unwrap();
                             let after = serde_json::to_value(&new).unwrap();
                             let (before, after) = compute_json_diff(before, after);
                             JsonPackageDiff {
-                                name: old.package_record().name.as_normalized().to_string(),
+                                name: old.record().name.as_normalized().to_string(),
                                 before: Some(before),
                                 after: Some(after),
                                 ty: JsonPackageType::Conda,
-                                explicit: conda_dependencies.contains_key(&old.package_record().name),
+                                explicit: conda_dependencies.contains_key(&old.record().name),
                             }
                         }
-                    (Package::Pypi(old), Package::Pypi(new)) => {
+                    (LockedPackage::Pypi(old, _), LockedPackage::Pypi(new, _)) => {
                         let before = serde_json::to_value(&old).unwrap();
                         let after = serde_json::to_value(&new).unwrap();
                         let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
-                            name: old.package_data().name.as_dist_info_name().into_owned(),
+                            name: old.name.as_dist_info_name().into_owned(),
                             before: Some(before),
                             after: Some(after),
                             ty: JsonPackageType::Pypi,
-                            explicit: pypi_dependencies.contains_key(&old.package_data().name),
+                            explicit: pypi_dependencies.contains_key(&old.name),
                         }
                     }
                     _ => unreachable!("packages cannot change type, they are represented as removals and inserts instead"),

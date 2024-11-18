@@ -1,6 +1,6 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::CondaPackageData;
+use rattler_lock::{CondaPackageData, CondaSourceData};
 use serde::{Deserialize, Serialize};
 
 use crate::{ParseLockFileError, PinnedSourceSpec};
@@ -38,23 +38,21 @@ pub struct InputHash {
 
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
-        CondaPackageData {
+        CondaPackageData::Source(CondaSourceData {
             package_record: value.package_record,
             location: value.source.into(),
-            file_name: None,
-            channel: None,
             input: value.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
                 globs: i.globs,
             }),
-        }
+        })
     }
 }
 
-impl TryFrom<CondaPackageData> for SourceRecord {
+impl TryFrom<CondaSourceData> for SourceRecord {
     type Error = ParseLockFileError;
 
-    fn try_from(value: CondaPackageData) -> Result<Self, Self::Error> {
+    fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
         Ok(Self {
             package_record: value.package_record,
             source: value.location.try_into()?,

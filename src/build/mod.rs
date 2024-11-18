@@ -27,9 +27,10 @@ use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
+pub use reporters::{BuildMetadataReporter, BuildReporter};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -40,8 +41,6 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
-
-pub use reporters::{BuildMetadataReporter, BuildReporter};
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
@@ -131,7 +130,7 @@ impl BuildContext {
     pub async fn extract_source_metadata(
         &self,
         source_spec: &SourceSpec,
-        channels: &[Url],
+        channels: &[ChannelUrl],
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
@@ -162,7 +161,7 @@ impl BuildContext {
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
-        channels: &[Url],
+        channels: &[ChannelUrl],
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
@@ -174,12 +173,14 @@ impl BuildContext {
             pinned: source_spec.source.clone(),
         };
 
+        let channels_urls: Vec<Url> = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
+
         let (cached_build, entry) = self
             .build_cache
             .entry(
                 &source_checkout,
                 &BuildInput {
-                    channel_urls: channels.to_vec(),
+                    channel_urls: channels.iter().cloned().map(Into::into).collect(),
                     target_platform: Platform::from_str(&source_spec.package_record.subdir)
                         .ok()
                         .unwrap_or(host_platform),
@@ -261,7 +262,7 @@ impl BuildContext {
                         virtual_packages: Some(host_virtual_packages.clone()),
                     }),
                     build_platform_virtual_packages: Some(build_virtual_packages.clone()),
-                    channel_base_urls: Some(channels.to_owned()),
+                    channel_base_urls: Some(channels_urls),
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
@@ -317,7 +318,7 @@ impl BuildContext {
                     .into(),
                 )
             })?,
-            channel: String::new(),
+            channel: None,
             file_name: build_result
                 .output_file
                 .file_name()
@@ -426,7 +427,7 @@ impl BuildContext {
     async fn extract_records(
         &self,
         source: &SourceCheckout,
-        channels: &[Url],
+        channels: &[ChannelUrl],
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
@@ -434,12 +435,14 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<Vec<SourceRecord>, BuildError> {
+        let channel_urls = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
+
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
             .entry(
                 source,
                 &SourceMetadataInput {
-                    channel_urls: channels.to_vec(),
+                    channel_urls: channel_urls.clone(),
                     build_platform,
                     build_virtual_packages: build_virtual_packages.clone(),
                     host_platform,
@@ -502,7 +505,7 @@ impl BuildContext {
                         platform: host_platform,
                         virtual_packages: Some(host_virtual_packages),
                     }),
-                    channel_base_urls: Some(channels.to_owned()),
+                    channel_base_urls: Some(channel_urls),
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },

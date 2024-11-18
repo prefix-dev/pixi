@@ -9,7 +9,7 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
-use rattler_lock::{CondaPackage, Environment, Package};
+use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
 
 use crate::{cli::cli_config::PrefixUpdateConfig, lock_file::UpdateLockFileOptions, Project};
 
@@ -30,6 +30,10 @@ pub struct Args {
     /// PyPI dependencies are not supported in the conda explicit spec file.
     #[arg(long, default_value = "false")]
     pub ignore_pypi_errors: bool,
+
+    /// Source dependencies are not supported in the conda explicit spec file.
+    #[arg(long, default_value = "false")]
+    pub ignore_source_errors: bool,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -95,16 +99,25 @@ fn render_env_platform(
         env_name,
     ))?;
 
-    let mut conda_packages_from_lockfile: Vec<CondaPackage> = Vec::new();
+    let mut conda_packages_from_lockfile: Vec<_> = Vec::new();
 
     for package in packages {
         match package {
-            Package::Conda(p) => conda_packages_from_lockfile.push(p),
-            Package::Pypi(pyp) => {
+            LockedPackageRef::Conda(CondaPackageData::Binary(p)) => {
+                conda_packages_from_lockfile.push(p.clone())
+            }
+            LockedPackageRef::Conda(CondaPackageData::Source(_)) => {
+                miette::bail!(
+                        "Conda source packages are not supported in a conda explicit spec. \
+                        Specify `--ignore-source-errors` to ignore this error and create \
+                        a spec file containing only the binary conda dependencies from the lockfile."
+                    );
+            }
+            LockedPackageRef::Pypi(pypi, _) => {
                 if ignore_pypi_errors {
                     tracing::warn!(
                         "ignoring PyPI package {} since PyPI packages are not supported",
-                        pyp.package_data().name
+                        pypi.name
                     );
                 } else {
                     miette::bail!(
@@ -173,7 +186,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
         if let Some(ref platforms) = args.platform {
             for plat in platforms {
                 if available_platforms.contains(plat) {
-                    env_platform.push((env_name.clone(), env.clone(), *plat));
+                    env_platform.push((env_name.clone(), env, *plat));
                 } else {
                     tracing::warn!(
                         "Platform {} not available for environment {}. Skipping...",
@@ -184,7 +197,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
             }
         } else {
             for plat in available_platforms {
-                env_platform.push((env_name.clone(), env.clone(), plat));
+                env_platform.push((env_name.clone(), env, plat));
             }
         }
     }

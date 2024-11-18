@@ -23,7 +23,8 @@ use rattler_conda_types::{
     ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
-    Package, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
+    UrlOrPath,
 };
 use thiserror::Error;
 use url::Url;
@@ -381,7 +382,7 @@ impl IntoUvRequirement for pep508_rs::Requirement {
 /// for the user and developer to figure out what went wrong.
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
-    locked_environment: &rattler_lock::Environment,
+    locked_environment: rattler_lock::Environment<'_>,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
@@ -415,10 +416,11 @@ pub fn verify_environment_satisfiability(
             None => {
                 // Mismatch when there should be an index but there is not
                 if locked_environment
+                    .lock_file()
                     .version()
                     .should_pypi_indexes_be_present()
                     && locked_environment
-                        .pypi_packages()
+                        .pypi_packages_by_platform()
                         .any(|(_platform, mut packages)| packages.next().is_some())
                 {
                     return Err(IndexesMismatch {
@@ -456,7 +458,7 @@ pub fn verify_environment_satisfiability(
 /// the user and developer to figure out what went wrong.
 pub async fn verify_platform_satisfiability(
     environment: &Environment<'_>,
-    locked_environment: &rattler_lock::Environment,
+    locked_environment: rattler_lock::Environment<'_>,
     platform: Platform,
     project_root: &Path,
     glob_hash_cache: GlobHashCache,
@@ -466,18 +468,17 @@ pub async fn verify_platform_satisfiability(
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
     for package in locked_environment.packages(platform).into_iter().flatten() {
         match package {
-            Package::Conda(conda) => {
+            LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
                     conda
-                        .package_data()
                         .clone()
                         .try_into()
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
-            Package::Pypi(pypi) => {
-                pypi_packages.push((pypi.package_data().clone(), pypi.environment_data().clone()));
+            LockedPackageRef::Pypi(pypi, env) => {
+                pypi_packages.push((pypi.clone(), env.clone()));
             }
         }
     }
@@ -609,12 +610,13 @@ pub(crate) fn pypi_satifisfies_requirement(
     spec: &uv_pypi_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
-) -> Result<(), PlatformUnsat> {
+) -> Result<(), Box<PlatformUnsat>> {
     if spec.name.to_string() != locked_data.name.to_string() {
         return Err(PlatformUnsat::LockedPyPINamesMismatch {
             expected: spec.name.to_string(),
             found: locked_data.name.to_string(),
-        });
+        }
+        .into());
     }
 
     match &spec.source {
@@ -631,7 +633,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                     name: spec.name.clone().to_string(),
                     specifiers: specifier.clone().to_string(),
                     version: version_string,
-                })
+                }
+                .into())
             }
         }
         RequirementSource::Url { url: spec_url, .. } => {
@@ -640,7 +643,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
                 {
-                    return Err(PlatformUnsat::LockedPyPIMalformedUrl(locked_url.clone()));
+                    return Err(PlatformUnsat::LockedPyPIMalformedUrl(locked_url.clone()).into());
                 }
                 let locked_url = locked_url
                     .as_ref()
@@ -655,12 +658,11 @@ pub(crate) fn pypi_satifisfies_requirement(
                         name: spec.name.clone().to_string(),
                         spec_url: spec_url.raw().to_string(),
                         lock_url: locked_url.to_string(),
-                    });
+                    }
+                    .into());
                 }
             }
-            Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(
-                spec.name.to_string(),
-            ))
+            Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
         }
         RequirementSource::Git {
             repository,
@@ -677,7 +679,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                                 name: spec.name.clone().to_string(),
                                 spec_url: repository.to_string(),
                                 lock_url: locked_git_url.url.repository().to_string(),
-                            });
+                            }
+                            .into());
                         }
                         // If the spec does not specify a revision than any will do
                         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
@@ -701,7 +704,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                                             name: spec.name.clone().to_string(),
                                             expected_ref: branch_or_tag.to_string(),
                                             found_ref: sha.to_string(),
-                                        });
+                                        }
+                                        .into());
                                     }
                                 }
                             }
@@ -715,18 +719,21 @@ pub(crate) fn pypi_satifisfies_requirement(
                                 name: spec.name.clone().to_string(),
                                 expected_ref: reference.to_string(),
                                 found_ref: locked_git_url.url.reference().to_string(),
-                            });
+                            }
+                            .into());
                         }
                     }
                     Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
                         spec.name.to_string(),
                         url.to_string(),
-                    ))
+                    )
+                    .into())
                 }
                 UrlOrPath::Path(path) => Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
                     spec.name.to_string(),
                     path.to_string(),
-                )),
+                )
+                .into()),
             }
         }
         RequirementSource::Path { install_path, .. }
@@ -739,11 +746,12 @@ pub(crate) fn pypi_satifisfies_requirement(
                         name: spec.name.clone().to_string(),
                         expected_path: install_path.clone(),
                         found_path: project_root.join(locked_path),
-                    });
+                    }
+                    .into());
                 }
                 return Ok(());
             }
-            Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()))
+            Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()).into())
         }
     }
 }

@@ -37,7 +37,7 @@ use pixi_manifest::{
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -817,10 +817,10 @@ impl Project {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    Package::Conda(package) => {
-                        !conda_packages.contains(&package.package_record().name)
+                    LockedPackageRef::Conda(package) => {
+                        !conda_packages.contains(&package.record().name)
                     }
-                    Package::Pypi(package) => !pypi_packages.contains(&package.package_data().name),
+                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
                 }
             } else {
                 true
@@ -847,9 +847,7 @@ impl Project {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                locked_env
-                    .conda_repodata_records_for_platform(platform)
-                    .ok()?
+                locked_env.conda_repodata_records(platform).ok()?
             })
             .flatten()
             .collect_vec();
@@ -922,7 +920,7 @@ impl Project {
             // Get all the conda and pypi records for the combination of environments and
             // platforms
             .iter()
-            .filter_map(|(env, platform)| env.pypi_packages_for_platform(*platform))
+            .filter_map(|(env, platform)| env.pypi_packages(*platform))
             .flatten()
             .collect_vec();
 

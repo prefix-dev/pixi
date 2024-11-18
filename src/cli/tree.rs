@@ -11,6 +11,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
 use rattler_conda_types::Platform;
+use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
 use crate::{
@@ -474,18 +475,14 @@ struct PackageInfo {
 }
 
 /// Helper function to extract package information
-fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> {
+fn extract_package_info(package: rattler_lock::LockedPackageRef<'_>) -> Option<PackageInfo> {
     if let Some(conda_package) = package.as_conda() {
         // Extract name
-        let name = conda_package
-            .package_record()
-            .name
-            .as_normalized()
-            .to_string();
+        let name = conda_package.record().name.as_normalized().to_string();
 
         // Extract dependencies
         let dependencies: Vec<String> = conda_package
-            .package_record()
+            .record()
             .depends
             .iter()
             .map(|d| {
@@ -499,17 +496,12 @@ fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> 
             dependencies,
             source: PackageSource::Conda,
         })
-    } else if let Some(pypi_package) = package.as_pypi() {
+    } else if let Some((pypi_package_data, _pypi_env_data)) = package.as_pypi() {
         // Extract name
-        let name = pypi_package
-            .package_data()
-            .name
-            .as_dist_info_name()
-            .into_owned();
+        let name = pypi_package_data.name.as_dist_info_name().into_owned();
 
         // Extract dependencies
-        let dependencies = pypi_package
-            .package_data()
+        let dependencies = pypi_package_data
             .requires_dist
             .iter()
             .filter_map(|p| {
@@ -538,18 +530,23 @@ fn extract_package_info(package: &rattler_lock::Package) -> Option<PackageInfo> 
 }
 
 /// Generate a map of dependencies from a list of locked packages
-fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<String, Package> {
+fn generate_dependency_map(
+    locked_deps: &[rattler_lock::LockedPackageRef<'_>],
+) -> HashMap<String, Package> {
     let mut package_dependencies_map = HashMap::new();
 
-    for package in locked_deps {
-        let version = package.version().into_owned();
-
+    for &package in locked_deps {
         if let Some(package_info) = extract_package_info(package) {
             package_dependencies_map.insert(
                 package_info.name.clone(),
                 Package {
                     name: package_info.name,
-                    version: version.clone(),
+                    version: match package {
+                        LockedPackageRef::Conda(conda_data) => {
+                            conda_data.record().version.to_string()
+                        }
+                        LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
+                    },
                     dependencies: package_info.dependencies.into_iter().unique().collect(),
                     needed_by: Vec::new(),
                     source: package_info.source,

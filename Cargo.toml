@@ -352,17 +352,17 @@ reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev =
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-file_url = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_digest = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_lock = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_networking = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_shell = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_solve = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "feat/pixi-build" }
+file_url = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/source_deps_in_lock" }
 
 #file_url = { path = "../rattler/crates/file_url" }
 #rattler = { path = "../rattler/crates/rattler" }
