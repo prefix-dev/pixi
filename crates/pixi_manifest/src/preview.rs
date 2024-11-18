@@ -35,10 +35,10 @@ impl Preview {
     }
 
     /// Returns true if the given preview feature is enabled
-    pub fn is_enabled(&self, feature: &KnownPreviewFeature) -> bool {
+    pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
         match self {
             Preview::AllEnabled(_) => true,
-            Preview::Features(features) => features.iter().any(|f| f == feature),
+            Preview::Features(features) => features.iter().any(|f| *f == feature),
         }
     }
 
@@ -89,7 +89,7 @@ impl PartialEq<KnownPreviewFeature> for PreviewFeature {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 /// Currently supported preview features are listed here
 pub enum KnownPreviewFeature {
@@ -188,9 +188,9 @@ mod tests {
     #[test]
     fn test_feature_is_unknown() {
         let input = r#"preview = ["new_parsing"]"#;
-        let top: TopLevel = from_str(&input).unwrap();
+        let top: TopLevel = from_str(input).unwrap();
         match top.preview {
-            Preview::AllEnabled(_) => assert!(false, "this arm should not be used"),
+            Preview::AllEnabled(_) => unreachable!("this arm should not be used"),
             Preview::Features(vec) => {
                 assert_matches::assert_matches!(
                     &vec[0],

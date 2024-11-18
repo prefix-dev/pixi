@@ -965,7 +965,8 @@ impl Project {
             .unwrap_or(false)
     }
 
-    pub fn is_preview_feature_enabled(&self, feature: &KnownPreviewFeature) -> bool {
+    /// Returns true if the given preview feature is enabled
+    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
         self.manifest
             .preview()
             .map(|preview| preview.is_enabled(feature))

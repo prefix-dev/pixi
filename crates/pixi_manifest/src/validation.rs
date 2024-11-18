@@ -135,7 +135,7 @@ impl ParsedManifest {
         // Warn on any unknown preview features
         if let Some(preview) = self.project.preview.as_ref() {
             let preview = preview.unknown_preview_features();
-            if preview.len() > 0 {
+            if !preview.is_empty() {
                 let are = if preview.len() > 1 { "are" } else { "is" };
                 let s = if preview.len() > 1 { "s" } else { "" };
                 let preview_array = if preview.len() == 1 {
