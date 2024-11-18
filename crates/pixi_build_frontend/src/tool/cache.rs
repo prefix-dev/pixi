@@ -1,8 +1,9 @@
-use std::{hash::Hash, path::PathBuf};
+use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 use dashmap::{DashMap, Entry};
+use pixi_consts::consts::CONDA_REPODATA_CACHE_DIR;
 use rattler_conda_types::Channel;
-use rattler_repodata_gateway::ChannelConfig;
+use rattler_repodata_gateway::{ChannelConfig, Gateway};
 use reqwest_middleware::ClientWithMiddleware;
 
 use super::IsolatedTool;
@@ -11,49 +12,112 @@ use crate::{
     IsolatedToolSpec, SystemToolSpec,
 };
 
+pub struct ToolContextBuilder {
+    gateway_config: ChannelConfig,
+    client: ClientWithMiddleware,
+    channels: Vec<Channel>,
+    cache_dir: PathBuf,
+}
+
+impl Default for ToolContextBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToolContextBuilder {
+    /// Create a new tool context builder.
+    pub fn new() -> Self {
+        Self {
+            gateway_config: ChannelConfig::default(),
+            client: ClientWithMiddleware::default(),
+            channels: Vec::new(),
+            cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
+        }
+    }
+
+    pub fn with_gateway_config(mut self, gateway_config: ChannelConfig) -> Self {
+        self.gateway_config = gateway_config;
+        self
+    }
+
+    pub fn with_client(mut self, client: ClientWithMiddleware) -> Self {
+        self.client = client;
+        self
+    }
+
+    #[must_use]
+    pub fn with_channels(mut self, channels: Vec<Channel>) -> Self {
+        self.channels = channels;
+        self
+    }
+
+    pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
+        self.cache_dir = cache_dir;
+        self
+    }
+
+    pub fn build(self) -> ToolContext {
+        let gateway = Gateway::builder()
+            .with_client(self.client.clone())
+            .with_cache_dir(self.cache_dir.join(CONDA_REPODATA_CACHE_DIR))
+            .with_channel_config(self.gateway_config)
+            .finish();
+
+        ToolContext {
+            channels: self.channels,
+            cache_dir: self.cache_dir,
+            client: self.client,
+            gateway,
+        }
+    }
+}
+
 /// The tool context,
 /// containing client, channels and gateway configuration
 /// that will be used to resolve and install tools.
 
-#[derive(Default, Debug)]
+#[derive(Default, Clone)]
 pub struct ToolContext {
-    /// The gateway configuration used to fetch repodata.
-    pub gateway_config: ChannelConfig,
-    /// Authenticated client to use for fetching repodata.
+    // Authentication client to use for fetching repodata.
     pub client: ClientWithMiddleware,
     /// The channels to use for resolving tools.
     pub channels: Vec<Channel>,
+    // The cache directory to use for the tools.
+    pub cache_dir: PathBuf,
+    // The gateway to use for fetching repodata.
+    pub gateway: Gateway,
 }
 
-/// gateway::ChannelConfig does not implement Clone currently
-/// so we need to implement it manually
-impl Clone for ToolContext {
-    fn clone(&self) -> Self {
-        let gateway_config = ChannelConfig {
-            default: self.gateway_config.default.clone(),
-            per_channel: self.gateway_config.per_channel.clone(),
-        };
-
-        Self {
-            gateway_config,
-            client: self.client.clone(),
-            channels: self.channels.clone(),
-        }
+impl Debug for ToolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolContext")
+            .field("client", &self.client)
+            .field("channels", &self.channels)
+            .field("cache_dir", &self.cache_dir)
+            .finish()
     }
 }
 
 impl ToolContext {
     /// Create a new tool context.
     pub fn new(
-        gateway_config: ChannelConfig,
         client: ClientWithMiddleware,
+        gateway: Gateway,
+        cache_dir: PathBuf,
         channels: Vec<Channel>,
     ) -> Self {
         Self {
-            gateway_config,
             client,
             channels,
+            cache_dir,
+            gateway,
         }
+    }
+
+    /// Create a new tool context builder.
+    pub fn builder() -> ToolContextBuilder {
+        ToolContextBuilder::new()
     }
 }
 
@@ -149,14 +213,11 @@ impl ToolCache {
         };
 
         let tool: CachedTool = match spec {
-            CacheableToolSpec::Isolated(spec) => {
-                let cache_dir = pixi_config::get_cache_dir().map_err(ToolCacheError::CacheDir)?;
-                CachedTool::Isolated(
-                    spec.install(&cache_dir, self.context.clone())
-                        .await
-                        .map_err(ToolCacheError::Install)?,
-                )
-            }
+            CacheableToolSpec::Isolated(spec) => CachedTool::Isolated(
+                spec.install(self.context.clone())
+                    .await
+                    .map_err(ToolCacheError::Install)?,
+            ),
             CacheableToolSpec::System(spec) => SystemTool::new(spec.command).into(),
         };
 
@@ -196,7 +257,11 @@ mod tests {
             .map(|c| c.into_channel(&channel_config).unwrap())
             .collect();
 
-        let tool_context = ToolContext::new(gateway_config, auth_client, channels);
+        let tool_context = ToolContext::builder()
+            .with_gateway_config(gateway_config)
+            .with_client(auth_client.clone())
+            .with_channels(channels)
+            .build();
 
         let cache = cache.with_context(tool_context);
 

@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use miette::IntoDiagnostic;
 use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
 use pixi_manifest::BuildSection;
 use pixi_utils::EnvironmentHash;
@@ -62,18 +63,9 @@ impl IsolatedToolSpec {
     }
 
     /// Installed the tool in the isolated environment.
-    pub async fn install(
-        &self,
-        cache_dir: &Path,
-        context: ToolContext,
-    ) -> miette::Result<IsolatedTool> {
-        let gateway = Gateway::builder()
-            .with_client(context.client.clone())
-            .with_cache_dir(cache_dir.join(CONDA_REPODATA_CACHE_DIR))
-            .with_channel_config(context.gateway_config)
-            .finish();
-
-        let repodata = gateway
+    pub async fn install(&self, context: ToolContext) -> miette::Result<IsolatedTool> {
+        let repodata = context
+            .gateway
             .query(
                 context.channels.clone(),
                 [Platform::current(), Platform::NoArch],
@@ -82,7 +74,7 @@ impl IsolatedToolSpec {
             .recursive(true)
             .execute()
             .await
-            .unwrap();
+            .into_diagnostic()?;
 
         // Determine virtual packages of the current platform
         let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
@@ -98,7 +90,7 @@ impl IsolatedToolSpec {
                 virtual_packages,
                 ..SolverTask::from_iter(&repodata)
             })
-            .unwrap();
+            .into_diagnostic()?;
 
         let cache = EnvironmentHash::new(
             self.command.clone(),
@@ -110,13 +102,18 @@ impl IsolatedToolSpec {
                 .collect(),
         );
 
-        let cached_dir = cache_dir.join(CACHED_BUILD_ENVS_DIR).join(cache.name());
+        let cached_dir = context
+            .cache_dir
+            .join(CACHED_BUILD_ENVS_DIR)
+            .join(cache.name());
 
         // Install the environment
         Installer::new()
             .with_download_client(context.client.clone())
             .with_package_cache(PackageCache::new(
-                cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+                context
+                    .cache_dir
+                    .join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
             ))
             .install(&cached_dir, solved_records)
             .await
