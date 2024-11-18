@@ -19,6 +19,7 @@ use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
     manifests::{ManifestSource, TomlManifest},
+    preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
     to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
@@ -719,6 +720,11 @@ impl Manifest {
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
+    }
+
+    /// Returns the preview field of the project
+    pub fn preview(&self) -> Option<&Preview> {
+        self.parsed.project.preview.as_ref()
     }
 }
 

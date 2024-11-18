@@ -32,7 +32,8 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest, ParsedManifest,
+    SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -954,6 +955,21 @@ impl Project {
         }
 
         Ok(implicit_constraints)
+    }
+
+    /// Returns true if all preview features are enabled
+    pub fn all_preview_features_enabled(&self) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.all_enabled())
+            .unwrap_or(false)
+    }
+
+    pub fn is_preview_feature_enabled(&self, feature: &KnownPreviewFeature) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.is_enabled(feature))
+            .unwrap_or(false)
     }
 }
 
