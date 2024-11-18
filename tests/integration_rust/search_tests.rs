@@ -125,5 +125,5 @@ async fn test_search_multiple_versions() {
     assert_eq!(result[0].package_record.build, "h60d57d3_1");
     assert!(output.contains("foo-0.2.0-h60d57d3_1 (+ 1 build)"));
     assert!(output.contains("Other Versions (1)"));
-    assert!(output.contains(&format!("0.1.0    h60d57d3_1")));
+    assert!(output.contains("0.1.0    h60d57d3_1"));
 }
