@@ -1406,16 +1406,16 @@ impl Display for EditablePackagesMismatch {
 
 #[cfg(test)]
 mod tests {
+    use insta::Settings;
+    use miette::{IntoDiagnostic, NarratableReportHandler};
+    use pep440_rs::Version;
+    use rattler_lock::LockFile;
+    use rstest::rstest;
     use std::{
         ffi::OsStr,
         path::{Component, PathBuf},
         str::FromStr,
     };
-
-    use miette::{IntoDiagnostic, NarratableReportHandler};
-    use pep440_rs::Version;
-    use rattler_lock::LockFile;
-    use rstest::rstest;
 
     use super::*;
     use crate::Project;
@@ -1515,9 +1515,22 @@ mod tests {
             .await
             .expect_err("expected failing satisfiability");
 
+        let name = manifest_path
+            .parent()
+            .unwrap()
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap();
+
         let mut s = String::new();
         report_handler.render_report(&mut s, &err).unwrap();
-        insta::assert_snapshot!(s);
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_suffix(name);
+        settings.bind(|| {
+            // run snapshot test here
+            insta::assert_snapshot!(s);
+        });
     }
 
     #[test]
