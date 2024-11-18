@@ -59,8 +59,8 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=10 tests
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
 test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
-# Update one test channel by passing on key of `mappings.toml`
-# e.g. "trampoline/trampoline_2.yaml"
+# Update one test channel by passing on value of `mappings.toml`
+# e.g. "multiple_versions_channel_1"
 update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
 
 [feature.dev.dependencies]
