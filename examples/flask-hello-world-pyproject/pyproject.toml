@@ -21,8 +21,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 flask-hello-world-pyproject = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
-# flask = "2.*"
-flask-hello-world-pyproject = { path = "." }
+flask = "2.*"
 
 
 [tool.pixi.environments]

@@ -15,7 +15,7 @@ flask = "2.*"
 [build]
 build-backend = "pixi-build-python"
 channels = [
-  "file:///Users/graf/projects/oss/pixi-build-backends/output",
+  "https://fast.prefix.dev/pixi-build-backends",
   "https://fast.prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-python"]
