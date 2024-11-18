@@ -14,7 +14,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_DIR: &str = ".pixi";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.36.0",
+    None => "0.37.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";

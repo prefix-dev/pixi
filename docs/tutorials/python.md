@@ -173,7 +173,7 @@ Now let's `install` the project with `pixi install`:
 
 ```shell
 $ pixi install
-✔ Project in /path/to/pixi-py is ready to use!
+✔ The default environment has been installed.
 ```
 
 We now have a new directory called `.pixi` in the project root.
