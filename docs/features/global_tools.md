@@ -151,16 +151,13 @@ exposed = { ansible = "ansible" } # (1)!
 
 It's also possible to expose an executable which is located in a nested directory.
 For example dotnet.exe executable is located in a dotnet folder,
-to expose dotnet.exe you must specify its relative path :
+to expose `dotnet` you must specify its relative path :
 
-```
-pixi global install dotnet --expose dotnet=dotnet\dotnet.exe
-```
-you can also omit the extension
 ```
 pixi global install dotnet --expose dotnet=dotnet\dotnet
 ```
-will create the following entry in the manifest:
+
+Which will create the following entry in the manifest:
 ```toml
 [envs.dotnet]
 channels = ["conda-forge"]
