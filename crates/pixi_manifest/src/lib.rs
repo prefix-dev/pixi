@@ -11,6 +11,7 @@ mod has_manifest_ref;
 mod manifests;
 mod metadata;
 mod parsed_manifest;
+mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod solve_group;
@@ -48,6 +49,7 @@ use thiserror::Error;
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
+pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
