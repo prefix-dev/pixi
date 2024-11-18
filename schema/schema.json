@@ -240,6 +240,27 @@
           "type": "string",
           "minLength": 1
         },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that are used to fetch the build backend from",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
+        },
         "dependencies": {
           "title": "Dependencies",
           "description": "The dependencies for the build backend",
