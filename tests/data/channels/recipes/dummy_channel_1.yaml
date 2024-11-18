@@ -19,7 +19,7 @@ outputs:
           then:
             - echo "dummy-a on windows" > $PREFIX/bin/dummy-a.bat
             - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
-            - echo "nested dummy on windows" > $PREFIX/nested/dummy.exe
+            - echo "nested dummy on windows" > $PREFIX/nested/dummy.bat
           else:
             - echo "dummy-a on unix" > $PREFIX/bin/dummy-a
             - echo "dummy-aa on unix" > $PREFIX/bin/dummy-aa
