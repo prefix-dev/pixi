@@ -16,7 +16,7 @@ packages:
   depends:
   - python
   input:
-    hash: b67010bf5bc5608db89c0399e726852b07a7ef4fb26b3aa18171f1d0f6a19c89
+    hash: f72524d6ca020fe2a30ceeb88e1d4931d8b7d8a07ba02c86e9450d12726070ce
     globs:
     - pixi.toml
 - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.0-h2628c8c_0_cpython.conda
