@@ -1,5 +1,5 @@
 from pathlib import Path
-from .common import verify_cli_command, ExitCode
+from integration_python.common import verify_cli_command, ExitCode
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
 

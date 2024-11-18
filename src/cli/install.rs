@@ -1,5 +1,6 @@
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::get_update_lock_file_and_prefix;
+use crate::lock_file::UpdateMode;
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -52,7 +53,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let environment = project.environment_from_name_or_env_var(Some(env))?;
 
         // Update the prefix by installing all packages
-        get_update_lock_file_and_prefix(&environment, args.lock_file_usage.into(), false).await?;
+        get_update_lock_file_and_prefix(
+            &environment,
+            args.lock_file_usage.into(),
+            false,
+            UpdateMode::Revalidate,
+        )
+        .await?;
 
         installed_envs.push(environment.name().clone());
     }

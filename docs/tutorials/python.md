@@ -18,13 +18,22 @@ In this tutorial, we will use the `pyproject.toml` format because it is the most
 
 ## Let's get started
 
-Let's start out by making a directory and creating a new `pyproject.toml` file.
+Let's start out by creating a new project that uses a `pyproject.toml` file.
 
 ```shell
 pixi init pixi-py --format pyproject
 ```
 
-This gives you the following pyproject.toml:
+This creates a project with the following structure:
+
+```shell
+├── src
+│   └── pixi_py
+│       └── __init__.py
+└── pyproject.toml
+```
+
+The `pyproject.toml` for the project looks like this:
 
 ```toml
 [project]
@@ -49,32 +58,8 @@ pixi-py = { path = ".", editable = true }
 [tool.pixi.tasks]
 ```
 
-Let's add the Python project to the tree:
+This project uses a src-layout, but pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
 
-=== "Linux & macOS"
-    ```shell
-    cd pixi-py # move into the project directory
-    mkdir pixi_py
-    touch pixi_py/__init__.py
-    ```
-
-=== "Windows"
-    ```shell
-    cd pixi-py
-    mkdir pixi_py
-    type nul > pixi_py\__init__.py
-    ```
-
-We now have the following directory structure:
-
-```shell
-.
-├── pixi_py
-│   └── __init__.py
-└── pyproject.toml
-```
-
-We've used a flat-layout here but pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
 
 ### What's in the `pyproject.toml`?
 
@@ -188,7 +173,7 @@ Now let's `install` the project with `pixi install`:
 
 ```shell
 $ pixi install
-✔ Project in /path/to/pixi-py is ready to use!
+✔ The default environment has been installed.
 ```
 
 We now have a new directory called `.pixi` in the project root.

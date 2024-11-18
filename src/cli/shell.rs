@@ -9,6 +9,7 @@ use rattler_shell::{
 };
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::lock_file::UpdateMode;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
@@ -247,6 +248,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
+        UpdateMode::QuickValidate,
     )
     .await?;
 

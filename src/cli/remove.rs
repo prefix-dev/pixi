@@ -6,6 +6,7 @@ use crate::DependencyType;
 use crate::Project;
 
 use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
+use crate::lock_file::UpdateMode;
 
 use super::has_specs::HasSpecs;
 
@@ -46,8 +47,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .manifest
                     .remove_pypi_dependency(
                         name,
-                        &dependency_config.platform,
-                        &dependency_config.feature_name(),
+                        &dependency_config.platforms,
+                        &dependency_config.feature,
                     )
                     .wrap_err(format!(
                         "failed to remove PyPI dependency: '{}'",
@@ -62,8 +63,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .remove_dependency(
                         name,
                         spec_type,
-                        &dependency_config.platform,
-                        &dependency_config.feature_name(),
+                        &dependency_config.platforms,
+                        &dependency_config.feature,
                     )
                     .wrap_err(format!(
                         "failed to remove dependency: '{}'",
@@ -82,6 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &project.default_environment(),
             prefix_update_config.lock_file_usage(),
             prefix_update_config.no_install,
+            UpdateMode::Revalidate,
         )
         .await?;
     }

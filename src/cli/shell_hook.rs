@@ -11,12 +11,12 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::project::HasProjectRef;
+use crate::activation::CurrentEnvVarBehavior;
+use crate::environment::get_update_lock_file_and_prefix;
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
-    environment::get_update_lock_file_and_prefix,
-    project::Environment,
+    activation::get_activator,
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    project::{Environment, HasProjectRef},
     Project,
 };
 
@@ -129,6 +129,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
+        args.prefix_update_config.update_mode(),
     )
     .await?;
 

@@ -267,25 +267,6 @@ fn list_tasks(
     Ok(())
 }
 
-fn get_tasks_per_env(
-    task_list: HashSet<TaskName>,
-    environments: Vec<Environment>,
-) -> HashMap<Environment, HashMap<TaskName, Task>> {
-    let mut tasks_per_env: HashMap<Environment, HashMap<TaskName, Task>> = HashMap::new();
-    for env in environments {
-        let mut tasks: HashMap<TaskName, Task> = HashMap::new();
-        let this_env_tasks = env.tasks(Some(env.best_platform())).unwrap_or_default();
-        for taskname in task_list.iter() {
-            // if the task is in the environment, add it to the list
-            if let Some(&task) = this_env_tasks.get(taskname) {
-                tasks.insert(taskname.clone(), task.clone());
-            }
-        }
-        tasks_per_env.insert(env, tasks);
-    }
-    tasks_per_env
-}
-
 pub fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     match args.operation {
@@ -397,19 +378,29 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
                 })
                 .transpose()?;
-            let available_tasks: HashSet<TaskName> =
+
+            let env_task_map: HashMap<Environment, HashSet<TaskName>> =
                 if let Some(explicit_environment) = explicit_environment {
-                    explicit_environment.get_filtered_tasks()
+                    HashMap::from([(
+                        explicit_environment.clone(),
+                        explicit_environment.get_filtered_tasks(),
+                    )])
                 } else {
                     project
                         .environments()
-                        .into_iter()
-                        .filter(|env| {
-                            verify_current_platform_has_required_virtual_packages(env).is_ok()
+                        .iter()
+                        .filter_map(|env| {
+                            if verify_current_platform_has_required_virtual_packages(env).is_ok() {
+                                Some((env.clone(), env.get_filtered_tasks()))
+                            } else {
+                                None
+                            }
                         })
-                        .flat_map(|env| env.get_filtered_tasks())
                         .collect()
                 };
+
+            let available_tasks: HashSet<TaskName> =
+                env_task_map.values().flatten().cloned().collect();
 
             if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
@@ -426,7 +417,20 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 return Ok(());
             }
 
-            let tasks_per_env = get_tasks_per_env(available_tasks, project.environments());
+            let tasks_per_env = env_task_map
+                .into_iter()
+                .map(|(env, task_names)| {
+                    let tasks: HashMap<TaskName, Task> = task_names
+                        .into_iter()
+                        .filter_map(|task_name| {
+                            env.task(&task_name, Some(env.best_platform()))
+                                .ok()
+                                .map(|task| (task_name, task.clone()))
+                        })
+                        .collect();
+                    (env, tasks)
+                })
+                .collect();
 
             list_tasks(tasks_per_env, args.summary).expect("io error when printing tasks");
         }

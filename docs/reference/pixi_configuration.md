@@ -192,6 +192,13 @@ Configuration for repodata fetching.
 disable-jlap = true  # don't try to download repodata.jlap
 disable-bzip2 = true # don't try to download repodata.json.bz2
 disable-zstd = true  # don't try to download repodata.json.zst
+disable-sharded = true  # don't try to download sharded repodata
+```
+
+The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
+```toml title="config.toml"
+[repodata-config."https://prefix.dev"]
+disable-sharded = false
 ```
 
 ### `pypi-config`

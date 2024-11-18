@@ -12,13 +12,13 @@ repos:
         entry: pixi run -e lint end-of-file-fixer
         language: system
         types: [text]
-        stages: [commit, push, manual]
+        stages: [pre-commit, pre-push, manual]
       - id: trailing-whitespace
         name: trailing-whitespace
         entry: pixi run -e lint trailing-whitespace-fixer
         language: system
         types: [text]
-        stages: [commit, push, manual]
+        stages: [pre-commit, pre-push, manual]
       # Use ruff for python examples
       - id: ruff
         name: ruff
@@ -32,6 +32,13 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # GitHub Actions
+      - id: actionlint
+        name: Lint GitHub Actions workflow files
+        language: system
+        entry: pixi run -e lint actionlint
+        types: [yaml]
+        files: ^\.github/workflows/
       # Typecheck python tests
       - id: typecheck-python
         name: typecheck-python

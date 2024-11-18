@@ -1,8 +1,8 @@
-use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask};
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use uv_distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use uv_normalize::PackageName;
 
 fn create_progress(length: u64, message: &'static str) -> ProgressBar {
@@ -213,6 +213,33 @@ impl uv_resolver::ResolverReporter for UvReporter {
 
     fn on_complete(&self) {
         self.finish_all()
+    }
+
+    // TODO: figure out how to display this nicely
+    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
+        0
+    }
+
+    fn on_download_progress(&self, _id: usize, _bytes: u64) {}
+
+    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
+}
+
+impl uv_distribution::Reporter for UvReporter {
+    fn on_build_start(&self, dist: &BuildableSource) -> usize {
+        self.start_sync(format!("building {}", dist,))
+    }
+
+    fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
+        self.finish(id);
+    }
+
+    fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        self.start_sync(format!("cloning {}", url))
+    }
+
+    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+        self.finish(index);
     }
 
     // TODO: figure out how to display this nicely
