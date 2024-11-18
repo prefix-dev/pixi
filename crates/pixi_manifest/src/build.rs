@@ -28,6 +28,7 @@ pub struct BuildSection {
 }
 
 impl BuildSection {
+    /// Returns the channels as URLs
     pub fn channels_url(&self, config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
         self.channels
             .iter()
@@ -35,6 +36,7 @@ impl BuildSection {
             .collect()
     }
 
+    /// Returns the channels as `Channel`s
     pub fn channels(&self, config: &ChannelConfig) -> Result<Vec<Channel>, ParseChannelError> {
         self.channels
             .iter()
