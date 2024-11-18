@@ -14,7 +14,6 @@ use crate::{
 /// The tool context,
 /// containing client, channels and gateway configuration
 /// that will be used to resolve and install tools.
-
 #[derive(Default, Debug)]
 pub struct ToolContext {
     /// The gateway configuration used to fetch repodata.
