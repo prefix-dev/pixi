@@ -1570,6 +1570,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#preview-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preview features
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       Global configuration
@@ -2091,6 +2100,15 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preview-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preview features
+    </span>
+  </a>
   
 </li>
       
@@ -2723,6 +2741,16 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 <li>The <code>channels</code> of the environment is the union of the <code>channels</code> of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.</li>
 <li>The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project <code>platforms</code> to all platforms it can support across its environments.</li>
 </ul>
+<h2 id="preview-features">Preview features<a class="headerlink" href="#preview-features" title="Permanent link">#</a></h2>
+<p>Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the <code>preview</code> field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value <code>true</code> to enable all preview features.</p>
+<p>An example of a preview feature in the project manifest:</p>
+<div class="language-toml highlight"><span class="filename">Example preview features in the project manifest</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="k">[project]</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-44-5"><a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;new-resolve&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Preview features in the documentation will be marked as such on the relevant pages.</p>
 <h2 id="global-configuration">Global configuration<a class="headerlink" href="#global-configuration" title="Permanent link">#</a></h2>
 <p>The global configuration options are documented in the <a href="../pixi_configuration/">global configuration</a> section.</p>
 
