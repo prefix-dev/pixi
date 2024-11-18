@@ -40,6 +40,32 @@ These directories are conda environments, and you can use them as such, but you 
 Pixi will always make sure the environment is in sync with the `pixi.lock` file.
 If this is not the case then all the commands that use the environment will automatically update the environment, e.g. `pixi run`, `pixi shell`.
 
+### Environment Installation Metadata
+On environment installation, pixi will write a small file to the environment that contains some metadata about installation.
+This file is called `pixi` and is located in the `conda-meta` folder of the environment.
+This file contains the following information:
+
+- `manifest_path`: The path to the manifest file that describes the project used to create this environment
+- `environment_name`: The name of the environment
+- `pixi_version`: The version of pixi that was used to create this environment
+- `environment_lock_file_hash`: The hash of the `pixi.lock` file that was used to create this environment
+
+```json
+{
+  "manifest_path": "/home/user/dev/pixi/pixi.toml",
+  "environment_name": "default",
+  "pixi_version": "0.34.0",
+  "environment_lock_file_hash": "4f36ee620f10329d"
+}
+```
+
+The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file.
+If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, pixi will update the environment.
+
+This is used to speedup activation, in order to trigger a full revalidation pass `--revalidate` to the `pixi run` or `pixi shell` command.
+A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
+By default, all lock file modifying commands will always use the revalidation and on `pixi install` it always revalidates.
+
 ### Cleaning up
 
 If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and pixi will recreate the environments when needed.
@@ -186,7 +212,7 @@ For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the 
 For this building step, `pixi` requires to first install `python` in the (conda)`[dependencies]` section of the `pixi.toml` file.
 This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
 
-## Caching
+## Caching packages
 
 Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.

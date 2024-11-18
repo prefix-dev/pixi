@@ -31,6 +31,10 @@ pub struct AddRemoveArgs {
     #[clap(long, num_args = 1)]
     pub priority: Option<i32>,
 
+    /// Add the channel(s) to the beginning of the channels list, making them highest priority
+    #[clap(long)]
+    pub prepend: bool,
+
     /// Don't update the environment, only modify the manifest and the
     /// lock-file.
     #[clap(long)]

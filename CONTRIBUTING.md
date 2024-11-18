@@ -51,8 +51,7 @@ By contributing to Pixi, you agree that your contributions will be licensed unde
 ```shell
 pixi run build
 pixi run lint
-pixi run test
-pixi run test-workspace
+pixi run test-all-fast
 pixi run install # only works on unix systems as on windows you can't overwrite the binary while it's running
 ```
 

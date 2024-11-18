@@ -11,13 +11,13 @@
       "depends": [
         "jupyter-core"
       ],
-      "md5": "28a369f8699f3116f9db45e2d34d73cd",
+      "md5": "b084adf91a0b0cc9248389c203e6b0c6",
       "name": "jupyter",
       "platform": "win",
-      "sha256": "a3a9ab7253af15eee751714f16b3be9e171e135cb747a5d3cb63e809fa4ebd98",
+      "sha256": "484c47d5b5715943af1589f08764eaed7fbd9a9eb156c76d8c195a8f4744ba03",
       "size": 992,
       "subdir": "win-64",
-      "timestamp": 1730276788859,
+      "timestamp": 1730898133106,
       "version": "0.1.0"
     },
     "jupyter-core-0.1.0-h9490d1a_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "d4971bf4749598fd70cb1dfe05ab94a2",
+      "md5": "2ccc77fec0a0a6bd881e1114f2ac4ae8",
       "name": "jupyter-core",
       "platform": "win",
-      "sha256": "88394a793591862c0583286f33fca390c11aaff6e705fdb8d32dd2eea7e3469e",
-      "size": 1185,
+      "sha256": "823222c9ea2f41898aec542eda9f68867f6f21b33d775f215be68568494690e5",
+      "size": 1184,
       "subdir": "win-64",
-      "timestamp": 1730276788859,
+      "timestamp": 1730898133106,
       "version": "0.1.0"
     }
   },

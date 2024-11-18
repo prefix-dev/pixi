@@ -121,7 +121,7 @@ impl PixiSpec {
                 build_number: spec.build_number,
                 file_name: spec.file_name,
                 channel: spec.channel.map(|c| {
-                    NamedChannelOrUrl::from_str(&channel_config.canonical_name(c.base_url()))
+                    NamedChannelOrUrl::from_str(&channel_config.canonical_name(c.base_url.url()))
                         .unwrap()
                 }),
                 subdir: spec.subdir,

@@ -35,12 +35,13 @@ use uv_dispatch::BuildDispatch;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+    IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
-use uv_python::{Interpreter, PythonEnvironment, PythonVersion};
+use uv_python::{Interpreter, PythonEnvironment};
+use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     Preferences, PythonRequirement, Resolver, ResolverEnvironment,
@@ -49,13 +50,20 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        package_identifier, resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
+        package_identifier, records_by_name::HasNameVersion,
+        resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
         PypiPackageIdentifier, PypiRecord, UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
-fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid hash: {0} type: {1}")]
+struct InvalidHash(String, String);
+
+fn parse_hashes_from_hash_vec(
+    hashes: &Vec<HashDigest>,
+) -> Result<Option<PackageHashes>, InvalidHash> {
     let mut sha256 = None;
     let mut md5 = None;
 
@@ -74,18 +82,30 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
     }
 
     match (sha256, md5) {
-        (Some(sha256), None) => Some(PackageHashes::Sha256(
-            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
-        )),
-        (None, Some(md5)) => Some(PackageHashes::Md5(
-            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
-        )),
-        (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
-            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
-            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
-        )),
-        (None, None) => None,
+        (Some(sha256), None) => Ok(Some(PackageHashes::Sha256(
+            parse_digest_from_hex::<Sha256>(&sha256)
+                .ok_or_else(|| InvalidHash(sha256.clone(), "sha256".to_string()))?,
+        ))),
+        (None, Some(md5)) => Ok(Some(PackageHashes::Md5(
+            parse_digest_from_hex::<Md5>(&md5)
+                .ok_or_else(|| InvalidHash(md5.clone(), "md5".to_string()))?,
+        ))),
+        (Some(sha256), Some(md5)) => Ok(Some(PackageHashes::Md5Sha256(
+            parse_digest_from_hex::<Md5>(&md5)
+                .ok_or_else(|| InvalidHash(md5.clone(), "md5".to_string()))?,
+            parse_digest_from_hex::<Sha256>(&sha256)
+                .ok_or_else(|| InvalidHash(sha256.clone(), "sha256".to_string()))?,
+        ))),
+        (None, None) => Ok(None),
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum ProcessPathUrlError {
+    #[error("expected given path for {0} but none found")]
+    NoGivenPath(String),
+    #[error("given path is an invalid file path")]
+    InvalidFilePath(String),
 }
 
 /// Given a pyproject.toml and either case:
@@ -104,14 +124,16 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
 /// relative
 ///
 /// I think this has to do with the order of UV processing the requirements
-fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> PathBuf {
-    let given = path_url.given().expect("path should have a given url");
+fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> Result<PathBuf, ProcessPathUrlError> {
+    let given = path_url
+        .given()
+        .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?;
     if given.starts_with("file://") {
         path_url
             .to_file_path()
-            .expect("path should be a valid file path")
+            .map_err(|_| ProcessPathUrlError::InvalidFilePath(path_url.to_string()))
     } else {
-        PathBuf::from(given)
+        Ok(PathBuf::from(given))
     }
 }
 
@@ -162,13 +184,13 @@ pub async fn resolve_pypi(
             )
         })
         .map_ok(|(record, p)| {
-            (
-                uv_normalize::PackageName::new(p.name.as_normalized().to_string())
-                    .expect("cannot convert to package name"),
+            Ok((
+                uv_normalize::PackageName::new(p.name.as_normalized().to_string())?,
                 (record.clone(), p),
-            )
+            ))
         })
-        .collect::<Result<HashMap<_, _>, _>>()
+        .collect::<Result<Result<HashMap<_, _>, uv_normalize::InvalidNameError>, _>>()
+        .into_diagnostic()?
         .into_diagnostic()
         .context("failed to extract python packages from conda metadata")?;
 
@@ -211,12 +233,38 @@ pub async fn resolve_pypi(
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
-    // Construct an interpreter from the conda environment.
+    // We need to setup both an interpreter and a requires_python specifier.
+    // The interpreter is used to (potentially) build the wheel, and the requires_python specifier is used
+    // to determine the python version of the wheel.
+    // So make sure the interpreter does not touch the solve parts of this function
+    let interpreter_version = python_record
+        .version()
+        .as_major_minor()
+        .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
+    let pep_version = uv_pep440::Version::from_str(&format!(
+        "{}.{}",
+        interpreter_version.0, interpreter_version.1
+    ))
+    .into_diagnostic()
+    .context("error parsing pep440 version for python interpreter")?;
+    let python_specifier =
+        uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
+            .into_diagnostic()
+            .context("error creating version specifier for python version")?;
+    let requires_python = uv_resolver::RequiresPython::from_specifiers(
+        &uv_pep440::VersionSpecifiers::from(python_specifier),
+    );
     let interpreter = Interpreter::query(python_location, &context.cache)
         .into_diagnostic()
         .wrap_err("failed to query python interpreter")?;
-
-    tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
+    tracing::debug!(
+        "using python interpreter (should be assumed for building only): {}",
+        interpreter.key()
+    );
+    tracing::info!(
+        "using requires python specifier (this may differ from the above): {}",
+        requires_python
+    );
 
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
@@ -228,6 +276,7 @@ pub async fn resolve_pypi(
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
             .index_strategy(index_strategy)
+            .markers(&marker_environment)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
@@ -350,28 +399,40 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
 
-    let resolver_env = ResolverEnvironment::specific(marker_environment.into());
+    let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
+
+    let constraints = Constraints::from_requirements(constraints.iter().cloned());
+    let lookahead_index = InMemoryIndex::default();
+    let lookaheads = LookaheadResolver::new(
+        &requirements,
+        &constraints,
+        &Overrides::default(),
+        &[],
+        &context.hash_strategy,
+        &lookahead_index,
+        DistributionDatabase::new(
+            &registry_client,
+            &build_dispatch,
+            context.concurrency.downloads,
+        ),
+    )
+    .with_reporter(UvReporter::new(
+        UvReporterOptions::new().with_existing(pb.clone()),
+    ))
+    .resolve(&resolver_env)
+    .await
+    .into_diagnostic()?;
+
     let manifest = Manifest::new(
         requirements,
-        Constraints::from_requirements(constraints.iter().cloned()),
+        constraints,
         Overrides::default(),
         Default::default(),
         Preferences::from_iter(preferences, &resolver_env),
         None,
         None,
         uv_resolver::Exclusions::None,
-        Vec::new(),
-    );
-
-    let interpreter_version = interpreter.python_version();
-    let python_specifier = uv_pep440::VersionSpecifier::from_version(
-        uv_pep440::Operator::EqualStar,
-        interpreter_version.clone(),
-    )
-    .into_diagnostic()
-    .context("error creating version specifier for python version")?;
-    let requires_python = uv_resolver::RequiresPython::from_specifiers(
-        &uv_pep440::VersionSpecifiers::from(python_specifier),
+        lookaheads,
     );
 
     let fallback_provider = DefaultResolverProvider::new(
@@ -399,14 +460,12 @@ pub async fn resolve_pypi(
     // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
     // one. As we have noted in the comment above.
     let resolver_in_memory_index = InMemoryIndex::default();
-    let python_version = PythonVersion::from_str(&interpreter_version.to_string())
-        .expect("could not get version from interpreter");
     let resolution = Resolver::new_custom_io(
         manifest,
         options,
         &context.hash_strategy,
         resolver_env,
-        &PythonRequirement::from_python_version(&interpreter, &python_version),
+        &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         &resolver_in_memory_index,
         &git_resolver,
         &context.capabilities,
@@ -441,8 +500,113 @@ pub async fn resolve_pypi(
         resolution,
         &context.capabilities,
         context.concurrency.downloads,
+        project_root,
     )
     .await
+}
+
+#[derive(Debug, thiserror::Error)]
+enum GetUrlOrPathError {
+    #[error("expected absolute path found: {path}", path = .0.display())]
+    InvalidAbsolutePath(PathBuf),
+    #[error("invalid base url: {0}")]
+    InvalidBaseUrl(String),
+    #[error("cannot join these urls {0} + {1}")]
+    CannotJoin(String, String),
+    #[error("expected path found: {0}")]
+    ExpectedPath(String),
+}
+
+/// Get the UrlOrPath from the index url and file location
+/// This will be used to handle the case of a source or built distribution
+/// coming from a registry index or a `--find-links` path
+fn get_url_or_path(
+    index_url: &IndexUrl,
+    file_location: &FileLocation,
+    abs_project_root: &Path,
+) -> Result<UrlOrPath, GetUrlOrPathError> {
+    const RELATIVE_BASE: &str = "./";
+    match index_url {
+        // This is the case where the registry index is a PyPI index
+        // or an URL
+        IndexUrl::Pypi(_) | IndexUrl::Url(_) => {
+            let url = match file_location {
+                // Normal case, can be something like:
+                // https://files.pythonhosted.org/packages/12/90/3c9ff0512038035f59d279fddeb79f5f1eccd8859f06d6163c58798b9487/certifi-2024.8.30-py3-none-any.whl
+                FileLocation::AbsoluteUrl(url) => {
+                    UrlOrPath::Url(Url::from_str(url.as_ref()).map_err(|_| {
+                        GetUrlOrPathError::InvalidAbsolutePath(PathBuf::from(url.to_string()))
+                    })?)
+                }
+                // This happens when it is relative to the non-standard index
+                // because we only lock absolute URLs, we need to join with the base
+                FileLocation::RelativeUrl(base, relative) => {
+                    let base = Url::from_str(base)
+                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.clone()))?;
+                    let url = base.join(relative).map_err(|_| {
+                        GetUrlOrPathError::CannotJoin(base.to_string(), relative.clone())
+                    })?;
+                    UrlOrPath::Url(url)
+                }
+            };
+            Ok(url)
+        }
+        // From observation this is the case where the index is a `--find-links` path
+        // i.e a path to a directory. This is not a PyPI index, but a directory or a file with links to wheels
+        IndexUrl::Path(_) => {
+            let url = match file_location {
+                // Okay we would have something like:
+                // file:///home/user/project/dist/certifi-2024.8.30-py3-none-any.whl
+                FileLocation::AbsoluteUrl(url) => {
+                    // Convert to a relative path from the base path
+                    let absolute = url
+                        .to_url()
+                        .to_file_path()
+                        .map_err(|_| GetUrlOrPathError::ExpectedPath(url.to_string()))?;
+                    // !IMPORTANT! We need to strip the base path from the absolute path
+                    // not the path returned by the uv solver. Why? Because we need the path relative
+                    // to the project root, **not** the path relative to the --find-links path.
+                    // This is because during installation we do something like: `project_root.join(relative_path)`
+                    let relative = absolute.strip_prefix(abs_project_root);
+                    let path = match relative {
+                        // Apparently, we can make it relative to the project root
+                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
+                            .map_err(|_| {
+                                GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
+                            })?
+                            .join(relative),
+                        // We can't make it relative to the project root
+                        // so we just return the absolute path
+                        Err(_) => absolute,
+                    };
+                    UrlOrPath::Path(path)
+                }
+                // This happens when it is relative to the non-standard index
+                // location on disk.
+                FileLocation::RelativeUrl(base, relative) => {
+                    // This is the same logic as the `AbsoluteUrl` case
+                    // basically but we just make an absolute path first
+                    let absolute = PathBuf::from_str(base)
+                        .map_err(|_| GetUrlOrPathError::ExpectedPath(base.clone()))?;
+                    let relative = PathBuf::from_str(relative)
+                        .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.clone()))?;
+                    let absolute = absolute.join(relative);
+
+                    let relative = absolute.strip_prefix(abs_project_root);
+                    let path = match relative {
+                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
+                            .map_err(|_| {
+                                GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
+                            })?
+                            .join(relative),
+                        Err(_) => absolute,
+                    };
+                    UrlOrPath::Path(path)
+                }
+            };
+            Ok(url)
+        }
+    }
 }
 
 /// Create a vector of locked packages from a resolution
@@ -453,6 +617,7 @@ async fn lock_pypi_packages<'a>(
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
+    abs_project_root: &Path,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
@@ -463,50 +628,53 @@ async fn lock_pypi_packages<'a>(
         }
 
         let pypi_package_data = match dist {
+            // Ignore installed distributions
             ResolvedDist::Installed(_) => {
-                // TODO handle installed distributions
                 continue;
             }
+
             ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let best_wheel = dist.best_wheel();
-                        let url = match &best_wheel.file.url {
-                            FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
-                                Url::from_str(url.as_ref()).expect("invalid absolute url"),
-                            ),
-                            // This happens when it is relative to the non-standard index
-                            FileLocation::RelativeUrl(base, relative) => {
-                                let base = Url::from_str(base).expect("invalid base url");
-                                let url = base.join(relative).expect("could not join urls");
-                                UrlOrPath::Url(url)
-                            }
-                        };
-
-                        let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes);
-                        (url, hash)
+                        let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
+                            .into_diagnostic()
+                            .context("cannot parse hashes for registry dist")?;
+                        let url_or_path = get_url_or_path(
+                            &best_wheel.index,
+                            &best_wheel.file.url,
+                            abs_project_root,
+                        )
+                        .into_diagnostic()
+                        .context("cannot convert registry dist")?;
+                        (url_or_path, hash)
                     }
                     BuiltDist::DirectUrl(dist) => {
                         let url = dist.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
-                            .expect("could not create direct-url");
+                            .into_diagnostic()
+                            .context("cannot create direct url")?;
 
                         (UrlOrPath::Url(direct_url), None)
                     }
-                    BuiltDist::Path(dist) => {
-                        (UrlOrPath::Path(process_uv_path_url(&dist.url)), None)
-                    }
+                    BuiltDist::Path(dist) => (
+                        UrlOrPath::Path(process_uv_path_url(&dist.url).into_diagnostic()?),
+                        None,
+                    ),
                 };
 
                 let metadata = registry_client
                     .wheel_metadata(dist, index_capabilities)
                     .await
-                    .expect("failed to get wheel metadata");
+                    .into_diagnostic()
+                    .wrap_err("cannot get wheel metadata")?;
                 PypiPackageData {
                     name: pep508_rs::PackageName::new(metadata.name.to_string())
-                        .expect("cannot convert name"),
+                        .into_diagnostic()
+                        .context("cannot convert name")?,
                     version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                        .expect("cannot convert version"),
+                        .into_diagnostic()
+                        .context("cannot convert version")?,
                     requires_python: metadata
                         .requires_python
                         .map(|r| to_version_specifiers(&r))
@@ -523,7 +691,13 @@ async fn lock_pypi_packages<'a>(
                 // Handle new hash stuff
                 let hash = source
                     .file()
-                    .and_then(|file| parse_hashes_from_hash_vec(&file.hashes));
+                    .and_then(|file| {
+                        parse_hashes_from_hash_vec(&file.hashes)
+                            .into_diagnostic()
+                            .context("cannot parse hashes for sdist")
+                            .transpose()
+                    })
+                    .transpose()?;
 
                 let metadata_response = database
                     .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
@@ -535,23 +709,17 @@ async fn lock_pypi_packages<'a>(
                 // otherwise try to construct it from the source
                 let (url_or_path, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
-                        let url_or_path = match &reg.file.url {
-                            FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
-                                Url::from_str(url.as_ref()).expect("invalid absolute url"),
-                            ),
-                            // This happens when it is relative to the non-standard index
-                            FileLocation::RelativeUrl(base, relative) => {
-                                let base = Url::from_str(base).expect("invalid base url");
-                                let url = base.join(relative).expect("could not join urls");
-                                UrlOrPath::Url(url)
-                            }
-                        };
+                        let url_or_path =
+                            get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
+                                .into_diagnostic()
+                                .context("cannot convert registry sdist")?;
                         (url_or_path, hash, false)
                     }
                     SourceDist::DirectUrl(direct) => {
                         let url = direct.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
-                            .expect("could not create direct-url");
+                            .into_diagnostic()
+                            .context("could not create direct-url")?;
                         (direct_url.into(), hash, false)
                     }
                     SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
@@ -569,7 +737,7 @@ async fn lock_pypi_packages<'a>(
                         };
 
                         // process the path or url that we get back from uv
-                        let given_path = process_uv_path_url(&path.url);
+                        let given_path = process_uv_path_url(&path.url).into_diagnostic()?;
 
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
@@ -578,7 +746,6 @@ async fn lock_pypi_packages<'a>(
                         (url_or_path, hash, false)
                     }
                     SourceDist::Directory(dir) => {
-                        // TODO: check that `install_path` is correct
                         // Compute the hash of the package based on the source tree.
                         let hash = if dir.install_path.is_dir() {
                             Some(
@@ -592,7 +759,7 @@ async fn lock_pypi_packages<'a>(
                         };
 
                         // process the path or url that we get back from uv
-                        let given_path = process_uv_path_url(&dir.url);
+                        let given_path = process_uv_path_url(&dir.url).into_diagnostic()?;
 
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
@@ -605,7 +772,7 @@ async fn lock_pypi_packages<'a>(
                 PypiPackageData {
                     name: to_normalize(&metadata.name).into_diagnostic()?,
                     version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                        .expect("cannot convert version"),
+                        .into_diagnostic()?,
                     requires_python: metadata
                         .requires_python
                         .map(|r| to_version_specifiers(&r))

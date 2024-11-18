@@ -1,13 +1,14 @@
-use std::{
-    collections::HashMap,
-    convert::identity,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    sync::Arc,
+use crate::{
+    install_pypi,
+    lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
 };
-
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
+use fs_err as fs;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
@@ -17,20 +18,23 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_lock::Package::{Conda, Pypi};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    convert::identity,
+    io,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::sync::Semaphore;
 use uv_distribution_types::{InstalledDist, Name};
 
-use crate::{
-    install_pypi,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
-    rlimit::try_increase_rlimit_to_sensible,
-    Project,
-};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -102,13 +106,22 @@ async fn prefix_location_changed(
     }
 }
 
+// Write the contents to the file at the given path.
+fn write_file<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    // Verify existence of parent
+    if let Some(parent) = path.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, contents)
+}
+
 /// Create the prefix location file.
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file_path = environment_dir
         .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
-    tracing::info!("Creating prefix file at: {}", prefix_file_path.display());
 
     let parent_dir = prefix_file_path.parent().ok_or_else(|| {
         miette::miette!(
@@ -120,18 +133,17 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     if parent_dir.exists() {
         let contents = parent_dir.to_string_lossy();
 
-        let path = Path::new(&prefix_file_path);
         // Read existing contents to determine if an update is necessary
-        if path.exists() {
-            let existing_contents = std::fs::read_to_string(path).into_diagnostic()?;
+        if prefix_file_path.exists() {
+            let existing_contents = fs::read_to_string(&prefix_file_path).into_diagnostic()?;
             if existing_contents == contents {
                 tracing::info!("No update needed for the prefix file.");
                 return Ok(());
             }
         }
 
-        // Write new contents to the prefix file
-        std::fs::write(path, &*contents).into_diagnostic()?;
+        write_file(&prefix_file_path, contents.as_bytes()).into_diagnostic()?;
+
         tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
@@ -142,57 +154,145 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     let history_file = environment_dir.join("conda-meta").join("history");
 
-    tracing::info!(
-        "Checking if history file exists: {}",
-        history_file.display()
-    );
+    tracing::info!("Verify history file exists: {}", history_file.display());
 
-    let binding = history_file.clone();
-    let parent = binding
-        .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
-
-    if parent.exists() && !history_file.exists() {
-        tracing::info!("Creating history file: {}", history_file.display());
-        std::fs::write(
-            history_file,
-            "// not relevant for pixi but for `conda run -p`",
-        )
-        .into_diagnostic()?;
-    }
-    Ok(())
+    write_file(
+        history_file,
+        "// not relevant for pixi but for `conda run -p`",
+    )
+    .into_diagnostic()
 }
 
+#[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockedEnvironmentHash(String);
+impl LockedEnvironmentHash {
+    pub(crate) fn from_environment(
+        environment: rattler_lock::Environment,
+        platform: Platform,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+
+        if let Some(packages) = environment.packages(platform) {
+            for package in packages {
+                // Always has the url or path
+                package
+                    .url_or_path()
+                    .into_owned()
+                    .to_string()
+                    .hash(&mut hasher);
+
+                match package {
+                    // A select set of fields are used to hash the package
+                    Conda(pack) => {
+                        if let Some(sha) = pack.package_record().sha256 {
+                            sha.hash(&mut hasher);
+                        } else if let Some(md5) = pack.package_record().md5 {
+                            md5.hash(&mut hasher);
+                        }
+                    }
+                    Pypi(pack) => {
+                        pack.is_editable().hash(&mut hasher);
+                        pack.extras().hash(&mut hasher);
+                    }
+                }
+            }
+        }
+
+        LockedEnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+/// Information about the environment that was used to create the environment.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
+    /// The path to the manifest file that was used to create the environment.
     pub(crate) manifest_path: PathBuf,
+    /// The name of the environment.
     pub(crate) environment_name: String,
+    /// The version of the pixi that was used to create the environment.
     pub(crate) pixi_version: String,
+    /// The hash of the lock file that was used to create the environment.
+    pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
+}
+
+/// The path to the environment file in the `conda-meta` directory of the environment.
+fn environment_file_path(environment_dir: &Path) -> PathBuf {
+    environment_dir
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME)
 }
 /// Write information about the environment to a file in the environment
-/// directory. This can be useful for other tools that only know the environment
-/// directory to find the original project.
+/// directory. Used by the prefix updating to validate if it needs to be updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
 ) -> miette::Result<PathBuf> {
-    let path = environment_dir
-        .join("conda-meta")
-        .join(consts::ENVIRONMENT_FILE_NAME);
+    let path = environment_file_path(environment_dir);
 
     let parent = path
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    std::fs::create_dir_all(parent).into_diagnostic()?;
+    match std::fs::create_dir_all(parent).into_diagnostic() {
+        Ok(_) => {
+            // Using json as it's easier to machine read it.
+            let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
+            match std::fs::write(&path, contents).into_diagnostic() {
+                Ok(_) => {
+                    tracing::debug!("Wrote environment file to: {:?}", path);
+                }
+                Err(e) => tracing::debug!(
+                    "Unable to write environment file to: {:?} => {:?}",
+                    path,
+                    e.root_cause().to_string()
+                ),
+            };
+            Ok(path)
+        }
+        Err(e) => {
+            tracing::debug!("Unable to create conda-meta folder to: {:?}", path);
+            Err(e)
+        }
+    }
+}
 
-    // Using json as it's easier to machine read it.
-    let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-    std::fs::write(&path, contents).into_diagnostic()?;
+/// Reading the environment file of the environment.
+/// Removing it if it's not valid.
+pub(crate) fn read_environment_file(
+    environment_dir: &Path,
+) -> miette::Result<Option<EnvironmentFile>> {
+    let path = environment_file_path(environment_dir);
 
-    tracing::debug!("Wrote environment file to: {:?}", path);
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            tracing::debug!("Environment file not yet found at: {:?}", path);
+            return Ok(None);
+        }
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
+                path,
+                e
+            );
+            let _ = std::fs::remove_file(&path);
+            return Err(e).into_diagnostic();
+        }
+    };
+    let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
+        Ok(env_file) => env_file,
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read environment file at: {:?}, error: {}, will try to remove it.",
+                path,
+                e
+            );
+            let _ = std::fs::remove_file(&path);
+            return Ok(None);
+        }
+    };
 
-    Ok(path)
+    Ok(Some(env_file))
 }
 
 /// Runs the following checks to make sure the project is in a sane state:
@@ -292,6 +392,7 @@ pub async fn update_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
+    update_mode: UpdateMode,
 ) -> miette::Result<()> {
     let current_platform = environment.best_platform();
     let project = environment.project();
@@ -316,7 +417,7 @@ pub async fn update_prefix(
 
     // Get the locked environment from the lock-file.
     if !no_install {
-        lock_file.prefix(environment).await?;
+        lock_file.prefix(environment, update_mode).await?;
     }
     Ok(())
 }

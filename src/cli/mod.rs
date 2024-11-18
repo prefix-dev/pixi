@@ -35,6 +35,7 @@ pub mod shell_hook;
 pub mod task;
 pub mod tree;
 pub mod update;
+pub mod upgrade;
 pub mod upload;
 
 #[derive(Parser, Debug)]
@@ -52,7 +53,7 @@ Basic Usage:
     $ pixi add python numpy pytest
 
     Run a task:
-    $ pixi add task test 'pytest -s'
+    $ pixi task add test 'pytest -s'
     $ pixi run test
 
 Found a Bug or Have a Feature Request?
@@ -106,6 +107,7 @@ pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Update(update::Args),
+    Upgrade(upgrade::Args),
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
@@ -290,6 +292,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
+        Command::Upgrade(cmd) => upgrade::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
     }
 }

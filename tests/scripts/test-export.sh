@@ -3,15 +3,18 @@ set -e
 set -x
 echo "Running test_export.sh"
 
+echo "Activating 'export-test' env"
+eval "$(pixi shell-hook)"
+unset PIXI_IN_SHELL
 echo "Exporting the export test environment"
-cd src/cli/project/export/test-data/testenv
+cd tests/data/mock-projects/test-project-export
 pixi project export conda-environment | tee test-env.yml
 echo "Creating the export test environment with micromamba"
 micromamba create -y -f test-env.yml -n export-test
 micromamba env list
 micromamba env remove -y -n export-test
 rm test-env.yml
-cd ../../../../../..
+cd ../../../..
 
 # Setuptools error with env_test_package
 # echo "Exporting an environment.yml with pip extras"

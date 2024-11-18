@@ -10,6 +10,7 @@ use std::{
     str::FromStr,
 };
 
+use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
@@ -27,6 +28,10 @@ use pixi::{
         TaskGraphError, TaskName,
     },
     Project, UpdateLockFileOptions,
+};
+use pixi::{
+    cli::{cli_config::ChannelsConfig, search},
+    lock_file::UpdateMode,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -326,8 +331,25 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
                 editable: false,
+            },
+        }
+    }
+
+    /// Search and return latest package. Returns an [`SearchBuilder`].
+    /// the command and await the result call `.await` on the return value.
+    pub fn search(&self, name: String) -> SearchBuilder {
+        SearchBuilder {
+            args: search::Args {
+                package: name,
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                platform: Platform::current(),
+                limit: None,
+                channels: ChannelsConfig::default(),
             },
         }
     }
@@ -345,6 +367,7 @@ impl PixiControl {
                     no_install: true,
                     lock_file_usage: LockFileUsageArgs::default(),
                     config: Default::default(),
+                    revalidate: false,
                 },
             },
         }
@@ -359,6 +382,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }
@@ -372,6 +396,7 @@ impl PixiControl {
                 no_install: true,
                 feature: None,
                 priority: None,
+                prepend: false,
             },
         }
     }
@@ -440,7 +465,9 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    lock_file.prefix(&task.run_environment).await?;
+                    lock_file
+                        .prefix(&task.run_environment, UpdateMode::Revalidate)
+                        .await?;
                     let env = get_task_env(&task.run_environment, args.clean_env).await?;
                     task_env.insert(env)
                 }
