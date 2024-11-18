@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.37.0] - 2024-11-18
+#### ✨ Highlights
+
+We now allow the use of `prefix.dev` channels with sharded repodata:
+
+Running `pixi search rubin-env` using `hyperfine` on the default versus our channels gives these results:
+
+| Cache Status | Channel                                  | Mean [ms] | Relative |
+|:-------------|------------------------------------------|----------:|---------:|
+| With cache   | `https://prefix.dev/conda-forge`         |      69.3 |     1.00 |
+| Without      | `https://prefix.dev/conda-forge`         |     389.5 |     5.62 |
+| With cache   | `https://conda.anaconda.org/conda-forge` |    1043.3 |    15.06 |
+| Without      | `https://conda.anaconda.org/conda-forge` |    2420.3 |    34.94 |
+
+#### Breaking
+
+- Make sure that `[activation.env]` are not completely overridden by `[target.` tables, by @hameerabbasi in [#2396](https://github.com/prefix-dev/pixi/pull/2396)
+
+#### Changed
+
+- Allow using sharded repodata by @baszalmstra in [#2467](https://github.com/prefix-dev/pixi/pull/2467)
+
+#### Documentation
+
+- Update ros2.md turtlesim section by @nbbrooks in [#2442](https://github.com/prefix-dev/pixi/pull/2442)
+- Update pycharm.md to show optional installation by @plainerman in [#2487](https://github.com/prefix-dev/pixi/pull/2487)
+- Fix typo in documentation by @saraedum in [#2496](https://github.com/prefix-dev/pixi/pull/2496)
+- Update pixi install output by @LiamConnors in [#2495](https://github.com/prefix-dev/pixi/pull/2495)
+
+#### Fixed
+
+- Incorrect python version was used in some parts of the solve by @tdejager in [#2481](https://github.com/prefix-dev/pixi/pull/2481)
+- Wrong description on pixi upgrade by @notPlancha in [#2483](https://github.com/prefix-dev/pixi/pull/2483)
+- Extra test for mismatch in python versions by @tdejager in [#2485](https://github.com/prefix-dev/pixi/pull/2485)
+- Keep `build` in `pixi upgrade` by @ruben-arts in [#2476](https://github.com/prefix-dev/pixi/pull/2476)
+
+#### New Contributors
+* @saraedum made their first contribution in [#2496](https://github.com/prefix-dev/pixi/pull/2496)
+* @plainerman made their first contribution in [#2487](https://github.com/prefix-dev/pixi/pull/2487)
+* @hameerabbasi made their first contribution in [#2396](https://github.com/prefix-dev/pixi/pull/2396)
+* @nbbrooks made their first contribution in [#2442](https://github.com/prefix-dev/pixi/pull/2442)
+
 ### [0.36.0] - 2024-11-07
 #### ✨ Highlights
 

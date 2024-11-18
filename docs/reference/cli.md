@@ -53,13 +53,17 @@ pixi init --format pixi --scm gitlab
 ## `add`
 
 Adds dependencies to the [manifest file](project_configuration.md).
-It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
+It will only add dependencies compatible with the rest of the dependencies in the project.
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
-If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+If the project manifest is a `pyproject.toml`, by default, adding a pypi dependency will add it to the native `project.dependencies` array, or to the native `dependency-groups` table if a feature is specified:
 
 - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
-- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
+- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `dependency-groups.aws` array
+
+Note that if `--platform` or `--editable` are specified, the pypi dependency
+will be added to the `tool.pixi.pypi-dependencies` table instead as native
+arrays have no support for platform-specific or editable dependencies.
 
 These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
 
@@ -79,7 +83,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
-- `--editable`: Specifies an editable dependency, only use in combination with `--pypi`.
+- `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
 
 ```shell
 pixi add numpy # (1)!

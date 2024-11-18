@@ -74,6 +74,15 @@ pub enum DependencyOverwriteBehavior {
     Error,
 }
 
+pub enum PypiDependencyLocation {
+    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
+    Pixi,
+    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    OptionalDependencies,
+    // The [dependency-groups] table in a 'pyproject.toml' manifest
+    DependencyGroups,
+}
+
 /// Converts an array of Platforms to a non-empty Vec of Option<Platform>
 fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
     match platforms.is_empty() {

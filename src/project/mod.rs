@@ -33,7 +33,7 @@ use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
     FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest, ParsedManifest,
-    SpecType,
+    PypiDependencyLocation, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -640,6 +640,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -671,6 +672,7 @@ impl Project {
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
+                location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
@@ -762,6 +764,7 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
+                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -896,6 +899,7 @@ impl Project {
 
     /// Update the pypi specs of newly added packages based on the contents of the
     /// updated lock-file.
+    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -904,6 +908,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -950,6 +955,7 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
+                    location,
                 )?;
             }
         }
