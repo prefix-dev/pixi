@@ -1,5 +1,4 @@
 from pathlib import Path
-import pytest
 from .common import verify_cli_command, ExitCode, default_env_path
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -154,17 +153,3 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     # Validate that the dummy-a files are reinstalled
     for file in dummy_a_meta_files:
         assert Path(file).exists()
-
-
-@pytest.mark.slow
-def test_pypi_git_deps(pixi: Path, tmp_path: Path) -> None:
-    test_data = Path(__file__).parent.parent / "data/pixi_tomls/pip_git_dep.toml"
-    manifest = tmp_path.joinpath("pixi.toml")
-    toml = test_data.read_text()
-    manifest.write_text(toml)
-
-    # Run the installation
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
-    )

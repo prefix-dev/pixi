@@ -19,11 +19,12 @@ use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
     manifests::{ManifestSource, TomlManifest},
+    preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
     to_options, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target, TargetSelector, Task,
-    TaskName,
+    GetFeatureError, ParsedManifest, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
+    TargetSelector, Task, TaskName,
 };
 
 #[derive(Debug, Clone)]
@@ -384,6 +385,7 @@ impl Manifest {
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
         for platform in crate::to_options(platforms) {
@@ -398,6 +400,7 @@ impl Manifest {
                         platform,
                         feature_name,
                         editable,
+                        location,
                     )?;
                     any_added = true;
                 }
@@ -719,6 +722,11 @@ impl Manifest {
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.parsed.environments.find(name)
+    }
+
+    /// Returns the preview field of the project
+    pub fn preview(&self) -> Option<&Preview> {
+        self.parsed.project.preview.as_ref()
     }
 }
 

@@ -174,12 +174,13 @@ Options:
     Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
     We strongly recommend not to switch the default.
-- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
-  Care should be taken when using this option.
-  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
-  This can cause hard to debug ABI incompatibilities.
 
-  We strongly discourage using this option.
+- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
+   Care should be taken when using this option.
+   Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
+   This can cause hard to debug ABI incompatibilities.
+
+   We strongly discourage using this option.
 
 ```toml
 channel-priority = "disabled"
@@ -761,11 +762,28 @@ test = {features = ["test"]}
 ```
 
 When an environment comprises several features (including the default feature):
+
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
 - The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
+
+## Preview features
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+
+An example of a preview feature in the project manifest:
+
+```toml title="Example preview features in the project manifest"
+[project]
+name = "foo"
+channels = []
+platforms = []
+preview = ["new-resolve"]
+```
+
+Preview features in the documentation will be marked as such on the relevant pages.
+
 
 ## Global configuration
 
