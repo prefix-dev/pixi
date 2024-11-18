@@ -1,3 +1,4 @@
+use pixi::cli::search;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
@@ -64,4 +65,65 @@ async fn search_return_latest_across_everything() {
     let found_package = binding.last().unwrap();
 
     assert_eq!(found_package.package_record.version.as_str(), "4");
+}
+
+#[tokio::test]
+async fn test_search_multiple_versions() {
+    let mut package_database = PackageDatabase::default();
+
+    // Add package with multiple versions and build strings
+    package_database.add_package(
+        Package::build("foo", "0.1.0")
+            .with_build("h60d57d3_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.1.0")
+            .with_build("h60d57d3_1")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.2.0")
+            .with_build("h60d57d3_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.2.0")
+            .with_build("h60d57d3_1")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-solve-group"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    let mut out = Vec::new();
+    let builder = pixi.search("foo".to_string());
+    let result = search::execute_impl(builder.args, &mut out)
+        .await
+        .unwrap()
+        .unwrap();
+    let output = String::from_utf8(out).unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].package_record.version.as_str(), "0.2.0");
+    assert_eq!(result[0].package_record.build, "h60d57d3_1");
+    assert!(output.contains("foo-0.2.0-h60d57d3_1 (+ 1 build)"));
+    assert!(output.contains("Other Versions (1)"));
+    assert!(output.contains(&format!("0.1.0    h60d57d3_1")));
 }
