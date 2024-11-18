@@ -220,7 +220,6 @@ impl PixiControl {
     /// Creates a new PixiControl instance from an existing manifest
     pub fn from_manifest(manifest: &str) -> miette::Result<PixiControl> {
         let pixi = Self::new()?;
-        eprintln!("manifest is {}", manifest);
         std::fs::write(pixi.manifest_path(), manifest)
             .into_diagnostic()
             .context("failed to write pixi.toml")?;
