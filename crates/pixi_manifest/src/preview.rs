@@ -12,7 +12,6 @@
 //! We do this for backwards compatibility with the old features that may have been used in the past.
 //! The [`KnownFeature`] enum contains all the known features. Extend this if you want to add support
 //! for new features.
-use serde::de::{self};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
@@ -77,7 +76,7 @@ pub enum PreviewFeature {
     /// This is a known preview feature
     Known(KnownPreviewFeature),
     /// Unknown preview feature
-    Unknown(String), // Catch-all for unknown strings
+    Unknown(String),
 }
 
 impl PartialEq<KnownPreviewFeature> for PreviewFeature {
@@ -108,7 +107,7 @@ impl<'de> Deserialize<'de> for PreviewFeature {
         } else {
             let unknown = String::deserialize(value)
                 .map(PreviewFeature::Unknown)
-                .map_err(de::Error::custom)?;
+                .map_err(serde::de::Error::custom)?;
             Ok(unknown)
         }
     }
