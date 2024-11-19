@@ -19,8 +19,11 @@ version = "0.1.0"
 
 [build]
 build-backend = "pixi-build-python"
-dependencies = ["pixi-build-python *"]
-
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]
 
 [dependencies]
 detailed = { version = ">=1.2.3" }

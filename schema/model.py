@@ -204,6 +204,9 @@ class BuildSection(StrictBaseModel):
     build_backend: NonEmptyStr = Field(
         None, alias="build-backend", description="The build executable to call"
     )
+    channels: list[Channel] = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
 
 
 class _PyPIRequirement(StrictBaseModel):

@@ -70,12 +70,16 @@ pub async fn amend_pypi_purls(
     let mut conda_packages = conda_packages.into_iter().collect::<Vec<_>>();
 
     for package in conda_packages.iter_mut() {
-        package.channel = package.channel.trim_end_matches('/').to_string();
+        package.channel = package
+            .channel
+            .as_ref()
+            .map(|c| c.trim_end_matches('/').to_string());
     }
     let packages_for_prefix_mapping: Vec<_> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.mapping.contains_key(&package.channel))
-        .map(|p| (**p).clone())
+        .filter_map(|record| record.channel.as_ref().map(|channel| (channel, record)))
+        .filter(|(channel, _)| !mapping_url.mapping.contains_key(*channel))
+        .map(|(_, p)| (**p).clone())
         .collect();
 
     let custom_mapping = mapping_url.fetch_custom_mapping(client).await?;
@@ -98,7 +102,10 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
         for record in conda_packages {
-            if !mapping_url.mapping.contains_key(&record.channel) {
+            let Some(channel) = record.channel.as_ref() else {
+                continue;
+            };
+            if !mapping_url.mapping.contains_key(channel) {
                 prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                     record,
                     &prefix_mapping,
@@ -136,7 +143,11 @@ fn amend_pypi_purls_for_record(
     let mut purls = Vec::new();
 
     // we verify if we have package channel and name in user provided mapping
-    if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
+    if let Some(mapped_channel) = record
+        .channel
+        .as_ref()
+        .and_then(|channel| custom_mapping.get(channel))
+    {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
             // we have a pypi name for it so we record a purl
             if let Some(name) = mapped_name {

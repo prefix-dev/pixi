@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
-use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseChannelError, Platform};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+};
 use rattler_solve::ChannelPriority;
-use url::Url;
 
 use crate::{
     has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies,
@@ -51,15 +52,14 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     ///
     /// This function is similar to [`Self::channels]` but it resolves the
     /// channel urls using the provided channel config.
-    fn channel_urls(&self, channel_config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
+    fn channel_urls(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Vec<ChannelUrl>, ParseChannelError> {
         self.channels()
             .into_iter()
             .cloned()
-            .map(|channel| {
-                channel
-                    .into_base_url(channel_config)
-                    .map(|ch| ch.url().clone())
-            })
+            .map(|channel| channel.into_base_url(channel_config))
             .collect()
     }
 

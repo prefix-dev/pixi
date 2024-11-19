@@ -750,6 +750,7 @@ mod tests {
         [build]
         dependencies = ["python-build-backend > 12"]
         build-backend = "python-build-backend"
+        channels = []
         "#
         .to_string();
         let manifest =
@@ -768,6 +769,7 @@ mod tests {
         [build]
         dependencies = ["python-build-backend > > 12"]
         build-backend = "python-build-backend"
+        channels = []
         "#
         .to_string();
         let err = ParsedManifest::from_toml_str(&contents).err();

@@ -23,9 +23,10 @@ use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::Package::{Conda, Pypi};
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+};
+use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -37,7 +38,6 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Semaphore;
-use url::Url;
 
 use crate::build::{BuildContext, BuildReporter};
 use uv_distribution_types::{InstalledDist, Name};
@@ -187,16 +187,16 @@ impl LockedEnvironmentHash {
 
                 match package {
                     // A select set of fields are used to hash the package
-                    Conda(pack) => {
-                        if let Some(sha) = pack.package_record().sha256 {
+                    LockedPackageRef::Conda(pack) => {
+                        if let Some(sha) = pack.record().sha256 {
                             sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.package_record().md5 {
+                        } else if let Some(md5) = pack.record().md5 {
                             md5.hash(&mut hasher);
                         }
                     }
-                    Pypi(pack) => {
-                        pack.is_editable().hash(&mut hasher);
-                        pack.extras().hash(&mut hasher);
+                    LockedPackageRef::Pypi(pack, env) => {
+                        pack.editable.hash(&mut hasher);
+                        env.extras.hash(&mut hasher);
                     }
                 }
             }
@@ -737,7 +737,7 @@ pub async fn update_prefix_conda(
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
-    channels: Vec<Url>,
+    channels: Vec<ChannelUrl>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,

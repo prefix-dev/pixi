@@ -5,10 +5,7 @@ pub use pinned_source::{
     MutablePinnedSourceSpec, ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec,
     PinnedUrlSpec, SourceMismatchError,
 };
-use rattler_conda_types::{
-    package::ArchiveIdentifier, MatchSpec, Matches, NamelessMatchSpec, PackageRecord,
-    RepoDataRecord,
-};
+use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord, RepoDataRecord};
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 pub use source_record::{InputHash, SourceRecord};
 use thiserror::Error;
@@ -110,23 +107,19 @@ impl TryFrom<CondaPackageData> for PixiRecord {
     type Error = ParseLockFileError;
 
     fn try_from(value: CondaPackageData) -> Result<Self, Self::Error> {
-        let archive_identifier = value
-            .location
-            .file_name()
-            .and_then(ArchiveIdentifier::try_from_filename);
-        if archive_identifier.is_some() {
-            let location = value.location.clone();
-            Ok(PixiRecord::Binary(value.try_into().map_err(
-                |err| match err {
+        let record = match value {
+            CondaPackageData::Binary(value) => {
+                let location = value.location.clone();
+                PixiRecord::Binary(value.try_into().map_err(|err| match err {
                     ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
                     ConversionError::LocationToUrlConversionError(err) => {
                         ParseLockFileError::InvalidRecordUrl(location, err)
                     }
-                },
-            )?))
-        } else {
-            Ok(PixiRecord::Source(value.try_into()?))
-        }
+                })?)
+            }
+            CondaPackageData::Source(value) => PixiRecord::Source(value.try_into()?),
+        };
+        Ok(record)
     }
 }
 

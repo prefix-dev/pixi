@@ -38,7 +38,7 @@ pub async fn resolve_conda(
                         &record.package_record.version,
                         &record.package_record.build
                     ),
-                    channel: String::new(),
+                    channel: None,
                 };
                 url_to_source_package.insert(url, (record, repodata_record));
             }
