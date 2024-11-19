@@ -1,3 +1,4 @@
+use insta::assert_snapshot;
 use pixi::cli::search;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
@@ -123,7 +124,11 @@ async fn test_search_multiple_versions() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].package_record.version.as_str(), "0.2.0");
     assert_eq!(result[0].package_record.build, "h60d57d3_1");
-    assert!(output.contains("foo-0.2.0-h60d57d3_1 (+ 1 build)"));
-    assert!(output.contains("Other Versions (1)"));
-    assert!(output.contains("0.1.0    h60d57d3_1"));
+    let output = output
+        .lines()
+        // Filter out URL line since temporary directory name is random.
+        .filter(|line| !line.starts_with("URL"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_snapshot!(output);
 }
