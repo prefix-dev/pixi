@@ -13,7 +13,7 @@ use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    DependencyOverwriteBehavior, Feature, ParsedManifest, SpecType,
+    DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
 use crate::{error::DependencyError, FeatureName};
 
@@ -26,7 +26,7 @@ pub struct PyProjectManifest {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
-    pub pixi: Option<ParsedManifest>,
+    pub pixi: Option<WorkspaceManifest>,
     pub poetry: Option<ToolPoetry>,
 }
 
@@ -90,7 +90,7 @@ impl PyProjectManifest {
         self.tool().and_then(|t| t.poetry.as_ref())
     }
 
-    fn pixi(&self) -> Option<&ParsedManifest> {
+    fn pixi(&self) -> Option<&WorkspaceManifest> {
         self.tool().and_then(|t| t.pixi.as_ref())
     }
 
@@ -105,7 +105,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     pub fn name(&self) -> Option<String> {
-        if let Some(pixi_name) = self.pixi().and_then(|p| p.project.name.as_ref()) {
+        if let Some(pixi_name) = self.pixi().and_then(|p| p.workspace.name.as_ref()) {
             return Some(pixi_name.clone());
         }
         if let Some(pyproject) = &self.project {
@@ -122,7 +122,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn description(&self) -> Option<String> {
-        if let Some(pixi_description) = self.pixi().and_then(|p| p.project.description.as_ref()) {
+        if let Some(pixi_description) = self.pixi().and_then(|p| p.workspace.description.as_ref()) {
             return Some(pixi_description.to_string());
         }
         if let Some(pyproject_description) =
@@ -141,7 +141,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn version(&self) -> Option<String> {
-        if let Some(pixi_version) = self.pixi().and_then(|p| p.project.version.as_ref()) {
+        if let Some(pixi_version) = self.pixi().and_then(|p| p.workspace.version.as_ref()) {
             return Some(pixi_version.to_string());
         }
         if let Some(pyproject_version) = self.project.as_ref().and_then(|p| p.version.as_ref()) {
@@ -158,7 +158,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn authors(&self) -> Option<Vec<String>> {
-        if let Some(pixi_authors) = self.pixi().and_then(|p| p.project.authors.as_ref()) {
+        if let Some(pixi_authors) = self.pixi().and_then(|p| p.workspace.authors.as_ref()) {
             return Some(pixi_authors.clone());
         }
         if let Some(pyproject_authors) = self.project.as_ref().and_then(|p| p.authors.as_ref()) {
@@ -244,7 +244,7 @@ pub enum PyProjectToManifestError {
     DependencyGroupError(#[from] Pep735Error),
 }
 
-impl TryFrom<PyProjectManifest> for ParsedManifest {
+impl TryFrom<PyProjectManifest> for WorkspaceManifest {
     type Error = PyProjectToManifestError;
 
     fn try_from(item: PyProjectManifest) -> Result<Self, Self::Error> {
@@ -257,10 +257,10 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
         // Set pixi project name, version, description and authors (if they are not set)
         // with the ones from the `[project]` or `[tool.poetry]` tables of the
         // `pyproject.toml`.
-        manifest.project.name = item.name();
-        manifest.project.description = item.description();
-        manifest.project.version = item.version().and_then(|v| v.parse().ok());
-        manifest.project.authors = item.authors();
+        manifest.workspace.name = item.name();
+        manifest.workspace.description = item.description();
+        manifest.workspace.version = item.version().and_then(|v| v.parse().ok());
+        manifest.workspace.authors = item.authors();
 
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit

@@ -6,7 +6,7 @@ use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNam
 use thiserror::Error;
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::ParsedManifest;
+use crate::WorkspaceManifest;
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -106,7 +106,7 @@ pub struct UnknownFeature {
 }
 
 impl UnknownFeature {
-    pub fn new(feature: String, manifest: impl Borrow<ParsedManifest>) -> Self {
+    pub fn new(feature: String, manifest: impl Borrow<WorkspaceManifest>) -> Self {
         // Find the top 2 features that are closest to the feature name.
         let existing_features = manifest
             .borrow()

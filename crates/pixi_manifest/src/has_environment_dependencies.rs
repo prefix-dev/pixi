@@ -11,7 +11,7 @@ pub trait HasEnvironmentDependencies<'source>:
     /// should be used.
     fn should_combine_dependencies(&self) -> bool {
         // If the manifest has a build section defined we should not combine.
-        if self.manifest().parsed.build.is_some() {
+        if self.manifest().workspace.build.is_some() {
             return false;
         }
         true

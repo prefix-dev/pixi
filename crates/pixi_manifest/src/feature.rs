@@ -16,11 +16,11 @@ use serde_with::{serde_as, SerializeDisplay};
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
     consts,
-    parsed_manifest::{deserialize_opt_package_map, deserialize_package_map},
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
     utils::PixiSpanned,
+    workspace_manifest::{deserialize_opt_package_map, deserialize_package_map},
     Activation, PyPiRequirement, SpecType, SystemRequirements, Target, TargetSelector,
 };
 
@@ -517,7 +517,7 @@ mod tests {
         );
 
         let bla_feature = manifest
-            .parsed
+            .workspace
             .features
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
@@ -591,6 +591,6 @@ mod tests {
         // and should now be none, previously this was added
         // to the default feature
         assert!(manifest.default_feature().pypi_options().is_some());
-        assert!(manifest.parsed.project.pypi_options.is_some());
+        assert!(manifest.workspace.workspace.pypi_options.is_some());
     }
 }

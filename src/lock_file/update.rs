@@ -26,7 +26,7 @@ use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
     ConversionError,
 };
-use pypi_mapping::{self};
+use pypi_mapping;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
@@ -1578,7 +1578,7 @@ fn make_unsupported_pypi_platform_error(
     let mut labels = Vec::new();
 
     // Add a reference to the set of platforms that are supported by the project.
-    let project_platforms = &environment.project().manifest.parsed.project.platforms;
+    let project_platforms = &environment.project().manifest.workspace.workspace.platforms;
     if let Some(span) = project_platforms.span.clone() {
         labels.push(LabeledSpan::at(
             span,

@@ -42,7 +42,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels = self.features().flat_map(|feature| match &feature.channels {
             Some(channels) => channels,
-            None => &self.manifest().parsed.project.channels,
+            None => &self.manifest().workspace.workspace.channels,
         });
 
         PrioritizedChannel::sort_channels_by_priority(channels).collect()
@@ -96,7 +96,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
-                    None => &self.manifest().parsed.project.platforms.value,
+                    None => &self.manifest().workspace.workspace.platforms.value,
                 }
                 .iter()
                 .copied()
@@ -187,7 +187,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             .features()
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
-                    self.manifest().parsed.project.pypi_options.as_ref()
+                    self.manifest().workspace.workspace.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }
