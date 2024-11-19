@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use pixi_manifest::BuildSection;
+use pixi_manifest::BuildSystem;
 use rattler_conda_types::MatchSpec;
 
 use crate::{BackendOverride, InProcessBackend};
@@ -34,7 +34,7 @@ impl IsolatedToolSpec {
     }
 
     /// Construct a new instance from a build section
-    pub fn from_build_section(build_section: &BuildSection) -> Self {
+    pub fn from_build_section(build_section: &BuildSystem) -> Self {
         Self {
             specs: build_section.dependencies.clone(),
             command: build_section.build_backend.clone(),

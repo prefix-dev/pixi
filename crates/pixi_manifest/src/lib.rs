@@ -1,5 +1,5 @@
 mod activation;
-mod build;
+mod build_system;
 pub(crate) mod channel;
 mod dependencies;
 mod environment;
@@ -24,7 +24,7 @@ mod validation;
 mod workspace;
 
 pub use activation::Activation;
-pub use build::BuildSection;
+pub use build_system::BuildSystem;
 pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use environment::{Environment, EnvironmentName};

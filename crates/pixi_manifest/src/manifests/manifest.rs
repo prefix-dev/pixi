@@ -22,7 +22,7 @@ use crate::{
     preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
-    to_options, BuildSection, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
+    to_options, BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
     FeatureName, GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
     TargetSelector, Task, TaskName, WorkspaceManifest,
 };
@@ -738,8 +738,8 @@ impl Manifest {
     }
 
     /// Return the build section from the parsed manifest
-    pub fn build_section(&self) -> Option<&BuildSection> {
-        self.workspace.build.as_ref()
+    pub fn build_section(&self) -> Option<&BuildSystem> {
+        self.workspace.build_system.as_ref()
     }
 }
 

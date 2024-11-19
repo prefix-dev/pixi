@@ -10,7 +10,7 @@ use serde_with::DisplayFromStr;
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct BuildSection {
+pub struct BuildSystem {
     /// The dependencies for the build tools which will be installed in the build environment.
     /// These need to be conda packages
     #[serde_as(as = "Vec<DisplayFromStr>")]
@@ -35,7 +35,7 @@ mod tests {
             build-backend = "pixi-build-python"
             "#;
 
-        let build: BuildSection = toml_edit::de::from_str(toml).unwrap();
+        let build: BuildSystem = toml_edit::de::from_str(toml).unwrap();
         assert_eq!(build.dependencies.len(), 1);
         assert_eq!(
             build.dependencies[0].to_string(),
