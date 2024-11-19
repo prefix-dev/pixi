@@ -153,14 +153,16 @@ pub(crate) fn get_activator<'p>(
 }
 
 /// Get the environment variables from the shell environment.
-/// This method will get the environment variables from the shell environment and return them as a HashMap.
-/// If the environment variable does not exist, an empty string will be used.
-fn get_environment_variable_from_shell_environment(names: Vec<&String>) -> HashMap<String, String> {
+/// This method retrieves the specified environment variables from the shell and returns them as a HashMap.
+/// If the variable is not set, its value will be `None`.
+fn get_environment_variable_from_shell_environment(
+    names: Vec<&str>,
+) -> HashMap<String, Option<String>> {
     names
         .into_iter()
         .map(|name| {
-            let value = std::env::var(name).unwrap_or_default();
-            (name.clone(), value)
+            let value = std::env::var(name).ok();
+            (name.to_string(), value)
         })
         .collect()
 }
@@ -199,7 +201,11 @@ async fn try_get_valid_activation_cache(
 
     // Get the current environment variables
     let current_input_env_vars = get_environment_variable_from_shell_environment(
-        cache.environment_variables.keys().collect(),
+        cache
+            .environment_variables
+            .keys()
+            .map(String::as_str)
+            .collect(),
     );
 
     // Hash the current state
@@ -304,8 +310,9 @@ pub async fn run_activation(
     if experimental {
         if let Some(lock_file) = lock_file {
             // Get the current environment variables from the shell to be part of the hash
-            let current_input_env_vars =
-                get_environment_variable_from_shell_environment(activator_result.keys().collect());
+            let current_input_env_vars = get_environment_variable_from_shell_environment(
+                activator_result.keys().map(String::as_str).collect(),
+            );
             let cache_file = environment.activation_cache_file_path();
             let cache = ActivationCache {
                 hash: EnvironmentHash::from_environment(

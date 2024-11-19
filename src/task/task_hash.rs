@@ -40,7 +40,7 @@ pub struct EnvironmentHash(String);
 impl EnvironmentHash {
     pub(crate) fn from_environment(
         run_environment: &project::Environment<'_>,
-        input_environment_variables: &HashMap<String, String>,
+        input_environment_variables: &HashMap<String, Option<String>>,
         lock_file: &LockFile,
     ) -> Self {
         let mut hasher = Xxh3::new();
