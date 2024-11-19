@@ -207,9 +207,10 @@ async fn try_get_valid_activation_cache(
 
     // Check if the hash matches
     if cache.hash == hash {
-        return Some(cache.environment_variables);
+        Some(cache.environment_variables)
+    } else {
+        None
     }
-    None
 }
 
 /// Runs and caches the activation script.
