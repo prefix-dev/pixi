@@ -170,14 +170,13 @@ fn get_environment_variable_from_shell_environment(
 /// Try to get the activation cache from the cache file.
 /// If it can get the cache, it will validate it with the lock file and the current environment.
 /// If the cache is valid, it will return the environment variables from the cache.
+///
+/// Without a lock file it will not use the cache, as it indicates the cache is not interesting
 async fn try_get_valid_activation_cache(
-    lock_file: Option<&LockFile>,
+    lock_file: &LockFile,
     environment: &Environment<'_>,
     cache_file: PathBuf,
 ) -> Option<HashMap<String, String>> {
-    // Check if the lock file is provided, early out if it is not.
-    let lock_file = lock_file?;
-
     // Find cache file
     if !cache_file.exists() {
         return None;
@@ -233,11 +232,18 @@ pub async fn run_activation(
             .project()
             .activation_env_cache_folder()
             .join(environment.activation_cache_name());
-        if let Some(env_vars) =
-            try_get_valid_activation_cache(lock_file, environment, cache_file).await
-        {
-            tracing::debug!("Using activation cache for {:?}", environment.name());
-            return Ok(env_vars);
+        if let Some(lock_file) = lock_file {
+            if let Some(env_vars) =
+                try_get_valid_activation_cache(lock_file, environment, cache_file).await
+            {
+                tracing::debug!("Using activation cache for {:?}", environment.name());
+                return Ok(env_vars);
+            }
+        } else {
+            tracing::debug!(
+                "No lock file provided for activation, not using activation cache for {:?}",
+                environment.name()
+            );
         }
     }
     tracing::debug!("Running activation script for {:?}", environment.name());
