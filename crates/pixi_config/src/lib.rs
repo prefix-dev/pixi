@@ -666,10 +666,13 @@ impl Config {
         let mut config = Self::load_system();
 
         for p in config_path_global() {
+            if !p.is_file() {
+                continue;
+            }
             match Self::from_path(&p) {
                 Ok(c) => config = config.merge_config(c),
-                Err(e) => tracing::debug!(
-                    "Failed to load global config: {} (error: {})",
+                Err(e) => tracing::warn!(
+                    "Failed to load global config '{}' with error: {}",
                     p.display(),
                     e
                 ),
