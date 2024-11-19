@@ -19,13 +19,14 @@ mod spec_type;
 mod system_requirements;
 mod target;
 pub mod task;
+pub mod toml;
 pub mod utils;
 mod validation;
 mod workspace;
 
 pub use activation::Activation;
 pub use build::BuildSection;
-pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
@@ -35,9 +36,7 @@ pub use has_environment_dependencies::HasEnvironmentDependencies;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
 use itertools::Itertools;
-pub use manifests::{
-    TomlManifest, WorkspaceManifest, {Manifest, ManifestKind},
-};
+pub use manifests::{Manifest, ManifestKind, WorkspaceManifest};
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;

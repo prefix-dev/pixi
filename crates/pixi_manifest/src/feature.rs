@@ -14,11 +14,12 @@ use serde::{de::Error, Deserialize, Deserializer};
 use serde_with::{serde_as, SerializeDisplay};
 
 use crate::{
-    channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
+    channel::PrioritizedChannel,
     consts,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
+    toml::TomlPrioritizedChannel,
     utils::PixiSpanned,
     Activation, PyPiRequirement, SpecType, SystemRequirements, Target, TargetSelector,
 };
@@ -388,7 +389,7 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             platforms: Option<PixiSpanned<IndexSet<Platform>>>,
             #[serde(default)]
-            channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
+            channels: Option<Vec<TomlPrioritizedChannel>>,
             #[serde(default)]
             channel_priority: Option<ChannelPriority>,
             #[serde(default)]
@@ -449,12 +450,9 @@ impl<'de> Deserialize<'de> for Feature {
         Ok(Feature {
             name: FeatureName::Default,
             platforms: inner.platforms,
-            channels: inner.channels.map(|channels| {
-                channels
-                    .into_iter()
-                    .map(|channel| channel.into_prioritized_channel())
-                    .collect()
-            }),
+            channels: inner
+                .channels
+                .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),
             channel_priority: inner.channel_priority,
             system_requirements: inner.system_requirements,
             pypi_options: inner.pypi_options,
