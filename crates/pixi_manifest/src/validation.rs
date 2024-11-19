@@ -290,7 +290,7 @@ fn is_using_source_deps<'a>(
     // Check if any of the spec types have source dependencies
     for platform in supported_platforms {
         for spec in spec_types {
-            let deps = feature.dependencies(spec, Some(platform.clone()));
+            let deps = feature.dependencies(spec, Some(*platform));
             if let Some(deps) = deps {
                 if deps.iter().any(|(_, spec)| spec.is_source()) {
                     return true;
