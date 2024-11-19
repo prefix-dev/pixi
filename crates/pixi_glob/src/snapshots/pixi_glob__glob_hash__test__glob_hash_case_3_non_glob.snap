@@ -3,7 +3,7 @@ source: crates/pixi_glob/src/glob_hash.rs
 expression: snapshot
 ---
 Globs:
-- tests/satisfiability/source-dependency/pixi.toml
-Hash: 4353d15bbc5c19dfc81721e4b2c05e6af607ffcfcfb3bd17dbb55e737e72b1cf
+- tests/data/satisfiability/source-dependency/pixi.toml
+Hash: 3fd25b6fc88a942ba43885b4b561385b819d879ffe28fc64a06beec4fa87a757
 Matched files:
-- tests/satisfiability/source-dependency/pixi.toml
+- tests/data/satisfiability/source-dependency/pixi.toml

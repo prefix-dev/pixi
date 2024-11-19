@@ -56,8 +56,8 @@ pub struct Manifest {
     pub path: PathBuf,
 
     /// The raw contents of the original manifest file. This field, in
-    /// conjunction with [`PixiSpanned`] is used to provide better error
-    /// messages.
+    /// conjunction with [`crate::utils::PixiSpanned`] is used to provide better
+    /// error messages.
     ///
     /// Note that if the document is edited, this field will not be updated.
     pub contents: Option<String>,
