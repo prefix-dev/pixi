@@ -24,7 +24,7 @@ async fn test_flat_links_based_index_returns_path() {
         [pypi-options]
         find-links = [{{ path = "{pypi_indexes}/multiple-indexes-a/flat"}}]"#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes.display(),
+        pypi_indexes = pypi_indexes.display().to_string().replace("\\", "/"),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
