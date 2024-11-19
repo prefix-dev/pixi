@@ -541,7 +541,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
 
-    use crate::manifests::manifest::Manifest;
+    use crate::Manifest;
 
     #[test]
     fn test_targets_overwrite_order() {

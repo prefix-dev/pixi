@@ -20,7 +20,6 @@ use crate::{
     target::Targets,
     task::{Task, TaskName},
     utils::PixiSpanned,
-    workspace_manifest::{deserialize_opt_package_map, deserialize_package_map},
     Activation, PyPiRequirement, SpecType, SystemRequirements, Target, TargetSelector,
 };
 
@@ -397,13 +396,22 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            #[serde(default, deserialize_with = "deserialize_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_package_map"
+            )]
             dependencies: IndexMap<PackageName, PixiSpec>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
@@ -462,7 +470,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::manifests::manifest::Manifest;
+    use crate::Manifest;
 
     #[test]
     fn test_dependencies_borrowed() {

@@ -201,8 +201,8 @@ impl PyProjectManifest {
     ///  - one environment is created per group with the same name
     ///  - each environment includes the feature of the same name
     ///  - it will also include other features inferred from any self references
-    ///    to other groups of optional dependencies (but won't for dependency groups,
-    ///    as recursion between groups is resolved upstream)
+    ///    to other groups of optional dependencies (but won't for dependency
+    ///    groups, as recursion between groups is resolved upstream)
     pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
         let mut environments = HashMap::new();
         if let Some(extras) = self.optional_dependencies() {
@@ -225,7 +225,8 @@ impl PyProjectManifest {
         if let Some(groups) = self.dependency_groups().transpose()? {
             for group in groups.into_keys() {
                 let normalised = group.replace('_', "-");
-                // Nothing to do if a group of optional dependencies has the same name as the dependency group
+                // Nothing to do if a group of optional dependencies has the same name as the
+                // dependency group
                 if !environments.contains_key(&normalised) {
                     environments.insert(normalised.clone(), vec![normalised]);
                 }
@@ -314,7 +315,8 @@ impl TryFrom<PyProjectManifest> for WorkspaceManifest {
 
         // For each group of optional dependency or dependency group,
         // create a feature of the same name if it does not exist,
-        // and add pypi dependencies, filtering out self-references in optional dependencies
+        // and add pypi dependencies, filtering out self-references in optional
+        // dependencies
         let project_name = item.package_name();
         for (group, reqs) in groups {
             let feature_name = FeatureName::Named(group.to_string());
@@ -371,8 +373,7 @@ mod tests {
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        manifests::manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior,
-        FeatureName,
+        manifests::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
     };
 
     const PYPROJECT_FULL: &str = r#"

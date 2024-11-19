@@ -1613,7 +1613,14 @@ fn make_unsupported_pypi_platform_error(
     diag.labels = Some(labels);
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
-    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
+    let reporter = miette::Report::new(diag);
+
+    // Add the source code if we have it available.
+    if let Some(content) = environment.project().manifest.contents.as_ref() {
+        reporter.with_source_code(content.clone())
+    } else {
+        reporter
+    }
 }
 
 /// Represents data that is sent back from a task. This is used to communicate

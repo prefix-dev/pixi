@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash, iter::FromIterator};
 
 use indexmap::{map::IndexMap, Equivalent};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::de::{Deserialize, Deserializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use toml_edit::DocumentMut;
 
@@ -28,7 +28,8 @@ use crate::{
     BuildSection,
 };
 
-/// Describes the contents of a parsed project manifest.
+/// Holds the parsed content of the workspace part of a pixi manifest. This
+/// describes the part related to the workspace only.
 #[derive(Debug, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
@@ -127,13 +128,22 @@ impl<'de> Deserialize<'de> for WorkspaceManifest {
             //
             // #[serde(flatten)]
             // default_target: Target,
-            #[serde(default, deserialize_with = "deserialize_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_package_map"
+            )]
             dependencies: IndexMap<PackageName, PixiSpec>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
@@ -274,77 +284,13 @@ impl<'de> Deserialize<'de> for WorkspaceManifest {
     }
 }
 
-struct PackageMap<'a>(&'a IndexMap<PackageName, PixiSpec>);
-
-impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
-    type Value = PackageName;
-
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let package_name = PackageName::deserialize(deserializer)?;
-        match self.0.get_key_value(&package_name) {
-            Some((package_name, _)) => {
-                Err(serde::de::Error::custom(
-                    format!(
-                        "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
-                ))
-            }
-            None => Ok(package_name),
-        }
-    }
-}
-
-pub fn deserialize_package_map<'de, D>(
-    deserializer: D,
-) -> Result<IndexMap<PackageName, PixiSpec>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct PackageMapVisitor(PhantomData<()>);
-
-    impl<'de> Visitor<'de> for PackageMapVisitor {
-        type Value = IndexMap<PackageName, PixiSpec>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "a map")
-        }
-
-        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-        where
-            A: MapAccess<'de>,
-        {
-            let mut result = IndexMap::new();
-            while let Some((package_name, spec)) =
-                map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<PixiSpec>)?
-            {
-                result.insert(package_name, spec);
-            }
-
-            Ok(result)
-        }
-    }
-    let visitor = PackageMapVisitor(PhantomData);
-    deserializer.deserialize_seq(visitor)
-}
-
-pub fn deserialize_opt_package_map<'de, D>(
-    deserializer: D,
-) -> Result<Option<IndexMap<PackageName, PixiSpec>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Ok(Some(deserialize_package_map(deserializer)?))
-}
-
 #[cfg(test)]
 mod tests {
     use insta::{assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
-    use crate::{workspace_manifest::WorkspaceManifest, TargetSelector};
+    use crate::{TargetSelector, WorkspaceManifest};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

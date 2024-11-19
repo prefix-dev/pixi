@@ -8,16 +8,16 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
+use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
+use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
-use pixi_manifest::{PrioritizedChannel, TomlManifest};
+use pixi_manifest::PrioritizedChannel;
+use pixi_manifest::TomlManifest;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
-
-use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
-use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the

@@ -18,7 +18,7 @@ use toml_edit::{DocumentMut, Value};
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
-    manifests::{ManifestSource, TomlManifest},
+    manifests::{source::ManifestSource, toml::TomlManifest},
     preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
@@ -45,6 +45,7 @@ impl ManifestKind {
 }
 
 /// Handles the project's manifest file.
+///
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format
 /// and structure. The manifest data is represented as a [`WorkspaceManifest`]
@@ -54,8 +55,12 @@ pub struct Manifest {
     /// The path to the manifest file
     pub path: PathBuf,
 
-    /// The raw contents of the manifest file
-    pub contents: String,
+    /// The raw contents of the original manifest file. This field, in
+    /// conjunction with [`PixiSpanned`] is used to provide better error
+    /// messages.
+    ///
+    /// Note that if the document is edited, this field will not be updated.
+    pub contents: Option<String>,
 
     /// Editable toml document
     pub document: ManifestSource,
@@ -129,7 +134,7 @@ impl Manifest {
 
         Ok(Self {
             path: manifest_path.to_path_buf(),
-            contents,
+            contents: Some(contents),
             document: source,
             workspace: manifest,
         })
@@ -137,8 +142,9 @@ impl Manifest {
 
     /// Save the manifest to the file and update the contents
     pub fn save(&mut self) -> miette::Result<()> {
-        self.contents = self.document.to_string();
-        std::fs::write(&self.path, self.contents.clone()).into_diagnostic()?;
+        let contents = self.document.to_string();
+        std::fs::write(&self.path, &contents).into_diagnostic()?;
+        self.contents = Some(contents);
         Ok(())
     }
 
