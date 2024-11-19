@@ -1923,7 +1923,7 @@ The <code>test</code> environment is created from the optional dependencies in t
 You can execute commands in this environment with e.g. <code>pixi run -e test python</code></p>
 <h2 id="getting-code-to-run">Getting code to run<a class="headerlink" href="#getting-code-to-run" title="Permanent link">#</a></h2>
 <p>Let's add some code to the <code>pixi-py</code> package.
-We will add a new function to the <code>pixi_py/__init__.py</code> file:</p>
+We will add a new function to the <code>src/pixi_py/__init__.py</code> file:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span> <span class="nn">rich</span> <span class="kn">import</span> <span class="nb">print</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">def</span> <span class="nf">hello</span><span class="p">():</span>
@@ -1951,10 +1951,11 @@ Let's add a <code>tests/test_me.py</code> file in the root of the project.</p>
 <p>Giving us the following project structure:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>.
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>├──<span class="w"> </span>pixi_py
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>│<span class="w">   </span>└──<span class="w"> </span>__init__.py
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>└──<span class="w"> </span>tests/test_me.py
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>├──<span class="w"> </span>src
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>│<span class="w">   </span>└──<span class="w"> </span>pixi_py
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>│<span class="w">       </span>└──<span class="w"> </span>__init__.py
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>├──<span class="w"> </span>pyproject.toml
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>└──<span class="w"> </span>tests/test_me.py
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span> <span class="nn">pixi_py</span> <span class="kn">import</span> <span class="n">hello</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
