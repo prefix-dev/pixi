@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, default_env_path
 
@@ -153,3 +154,70 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     # Validate that the dummy-a files are reinstalled
     for file in dummy_a_meta_files:
         assert Path(file).exists()
+
+
+def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
+    manifest = tmp_path.joinpath("pixi.toml")
+    toml = f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [activation.env]
+    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
+    [tasks]
+    task = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    """
+    manifest.write_text(toml)
+
+    # Run the default task
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        ExitCode.SUCCESS,
+        stdout_contains="test123",
+    )
+
+    # Validate that without experimental it does not use the cache
+    assert not tmp_path.joinpath(".pixi/activation-env-v0").exists()
+
+    # Enable the experimental cache config
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest,
+            "--local",
+            "experimental.use-environment-activation-cache",
+            "true",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # Run the default task and create cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        ExitCode.SUCCESS,
+        stdout_contains="test123",
+    )
+
+    # Modify the environment variable in cache
+    cache_path = tmp_path.joinpath(".pixi/activation-env-v0/activation_default.json")
+    with cache_path.open("r") as f:
+        data = json.load(f)
+    data = json.loads(json.dumps(data).replace("test123", "test456"))
+    with cache_path.open("w") as f:
+        json.dump(data, f, indent=4)
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        ExitCode.SUCCESS,
+        # Contain overwritten value
+        stdout_contains="test456",
+        stdout_excludes="test123",
+    )
+
+    # Ignore activation cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
+        ExitCode.SUCCESS,
+        stdout_contains="test123",
+    )
