@@ -120,6 +120,11 @@ async fn test_search_multiple_versions() {
         .unwrap()
         .unwrap();
     let output = String::from_utf8(out).unwrap();
+    let output = output
+        // Remove ANSI escape codes from output
+        .replace("\x1b[0m", "")
+        .replace("\x1b[1m", "")
+        .replace("\x1b[2m", "");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].package_record.version.as_str(), "0.2.0");
