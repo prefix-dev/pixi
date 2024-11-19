@@ -2355,4 +2355,68 @@ bar = "*"
             .collect();
         assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
     }
+
+    #[test]
+    fn test_validation_failure_source_dependency() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"source dependencies are used in the feature 'default', but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_failure_build_section() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [build]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"the build section is defined, but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_succeed_build() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [build]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        manifest.unwrap();
+    }
 }

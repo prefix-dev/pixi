@@ -92,7 +92,8 @@ impl PartialEq<KnownPreviewFeature> for PreviewFeature {
 #[serde(rename_all = "kebab-case")]
 /// Currently supported preview features are listed here
 pub enum KnownPreviewFeature {
-    // Add known features here
+    /// Build feature, to enable conda source builds
+    PixiBuild,
 }
 
 impl<'de> Deserialize<'de> for PreviewFeature {
