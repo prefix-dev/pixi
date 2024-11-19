@@ -286,6 +286,7 @@ Let's add a `tests/test_me.py` file in the root of the project.
 Giving us the following project structure:
 
 ```shell
+.
 ├── pixi.lock
 ├── src
 │   └── pixi_py
