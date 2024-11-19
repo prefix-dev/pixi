@@ -1505,7 +1505,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_failing_satisiability(
-        #[files("tests/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 

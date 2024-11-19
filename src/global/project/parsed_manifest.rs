@@ -256,7 +256,10 @@ pub(crate) struct ParsedEnvironment {
     pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
     pub platform: Option<Platform>,
-    #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
+    #[serde(
+        default,
+        deserialize_with = "pixi_manifest::utils::package_map::deserialize_package_map"
+    )]
     pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
     #[serde(
         default,

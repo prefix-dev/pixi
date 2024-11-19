@@ -32,8 +32,8 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest, ParsedManifest,
-    PypiDependencyLocation, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest,
+    PypiDependencyLocation, SpecType, WorkspaceManifest,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -148,8 +148,8 @@ impl Debug for Project {
     }
 }
 
-impl Borrow<ParsedManifest> for Project {
-    fn borrow(&self) -> &ParsedManifest {
+impl Borrow<WorkspaceManifest> for Project {
+    fn borrow(&self) -> &WorkspaceManifest {
         self.manifest.borrow()
     }
 }
@@ -157,7 +157,7 @@ impl Borrow<ParsedManifest> for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
+        let env_vars = Project::init_env_vars(&manifest.workspace.environments);
 
         let root = manifest
             .path
@@ -274,8 +274,8 @@ impl Project {
     /// Returns the name of the project
     pub fn name(&self) -> &str {
         self.manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .name
             .as_ref()
             .expect("name should always be defined.")
@@ -283,12 +283,12 @@ impl Project {
 
     /// Returns the version of the project
     pub fn version(&self) -> &Option<Version> {
-        &self.manifest.parsed.project.version
+        &self.manifest.workspace.workspace.version
     }
 
     /// Returns the description of the project
     pub(crate) fn description(&self) -> &Option<String> {
-        &self.manifest.parsed.project.description
+        &self.manifest.workspace.workspace.description
     }
 
     /// Returns the root directory of the project
@@ -413,7 +413,7 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> Vec<Environment> {
         self.manifest
-            .parsed
+            .workspace
             .environments
             .iter()
             .map(|env| Environment::new(self, env))
@@ -470,7 +470,7 @@ impl Project {
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .iter()
             .map(|group| SolveGroup {
@@ -484,7 +484,7 @@ impl Project {
     /// exists.
     pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .find(name)
             .map(|group| SolveGroup {
@@ -534,7 +534,7 @@ impl Project {
             manifest: &Manifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
-            match manifest.parsed.project.conda_pypi_map.clone() {
+            match manifest.workspace.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
                         .into_iter()
@@ -550,8 +550,8 @@ impl Project {
                     }
 
                     let project_channels: HashSet<_> = manifest
-                        .parsed
-                        .project
+                        .workspace
+                        .workspace
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
@@ -559,7 +559,7 @@ impl Project {
                         .into_diagnostic()?;
 
                     let feature_channels: HashSet<_> = manifest
-                        .parsed
+                        .workspace
                         .features
                         .values()
                         .flat_map(|feature| feature.channels.iter())

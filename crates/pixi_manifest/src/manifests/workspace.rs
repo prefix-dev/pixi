@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt, hash::Hash, iter::FromIterator, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash, iter::FromIterator};
 
 use indexmap::{map::IndexMap, Equivalent};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
-use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, Visitor};
+use serde::de::{Deserialize, Deserializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use toml_edit::DocumentMut;
 
@@ -14,7 +14,6 @@ use crate::{
     environments::Environments,
     error::TomlError,
     feature::{Feature, FeatureName},
-    metadata::ProjectMetadata,
     pypi::{
         pypi_options::PypiOptions, pypi_requirement::PyPiRequirement,
         pypi_requirement_types::PyPiPackageName,
@@ -25,14 +24,16 @@ use crate::{
     target::{Target, TargetSelector, Targets},
     task::{Task, TaskName},
     utils::PixiSpanned,
+    workspace::Workspace,
     BuildSection,
 };
 
-/// Describes the contents of a parsed project manifest.
+/// Holds the parsed content of the workspace part of a pixi manifest. This
+/// describes the part related to the workspace only.
 #[derive(Debug, Clone)]
-pub struct ParsedManifest {
+pub struct WorkspaceManifest {
     /// Information about the project
-    pub project: ProjectMetadata,
+    pub workspace: Workspace,
 
     /// All the features defined in the project.
     pub features: IndexMap<FeatureName, Feature>,
@@ -47,13 +48,14 @@ pub struct ParsedManifest {
     pub build: Option<BuildSection>,
 }
 
-impl ParsedManifest {
+impl WorkspaceManifest {
     /// Parses a toml string into a project manifest.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        let manifest: ParsedManifest = toml_edit::de::from_str(source).map_err(TomlError::from)?;
+        let manifest: WorkspaceManifest =
+            toml_edit::de::from_str(source).map_err(TomlError::from)?;
 
         // Make sure project.name is defined
-        if manifest.project.name.is_none() {
+        if manifest.workspace.name.is_none() {
             let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["project"].span();
             return Err(TomlError::NoProjectName(span));
         }
@@ -102,7 +104,7 @@ impl ParsedManifest {
     }
 }
 
-impl<'de> Deserialize<'de> for ParsedManifest {
+impl<'de> Deserialize<'de> for WorkspaceManifest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -111,7 +113,8 @@ impl<'de> Deserialize<'de> for ParsedManifest {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         pub struct TomlProjectManifest {
-            project: ProjectMetadata,
+            #[serde(alias = "project")]
+            workspace: Workspace,
             #[serde(default)]
             system_requirements: SystemRequirements,
             #[serde(default)]
@@ -125,13 +128,22 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             //
             // #[serde(flatten)]
             // default_target: Target,
-            #[serde(default, deserialize_with = "deserialize_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_package_map"
+            )]
             dependencies: IndexMap<PackageName, PixiSpec>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
@@ -196,7 +208,7 @@ impl<'de> Deserialize<'de> for ParsedManifest {
             platforms: None,
             channels: None,
 
-            channel_priority: toml_manifest.project.channel_priority,
+            channel_priority: toml_manifest.workspace.channel_priority,
 
             system_requirements: toml_manifest.system_requirements,
 
@@ -263,7 +275,7 @@ impl<'de> Deserialize<'de> for ParsedManifest {
         let build = toml_manifest.build;
 
         Ok(Self {
-            project: toml_manifest.project,
+            workspace: toml_manifest.workspace,
             features,
             environments,
             solve_groups,
@@ -272,77 +284,13 @@ impl<'de> Deserialize<'de> for ParsedManifest {
     }
 }
 
-struct PackageMap<'a>(&'a IndexMap<PackageName, PixiSpec>);
-
-impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
-    type Value = PackageName;
-
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let package_name = PackageName::deserialize(deserializer)?;
-        match self.0.get_key_value(&package_name) {
-            Some((package_name, _)) => {
-                Err(serde::de::Error::custom(
-                    format!(
-                        "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
-                ))
-            }
-            None => Ok(package_name),
-        }
-    }
-}
-
-pub fn deserialize_package_map<'de, D>(
-    deserializer: D,
-) -> Result<IndexMap<PackageName, PixiSpec>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct PackageMapVisitor(PhantomData<()>);
-
-    impl<'de> Visitor<'de> for PackageMapVisitor {
-        type Value = IndexMap<PackageName, PixiSpec>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "a map")
-        }
-
-        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-        where
-            A: MapAccess<'de>,
-        {
-            let mut result = IndexMap::new();
-            while let Some((package_name, spec)) =
-                map.next_entry_seed::<PackageMap, _>(PackageMap(&result), PhantomData::<PixiSpec>)?
-            {
-                result.insert(package_name, spec);
-            }
-
-            Ok(result)
-        }
-    }
-    let visitor = PackageMapVisitor(PhantomData);
-    deserializer.deserialize_seq(visitor)
-}
-
-pub fn deserialize_opt_package_map<'de, D>(
-    deserializer: D,
-) -> Result<Option<IndexMap<PackageName, PixiSpec>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Ok(Some(deserialize_package_map(deserializer)?))
-}
-
 #[cfg(test)]
 mod tests {
     use insta::{assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
-    use crate::{parsed_manifest::ParsedManifest, TargetSelector};
+    use crate::{TargetSelector, WorkspaceManifest};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -366,7 +314,7 @@ mod tests {
         "#
         );
 
-        let manifest = ParsedManifest::from_toml_str(&contents).unwrap();
+        let manifest = WorkspaceManifest::from_toml_str(&contents).unwrap();
         let targets = &manifest.default_feature().targets;
         assert_eq!(
             targets.user_defined_selectors().cloned().collect_vec(),
@@ -421,7 +369,7 @@ mod tests {
             "#
         );
 
-        let manifest = ParsedManifest::from_toml_str(&contents).unwrap();
+        let manifest = WorkspaceManifest::from_toml_str(&contents).unwrap();
         let deps = manifest
             .default_feature()
             .targets
@@ -509,7 +457,7 @@ mod tests {
             "#
         );
 
-        let manifest = ParsedManifest::from_toml_str(&contents).unwrap();
+        let manifest = WorkspaceManifest::from_toml_str(&contents).unwrap();
         let default_target = manifest.default_feature().targets.default();
         let run_dependencies = default_target.run_dependencies().unwrap();
         let build_dependencies = default_target.build_dependencies().unwrap();
@@ -551,7 +499,7 @@ mod tests {
 
         assert_snapshot!(examples
             .into_iter()
-            .map(|example| ParsedManifest::from_toml_str(&format!(
+            .map(|example| WorkspaceManifest::from_toml_str(&format!(
                 "{PROJECT_BOILERPLATE}\n{example}"
             ))
             .unwrap_err()
@@ -569,7 +517,7 @@ mod tests {
         ];
         assert_snapshot!(examples
             .into_iter()
-            .map(|example| ParsedManifest::from_toml_str(&example)
+            .map(|example| WorkspaceManifest::from_toml_str(&example)
                 .unwrap_err()
                 .to_string())
             .collect::<Vec<_>>()
@@ -592,7 +540,7 @@ mod tests {
             "#
         );
 
-        let manifest = ParsedManifest::from_toml_str(&contents).unwrap();
+        let manifest = WorkspaceManifest::from_toml_str(&contents).unwrap();
 
         assert_snapshot!(manifest
             .default_feature()
@@ -624,7 +572,7 @@ mod tests {
             "#
         );
 
-        assert_snapshot!(toml_edit::de::from_str::<ParsedManifest>(&contents)
+        assert_snapshot!(toml_edit::de::from_str::<WorkspaceManifest>(&contents)
             .expect("parsing should succeed!")
             .default_feature()
             .targets
@@ -652,9 +600,9 @@ mod tests {
             "#
         );
 
-        assert_yaml_snapshot!(toml_edit::de::from_str::<ParsedManifest>(&contents)
+        assert_yaml_snapshot!(toml_edit::de::from_str::<WorkspaceManifest>(&contents)
             .expect("parsing should succeed!")
-            .project
+            .workspace
             .pypi_options
             .clone()
             .unwrap());
@@ -673,9 +621,9 @@ mod tests {
             "#
         );
 
-        let manifest =
-            toml_edit::de::from_str::<ParsedManifest>(&contents).expect("parsing should succeed!");
-        assert_yaml_snapshot!(manifest.project.pypi_options.clone().unwrap());
+        let manifest = toml_edit::de::from_str::<WorkspaceManifest>(&contents)
+            .expect("parsing should succeed!");
+        assert_yaml_snapshot!(manifest.workspace.pypi_options.clone().unwrap());
     }
 
     #[test]
@@ -689,7 +637,7 @@ mod tests {
         flask = "2.*"
         "#
         );
-        let manifest = ParsedManifest::from_toml_str(&contents);
+        let manifest = WorkspaceManifest::from_toml_str(&contents);
 
         assert!(manifest.is_err());
         assert!(manifest
@@ -709,7 +657,7 @@ mod tests {
         libc = "2.12"
         "#
         );
-        let manifest = ParsedManifest::from_toml_str(&contents);
+        let manifest = WorkspaceManifest::from_toml_str(&contents);
 
         assert!(manifest.is_err());
         assert!(manifest
@@ -736,7 +684,7 @@ mod tests {
         [tool.poetry]
         test = "test"
         "#;
-        let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let _manifest = WorkspaceManifest::from_toml_str(contents).unwrap();
     }
 
     #[test]
@@ -753,8 +701,8 @@ mod tests {
         channels = []
         "#
         .to_string();
-        let manifest =
-            toml_edit::de::from_str::<ParsedManifest>(&contents).expect("parsing should succeed!");
+        let manifest = toml_edit::de::from_str::<WorkspaceManifest>(&contents)
+            .expect("parsing should succeed!");
         assert_yaml_snapshot!(manifest.build.clone().unwrap());
     }
 
@@ -772,7 +720,7 @@ mod tests {
         channels = []
         "#
         .to_string();
-        let err = ParsedManifest::from_toml_str(&contents).err();
+        let err = WorkspaceManifest::from_toml_str(&contents).err();
         assert_yaml_snapshot!(err.unwrap().to_string());
     }
 }

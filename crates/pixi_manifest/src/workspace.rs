@@ -15,7 +15,7 @@ use crate::utils::PixiSpanned;
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct ProjectMetadata {
+pub struct Workspace {
     /// The name of the project
     pub name: Option<String>, // set as optional to handle conversion from pyproject.toml
 

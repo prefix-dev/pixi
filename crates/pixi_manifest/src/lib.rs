@@ -11,8 +11,6 @@ mod has_environment_dependencies;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
-mod metadata;
-mod parsed_manifest;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
@@ -21,25 +19,27 @@ mod spec_type;
 mod system_requirements;
 mod target;
 pub mod task;
-mod utils;
+pub mod utils;
 mod validation;
+mod workspace;
 
-pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
-
-pub use manifests::manifest::{Manifest, ManifestKind};
-pub use manifests::TomlManifest;
-
-pub use crate::environments::Environments;
-pub use crate::parsed_manifest::{deserialize_package_map, ParsedManifest};
-pub use crate::solve_group::{SolveGroup, SolveGroups};
 pub use activation::Activation;
+pub use build::BuildSection;
 pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
+pub use features_ext::FeaturesExt;
+pub use has_environment_dependencies::HasEnvironmentDependencies;
+pub use has_features_iter::HasFeaturesIter;
+pub use has_manifest_ref::HasManifestRef;
 use itertools::Itertools;
-pub use metadata::ProjectMetadata;
+pub use manifests::{
+    TomlManifest, WorkspaceManifest, {Manifest, ManifestKind},
+};
 use miette::Diagnostic;
+pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
@@ -47,13 +47,12 @@ pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+pub use workspace::Workspace;
 
-pub use build::BuildSection;
-pub use features_ext::FeaturesExt;
-pub use has_environment_dependencies::HasEnvironmentDependencies;
-pub use has_features_iter::HasFeaturesIter;
-pub use has_manifest_ref::HasManifestRef;
-pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
+pub use crate::{
+    environments::Environments,
+    solve_group::{SolveGroup, SolveGroups},
+};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]

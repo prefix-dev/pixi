@@ -175,9 +175,9 @@ mod test {
     }
 
     #[rstest]
-    #[case::satisfiability(vec!["tests/satisfiability/source-dependency/**/*"])]
-    #[case::satisfiability_ignore_lock(vec!["tests/satisfiability/source-dependency/**/*", "!tests/satisfiability/source-dependency/**/*.lock"])]
-    #[case::non_glob(vec!["tests/satisfiability/source-dependency/pixi.toml"])]
+    #[case::satisfiability(vec!["tests/data/satisfiability/source-dependency/**/*"])]
+    #[case::satisfiability_ignore_lock(vec!["tests/data/satisfiability/source-dependency/**/*", "!tests/data/satisfiability/source-dependency/**/*.lock"])]
+    #[case::non_glob(vec!["tests/data/satisfiability/source-dependency/pixi.toml"])]
     fn test_input_hash(testname: String, #[case] globs: Vec<&str>) {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

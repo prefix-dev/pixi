@@ -56,7 +56,7 @@ impl<'p> SolveGroup<'p> {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
-                &self.project.manifest.parsed.environments[*env_idx],
+                &self.project.manifest.workspace.environments[*env_idx],
             )
         })
     }
