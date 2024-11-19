@@ -249,7 +249,7 @@ You can execute commands in this environment with e.g. `pixi run -e test python`
 ## Getting code to run
 
 Let's add some code to the `pixi-py` package.
-We will add a new function to the `pixi_py/__init__.py` file:
+We will add a new function to the `src/pixi_py/__init__.py` file:
 
 ```python
 from rich import print
@@ -286,10 +286,10 @@ Let's add a `tests/test_me.py` file in the root of the project.
 Giving us the following project structure:
 
 ```shell
-.
 ├── pixi.lock
-├── pixi_py
-│   └── __init__.py
+├── src
+│   └── pixi_py
+│       └── __init__.py
 ├── pyproject.toml
 └── tests/test_me.py
 ```
