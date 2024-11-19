@@ -14,7 +14,6 @@ mod manifest;
 mod source;
 mod toml;
 mod workspace;
-
 pub use manifest::{Manifest, ManifestKind};
 pub use toml::TomlManifest;
 pub use workspace::WorkspaceManifest;
