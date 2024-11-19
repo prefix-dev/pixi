@@ -132,6 +132,22 @@ impl ParsedManifest {
             }
         }
 
+        // Warn on any unknown preview features
+        if let Some(preview) = self.project.preview.as_ref() {
+            let preview = preview.unknown_preview_features();
+            if !preview.is_empty() {
+                let are = if preview.len() > 1 { "are" } else { "is" };
+                let s = if preview.len() > 1 { "s" } else { "" };
+                let preview_array = if preview.len() == 1 {
+                    format!("{:?}", preview)
+                } else {
+                    format!("[{:?}]", preview.iter().format(", "))
+                };
+                tracing::warn!(
+                    "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
+            }
+        }
+
         // If there is a build section, make sure the build-string is not empty
         if let Some(build) = &self.build {
             if build.build_backend.is_empty() {

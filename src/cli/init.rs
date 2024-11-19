@@ -259,6 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )?;
         }
         project.save()?;
@@ -315,7 +316,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 Some(name) => (name, false),
                 None => (default_name.clone(), true),
             };
-            let environments = pyproject.environments_from_extras();
+            let environments = pyproject.environments_from_extras().into_diagnostic()?;
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
@@ -348,11 +349,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     console::style(console::Emoji("✔ ", "")).green(),
                     name
                 );
-                // Inform about the addition of environments from extras (if any)
+                // Inform about the addition of environments from optional dependencies
+                // or dependency groups (if any)
                 if !environments.is_empty() {
                     let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
                     eprintln!(
-                        "{}Added environment{} '{}' from optional extras.",
+                        "{}Added environment{} '{}' from optional dependencies or dependency groups.",
                         console::style(console::Emoji("✔ ", "")).green(),
                         if envs.len() > 1 { "s" } else { "" },
                         envs.join("', '")

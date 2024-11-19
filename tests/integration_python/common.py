@@ -4,7 +4,7 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.36.0"
+PIXI_VERSION = "0.37.0"
 
 
 class ExitCode(IntEnum):

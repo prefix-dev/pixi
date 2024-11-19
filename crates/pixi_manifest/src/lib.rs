@@ -13,6 +13,7 @@ mod has_manifest_ref;
 mod manifests;
 mod metadata;
 mod parsed_manifest;
+mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod solve_group;
@@ -52,6 +53,7 @@ pub use features_ext::FeaturesExt;
 pub use has_environment_dependencies::HasEnvironmentDependencies;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
+pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -74,6 +76,15 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+pub enum PypiDependencyLocation {
+    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
+    Pixi,
+    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    OptionalDependencies,
+    // The [dependency-groups] table in a 'pyproject.toml' manifest
+    DependencyGroups,
 }
 
 /// Converts an array of Platforms to a non-empty Vec of Option<Platform>

@@ -5,6 +5,7 @@ use rattler_conda_types::{PackageName, Platform};
 use toml_edit::{value, Array, Item, Table, Value};
 
 use super::TomlManifest;
+use crate::PypiDependencyLocation;
 use crate::{consts, error::TomlError, pypi::PyPiPackageName, PyPiRequirement};
 use crate::{consts::PYPROJECT_PIXI_PREFIX, FeatureName, SpecType, Task};
 
@@ -188,30 +189,43 @@ impl ManifestSource {
     ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
         // arrays
-        let array = match self {
+        let remove_requirement =
+            |source: &mut ManifestSource, table, array_name| -> Result<(), TomlError> {
+                let array = source.manifest().get_toml_array(table, array_name)?;
+                if let Some(array) = array {
+                    array.retain(|x| {
+                        let req: pep508_rs::Requirement = x
+                            .as_str()
+                            .unwrap_or("")
+                            .parse()
+                            .expect("should be a valid pep508 dependency");
+                        let name = PyPiPackageName::from_normalized(req.name);
+                        name != *dep
+                    });
+                    if array.is_empty() {
+                        source
+                            .manifest()
+                            .get_or_insert_nested_table(table)?
+                            .remove(array_name);
+                    }
+                }
+                Ok(())
+            };
+
+        match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                self.manifest().get_toml_array("project", "dependencies")?
+                remove_requirement(self, "project", "dependencies")?;
             }
-            ManifestSource::PyProjectToml(_) => self
-                .manifest()
-                .get_toml_array("project.optional-dependencies", &feature_name.to_string())?,
-            _ => None,
+            ManifestSource::PyProjectToml(_) => {
+                let name = feature_name.to_string();
+                remove_requirement(self, "project.optional-dependencies", &name)?;
+                remove_requirement(self, "dependency-groups", &name)?;
+            }
+            _ => (),
         };
-        if let Some(array) = array {
-            array.retain(|x| {
-                let req: pep508_rs::Requirement = x
-                    .as_str()
-                    .unwrap_or("")
-                    .parse()
-                    .expect("should be a valid pep508 dependency");
-                let name = PyPiPackageName::from_normalized(req.name);
-                name != *dep
-            });
-        }
 
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
         // try and remove the dependency from pixi native tables
-
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
@@ -285,47 +299,72 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
+        location: &Option<PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
-        match self {
-            ManifestSource::PyProjectToml(_) => {
-                // Pypi dependencies can be stored in different places
-                // so we remove any potential dependency of the same name before adding it back
-                self.remove_pypi_dependency(
-                    &PyPiPackageName::from_normalized(requirement.name.clone()),
-                    platform,
-                    feature_name,
-                )?;
-                if let FeatureName::Named(name) = feature_name {
-                    self.manifest()
-                        .get_or_insert_toml_array("project.optional-dependencies", name)?
-                        .push(requirement.to_string())
-                } else {
-                    self.manifest()
-                        .get_or_insert_toml_array("project", "dependencies")?
-                        .push(requirement.to_string())
-                }
-            }
-            ManifestSource::PixiToml(_) => {
-                let mut pypi_requirement =
-                    PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
-                if let Some(editable) = editable {
-                    pypi_requirement.set_editable(editable);
-                }
+        // Pypi dependencies can be stored in different places in pyproject.toml manifests
+        // so we remove any potential dependency of the same name before adding it back
+        if matches!(self, ManifestSource::PyProjectToml(_)) {
+            self.remove_pypi_dependency(
+                &PyPiPackageName::from_normalized(requirement.name.clone()),
+                platform,
+                feature_name,
+            )?;
+        }
 
-                let dependency_table = TableName::new()
-                    .with_prefix(self.table_prefix())
-                    .with_platform(platform.as_ref())
-                    .with_feature_name(Some(feature_name))
-                    .with_table(Some(consts::PYPI_DEPENDENCIES));
-
-                self.manifest()
-                    .get_or_insert_nested_table(dependency_table.to_string().as_str())?
-                    .insert(
-                        requirement.name.as_ref(),
-                        Item::Value(pypi_requirement.into()),
-                    );
+        // The '[pypi-dependencies]' or '[tool.pixi.pypi-dependencies]' table is selected
+        //  - For 'pixi.toml' manifests where it is the only choice
+        //  - When explicitly requested
+        //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
+        //  - When an editable install is requested
+        if matches!(self, ManifestSource::PixiToml(_))
+            || matches!(location, Some(PypiDependencyLocation::Pixi))
+            || platform.is_some()
+            || editable.is_some_and(|e| e)
+        {
+            let mut pypi_requirement =
+                PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+            if let Some(editable) = editable {
+                pypi_requirement.set_editable(editable);
             }
-        };
+
+            let dependency_table = TableName::new()
+                .with_prefix(self.table_prefix())
+                .with_platform(platform.as_ref())
+                .with_feature_name(Some(feature_name))
+                .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+            self.manifest()
+                .get_or_insert_nested_table(dependency_table.to_string().as_str())?
+                .insert(
+                    requirement.name.as_ref(),
+                    Item::Value(pypi_requirement.into()),
+                );
+            return Ok(());
+        }
+
+        // Otherwise:
+        //   - the [project.dependencies] array is selected for the default feature
+        //   - the [dependency-groups.feature_name] array is selected unless
+        //   - optional-dependencies is explicitly requested as location
+        let add_requirement =
+            |source: &mut ManifestSource, table, array| -> Result<(), TomlError> {
+                source
+                    .manifest()
+                    .get_or_insert_toml_array(table, array)?
+                    .push(requirement.to_string());
+                Ok(())
+            };
+        if feature_name.is_default() {
+            add_requirement(self, "project", "dependencies")?
+        } else if matches!(location, Some(PypiDependencyLocation::OptionalDependencies)) {
+            add_requirement(
+                self,
+                "project.optional-dependencies",
+                &feature_name.to_string(),
+            )?
+        } else {
+            add_requirement(self, "dependency-groups", &feature_name.to_string())?
+        }
         Ok(())
     }
 

@@ -32,7 +32,8 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest, ParsedManifest,
+    PypiDependencyLocation, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -639,6 +640,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -670,6 +672,7 @@ impl Project {
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
+                location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
@@ -764,6 +767,7 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
+                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -900,6 +904,7 @@ impl Project {
 
     /// Update the pypi specs of newly added packages based on the contents of the
     /// updated lock-file.
+    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -908,6 +913,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -958,11 +964,28 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
+                    location,
                 )?;
             }
         }
 
         Ok(implicit_constraints)
+    }
+
+    /// Returns true if all preview features are enabled
+    pub fn all_preview_features_enabled(&self) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.all_enabled())
+            .unwrap_or(false)
+    }
+
+    /// Returns true if the given preview feature is enabled
+    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.is_enabled(feature))
+            .unwrap_or(false)
     }
 }
 
