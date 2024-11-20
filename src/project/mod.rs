@@ -32,8 +32,8 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, PypiDependencyLocation,
-    SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest, ParsedManifest,
+    PypiDependencyLocation, SpecType,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -436,6 +436,9 @@ impl Project {
         &self,
         environment: &Environment<'_>,
         current_env_var_behavior: CurrentEnvVarBehavior,
+        lock_file: Option<&LockFile>,
+        force_activate: bool,
+        experimental_cache: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -447,26 +450,48 @@ impl Project {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Exclude => {
                 vars.pixi_only()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Include => {
                 vars.full()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
         }
     }
+
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -524,6 +549,10 @@ impl Project {
 
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
+
+    pub(crate) fn activation_env_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 
     /// Returns what pypi mapping configuration we should use.
@@ -961,6 +990,22 @@ impl Project {
         }
 
         Ok(implicit_constraints)
+    }
+
+    /// Returns true if all preview features are enabled
+    pub fn all_preview_features_enabled(&self) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.all_enabled())
+            .unwrap_or(false)
+    }
+
+    /// Returns true if the given preview feature is enabled
+    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.is_enabled(feature))
+            .unwrap_or(false)
     }
 }
 

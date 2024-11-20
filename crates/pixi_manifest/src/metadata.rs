@@ -8,6 +8,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
+use crate::preview::Preview;
 use crate::utils::PixiSpanned;
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -64,4 +65,7 @@ pub struct ProjectMetadata {
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
+
+    /// Preview features
+    pub preview: Option<Preview>,
 }

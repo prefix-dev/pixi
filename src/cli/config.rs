@@ -1,13 +1,12 @@
-use std::{path::PathBuf, str::FromStr};
-
+use crate::cli::cli_config::ProjectConfig;
+use crate::Project;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_conda_types::NamedChannelOrUrl;
-
-use crate::project;
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -60,6 +59,9 @@ struct CommonArgs {
     /// Operation on system configuration
     #[arg(long, short, conflicts_with_all = &["local", "global"])]
     system: bool,
+
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -195,25 +197,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
-    match project::find_project_manifest(std::env::current_dir().into_diagnostic()?) {
-        None => {
+    match Project::load_or_else_discover(common_args.project_config.manifest_path.as_deref()) {
+        Err(e) => {
             if common_args.local {
                 return Err(miette::miette!(
-                    "--local flag can only be used inside a pixi project"
+                    "--local flag can only be used inside a pixi project: '{e}'",
                 ));
             }
             Ok(None)
         }
-        Some(manifest_file) => {
-            let full_path = dunce::canonicalize(&manifest_file).into_diagnostic()?;
-            let root = full_path
-                .parent()
-                .ok_or_else(|| {
-                    miette::miette!("can not find parent of {}", manifest_file.display())
-                })?
-                .to_path_buf();
-            Ok(Some(root))
-        }
+        Ok(project) => Ok(Some(project.root().to_path_buf())),
     }
 }
 

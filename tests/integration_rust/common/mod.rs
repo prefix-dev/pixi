@@ -467,7 +467,9 @@ impl PixiControl {
                     lock_file
                         .prefix(&task.run_environment, UpdateMode::Revalidate)
                         .await?;
-                    let env = get_task_env(&task.run_environment, args.clean_env).await?;
+                    let env =
+                        get_task_env(&task.run_environment, args.clean_env, None, false, false)
+                            .await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,
