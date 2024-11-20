@@ -127,8 +127,8 @@ pub struct ToolCache {
 pub enum ToolCacheError {
     #[error("could not resolve '{}', {1}", .0.display())]
     Instantiate(PathBuf, which::Error),
-    #[error("could not install isolated tool '{}'", .0.as_display())]
-    Install(miette::Report),
+    #[error(transparent)]
+    Install(#[source] miette::Report),
     #[error("could not determine default cache dir '{}'", .0.as_display())]
     CacheDir(miette::Report),
 }
