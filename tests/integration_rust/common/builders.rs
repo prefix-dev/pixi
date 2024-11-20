@@ -26,6 +26,7 @@
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use std::{
     future::{Future, IntoFuture},
+    io,
     path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
@@ -232,7 +233,10 @@ impl IntoFuture for SearchBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        search::execute_impl(self.args).boxed_local()
+        Box::pin(async move {
+            let mut out = io::stdout();
+            search::execute_impl(self.args, &mut out).await
+        })
     }
 }
 
