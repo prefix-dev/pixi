@@ -18,7 +18,7 @@ use rattler_conda_types::MatchSpec;
 pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
 pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
 use tokio::io::{AsyncRead, AsyncWrite};
-pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
+pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolContext, ToolSpec};
 use url::Url;
 
 pub use crate::protocol::Protocol;
@@ -29,7 +29,7 @@ pub enum BackendOverride {
     Spec(MatchSpec),
 
     /// Overwrite the backend with a specific tool.
-    Path(PathBuf),
+    System(String),
 
     /// Use the given IO for the backend.
     Io(InProcessBackend),

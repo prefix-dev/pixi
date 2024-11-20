@@ -1,9 +1,19 @@
-use std::path::PathBuf;
-
+use miette::IntoDiagnostic;
+use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_manifest::BuildSection;
-use rattler_conda_types::MatchSpec;
+use pixi_utils::EnvironmentHash;
+use rattler::{install::Installer, package_cache::PackageCache};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
+use rattler_shell::{
+    activation::{ActivationVariables, Activator},
+    shell::ShellEnum,
+};
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 
 use crate::{BackendOverride, InProcessBackend};
+
+use super::{IsolatedTool, ToolContext};
 
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.
@@ -48,6 +58,78 @@ impl IsolatedToolSpec {
             ..self
         }
     }
+
+    /// Installed the tool in the isolated environment.
+    pub async fn install(&self, context: ToolContext) -> miette::Result<IsolatedTool> {
+        let repodata = context
+            .gateway
+            .query(
+                context.channels.clone(),
+                [Platform::current(), Platform::NoArch],
+                self.specs.clone(),
+            )
+            .recursive(true)
+            .execute()
+            .await
+            .into_diagnostic()?;
+
+        // Determine virtual packages of the current platform
+        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        let solved_records = Solver
+            .solve(SolverTask {
+                specs: self.specs.clone(),
+                virtual_packages,
+                ..SolverTask::from_iter(&repodata)
+            })
+            .into_diagnostic()?;
+
+        let cache = EnvironmentHash::new(
+            self.command.clone(),
+            self.specs.clone(),
+            context
+                .channels
+                .iter()
+                .map(|c| c.base_url.to_string())
+                .collect(),
+        );
+
+        let cached_dir = context
+            .cache_dir
+            .join(CACHED_BUILD_ENVS_DIR)
+            .join(cache.name());
+
+        // Install the environment
+        Installer::new()
+            .with_download_client(context.client.clone())
+            .with_package_cache(PackageCache::new(
+                context
+                    .cache_dir
+                    .join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+            ))
+            .install(&cached_dir, solved_records)
+            .await
+            .unwrap();
+
+        // Get the activation scripts
+        let activator =
+            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current()).unwrap();
+
+        let activation_scripts = activator
+            .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
+            .unwrap();
+
+        Ok(IsolatedTool::new(
+            self.command.clone(),
+            cached_dir,
+            activation_scripts,
+        ))
+    }
 }
 
 impl From<IsolatedToolSpec> for ToolSpec {
@@ -60,7 +142,7 @@ impl From<IsolatedToolSpec> for ToolSpec {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct SystemToolSpec {
     /// The command to invoke.
-    pub command: PathBuf,
+    pub command: String,
 }
 
 impl From<SystemToolSpec> for ToolSpec {
@@ -75,7 +157,7 @@ impl BackendOverride {
             BackendOverride::Spec(spec) => {
                 ToolSpec::Isolated(IsolatedToolSpec::from_specs(vec![spec]))
             }
-            BackendOverride::Path(path) => ToolSpec::System(SystemToolSpec { command: path }),
+            BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
             BackendOverride::Io(process) => ToolSpec::Io(process),
         }
     }

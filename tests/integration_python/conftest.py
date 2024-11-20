@@ -15,7 +15,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
-    return Path(__file__).parent.joinpath(f"../../target-pixi/{pixi_build}/pixi")
+    return Path(__file__).parent.joinpath(f"../../target/{pixi_build}/pixi")
 
 
 @pytest.fixture

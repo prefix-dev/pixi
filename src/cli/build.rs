@@ -1,9 +1,9 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
+use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -13,6 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::{
     cli::cli_config::ProjectConfig,
+    repodata::Repodata,
     utils::{move_file, MoveError},
     Project,
 };
@@ -33,6 +34,10 @@ pub struct Args {
     /// The output directory to place the build artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
+
+    /// Use system backend installed tool
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub with_system: bool,
 }
 
 struct ProgressReporter {
@@ -84,16 +89,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Instantiate a protocol for the source directory.
     let channel_config = project.channel_config();
+    let channels = project
+        .manifest()
+        .build_section()
+        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?
+        .channels(&channel_config)
+        .into_diagnostic()?;
+
+    let tool_config = pixi_build_frontend::ToolContext::builder(channels)
+        .with_gateway(project.repodata_gateway().clone())
+        .with_client(project.authenticated_client().clone())
+        .build();
+
+    let build_section = project
+        .manifest()
+        .build_section()
+        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?;
+
+    let backend_override = if args.with_system {
+        Some(BackendOverride::System(build_section.build_backend.clone()))
+    } else {
+        None
+    };
+
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
+        .with_tool_context(tool_config)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_override: Default::default(),
+            build_tool_override: backend_override,
             build_id: 0,
         })
         .await
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the project")?;
+
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
     let pixi_dir = &project.pixi_dir();

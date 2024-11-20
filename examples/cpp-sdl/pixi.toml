@@ -9,9 +9,9 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 build-backend = "pixi-build-cmake"
 channels = [
   "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
+  "https://fast.prefix.dev/conda-forge",
 ]
-dependencies = ["pixi-build-python"]
+dependencies = ["pixi-build-cmake"]
 
 [tasks.start]
 cmd = "sdl_example"
