@@ -28,8 +28,8 @@ def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
     parsed_manifest["tool"]["pixi"]["build"] = {
         "build-backend": "pixi-build-python",
         "channels": [
-            "https://fast.prefix.dev/pixi-build-backends",
-            "https://fast.prefix.dev/conda-forge",
+            "https://repo.prefix.dev/pixi-build-backends",
+            "https://repo.prefix.dev/conda-forge",
         ],
         "dependencies": ["pixi-build-python"],
     }
