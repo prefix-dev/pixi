@@ -200,12 +200,10 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     )
 
     # Modify the environment variable in cache
-    cache_path = tmp_path.joinpath(".pixi/activation-env-v0/activation_default.json")
-    with cache_path.open("r") as f:
-        data = json.load(f)
-    data = json.loads(json.dumps(data).replace("test123", "test456"))
-    with cache_path.open("w") as f:
-        json.dump(data, f, indent=4)
+    cache_path = tmp_path.joinpath(".pixi", "activation-env-v0", "activation_default.json")
+    data = json.loads(cache_path.read_text())
+    data["environment_variables"]["TEST_ENV_VAR_FOR_ACTIVATION_TEST"] = "test456"
+    cache_path.write_text(json.dumps(data, indent=4))
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
