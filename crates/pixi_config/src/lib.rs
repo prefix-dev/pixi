@@ -19,6 +19,7 @@ use rattler_repodata_gateway::{Gateway, SourceConfig};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
+use uv_configuration::TrustedHost;
 
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
@@ -241,6 +242,10 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
+    /// Allow insecure connections to a host
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub allow_insecure_host: Vec<TrustedHost>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -286,6 +291,11 @@ impl PyPIConfig {
             index_url: other.index_url.or(self.index_url),
             extra_index_urls,
             keyring_provider: other.keyring_provider.or(self.keyring_provider),
+            allow_insecure_host: self
+                .allow_insecure_host
+                .into_iter()
+                .chain(other.allow_insecure_host.into_iter())
+                .collect(),
         }
     }
 
@@ -1107,6 +1117,29 @@ UNUSED = "unused"
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
+        );
+    }
+
+    #[test]
+    fn test_pypi_config_allow_insecure_host() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+            allow-insecure-host = ["https://localhost:1234", "*"]
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.pypi_config().allow_insecure_host,
+            vec![
+                TrustedHost::Host {
+                    scheme: Some("https".into()),
+                    host: "localhost".into(),
+                    port: Some(1234),
+                },
+                TrustedHost::Wildcard,
+            ]
         );
     }
 

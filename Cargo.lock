@@ -3350,6 +3350,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "url",
+ "uv-configuration",
 ]
 
 [[package]]

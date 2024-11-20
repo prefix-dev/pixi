@@ -643,6 +643,7 @@ pub async fn update_python_distributions(
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
             .client(uv_context.client.clone())
+            .allow_insecure_host(uv_context.allow_insecure_host.clone())
             .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)

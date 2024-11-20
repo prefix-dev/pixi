@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
-use uv_configuration::{BuildOptions, Concurrency, SourceStrategy};
+use uv_configuration::{BuildOptions, Concurrency, SourceStrategy, TrustedHost};
 use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
@@ -22,6 +22,7 @@ pub struct UvResolutionContext {
     pub concurrency: Concurrency,
     pub source_strategy: SourceStrategy,
     pub capabilities: IndexCapabilities,
+    pub allow_insecure_host: Vec<TrustedHost>,
 }
 
 impl UvResolutionContext {
@@ -57,6 +58,7 @@ impl UvResolutionContext {
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,
             capabilities: IndexCapabilities::default(),
+            allow_insecure_host: project.config().pypi_config.allow_insecure_host.clone(),
         })
     }
 }
