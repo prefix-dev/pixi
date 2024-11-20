@@ -5,6 +5,7 @@ use rattler_conda_types::ChannelConfig;
 use crate::{
     conda_build_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
+    rattler_build_protocol,
     tool::ToolCache,
     BackendOverride, BuildFrontendError, Protocol,
 };
@@ -17,6 +18,10 @@ pub(crate) enum ProtocolBuilder {
     /// A directory containing a `meta.yaml` that can be interpreted by
     /// conda-build.
     CondaBuild(conda_build_protocol::ProtocolBuilder),
+
+    /// A directory containing a `recipe.yaml` that can be interpreted by
+    /// rattler-build.
+    RattlerBuild(rattler_build_protocol::ProtocolBuilder),
 }
 
 impl From<pixi_protocol::ProtocolBuilder> for ProtocolBuilder {
@@ -31,6 +36,12 @@ impl From<conda_build_protocol::ProtocolBuilder> for ProtocolBuilder {
     }
 }
 
+impl From<rattler_build_protocol::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: rattler_build_protocol::ProtocolBuilder) -> Self {
+        Self::RattlerBuild(value)
+    }
+}
+
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
     pub fn discover(source_dir: &Path) -> Result<Self, DiscoveryError> {
@@ -38,6 +49,16 @@ impl ProtocolBuilder {
             return Err(DiscoveryError::NotADirectory);
         } else if !source_dir.is_dir() {
             return Err(DiscoveryError::NotFound(source_dir.to_path_buf()));
+        }
+
+        // Try to discover as a rattler-build recipe first
+        // and it also should be a `pixi` project
+        if let Some(protocol) =
+            rattler_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
+        {
+            if pixi_protocol::ProtocolBuilder::discover(source_dir)?.is_some() {
+                return Ok(protocol.into());
+            }
         }
 
         // Try to discover as a pixi project
@@ -63,6 +84,9 @@ impl ProtocolBuilder {
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_channel_config(channel_config))
             }
+            Self::RattlerBuild(protocol) => {
+                Self::RattlerBuild(protocol.with_channel_config(channel_config))
+            }
         }
     }
 
@@ -70,6 +94,9 @@ impl ProtocolBuilder {
         match self {
             Self::Pixi(protocol) => Self::Pixi(protocol.with_backend_override(backend)),
             Self::CondaBuild(protocol) => Self::CondaBuild(protocol.with_backend_override(backend)),
+            Self::RattlerBuild(protocol) => {
+                Self::RattlerBuild(protocol.with_backend_override(backend))
+            }
         }
     }
 
@@ -80,6 +107,9 @@ impl ProtocolBuilder {
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_opt_cache_dir(cache_directory))
             }
+            Self::RattlerBuild(protocol) => {
+                Self::RattlerBuild(protocol.with_opt_cache_dir(cache_directory))
+            }
         }
     }
 
@@ -88,6 +118,7 @@ impl ProtocolBuilder {
         match self {
             Self::Pixi(_) => "pixi",
             Self::CondaBuild(_) => "conda-build",
+            Self::RattlerBuild(_) => "rattler-build",
         }
     }
 
@@ -109,6 +140,12 @@ impl ProtocolBuilder {
                     .finish(tool_cache)
                     .await
                     .map_err(FinishError::CondaBuild)?,
+            )),
+            Self::RattlerBuild(protocol) => Ok(Protocol::RattlerBuild(
+                protocol
+                    .finish(tool_cache, build_id)
+                    .await
+                    .map_err(FinishError::RattlerBuild)?,
             )),
         }
     }

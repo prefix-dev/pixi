@@ -5,7 +5,10 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub(crate) use protocols::{conda_build as conda_build_protocol, pixi as pixi_protocol};
+pub(crate) use protocols::{
+    conda_build as conda_build_protocol, pixi as pixi_protocol,
+    rattler_build as rattler_build_protocol,
+};
 
 mod protocol_builder;
 mod reporters;

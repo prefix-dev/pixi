@@ -6,7 +6,10 @@ use pixi_build_types::procedures::{
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
 
-use crate::{conda_build_protocol, pixi_protocol, CondaBuildReporter, CondaMetadataReporter};
+use crate::{
+    conda_build_protocol, pixi_protocol, rattler_build_protocol, CondaBuildReporter,
+    CondaMetadataReporter,
+};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -18,6 +21,10 @@ pub enum FinishError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CondaBuild(#[from] conda_build_protocol::FinishError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RattlerBuild(#[from] rattler_build_protocol::FinishError),
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -70,6 +77,7 @@ pub enum DiscoveryError {
 pub enum Protocol {
     Pixi(pixi_protocol::Protocol),
     CondaBuild(conda_build_protocol::Protocol),
+    RattlerBuild(rattler_build_protocol::Protocol),
 }
 
 impl From<pixi_protocol::Protocol> for Protocol {
@@ -84,6 +92,12 @@ impl From<conda_build_protocol::Protocol> for Protocol {
     }
 }
 
+impl From<rattler_build_protocol::Protocol> for Protocol {
+    fn from(value: rattler_build_protocol::Protocol) -> Self {
+        Self::RattlerBuild(value)
+    }
+}
+
 impl Protocol {
     /// Returns the root manifest files of the source directory. These indicate
     /// the files that are used to determine the build configuration.
@@ -91,6 +105,7 @@ impl Protocol {
         match self {
             Self::Pixi(protocol) => protocol.manifests(),
             Self::CondaBuild(protocol) => protocol.manifests(),
+            Self::RattlerBuild(protocol) => protocol.manifests(),
         }
     }
 
@@ -105,6 +120,10 @@ impl Protocol {
                 .await
                 .into_diagnostic(),
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
+            Self::RattlerBuild(protocol) => protocol
+                .get_conda_metadata(request, reporter.as_ref())
+                .await
+                .into_diagnostic(),
         }
     }
 
@@ -119,6 +138,10 @@ impl Protocol {
                 .await
                 .into_diagnostic(),
             Self::CondaBuild(_) => unreachable!(),
+            Self::RattlerBuild(protocol) => protocol
+                .conda_build(request, reporter.as_ref())
+                .await
+                .into_diagnostic(),
         }
     }
 
@@ -126,6 +149,7 @@ impl Protocol {
         match self {
             Self::Pixi(protocol) => protocol.backend_identifier(),
             Self::CondaBuild(protocol) => protocol.backend_identifier(),
+            Self::RattlerBuild(protocol) => protocol.backend_identifier(),
         }
     }
 }
