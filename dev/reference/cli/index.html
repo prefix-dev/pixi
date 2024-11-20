@@ -2899,6 +2899,7 @@ The custom tasks defined in the <a href="../project_configuration/">manifest fil
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../project_configuration/">manifest file</a><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 <li><code>--clean-env</code>: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON <code>Windows</code>.</li>
+<li><code>--force-activate</code>: (default, except in <em>experimental</em> mode) Force the activation of the environment, even if the environment is already activated.</li>
 <li><code>--revalidate</code>: Revalidate the full environment, instead of checking the lock file hash. <a href="../../features/environment/#environment-installation-metadata">more info</a></li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python
@@ -3126,6 +3127,8 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../project_configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../project_configuration/">manifest file</a><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
+<li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
+<li><code>--no-progress</code>: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>list
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>list<span class="w"> </span>py
@@ -3179,6 +3182,8 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../project_configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../project_configuration/">manifest file</a><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
+<li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
+<li><code>--no-progress</code>: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>tree
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>tree<span class="w"> </span>pre-commit
@@ -3276,7 +3281,11 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../project_configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../project_configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../project_configuration/">manifest file</a><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--no-install</code>: Don't install the environment, only activate the environment.</li>
+<li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
+<li><code>--no-progress</code>: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]</li>
+<li><code>--force-activate</code>: (default, except in <em>experimental</em> mode) Force the activation of the environment, even if the environment is already activated.</li>
 <li><code>--revalidate</code>: Revalidate the full environment, instead of checking lock file hash. <a href="../../features/environment/#environment-installation-metadata">more info</a></li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>shell
@@ -3302,6 +3311,7 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 <li><code>--json</code>: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, <code>--shell</code> is ignored.</li>
+<li><code>--force-activate</code>: (default, except in <em>experimental</em> mode) Force the activation of the environment, even if the environment is already activated.</li>
 <li><code>--revalidate</code>: Revalidate the full environment, instead of checking lock file hash. <a href="../../features/environment/#environment-installation-metadata">more info</a></li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>shell-hook
@@ -3431,6 +3441,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 <li><code>--system (-s)</code>: Specify management scope to system configuration.</li>
 <li><code>--global (-g)</code>: Specify management scope to global configuration.</li>
 <li><code>--local (-l)</code>: Specify management scope to local configuration.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../project_configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 </ul>
 <p>Checkout the <a href="../pixi_configuration/">pixi configuration</a> for more information about the locations.</p>
 <h3 id="config-edit"><code>config edit</code><a class="headerlink" href="#config-edit" title="Permanent link">#</a></h3>
