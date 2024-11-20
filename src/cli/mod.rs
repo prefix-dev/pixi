@@ -17,6 +17,7 @@ pub mod add;
 pub mod clean;
 pub mod cli_config;
 pub mod completion;
+pub mod conda;
 pub mod config;
 mod exec;
 pub mod global;
@@ -139,6 +140,9 @@ pub enum Command {
     SelfUpdate(self_update::Args),
     Clean(clean::Args),
     Completion(completion::Args),
+
+    // Conda compatibility]
+    Conda(conda::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -294,6 +298,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Update(cmd) => update::execute(cmd).await,
         Command::Upgrade(cmd) => upgrade::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
+        Command::Conda(args) => conda::execute(args).await,
     }
 }
 
