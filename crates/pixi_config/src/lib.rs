@@ -294,7 +294,7 @@ impl PyPIConfig {
             allow_insecure_host: self
                 .allow_insecure_host
                 .into_iter()
-                .chain(other.allow_insecure_host.into_iter())
+                .chain(other.allow_insecure_host)
                 .collect(),
         }
     }
