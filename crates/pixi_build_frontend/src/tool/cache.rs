@@ -3,7 +3,7 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 use dashmap::{DashMap, Entry};
 use pixi_consts::consts::CONDA_REPODATA_CACHE_DIR;
 use rattler_conda_types::Channel;
-use rattler_repodata_gateway::{ChannelConfig, Gateway};
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 
 use super::IsolatedTool;
@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct ToolContextBuilder {
-    gateway_config: ChannelConfig,
+    gateway: Option<Gateway>,
     client: ClientWithMiddleware,
     channels: Vec<Channel>,
     cache_dir: PathBuf,
@@ -24,33 +24,38 @@ impl ToolContextBuilder {
     pub fn new(channels: Vec<Channel>) -> Self {
         Self {
             channels,
-            gateway_config: ChannelConfig::default(),
+            gateway: None,
             client: ClientWithMiddleware::default(),
             cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
         }
     }
 
-    pub fn with_gateway_config(mut self, gateway_config: ChannelConfig) -> Self {
-        self.gateway_config = gateway_config;
+    /// Set the gateway for the tool context.
+    pub fn with_gateway(mut self, gateway: Gateway) -> Self {
+        self.gateway = Some(gateway);
         self
     }
 
+    /// Set the client for the tool context.
     pub fn with_client(mut self, client: ClientWithMiddleware) -> Self {
         self.client = client;
         self
     }
 
+    /// Set the cache directory for the tool context.
     pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
         self.cache_dir = cache_dir;
         self
     }
 
+    /// Build the `ToolContext` using builder configuration.
     pub fn build(self) -> ToolContext {
-        let gateway = Gateway::builder()
-            .with_client(self.client.clone())
-            .with_cache_dir(self.cache_dir.join(CONDA_REPODATA_CACHE_DIR))
-            .with_channel_config(self.gateway_config)
-            .finish();
+        let gateway = self.gateway.unwrap_or_else(|| {
+            Gateway::builder()
+                .with_client(self.client.clone())
+                .with_cache_dir(self.cache_dir.join(CONDA_REPODATA_CACHE_DIR))
+                .finish()
+        });
 
         ToolContext {
             channels: self.channels,
@@ -87,21 +92,6 @@ impl Debug for ToolContext {
 }
 
 impl ToolContext {
-    /// Create a new tool context.
-    pub fn new(
-        client: ClientWithMiddleware,
-        gateway: Gateway,
-        cache_dir: PathBuf,
-        channels: Vec<Channel>,
-    ) -> Self {
-        Self {
-            client,
-            channels,
-            cache_dir,
-            gateway,
-        }
-    }
-
     /// Create a new tool context builder with the given channels.
     pub fn builder(channels: Vec<Channel>) -> ToolContextBuilder {
         ToolContextBuilder::new(channels)
@@ -178,12 +168,6 @@ impl ToolCache {
         }
     }
 
-    #[cfg(test)]
-    /// Set the context for the tool cache.
-    pub fn with_context(self, context: ToolContext) -> Self {
-        Self { context, ..self }
-    }
-
     /// Instantiate a tool from a specification.
     ///
     /// If the tool is not already cached, it will be created, installed and cached.
@@ -229,12 +213,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_tool_cache() {
-        let cache = ToolCache::new();
+        let mut cache = ToolCache::new();
         let mut config = Config::default();
         config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".to_string())];
 
         let auth_client = ClientWithMiddleware::default();
-        let gateway_config = rattler_repodata_gateway::ChannelConfig::from(&config);
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
 
         let channels = config
@@ -245,11 +228,10 @@ mod tests {
             .collect();
 
         let tool_context = ToolContext::builder(channels)
-            .with_gateway_config(gateway_config)
             .with_client(auth_client.clone())
             .build();
 
-        let cache = cache.with_context(tool_context);
+        cache.context = tool_context;
 
         let tool_spec = IsolatedToolSpec {
             specs: vec![MatchSpec::from_str("cowpy", ParseStrictness::Strict).unwrap()],

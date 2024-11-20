@@ -13,6 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::{
     cli::cli_config::ProjectConfig,
+    repodata::Repodata,
     utils::{move_file, MoveError},
     Project,
 };
@@ -96,7 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     let tool_config = pixi_build_frontend::ToolContext::builder(channels)
-        .with_gateway_config(project.config().into())
+        .with_gateway(project.repodata_gateway().clone())
         .with_client(project.authenticated_client().clone())
         .build();
 

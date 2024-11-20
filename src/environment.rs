@@ -27,7 +27,7 @@ use rattler::{
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::Package::{Conda, Pypi};
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::ChannelConfig;
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -746,7 +746,7 @@ pub async fn update_prefix_conda(
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
     build_context: BuildContext,
-    gateway_config: rattler_repodata_gateway::ChannelConfig,
+    gateway: Gateway,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -777,11 +777,7 @@ pub async fn update_prefix_conda(
             let build_channels = &build_channels;
             let virtual_packages = &virtual_packages;
             let client = authenticated_client.clone();
-            // TODO(nichita): I think gateway_config should implement Clone
-            let gateway_config = ChannelConfig {
-                default: gateway_config.default.clone(),
-                per_channel: gateway_config.per_channel.clone(),
-            };
+            let gateway = gateway.clone();
             async move {
                 let build_channels = build_channels.clone().ok_or_else(|| {
                     BuildError::BackendError(miette::miette!("no build section").into())
@@ -798,7 +794,7 @@ pub async fn update_prefix_conda(
                         progress_reporter.clone(),
                         build_id,
                         client,
-                        gateway_config,
+                        gateway,
                     )
                     .await
             }

@@ -373,6 +373,7 @@ impl<'p> LockFileDerivedData<'p> {
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
+        let gateway = environment.project().repodata_gateway().clone();
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
@@ -399,7 +400,7 @@ impl<'p> LockFileDerivedData<'p> {
             "",
             self.io_concurrency_limit.clone().into(),
             self.build_context.clone(),
-            environment.project().config().into(),
+            gateway,
         )
         .await?;
 
@@ -1687,7 +1688,7 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.project().channel_config();
 
-    let config = group.project().config().clone();
+    let gateway = group.project().repodata_gateway().clone();
 
     let build_channels = group
         .project()
@@ -1736,7 +1737,7 @@ async fn spawn_solve_conda_environment_task(
                 .into_diagnostic()?;
 
             let build_channels = &build_channels;
-            let config = &config;
+            let gateway = &gateway;
 
             let mut metadata_progress = None;
             let mut source_match_specs = Vec::new();
@@ -1765,7 +1766,7 @@ async fn spawn_solve_conda_environment_task(
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
                             build_id,
-                            config.into(),
+                            gateway.clone(),
                             client.clone(),
                         )
                         .map_err(|e| {
@@ -2214,7 +2215,6 @@ async fn spawn_create_prefix_task(
 ) -> miette::Result<TaskResult> {
     let group_name = group.name().clone();
     let prefix = group.prefix();
-    let config = group.project().config();
     let client = group.project().authenticated_client().clone();
     let channels = group
         .channel_urls(&group.project().channel_config())
@@ -2245,10 +2245,12 @@ async fn spawn_create_prefix_task(
 
     let build_virtual_packages = group.virtual_packages(Platform::current());
 
+    let gateway = group.project().repodata_gateway();
+
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
-        let config = config.clone();
+        let gateway = gateway.clone();
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
@@ -2275,7 +2277,7 @@ async fn spawn_create_prefix_task(
                 "  ",
                 io_concurrency_limit.into(),
                 build_context,
-                config.into(),
+                gateway.clone(),
             )
             .await?;
             let end = Instant::now();

@@ -30,6 +30,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tracing::instrument;
@@ -140,7 +141,7 @@ impl BuildContext {
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
-        gateway_config: rattler_repodata_gateway::ChannelConfig,
+        gateway: Gateway,
         client: ClientWithMiddleware,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
@@ -155,7 +156,7 @@ impl BuildContext {
                 build_virtual_packages,
                 metadata_reporter.clone(),
                 build_id,
-                gateway_config,
+                gateway,
                 client,
             )
             .await?;
@@ -177,7 +178,7 @@ impl BuildContext {
         build_reporter: Arc<dyn BuildReporter>,
         build_id: usize,
         authenticated_client: ClientWithMiddleware,
-        gateway_config: rattler_repodata_gateway::ChannelConfig,
+        gateway: Gateway,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
@@ -252,7 +253,7 @@ impl BuildContext {
         }
 
         let tool_config = ToolContext::builder(build_channels.to_vec())
-            .with_gateway_config(gateway_config)
+            .with_gateway(gateway.clone())
             .with_client(authenticated_client.clone())
             .build();
 
@@ -451,7 +452,7 @@ impl BuildContext {
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
-        gateway_config: rattler_repodata_gateway::ChannelConfig,
+        gateway: Gateway,
         client: ClientWithMiddleware,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let (cached_metadata, cache_entry) = self
@@ -500,7 +501,7 @@ impl BuildContext {
         }
         // tool config
         let tool_config = ToolContext::builder(build_channels)
-            .with_gateway_config(gateway_config)
+            .with_gateway(gateway)
             .with_client(client)
             .build();
 

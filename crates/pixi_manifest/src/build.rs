@@ -1,13 +1,13 @@
 //! Defines the build section for the pixi manifest.
 use rattler_conda_types::Channel;
 use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::ChannelUrl;
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::NamedChannelOrUrl;
 use rattler_conda_types::ParseChannelError;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use url::Url;
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
@@ -29,10 +29,13 @@ pub struct BuildSection {
 
 impl BuildSection {
     /// Returns the channels as URLs
-    pub fn channels_url(&self, config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
+    pub fn channels_url(
+        &self,
+        config: &ChannelConfig,
+    ) -> Result<Vec<ChannelUrl>, ParseChannelError> {
         self.channels
             .iter()
-            .map(|c| c.clone().into_base_url(config).map(|c| c.url().clone()))
+            .map(|c| c.clone().into_base_url(config))
             .collect()
     }
 
