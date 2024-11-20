@@ -415,10 +415,13 @@ fn print_matching_packages<W: Write>(
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
 
-        let channel_name = Url::from_str(&package.channel)
-            .ok()
+        let channel_name = package
+            .channel
+            .as_ref()
+            .and_then(|channel| Url::from_str(channel).ok())
             .and_then(|url| channel_config.strip_channel_alias(&url))
-            .unwrap_or_else(|| package.channel.to_string());
+            .or_else(|| package.channel.clone())
+            .unwrap_or_else(|| "<unknown>".to_string());
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 

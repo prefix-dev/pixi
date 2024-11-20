@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackageRef};
 
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
@@ -166,7 +166,7 @@ async fn find_unsatisfiable_targets<'p>(
         };
 
         // The locked environment exists, but does it match our project environment?
-        if let Err(unsat) = verify_environment_satisfiability(&environment, &locked_environment) {
+        if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
             tracing::info!(
                 "environment '{0}' is out of date because {unsat}",
                 environment.name().fancy_display()
@@ -196,7 +196,7 @@ async fn find_unsatisfiable_targets<'p>(
         for platform in platforms {
             match verify_platform_satisfiability(
                 &environment,
-                &locked_environment,
+                locked_environment,
                 platform,
                 project.root(),
                 glob_hash_cache.clone(),
@@ -327,13 +327,11 @@ fn find_inconsistent_solve_groups<'p>(
 
             for package in locked_env.packages(platform).into_iter().flatten() {
                 match package {
-                    Package::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.package_record().name) {
+                    LockedPackageRef::Conda(pkg) => {
+                        match conda_packages_by_name.get(&pkg.record().name) {
                             None => {
-                                conda_packages_by_name.insert(
-                                    pkg.package_record().name.clone(),
-                                    pkg.location().clone(),
-                                );
+                                conda_packages_by_name
+                                    .insert(pkg.record().name.clone(), pkg.location().clone());
                             }
                             Some(url) if pkg.location() != url => {
                                 conda_package_mismatch = true;
@@ -341,20 +339,15 @@ fn find_inconsistent_solve_groups<'p>(
                             _ => {}
                         }
                     }
-                    Package::Pypi(pkg) => {
-                        match pypi_packages_by_name.get(&pkg.package_data().name) {
-                            None => {
-                                pypi_packages_by_name.insert(
-                                    pkg.package_data().name.clone(),
-                                    pkg.location().clone(),
-                                );
-                            }
-                            Some(url) if pkg.location() != url => {
-                                pypi_package_mismatch = true;
-                            }
-                            _ => {}
+                    LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
+                        None => {
+                            pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
                         }
-                    }
+                        Some(url) if &pkg.location != url => {
+                            pypi_package_mismatch = true;
+                        }
+                        _ => {}
+                    },
                 }
 
                 // If there is a conda package mismatch there is also a pypi mismatch and we

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockFileBuilder, Package};
+use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
 use crate::{
@@ -28,9 +28,13 @@ impl From<IoConcurrencyLimit> for Arc<Semaphore> {
 }
 
 /// Constructs a new lock-file where some of the packages have been removed
-pub fn filter_lock_file<'p, F: FnMut(&Environment<'p>, Platform, &Package) -> bool>(
+pub fn filter_lock_file<
+    'p,
+    'lock,
+    F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,
+>(
     project: &'p Project,
-    lock_file: &LockFile,
+    lock_file: &'lock LockFile,
     mut filter: F,
 ) -> LockFile {
     let mut builder = LockFileBuilder::new();
@@ -55,8 +59,8 @@ pub fn filter_lock_file<'p, F: FnMut(&Environment<'p>, Platform, &Package) -> bo
         // Copy all packages that don't need to be relaxed
         for (platform, packages) in environment.packages_by_platform() {
             for package in packages {
-                if filter(&project_env, platform, &package) {
-                    builder.add_package(environment_name, platform, package);
+                if filter(&project_env, platform, package) {
+                    builder.add_package(environment_name, platform, package.into());
                 }
             }
         }

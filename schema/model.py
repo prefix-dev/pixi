@@ -88,6 +88,10 @@ class ChannelPriority(str, Enum):
     strict = "strict"
 
 
+class KnownPreviewFeature(str, Enum):
+    """The preview features of the project."""
+
+
 class Project(StrictBaseModel):
     """The project's metadata information."""
 
@@ -138,6 +142,9 @@ class Project(StrictBaseModel):
     )
     pypi_options: PyPIOptions | None = Field(
         None, alias="pypi-options", description="Options related to PyPI indexes for this project"
+    )
+    preview: list[KnownPreviewFeature | str] | bool | None = Field(
+        None, alias="preview", description="Defines the enabling of preview features of the project"
     )
 
 
@@ -200,6 +207,9 @@ class BuildSection(StrictBaseModel):
     )
     build_backend: NonEmptyStr = Field(
         None, alias="build-backend", description="The build executable to call"
+    )
+    channels: list[Channel] = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
     )
 
 

@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_manifest/src/manifests/project.rs
+source: crates/pixi_manifest/src/manifests/source.rs
 expression: source.to_string()
 ---
 [environments]

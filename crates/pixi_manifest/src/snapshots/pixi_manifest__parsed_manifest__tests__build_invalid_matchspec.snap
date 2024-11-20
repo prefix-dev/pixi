@@ -1,5 +1,0 @@
----
-source: crates/pixi_manifest/src/parsed_manifest.rs
-expression: err.unwrap().to_string()
----
-"TOML parse error at line 8, column 25\n  |\n8 |         dependencies = [\"python-build-backend > > 12\"]\n  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nUnable to parse version spec: > > 12\n"

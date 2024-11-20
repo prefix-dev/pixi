@@ -1,0 +1,8 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: manifest.build.clone().unwrap()
+---
+dependencies:
+  - python-build-backend >12
+build-backend: python-build-backend
+channels: []

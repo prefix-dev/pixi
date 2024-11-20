@@ -18,12 +18,13 @@ use toml_edit::{DocumentMut, Value};
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
-    manifests::{ManifestSource, TomlManifest},
+    manifests::{source::ManifestSource, toml::TomlManifest},
+    preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
     to_options, BuildSection, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
-    FeatureName, GetFeatureError, ParsedManifest, PrioritizedChannel, SpecType, Target,
-    TargetSelector, Task, TaskName,
+    FeatureName, GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
+    TargetSelector, Task, TaskName, WorkspaceManifest,
 };
 
 #[derive(Debug, Clone)]
@@ -44,28 +45,33 @@ impl ManifestKind {
 }
 
 /// Handles the project's manifest file.
+///
 /// This struct is responsible for reading, parsing, editing, and saving the
 /// manifest. It encapsulates all logic related to the manifest's TOML format
-/// and structure. The manifest data is represented as a [`ParsedManifest`]
+/// and structure. The manifest data is represented as a [`WorkspaceManifest`]
 /// struct for easy manipulation.
 #[derive(Debug, Clone)]
 pub struct Manifest {
     /// The path to the manifest file
     pub path: PathBuf,
 
-    /// The raw contents of the manifest file
-    pub contents: String,
+    /// The raw contents of the original manifest file. This field, in
+    /// conjunction with [`crate::utils::PixiSpanned`] is used to provide better
+    /// error messages.
+    ///
+    /// Note that if the document is edited, this field will not be updated.
+    pub contents: Option<String>,
 
     /// Editable toml document
     pub document: ManifestSource,
 
-    /// The parsed manifest
-    pub parsed: ParsedManifest,
+    /// The parsed workspace manifest
+    pub workspace: WorkspaceManifest,
 }
 
-impl Borrow<ParsedManifest> for Manifest {
-    fn borrow(&self) -> &ParsedManifest {
-        &self.parsed
+impl Borrow<WorkspaceManifest> for Manifest {
+    fn borrow(&self) -> &WorkspaceManifest {
+        &self.workspace
     }
 }
 
@@ -96,7 +102,7 @@ impl Manifest {
 
         let contents = contents.into();
         let (parsed, file_name) = match manifest_kind {
-            ManifestKind::Pixi => (ParsedManifest::from_toml_str(&contents), "pixi.toml"),
+            ManifestKind::Pixi => (WorkspaceManifest::from_toml_str(&contents), "pixi.toml"),
             ManifestKind::Pyproject => {
                 let manifest = match PyProjectManifest::from_toml_str(&contents)
                     .and_then(|m| m.ensure_pixi(&contents))
@@ -128,16 +134,17 @@ impl Manifest {
 
         Ok(Self {
             path: manifest_path.to_path_buf(),
-            contents,
+            contents: Some(contents),
             document: source,
-            parsed: manifest,
+            workspace: manifest,
         })
     }
 
     /// Save the manifest to the file and update the contents
     pub fn save(&mut self) -> miette::Result<()> {
-        self.contents = self.document.to_string();
-        std::fs::write(&self.path, self.contents.clone()).into_diagnostic()?;
+        let contents = self.document.to_string();
+        std::fs::write(&self.path, &contents).into_diagnostic()?;
+        self.contents = Some(contents);
         Ok(())
     }
 
@@ -200,7 +207,7 @@ impl Manifest {
         // Make sure the features exist
         for feature in features.iter().flatten() {
             if self.feature(feature.as_str()).is_none() {
-                return Err(UnknownFeature::new(feature.to_string(), &self.parsed).into());
+                return Err(UnknownFeature::new(feature.to_string(), &self.workspace).into());
             }
         }
 
@@ -211,7 +218,7 @@ impl Manifest {
             no_default_feature,
         )?;
 
-        let environment_idx = self.parsed.environments.add(Environment {
+        let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
             features: features.unwrap_or_default(),
             features_source_loc: None,
@@ -220,7 +227,9 @@ impl Manifest {
         });
 
         if let Some(solve_group) = solve_group {
-            self.parsed.solve_groups.add(solve_group, environment_idx);
+            self.workspace
+                .solve_groups
+                .add(solve_group, environment_idx);
         }
 
         Ok(())
@@ -235,14 +244,14 @@ impl Manifest {
 
         // Remove the environment from the internal manifest
         let environment_idx = self
-            .parsed
+            .workspace
             .environments
             .by_name
             .shift_remove(name)
             .expect("environment should exist");
 
         // Remove the environment from the solve groups
-        self.parsed
+        self.workspace
             .solve_groups
             .iter_mut()
             .for_each(|group| group.environments.retain(|&idx| idx != environment_idx));
@@ -283,7 +292,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Get current and new platforms for the feature
         let current = match feature_name {
-            FeatureName::Default => self.parsed.project.platforms.get_mut(),
+            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self.get_or_insert_feature_mut(feature_name).platforms_mut(),
         };
         let to_add: IndexSet<_> = platforms.cloned().collect();
@@ -309,7 +318,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Get current platforms and platform to remove for the feature
         let current = match feature_name {
-            FeatureName::Default => self.parsed.project.platforms.get_mut(),
+            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
         };
         // Get the platforms to remove, while checking if they exist
@@ -384,6 +393,7 @@ impl Manifest {
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
         for platform in crate::to_options(platforms) {
@@ -398,6 +408,7 @@ impl Manifest {
                         platform,
                         feature_name,
                         editable,
+                        location,
                     )?;
                     any_added = true;
                 }
@@ -511,7 +522,7 @@ impl Manifest {
     /// This also returns true if the `pypi-dependencies` key is defined but
     /// empty.
     pub fn has_pypi_dependencies(&self) -> bool {
-        self.parsed
+        self.workspace
             .features
             .values()
             .flat_map(|f| f.targets.targets())
@@ -530,7 +541,7 @@ impl Manifest {
 
         // Get the current channels and update them
         let current = match feature_name {
-            FeatureName::Default => &mut self.parsed.project.channels,
+            FeatureName::Default => &mut self.workspace.workspace.channels,
             FeatureName::Named(_) => self.get_or_insert_feature_mut(feature_name).channels_mut(),
         };
 
@@ -576,7 +587,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Get current channels and channels to remove for the feature
         let current = match feature_name {
-            FeatureName::Default => &mut self.parsed.project.channels,
+            FeatureName::Default => &mut self.workspace.workspace.channels,
             FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
         };
         // Get the channels to remove, while checking if they exist
@@ -615,7 +626,7 @@ impl Manifest {
     /// Set the project description
     pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.parsed.project.description = Some(description.to_string());
+        self.workspace.workspace.description = Some(description.to_string());
         self.document.set_description(description);
 
         Ok(())
@@ -624,7 +635,7 @@ impl Manifest {
     /// Set the project version
     pub fn set_version(&mut self, version: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.parsed.project.version = Some(
+        self.workspace.workspace.version = Some(
             Version::from_str(version)
                 .into_diagnostic()
                 .context("could not convert version to a valid project version")?,
@@ -665,12 +676,12 @@ impl Manifest {
     /// This is the feature that is added implicitly by the tables at the root
     /// of the project manifest.
     pub fn default_feature(&self) -> &Feature {
-        self.parsed.default_feature()
+        self.workspace.default_feature()
     }
 
     /// Returns a mutable reference to the default feature.
     pub fn default_feature_mut(&mut self) -> &mut Feature {
-        self.parsed.default_feature_mut()
+        self.workspace.default_feature_mut()
     }
 
     /// Returns the mutable feature with the given name or `Err` if it does not
@@ -679,7 +690,7 @@ impl Manifest {
     where
         Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
-        self.parsed.features.get_mut(name).ok_or_else(|| {
+        self.workspace.features.get_mut(name).ok_or_else(|| {
             miette!(
                 "Feature {} does not exist",
                 consts::FEATURE_STYLE.apply_to(name)
@@ -689,7 +700,7 @@ impl Manifest {
 
     /// Returns the mutable feature with the given name
     pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
-        self.parsed
+        self.workspace
             .features
             .entry(name.clone())
             .or_insert_with(|| Feature::new(name.clone()))
@@ -700,7 +711,7 @@ impl Manifest {
     where
         Q: ?Sized + Hash + Equivalent<FeatureName>,
     {
-        self.parsed.features.get(name)
+        self.workspace.features.get(name)
     }
 
     /// Returns the default environment
@@ -709,7 +720,7 @@ impl Manifest {
     /// only the default feature. The default environment can be overwritten
     /// by a environment named `default`.
     pub fn default_environment(&self) -> &Environment {
-        self.parsed.default_environment()
+        self.workspace.default_environment()
     }
 
     /// Returns the environment with the given name or `None` if it does not
@@ -718,12 +729,17 @@ impl Manifest {
     where
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
-        self.parsed.environments.find(name)
+        self.workspace.environments.find(name)
+    }
+
+    /// Returns the preview field of the project
+    pub fn preview(&self) -> Option<&Preview> {
+        self.workspace.workspace.preview.as_ref()
     }
 
     /// Return the build section from the parsed manifest
     pub fn build_section(&self) -> Option<&BuildSection> {
-        self.parsed.build.as_ref()
+        self.workspace.build.as_ref()
     }
 }
 
@@ -774,9 +790,9 @@ mod tests {
         // From PathBuf
         let manifest = Manifest::from_path(path).unwrap();
 
-        assert_eq!(manifest.parsed.project.name.unwrap(), "foo");
+        assert_eq!(manifest.workspace.workspace.name.unwrap(), "foo");
         assert_eq!(
-            manifest.parsed.project.version,
+            manifest.workspace.workspace.version,
             Some(Version::from_str("0.1.0").unwrap())
         );
     }
@@ -1224,14 +1240,26 @@ feature_target_dep = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
-            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            manifest
+                .workspace
+                .workspace
+                .version
+                .as_ref()
+                .unwrap()
+                .clone(),
             Version::from_str("0.1.0").unwrap()
         );
 
         manifest.set_version(&String::from("1.2.3")).unwrap();
 
         assert_eq!(
-            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            manifest
+                .workspace
+                .workspace
+                .version
+                .as_ref()
+                .unwrap()
+                .clone(),
             Version::from_str("1.2.3").unwrap()
         );
     }
@@ -1253,8 +1281,8 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .parsed
-                .project
+                .workspace
+                .workspace
                 .description
                 .as_ref()
                 .unwrap()
@@ -1268,8 +1296,8 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .parsed
-                .project
+                .workspace
+                .workspace
                 .description
                 .as_ref()
                 .unwrap()
@@ -1294,7 +1322,7 @@ feature_target_dep = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
-            manifest.parsed.project.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1305,7 +1333,7 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.parsed.project.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1374,7 +1402,7 @@ feature_target_dep = "*"
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
-            manifest.parsed.project.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1385,7 +1413,7 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.parsed.project.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
 
@@ -1446,7 +1474,7 @@ platforms = ["linux-64", "win-64"]
 
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        assert_eq!(manifest.parsed.project.channels, IndexSet::new());
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
 
         let conda_forge =
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
@@ -1473,7 +1501,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert_eq!(
-            manifest.parsed.project.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
@@ -1488,7 +1516,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert_eq!(
-            manifest.parsed.project.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
@@ -1499,7 +1527,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .parsed
+                .workspace
                 .features
                 .get(&cuda_feature)
                 .unwrap()
@@ -1521,7 +1549,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .parsed
+                .workspace
                 .features
                 .get(&cuda_feature)
                 .unwrap()
@@ -1538,7 +1566,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .parsed
+                .workspace
                 .features
                 .get(&test_feature)
                 .unwrap()
@@ -1569,8 +1597,8 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .channels
             .iter()
             .any(|c| c.channel == custom_channel.channel));
@@ -1585,8 +1613,8 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .channels
             .iter()
             .any(|c| c.channel == prioritized_channel1.channel && c.priority == Some(12i32)));
@@ -1600,8 +1628,8 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .channels
             .iter()
             .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
@@ -1628,7 +1656,7 @@ platforms = ["linux-64", "win-64"]
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
-            manifest.parsed.project.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel::from(NamedChannelOrUrl::Name(
                 String::from("conda-forge")
             ))]
@@ -1646,7 +1674,7 @@ platforms = ["linux-64", "win-64"]
             )
             .unwrap();
 
-        assert_eq!(manifest.parsed.project.channels, IndexSet::new());
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
 
         manifest
             .remove_channels(
@@ -1724,7 +1752,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             test1_env
                 .solve_group
-                .map(|idx| manifest.parsed.solve_groups[idx].name.as_str()),
+                .map(|idx| manifest.workspace.solve_groups[idx].name.as_str()),
             Some("test")
         );
 
@@ -1735,7 +1763,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             test2_env
                 .solve_group
-                .map(|idx| manifest.parsed.solve_groups[idx].name.as_str()),
+                .map(|idx| manifest.workspace.solve_groups[idx].name.as_str()),
             Some("test")
         );
 
@@ -1768,7 +1796,7 @@ platforms = ["linux-64", "win-64"]
         let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         let cuda_feature = manifest
-            .parsed
+            .workspace
             .features
             .get(&FeatureName::Named("cuda".to_string()))
             .unwrap();
@@ -2301,8 +2329,8 @@ bar = "*"
         // Verify pytorch is first in the list
         assert_eq!(
             manifest
-                .parsed
-                .project
+                .workspace
+                .workspace
                 .channels
                 .iter()
                 .next()
@@ -2319,8 +2347,8 @@ bar = "*"
 
         // Verify order is still pytorch, conda-forge, bioconda
         let channels: Vec<_> = manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .channels
             .iter()
             .map(|c| c.channel.to_string())

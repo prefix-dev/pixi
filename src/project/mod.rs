@@ -32,12 +32,13 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest,
+    PypiDependencyLocation, SpecType, WorkspaceManifest,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -147,8 +148,8 @@ impl Debug for Project {
     }
 }
 
-impl Borrow<ParsedManifest> for Project {
-    fn borrow(&self) -> &ParsedManifest {
+impl Borrow<WorkspaceManifest> for Project {
+    fn borrow(&self) -> &WorkspaceManifest {
         self.manifest.borrow()
     }
 }
@@ -156,7 +157,7 @@ impl Borrow<ParsedManifest> for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
+        let env_vars = Project::init_env_vars(&manifest.workspace.environments);
 
         let root = manifest
             .path
@@ -273,8 +274,8 @@ impl Project {
     /// Returns the name of the project
     pub fn name(&self) -> &str {
         self.manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .name
             .as_ref()
             .expect("name should always be defined.")
@@ -282,12 +283,12 @@ impl Project {
 
     /// Returns the version of the project
     pub fn version(&self) -> &Option<Version> {
-        &self.manifest.parsed.project.version
+        &self.manifest.workspace.workspace.version
     }
 
     /// Returns the description of the project
     pub(crate) fn description(&self) -> &Option<String> {
-        &self.manifest.parsed.project.description
+        &self.manifest.workspace.workspace.description
     }
 
     /// Returns the root directory of the project
@@ -412,7 +413,7 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> Vec<Environment> {
         self.manifest
-            .parsed
+            .workspace
             .environments
             .iter()
             .map(|env| Environment::new(self, env))
@@ -469,7 +470,7 @@ impl Project {
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .iter()
             .map(|group| SolveGroup {
@@ -483,7 +484,7 @@ impl Project {
     /// exists.
     pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .find(name)
             .map(|group| SolveGroup {
@@ -533,7 +534,7 @@ impl Project {
             manifest: &Manifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
-            match manifest.parsed.project.conda_pypi_map.clone() {
+            match manifest.workspace.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
                         .into_iter()
@@ -549,8 +550,8 @@ impl Project {
                     }
 
                     let project_channels: HashSet<_> = manifest
-                        .parsed
-                        .project
+                        .workspace
+                        .workspace
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
@@ -558,7 +559,7 @@ impl Project {
                         .into_diagnostic()?;
 
                     let feature_channels: HashSet<_> = manifest
-                        .parsed
+                        .workspace
                         .features
                         .values()
                         .flat_map(|feature| feature.channels.iter())
@@ -639,6 +640,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -670,6 +672,7 @@ impl Project {
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
+                location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
@@ -764,6 +767,7 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
+                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -817,10 +821,10 @@ impl Project {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    Package::Conda(package) => {
-                        !conda_packages.contains(&package.package_record().name)
+                    LockedPackageRef::Conda(package) => {
+                        !conda_packages.contains(&package.record().name)
                     }
-                    Package::Pypi(package) => !pypi_packages.contains(&package.package_data().name),
+                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
                 }
             } else {
                 true
@@ -847,9 +851,7 @@ impl Project {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                locked_env
-                    .conda_repodata_records_for_platform(platform)
-                    .ok()?
+                locked_env.conda_repodata_records(platform).ok()?
             })
             .flatten()
             .collect_vec();
@@ -900,6 +902,7 @@ impl Project {
 
     /// Update the pypi specs of newly added packages based on the contents of the
     /// updated lock-file.
+    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -908,6 +911,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -922,7 +926,7 @@ impl Project {
             // Get all the conda and pypi records for the combination of environments and
             // platforms
             .iter()
-            .filter_map(|(env, platform)| env.pypi_packages_for_platform(*platform))
+            .filter_map(|(env, platform)| env.pypi_packages(*platform))
             .flatten()
             .collect_vec();
 
@@ -958,11 +962,28 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
+                    location,
                 )?;
             }
         }
 
         Ok(implicit_constraints)
+    }
+
+    /// Returns true if all preview features are enabled
+    pub fn all_preview_features_enabled(&self) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.all_enabled())
+            .unwrap_or(false)
+    }
+
+    /// Returns true if the given preview feature is enabled
+    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
+        self.manifest
+            .preview()
+            .map(|preview| preview.is_enabled(feature))
+            .unwrap_or(false)
     }
 }
 

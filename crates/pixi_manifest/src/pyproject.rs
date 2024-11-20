@@ -5,7 +5,7 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, Project};
+use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 use thiserror::Error;
@@ -13,7 +13,7 @@ use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    DependencyOverwriteBehavior, Feature, ParsedManifest, SpecType,
+    DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
 use crate::{error::DependencyError, FeatureName};
 
@@ -26,7 +26,7 @@ pub struct PyProjectManifest {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
-    pub pixi: Option<ParsedManifest>,
+    pub pixi: Option<WorkspaceManifest>,
     pub poetry: Option<ToolPoetry>,
 }
 
@@ -90,7 +90,7 @@ impl PyProjectManifest {
         self.tool().and_then(|t| t.poetry.as_ref())
     }
 
-    fn pixi(&self) -> Option<&ParsedManifest> {
+    fn pixi(&self) -> Option<&WorkspaceManifest> {
         self.tool().and_then(|t| t.pixi.as_ref())
     }
 
@@ -105,7 +105,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     pub fn name(&self) -> Option<String> {
-        if let Some(pixi_name) = self.pixi().and_then(|p| p.project.name.as_ref()) {
+        if let Some(pixi_name) = self.pixi().and_then(|p| p.workspace.name.as_ref()) {
             return Some(pixi_name.clone());
         }
         if let Some(pyproject) = &self.project {
@@ -122,7 +122,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn description(&self) -> Option<String> {
-        if let Some(pixi_description) = self.pixi().and_then(|p| p.project.description.as_ref()) {
+        if let Some(pixi_description) = self.pixi().and_then(|p| p.workspace.description.as_ref()) {
             return Some(pixi_description.to_string());
         }
         if let Some(pyproject_description) =
@@ -141,7 +141,7 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn version(&self) -> Option<String> {
-        if let Some(pixi_version) = self.pixi().and_then(|p| p.project.version.as_ref()) {
+        if let Some(pixi_version) = self.pixi().and_then(|p| p.workspace.version.as_ref()) {
             return Some(pixi_version.to_string());
         }
         if let Some(pyproject_version) = self.project.as_ref().and_then(|p| p.version.as_ref()) {
@@ -158,18 +158,17 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     fn authors(&self) -> Option<Vec<String>> {
-        if let Some(pixi_authors) = self.pixi().and_then(|p| p.project.authors.as_ref()) {
+        if let Some(pixi_authors) = self.pixi().and_then(|p| p.workspace.authors.as_ref()) {
             return Some(pixi_authors.clone());
         }
         if let Some(pyproject_authors) = self.project.as_ref().and_then(|p| p.authors.as_ref()) {
             return Some(
                 pyproject_authors
                     .iter()
-                    .filter_map(|contact| match (contact.name(), contact.email()) {
-                        (Some(name), Some(email)) => Some(format!("{} <{}>", name, email)),
-                        (Some(name), None) => Some(name.to_string()),
-                        (None, Some(email)) => Some(email.to_string()),
-                        (None, None) => None,
+                    .map(|contact| match contact {
+                        Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
+                        Contact::Name { name } => name.clone(),
+                        Contact::Email { email } => email.clone(),
                     })
                     .collect(),
             );
@@ -192,15 +191,19 @@ impl PyProjectManifest {
         self.project().and_then(|p| p.optional_dependencies.clone())
     }
 
-    /// Builds a list of pixi environments from pyproject groups of extra
-    /// dependencies:
-    ///  - one environment is created per group of extra, with the same name as
-    ///    the group of extra
-    ///  - each environment includes the feature of the same name as the group
-    ///    of extra
+    /// Returns dependency groups from the `[dependency-groups]` table
+    fn dependency_groups(&self) -> Option<Result<IndexMap<String, Vec<Requirement>>, Pep735Error>> {
+        self.dependency_groups.as_ref().map(|dg| dg.resolve())
+    }
+
+    /// Builds a list of pixi environments from pyproject groups of optional
+    /// dependencies and/or dependency groups:
+    ///  - one environment is created per group with the same name
+    ///  - each environment includes the feature of the same name
     ///  - it will also include other features inferred from any self references
-    ///    to other groups of extras
-    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
+    ///    to other groups of optional dependencies (but won't for dependency
+    ///    groups, as recursion between groups is resolved upstream)
+    pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
         let mut environments = HashMap::new();
         if let Some(extras) = self.optional_dependencies() {
             let pname = self.package_name();
@@ -218,7 +221,19 @@ impl PyProjectManifest {
                 environments.insert(extra.replace('_', "-").clone(), features);
             }
         }
-        environments
+
+        if let Some(groups) = self.dependency_groups().transpose()? {
+            for group in groups.into_keys() {
+                let normalised = group.replace('_', "-");
+                // Nothing to do if a group of optional dependencies has the same name as the
+                // dependency group
+                if !environments.contains_key(&normalised) {
+                    environments.insert(normalised.clone(), vec![normalised]);
+                }
+            }
+        }
+
+        Ok(environments)
     }
 }
 
@@ -226,9 +241,11 @@ impl PyProjectManifest {
 pub enum PyProjectToManifestError {
     #[error("Unsupported pep508 requirement: '{0}'")]
     DependencyError(Requirement, #[source] DependencyError),
+    #[error(transparent)]
+    DependencyGroupError(#[from] Pep735Error),
 }
 
-impl TryFrom<PyProjectManifest> for ParsedManifest {
+impl TryFrom<PyProjectManifest> for WorkspaceManifest {
     type Error = PyProjectToManifestError;
 
     fn try_from(item: PyProjectManifest) -> Result<Self, Self::Error> {
@@ -241,10 +258,10 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
         // Set pixi project name, version, description and authors (if they are not set)
         // with the ones from the `[project]` or `[tool.poetry]` tables of the
         // `pyproject.toml`.
-        manifest.project.name = item.name();
-        manifest.project.description = item.description();
-        manifest.project.version = item.version().and_then(|v| v.parse().ok());
-        manifest.project.authors = item.authors();
+        manifest.workspace.name = item.name();
+        manifest.workspace.description = item.description();
+        manifest.workspace.version = item.version().and_then(|v| v.parse().ok());
+        manifest.workspace.authors = item.authors();
 
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
@@ -289,32 +306,38 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
             }
         }
 
-        // For each extra group, create a feature of the same name if it does not exist,
-        // and add pypi dependencies from project.optional-dependencies,
-        // filtering out self-references
-        if let Some(extras) = item.optional_dependencies() {
-            let project_name = item.package_name();
-            for (extra, reqs) in extras {
-                let feature_name = FeatureName::Named(extra.to_string());
-                let target = manifest
-                    .features
-                    .entry(feature_name.clone())
-                    .or_insert_with(move || Feature::new(feature_name))
-                    .targets
-                    .default_mut();
-                for requirement in reqs.iter() {
-                    // filter out any self references in groups of extra dependencies
-                    if project_name.as_ref() != Some(&requirement.name) {
-                        target
-                            .try_add_pep508_dependency(
-                                requirement,
-                                None,
-                                DependencyOverwriteBehavior::Error,
-                            )
-                            .map_err(|err| {
-                                PyProjectToManifestError::DependencyError(requirement.clone(), err)
-                            })?;
-                    }
+        // Define an iterator over both optional dependencies and dependency groups
+        let groups = item
+            .optional_dependencies()
+            .into_iter()
+            .chain(item.dependency_groups().transpose()?)
+            .flat_map(|map| map.into_iter());
+
+        // For each group of optional dependency or dependency group,
+        // create a feature of the same name if it does not exist,
+        // and add pypi dependencies, filtering out self-references in optional
+        // dependencies
+        let project_name = item.package_name();
+        for (group, reqs) in groups {
+            let feature_name = FeatureName::Named(group.to_string());
+            let target = manifest
+                .features
+                .entry(feature_name.clone())
+                .or_insert_with(move || Feature::new(feature_name))
+                .targets
+                .default_mut();
+            for requirement in reqs.iter() {
+                // filter out any self references in groups of extra dependencies
+                if project_name.as_ref() != Some(&requirement.name) {
+                    target
+                        .try_add_pep508_dependency(
+                            requirement,
+                            None,
+                            DependencyOverwriteBehavior::Error,
+                        )
+                        .map_err(|err| {
+                            PyProjectToManifestError::DependencyError(requirement.clone(), err)
+                        })?;
                 }
             }
         }
@@ -350,8 +373,7 @@ mod tests {
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        manifests::manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior,
-        FeatureName,
+        manifests::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
     };
 
     const PYPROJECT_FULL: &str = r#"
@@ -534,6 +556,7 @@ mod tests {
                 &FeatureName::Default,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )
             .unwrap();
 
@@ -557,6 +580,7 @@ mod tests {
                 &FeatureName::Named("test".to_string()),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )
             .unwrap();
         assert!(manifest

@@ -8,13 +8,14 @@ use serde_with::{serde_as, DisplayFromStr};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
+use crate::preview::Preview;
 use crate::utils::PixiSpanned;
 
 /// Describes the contents of the `[package]` section of the project manifest.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct ProjectMetadata {
+pub struct Workspace {
     /// The name of the project
     pub name: Option<String>, // set as optional to handle conversion from pyproject.toml
 
@@ -64,4 +65,7 @@ pub struct ProjectMetadata {
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
+
+    /// Preview features
+    pub preview: Option<Preview>,
 }

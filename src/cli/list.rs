@@ -18,7 +18,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{CondaPackage, Package, PypiPackage, UrlOrPath};
+use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -111,13 +111,14 @@ where
 }
 
 /// Associate with a uv_normalize::PackageName
+#[allow(clippy::large_enum_variant)]
 enum PackageExt {
-    PyPI(PypiPackage, uv_normalize::PackageName),
-    Conda(CondaPackage),
+    PyPI(PypiPackageData, uv_normalize::PackageName),
+    Conda(CondaPackageData),
 }
 
 impl PackageExt {
-    fn as_conda(&self) -> Option<&CondaPackage> {
+    fn as_conda(&self) -> Option<&CondaPackageData> {
         match self {
             PackageExt::Conda(c) => Some(c),
             _ => None,
@@ -127,16 +128,16 @@ impl PackageExt {
     /// Returns the name of the package.
     pub fn name(&self) -> Cow<'_, str> {
         match self {
-            Self::Conda(value) => value.package_record().name.as_normalized().into(),
-            Self::PyPI(value, _) => value.package_data().name.as_dist_info_name(),
+            Self::Conda(value) => value.record().name.as_normalized().into(),
+            Self::PyPI(value, _) => value.name.as_dist_info_name(),
         }
     }
 
     /// Returns the version string of the package
     pub fn version(&self) -> Cow<'_, str> {
         match self {
-            Self::Conda(value) => value.package_record().version.as_str(),
-            Self::PyPI(value, _) => value.package_data().version.to_string().into(),
+            Self::Conda(value) => value.record().version.as_str(),
+            Self::PyPI(value, _) => value.version.to_string().into(),
         }
     }
 }
@@ -166,11 +167,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let locked_deps_ext = locked_deps
         .into_iter()
         .map(|p| match p {
-            Package::Pypi(p) => {
-                let name = to_uv_normalize(&p.package_data().name)?;
-                Ok(PackageExt::PyPI(p, name))
+            LockedPackageRef::Pypi(pypi_data, _) => {
+                let name = to_uv_normalize(&pypi_data.name)?;
+                Ok(PackageExt::PyPI(pypi_data.clone(), name))
             }
-            Package::Conda(c) => Ok(PackageExt::Conda(c)),
+            LockedPackageRef::Conda(c) => Ok(PackageExt::Conda(c.clone())),
         })
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
@@ -192,7 +193,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),
-                python_record.package_record(),
+                python_record.record(),
             )?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
@@ -357,26 +358,25 @@ fn create_package_to_output<'a, 'b>(
         PackageExt::PyPI(_, _) => "pypi".to_string(),
     };
     let build = match package {
-        PackageExt::Conda(pkg) => Some(pkg.package_record().build.clone()),
+        PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
         PackageExt::PyPI(_, _) => None,
     };
 
     let (size_bytes, source) = match package {
         PackageExt::Conda(pkg) => (
-            pkg.package_record().size,
-            Some(pkg.package_record().name.as_source().to_owned()),
+            pkg.record().size,
+            Some(pkg.record().name.as_source().to_owned()),
         ),
         PackageExt::PyPI(p, name) => {
             if let Some(registry_index) = registry_index {
                 let entry = registry_index.get(name).find(|i| {
-                    i.dist.filename.version
-                        == to_uv_version(&p.package_data().version).expect("invalid version")
+                    i.dist.filename.version == to_uv_version(&p.version).expect("invalid version")
                 });
                 let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
                 let name = entry.map(|e| e.dist.filename.to_string());
                 (size, name)
             } else {
-                match &p.package_data().location {
+                match &p.location {
                     UrlOrPath::Url(url) => (None, Some(url.to_string())),
                     UrlOrPath::Path(path) => (
                         get_dir_size(std::path::Path::new(path.as_str())).ok(),
@@ -390,7 +390,7 @@ fn create_package_to_output<'a, 'b>(
     let is_explicit = project_dependency_names.contains(&name);
     let is_editable = match package {
         PackageExt::Conda(_) => false,
-        PackageExt::PyPI(p, _) => p.package_data().editable,
+        PackageExt::PyPI(p, _) => p.editable,
     };
 
     Ok(PackageToOutput {

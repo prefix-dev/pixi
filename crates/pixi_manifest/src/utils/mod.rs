@@ -1,3 +1,4 @@
+pub mod package_map;
 mod spanned;
 
 pub use spanned::PixiSpanned;

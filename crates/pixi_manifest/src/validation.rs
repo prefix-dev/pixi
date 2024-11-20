@@ -9,10 +9,10 @@ use std::{
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    Environment, Feature, FeatureName, ParsedManifest, SystemRequirements, TargetSelector,
+    Environment, Feature, FeatureName, SystemRequirements, TargetSelector, WorkspaceManifest,
 };
 
-impl ParsedManifest {
+impl WorkspaceManifest {
     /// Validate the project manifest.
     pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
@@ -20,7 +20,7 @@ impl ParsedManifest {
             let platforms = feature
                 .platforms
                 .as_ref()
-                .unwrap_or(&self.project.platforms);
+                .unwrap_or(&self.workspace.platforms);
             for target_sel in feature.targets.user_defined_selectors() {
                 match target_sel {
                     TargetSelector::Platform(p) => {
@@ -98,7 +98,7 @@ impl ParsedManifest {
         }
 
         // parse the SPDX license expression to make sure that it is a valid expression.
-        if let Some(spdx_expr) = &self.project.license {
+        if let Some(spdx_expr) = &self.workspace.license {
             spdx::Expression::parse(spdx_expr)
                 .into_diagnostic()
                 .with_context(|| {
@@ -122,13 +122,29 @@ impl ParsedManifest {
             Ok(())
         };
 
-        check_file_existence(&self.project.license_file)?;
-        check_file_existence(&self.project.readme)?;
+        check_file_existence(&self.workspace.license_file)?;
+        check_file_existence(&self.workspace.readme)?;
 
         // Validate the environments defined in the project
         for env in self.environments.iter() {
             if let Err(report) = self.validate_environment(env, self.default_feature()) {
                 return Err(report.with_source_code(source));
+            }
+        }
+
+        // Warn on any unknown preview features
+        if let Some(preview) = self.workspace.preview.as_ref() {
+            let preview = preview.unknown_preview_features();
+            if !preview.is_empty() {
+                let are = if preview.len() > 1 { "are" } else { "is" };
+                let s = if preview.len() > 1 { "s" } else { "" };
+                let preview_array = if preview.len() == 1 {
+                    format!("{:?}", preview)
+                } else {
+                    format!("[{:?}]", preview.iter().format(", "))
+                };
+                tracing::warn!(
+                    "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
             }
         }
 
@@ -216,7 +232,7 @@ impl ParsedManifest {
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
                     // Use the project default features
-                    self.project.pypi_options.as_ref()
+                    self.workspace.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }

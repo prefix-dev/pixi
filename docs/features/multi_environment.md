@@ -207,7 +207,7 @@ default = ["test", "dev"]
 test = ["test"]
 dev = ["dev"]
 ```
-Trying to run the `abmi` task will prompt the user to select the environment.
+Trying to run the `ambi` task will prompt the user to select the environment.
 As it is available in all environments.
 
 ```shell title="Interactive selection of environments if task is in multiple environments"

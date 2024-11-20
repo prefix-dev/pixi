@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
-use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseChannelError, Platform};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+};
 use rattler_solve::ChannelPriority;
-use url::Url;
 
 use crate::{
     has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies,
@@ -41,7 +42,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels = self.features().flat_map(|feature| match &feature.channels {
             Some(channels) => channels,
-            None => &self.manifest().parsed.project.channels,
+            None => &self.manifest().workspace.workspace.channels,
         });
 
         PrioritizedChannel::sort_channels_by_priority(channels).collect()
@@ -51,15 +52,14 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     ///
     /// This function is similar to [`Self::channels]` but it resolves the
     /// channel urls using the provided channel config.
-    fn channel_urls(&self, channel_config: &ChannelConfig) -> Result<Vec<Url>, ParseChannelError> {
+    fn channel_urls(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Vec<ChannelUrl>, ParseChannelError> {
         self.channels()
             .into_iter()
             .cloned()
-            .map(|channel| {
-                channel
-                    .into_base_url(channel_config)
-                    .map(|ch| ch.url().clone())
-            })
+            .map(|channel| channel.into_base_url(channel_config))
             .collect()
     }
 
@@ -96,7 +96,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
-                    None => &self.manifest().parsed.project.platforms.value,
+                    None => &self.manifest().workspace.workspace.platforms.value,
                 }
                 .iter()
                 .copied()
@@ -187,7 +187,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             .features()
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
-                    self.manifest().parsed.project.pypi_options.as_ref()
+                    self.manifest().workspace.workspace.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }

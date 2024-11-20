@@ -1,5 +1,5 @@
 use crate::{
-    build::BuildError,
+    build::{BuildError, BuildReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -24,8 +24,10 @@ use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::Package::{Conda, Pypi};
+use rattler_conda_types::{
+    Channel, ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+};
+use rattler_lock::LockedPackageRef;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
@@ -39,9 +41,8 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Semaphore;
-use url::Url;
 
-use crate::build::{BuildContext, BuildReporter};
+use crate::build::BuildContext;
 use uv_distribution_types::{InstalledDist, Name};
 
 use xxhash_rust::xxh3::Xxh3;
@@ -189,16 +190,16 @@ impl LockedEnvironmentHash {
 
                 match package {
                     // A select set of fields are used to hash the package
-                    Conda(pack) => {
-                        if let Some(sha) = pack.package_record().sha256 {
+                    LockedPackageRef::Conda(pack) => {
+                        if let Some(sha) = pack.record().sha256 {
                             sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.package_record().md5 {
+                        } else if let Some(md5) = pack.record().md5 {
                             md5.hash(&mut hasher);
                         }
                     }
-                    Pypi(pack) => {
-                        pack.is_editable().hash(&mut hasher);
-                        pack.extras().hash(&mut hasher);
+                    LockedPackageRef::Pypi(pack, env) => {
+                        pack.editable.hash(&mut hasher);
+                        env.extras.hash(&mut hasher);
                     }
                 }
             }
@@ -739,7 +740,7 @@ pub async fn update_prefix_conda(
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
-    channels: Vec<Url>,
+    channels: Vec<ChannelUrl>,
     build_channels: Option<Vec<Channel>>,
     platform: Platform,
     progress_bar_message: &str,
@@ -786,8 +787,8 @@ pub async fn update_prefix_conda(
                 build_context
                     .build_source_record(
                         &record,
-                        channels,
                         build_channels,
+                        channels,
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),

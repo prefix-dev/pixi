@@ -16,7 +16,6 @@ use serde_with::{serde_as, SerializeDisplay};
 use crate::{
     channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
     consts,
-    parsed_manifest::{deserialize_opt_package_map, deserialize_package_map},
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     task::{Task, TaskName},
@@ -397,13 +396,22 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            #[serde(default, deserialize_with = "deserialize_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_package_map"
+            )]
             dependencies: IndexMap<PackageName, PixiSpec>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
+            #[serde(
+                default,
+                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
+            )]
             build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
 
             #[serde(default)]
@@ -462,7 +470,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::manifests::manifest::Manifest;
+    use crate::Manifest;
 
     #[test]
     fn test_dependencies_borrowed() {
@@ -517,7 +525,7 @@ mod tests {
         );
 
         let bla_feature = manifest
-            .parsed
+            .workspace
             .features
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
@@ -591,6 +599,6 @@ mod tests {
         // and should now be none, previously this was added
         // to the default feature
         assert!(manifest.default_feature().pypi_options().is_some());
-        assert!(manifest.parsed.project.pypi_options.is_some());
+        assert!(manifest.workspace.workspace.pypi_options.is_some());
     }
 }

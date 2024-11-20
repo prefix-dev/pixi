@@ -201,6 +201,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.specs.feature,
             &[],
             false,
+            &None,
             args.dry_run,
         )
         .await?;

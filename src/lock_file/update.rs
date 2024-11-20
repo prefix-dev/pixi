@@ -1,12 +1,24 @@
+use std::{
+    cmp::PartialEq,
+    collections::{HashMap, HashSet},
+    future::{ready, Future},
+    iter,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::TryStreamExt;
-use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
+use futures::{
+    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{miette, Report};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -24,44 +36,39 @@ use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmen
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
-use std::cmp::PartialEq;
-use std::{
-    collections::{HashMap, HashSet},
-    future::{ready, Future},
-    iter,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
-use crate::environment::{read_environment_file, LockedEnvironmentHash};
-use crate::lock_file::reporter::{GatewayProgressReporter, SolveProgressBar};
-use crate::lock_file::PypiRecord;
-use crate::repodata::Repodata;
+use super::{
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, PixiRecordsByName,
+    PypiRecordsByName, UvResolutionContext,
+};
 use crate::{
     activation::CurrentEnvVarBehavior,
     build::{BuildContext, GlobHashCache},
     environment::{
-        self, write_environment_file, EnvironmentFile, LockFileUsage, PerEnvironmentAndPlatform,
-        PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
+        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
+        PythonStatus,
     },
     load_lock_file,
-    lock_file::{self, records_by_name::HasNameVersion, reporter::CondaMetadataProgress},
+    lock_file::{
+        self,
+        records_by_name::HasNameVersion,
+        reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
+        PypiRecord,
+    },
     prefix::Prefix,
     project::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         Environment, HasProjectRef,
     },
+    repodata::Repodata,
     Project,
 };
-
-use super::outdated::OutdatedEnvironments;
-use super::utils::IoConcurrencyLimit;
-use super::{PixiRecordsByName, PypiRecordsByName, UvResolutionContext};
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -135,8 +142,8 @@ pub struct LockFileDerivedData<'p> {
 pub enum UpdateMode {
     /// Validate if the prefix is up-to-date.
     /// Using a fast and simple validation method.
-    /// Used for skipping the update if the prefix is already up-to-date, in activating commands.
-    /// Like `pixi shell` or `pixi run`.
+    /// Used for skipping the update if the prefix is already up-to-date, in
+    /// activating commands. Like `pixi shell` or `pixi run`.
     QuickValidate,
     /// Force a prefix install without running the short validation.
     /// Used for updating the prefix when the lock-file likely out of date.
@@ -174,7 +181,8 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         update_mode: UpdateMode,
     ) -> miette::Result<Prefix> {
-        // Check if the prefix is already up-to-date by validating the hash with the environment file
+        // Check if the prefix is already up-to-date by validating the hash with the
+        // environment file
         let hash = self.locked_environment_hash(environment)?;
         if update_mode == UpdateMode::QuickValidate {
             if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
@@ -293,7 +301,7 @@ impl<'p> LockFileDerivedData<'p> {
             .environment(environment.name().as_str())
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
 
-        let packages = locked_env.pypi_packages_for_platform(platform);
+        let packages = locked_env.pypi_packages(platform);
         Ok(packages.map(|iter| {
             iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
                 .collect()
@@ -322,7 +330,7 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
 
         Ok(locked_env
-            .conda_packages_for_platform(platform)
+            .conda_packages(platform)
             .map(|iter| {
                 iter.cloned()
                     .map(PixiRecord::try_from)
@@ -869,7 +877,7 @@ impl<'p> UpdateContextBuilder<'p> {
                     .into_iter()
                     .map(move |locked_env| {
                         locked_env
-                            .conda_packages()
+                            .conda_packages_by_platform()
                             .map(|(platform, records)| {
                                 records
                                     .cloned()
@@ -897,7 +905,7 @@ impl<'p> UpdateContextBuilder<'p> {
                         (
                             env.clone(),
                             locked_env
-                                .pypi_packages()
+                                .pypi_packages_by_platform()
                                 .map(|(platform, records)| {
                                     (
                                         platform,
@@ -1584,7 +1592,7 @@ fn make_unsupported_pypi_platform_error(
     let mut labels = Vec::new();
 
     // Add a reference to the set of platforms that are supported by the project.
-    let project_platforms = &environment.project().manifest.parsed.project.platforms;
+    let project_platforms = &environment.project().manifest.workspace.workspace.platforms;
     if let Some(span) = project_platforms.span.clone() {
         labels.push(LabeledSpan::at(
             span,
@@ -1619,7 +1627,14 @@ fn make_unsupported_pypi_platform_error(
     diag.labels = Some(labels);
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
-    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
+    let reporter = miette::Report::new(diag);
+
+    // Add the source code if we have it available.
+    if let Some(content) = environment.project().manifest.contents.as_ref() {
+        reporter.with_source_code(content.clone())
+    } else {
+        reporter
+    }
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
@@ -1728,11 +1743,7 @@ async fn spawn_solve_conda_environment_task(
             // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
-                .map(|c| {
-                    c.clone()
-                        .into_base_url(&channel_config)
-                        .map(|ch| ch.url().clone())
-                })
+                .map(|c| c.clone().into_base_url(&channel_config))
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
