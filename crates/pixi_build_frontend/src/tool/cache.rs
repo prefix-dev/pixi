@@ -1,6 +1,7 @@
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 use dashmap::{DashMap, Entry};
+use miette::miette;
 use pixi_consts::consts::CONDA_REPODATA_CACHE_DIR;
 use rattler_conda_types::Channel;
 use rattler_repodata_gateway::Gateway;
@@ -184,11 +185,16 @@ impl ToolCache {
         };
 
         let tool: CachedTool = match spec {
-            CacheableToolSpec::Isolated(spec) => CachedTool::Isolated(
+            CacheableToolSpec::Isolated(spec) => CachedTool::Isolated(if spec.specs.is_empty() {
+                return Err(ToolCacheError::Install(miette!(
+                    "No build specs provided for '{}' command.",
+                    spec.command
+                )));
+            } else {
                 spec.install(self.context.clone())
                     .await
-                    .map_err(ToolCacheError::Install)?,
-            ),
+                    .map_err(ToolCacheError::Install)?
+            }),
             CacheableToolSpec::System(spec) => SystemTool::new(spec.command).into(),
         };
 

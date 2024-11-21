@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_manifest::BuildSection;
@@ -89,6 +90,14 @@ impl IsolatedToolSpec {
             })
             .into_diagnostic()?;
 
+        eprintln!("spec is {:?}", self.specs);
+        if solved_records.is_empty() {
+            miette::bail!(
+                "could not find {}",
+                self.specs.iter().map(|spec| spec.to_string()).join(",")
+            );
+        }
+
         let cache = EnvironmentHash::new(
             self.command.clone(),
             self.specs.clone(),
@@ -114,7 +123,7 @@ impl IsolatedToolSpec {
             ))
             .install(&cached_dir, solved_records)
             .await
-            .unwrap();
+            .into_diagnostic()?;
 
         // Get the activation scripts
         let activator =

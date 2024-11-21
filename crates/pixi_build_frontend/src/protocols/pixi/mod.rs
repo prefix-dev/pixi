@@ -125,10 +125,15 @@ impl ProtocolBuilder {
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
 
+        eprintln!("tool spec is {:?}", tool_spec);
+
+        eprintln!("tool contextn  is {:?}", tool.context);
         let tool = tool
             .instantiate(tool_spec)
             .await
             .map_err(FinishError::Tool)?;
+
+        eprintln!("tool is {:?}", tool);
 
         Ok(Protocol::setup(
             self.source_dir,
