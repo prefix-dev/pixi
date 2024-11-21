@@ -1,16 +1,16 @@
 mod protocol;
 mod stderr;
 
-use std::{
-    convert::Infallible,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use miette::Diagnostic;
+use pixi_manifest::Manifest;
 use protocol::InitializeError;
 pub use protocol::Protocol;
-use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
+
+use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
 
 use crate::{
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
@@ -24,6 +24,17 @@ pub enum FinishError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Init(#[from] InitializeError),
+    #[error("failed to setup a build backend, the project manifest at {0} does not contain a [build] section")]
+    NoBuildSection(PathBuf),
+}
+
+/// Right now building a rattler-build protocol is *almost* infallible.
+/// The only way it can fail is if the pixi protocol cannot be built.
+/// This error for now is mostly a wrapper around the pixi protocol build error.
+#[derive(thiserror::Error, Debug, Diagnostic)]
+pub enum ProtocolBuildError {
+    #[error(transparent)]
+    FailedToBuildPixi(#[from] PixiProtocolBuildError),
 }
 
 /// A builder for constructing a [`protocol::Protocol`] instance.
@@ -35,28 +46,38 @@ pub struct ProtocolBuilder {
     /// The directory that contains the `recipe.yaml` in the source directory.
     recipe_dir: PathBuf,
 
+    /// The path to the manifest file.
+    manifest_path: PathBuf,
+
     /// The backend tool to install.
-    backend_spec: ToolSpec,
+    backend_spec: Option<ToolSpec>,
 
     /// The channel configuration used by this instance.
     channel_config: ChannelConfig,
 
     /// The cache directory the backend should use. (not used atm)
-    _cache_dir: Option<PathBuf>,
-
-    /// A user friendly name for the backend.
-    backend_identifier: String,
+    cache_dir: Option<PathBuf>,
 }
 
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
-    pub fn discover(source_dir: &Path) -> miette::Result<Option<Self>> {
+    pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
+        // first we need to discover that pixi protocol also can be built.
+        // it is used to get the manifest
+        let pixi_protocol = pixi::ProtocolBuilder::discover(source_dir)?;
+        // we cannot find pixi protocol, so we cannot build rattler-build protocol.
+        let manifest = if let Some(pixi_protocol) = pixi_protocol {
+            pixi_protocol.manifest().clone()
+        } else {
+            return Ok(None);
+        };
+
         let recipe_dir = source_dir.join("recipe");
 
         let protocol = if source_dir.join("recipe.yaml").is_file() {
-            Self::new(source_dir, source_dir)
+            Self::new(source_dir, source_dir, &manifest)
         } else if recipe_dir.join("recipe.yaml").is_file() {
-            Self::new(source_dir, &recipe_dir)
+            Self::new(source_dir, &recipe_dir, &manifest)
         } else {
             return Ok(None);
         };
@@ -65,22 +86,18 @@ impl ProtocolBuilder {
     }
 
     /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: &Path, recipe_dir: &Path) -> Self {
-        let backend_spec = IsolatedToolSpec::from_specs(vec![MatchSpec::from_str(
-            "pixi-build-rattler-build",
-            Strict,
-        )
-        .unwrap()])
-        .with_command("pixi-build-rattler-build")
-        .into();
+    pub fn new(source_dir: &Path, recipe_dir: &Path, manifest: &Manifest) -> Self {
+        let backend_spec = manifest
+            .build_section()
+            .map(IsolatedToolSpec::from_build_section);
 
         Self {
             source_dir: source_dir.to_path_buf(),
             recipe_dir: recipe_dir.to_path_buf(),
-            backend_spec,
+            manifest_path: manifest.path.clone(),
+            backend_spec: backend_spec.map(Into::into),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
-            _cache_dir: None,
-            backend_identifier: "pixi-build-rattler-build".to_string(),
+            cache_dir: None,
         }
     }
 
@@ -89,7 +106,7 @@ impl ProtocolBuilder {
         Self {
             backend_spec: backend_override
                 .map(BackendOverride::into_spec)
-                .unwrap_or(self.backend_spec),
+                .or(self.backend_spec),
             ..self
         }
     }
@@ -104,14 +121,14 @@ impl ProtocolBuilder {
 
     /// Sets the cache directory the backend should use.
     pub fn with_opt_cache_dir(self, cache_dir: Option<PathBuf>) -> Self {
-        Self {
-            _cache_dir: cache_dir,
-            ..self
-        }
+        Self { cache_dir, ..self }
     }
 
+    /// Create the protocol instance.
     pub async fn finish(self, tool: &ToolCache, build_id: usize) -> Result<Protocol, FinishError> {
-        let tool_spec = self.backend_spec;
+        let tool_spec = self
+            .backend_spec
+            .ok_or(FinishError::NoBuildSection(self.manifest_path.clone()))?;
 
         let tool = tool
             .instantiate(tool_spec)
@@ -122,7 +139,7 @@ impl ProtocolBuilder {
             self.source_dir,
             self.recipe_dir,
             build_id,
-            self._cache_dir,
+            self.cache_dir,
             self.channel_config,
             tool,
         )

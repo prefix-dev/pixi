@@ -140,6 +140,11 @@ impl ProtocolBuilder {
         )
         .await?)
     }
+
+    /// Returns the manifest of pixi
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
 }
 
 /// Try to find a pixi manifest in the given source directory.

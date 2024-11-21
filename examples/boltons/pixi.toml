@@ -1,0 +1,24 @@
+[project]
+authors = ["nichmor <nmorkotilo@gmail.com>"]
+channels = ["conda-forge"]
+description = "Add a short description here"
+name = "boltons"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+boltons = { path = "." }
+
+[host-dependencies]
+# This ensures that SDL2 is available at build time.
+hatchling = "*"
+
+[build]
+build-backend = "pixi-build-python"
+channels = [
+  "https://repo.prefix.dev/graf",
+  "https://fast.prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]

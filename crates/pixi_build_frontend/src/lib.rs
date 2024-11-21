@@ -26,6 +26,8 @@ use url::Url;
 
 pub use crate::protocol::Protocol;
 
+pub use protocol_builder::DiscoveryConfig;
+
 #[derive(Debug)]
 pub enum BackendOverride {
     /// Overrwide the backend with a specific tool.

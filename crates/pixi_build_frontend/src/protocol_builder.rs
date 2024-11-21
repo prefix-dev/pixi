@@ -11,6 +11,27 @@ use crate::{
 };
 
 #[derive(Debug)]
+pub struct DiscoveryConfig {
+    /// Enable the rattler-build protocol.
+    pub enable_rattler_build: bool,
+    /// Enable the pixi protocol.
+    pub enable_pixi: bool,
+    /// Enable the conda-build protocol.
+    pub enable_conda_build: bool,
+}
+
+impl Default for DiscoveryConfig {
+    /// Create a new `DiscoveryConfig` with all protocols enabled.
+    fn default() -> Self {
+        Self {
+            enable_rattler_build: true,
+            enable_pixi: true,
+            enable_conda_build: true,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) enum ProtocolBuilder {
     /// A pixi project.
     Pixi(pixi_protocol::ProtocolBuilder),
@@ -44,7 +65,10 @@ impl From<rattler_build_protocol::ProtocolBuilder> for ProtocolBuilder {
 
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
-    pub fn discover(source_dir: &Path) -> Result<Self, DiscoveryError> {
+    pub fn discover(
+        source_dir: &Path,
+        discovery_config: &DiscoveryConfig,
+    ) -> Result<Self, DiscoveryError> {
         if source_dir.is_file() {
             return Err(DiscoveryError::NotADirectory);
         } else if !source_dir.is_dir() {
@@ -53,24 +77,27 @@ impl ProtocolBuilder {
 
         // Try to discover as a rattler-build recipe first
         // and it also should be a `pixi` project
-        if let Some(protocol) =
-            rattler_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
-        {
-            if pixi_protocol::ProtocolBuilder::discover(source_dir)?.is_some() {
+        if discovery_config.enable_rattler_build {
+            if let Some(protocol) = rattler_build_protocol::ProtocolBuilder::discover(source_dir)? {
                 return Ok(protocol.into());
             }
         }
 
         // Try to discover as a pixi project
-        if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)? {
-            return Ok(protocol.into());
+        if discovery_config.enable_pixi {
+            if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)? {
+                return Ok(protocol.into());
+            }
         }
 
         // Try to discover as a conda build project
         // Unwrap because error is Infallible
-        if let Some(protocol) = conda_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
-        {
-            return Ok(protocol.into());
+        if discovery_config.enable_conda_build {
+            if let Some(protocol) =
+                conda_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
+            {
+                return Ok(protocol.into());
+            }
         }
 
         // TODO: Add additional formats later

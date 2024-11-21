@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use clap::{ArgAction, Parser};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
+use pixi_build_frontend::{BackendOverride, CondaBuildReporter, DiscoveryConfig, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -38,6 +38,11 @@ pub struct Args {
     /// Use system backend installed tool
     #[arg(long, action = ArgAction::SetTrue)]
     pub with_system: bool,
+
+    /// If recipe.yaml is present in the source directory, ignore it
+    /// and build the package using manifest only
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub ignore_recipe: bool,
 }
 
 struct ProgressReporter {
@@ -112,9 +117,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None
     };
 
+    let discovery_config = DiscoveryConfig {
+        enable_rattler_build: !args.ignore_recipe,
+        ..Default::default()
+    };
+
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
         .with_tool_context(tool_config)
+        .with_discovery_config(discovery_config)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
             build_tool_override: backend_override,

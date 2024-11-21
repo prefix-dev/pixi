@@ -6,7 +6,7 @@ use rattler_conda_types::ChannelConfig;
 
 use crate::{
     protocol,
-    protocol_builder::ProtocolBuilder,
+    protocol_builder::{DiscoveryConfig, ProtocolBuilder},
     tool::{ToolCache, ToolContext},
     Protocol, SetupRequest,
 };
@@ -21,6 +21,9 @@ pub struct BuildFrontend {
 
     /// The cache directory to use or `None` to use the default cache directory.
     cache_dir: Option<PathBuf>,
+
+    /// The configuration to use when discovering the protocol.
+    discovery_config: DiscoveryConfig,
 }
 
 impl Default for BuildFrontend {
@@ -29,6 +32,7 @@ impl Default for BuildFrontend {
             tool_cache: Arc::new(ToolCache::new()),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
+            discovery_config: DiscoveryConfig::default(),
         }
     }
 }
@@ -88,6 +92,14 @@ impl BuildFrontend {
         }
     }
 
+    /// Sets the discovery config.
+    pub fn with_discovery_config(self, discovery_config: DiscoveryConfig) -> Self {
+        Self {
+            discovery_config,
+            ..self
+        }
+    }
+
     /// Constructs a new [`Protocol`] for the given request. This object can be
     /// used to build the package.
     pub async fn setup_protocol(
@@ -95,7 +107,7 @@ impl BuildFrontend {
         request: SetupRequest,
     ) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
-        let protocol = ProtocolBuilder::discover(&request.source_dir)?
+        let protocol = ProtocolBuilder::discover(&request.source_dir, &self.discovery_config)?
             .with_channel_config(self.channel_config.clone())
             .with_opt_cache_dir(self.cache_dir.clone());
 

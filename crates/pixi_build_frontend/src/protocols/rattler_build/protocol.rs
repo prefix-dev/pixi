@@ -120,6 +120,7 @@ impl Protocol {
             .collect()
     }
 
+    /// Setup a new protocol instance with the given source directory and recipe directory.
     pub(crate) async fn setup(
         source_dir: PathBuf,
         recipe_dir: PathBuf,

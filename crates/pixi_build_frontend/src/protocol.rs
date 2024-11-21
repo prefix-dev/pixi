@@ -44,6 +44,10 @@ pub enum DiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Pixi(#[from] pixi_protocol::ProtocolBuildError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RattlerBuild(#[from] rattler_build_protocol::ProtocolBuildError),
 }
 
 /// A protocol describes how to communicate with a build backend. A build
