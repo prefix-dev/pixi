@@ -16,7 +16,7 @@ pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 struct Metadata {
     exe: String,
     #[allow(unused)]
-    prefix: PathBuf,
+    path: PathBuf,
     path_variables: Vec<PathBuf>,
     env: HashMap<String, String>,
 }
