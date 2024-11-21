@@ -77,6 +77,11 @@ impl Project {
     ) -> miette::Result<LockFileDerivedData<'_>> {
         self::update_lock_file(self, options).await
     }
+
+    /// Get lockfile without checking
+    pub async fn get_lock_file(&self) -> miette::Result<LockFile> {
+        load_lock_file(self).await
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -252,7 +257,15 @@ impl<'p> LockFileDerivedData<'p> {
         // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = self
             .project
-            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            // Not providing a lock-file as the cache will be invalidated directly anyway,
+            // by it changing the lockfile with pypi records.
+            .get_activated_environment_variables(
+                environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+                false,
+            )
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
@@ -1245,7 +1258,13 @@ impl<'p> UpdateContext<'p> {
 
             // Get environment variables from the activation
             let env_variables = project
-                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .get_activated_environment_variables(
+                    environment,
+                    CurrentEnvVarBehavior::Exclude,
+                    None,
+                    false,
+                    false,
+                )
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available
