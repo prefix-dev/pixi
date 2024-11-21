@@ -16,7 +16,9 @@ use futures::{
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use miette::{miette, Report};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
@@ -26,13 +28,15 @@ use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
     ConversionError,
 };
-use pypi_mapping;
+use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
+use reqwest_middleware::ClientWithMiddleware;
+
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -76,6 +80,11 @@ impl Project {
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
         self::update_lock_file(self, options).await
+    }
+
+    /// Get lockfile without checking
+    pub async fn get_lock_file(&self) -> miette::Result<LockFile> {
+        load_lock_file(self).await
     }
 }
 
@@ -252,7 +261,15 @@ impl<'p> LockFileDerivedData<'p> {
         // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = self
             .project
-            .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+            // Not providing a lock-file as the cache will be invalidated directly anyway,
+            // by it changing the lockfile with pypi records.
+            .get_activated_environment_variables(
+                environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+                false,
+            )
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
@@ -367,9 +384,17 @@ impl<'p> LockFileDerivedData<'p> {
             .channel_urls(&self.project.channel_config())
             .into_diagnostic()?;
 
+        let build_dep_channel_urls = environment
+            .project()
+            .manifest()
+            .build_section()
+            .map(|section| section.channels(&self.project.channel_config()))
+            .transpose()
+            .into_diagnostic()?;
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
+        let gateway = environment.project().repodata_gateway().clone();
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
@@ -382,6 +407,7 @@ impl<'p> LockFileDerivedData<'p> {
                 .map(GenericVirtualPackage::from)
                 .collect(),
             channel_urls,
+            build_dep_channel_urls,
             platform,
             &format!(
                 "{} environment '{}'",
@@ -395,6 +421,7 @@ impl<'p> LockFileDerivedData<'p> {
             "",
             self.io_concurrency_limit.clone().into(),
             self.build_context.clone(),
+            gateway,
         )
         .await?;
 
@@ -1128,7 +1155,7 @@ impl<'p> UpdateContext<'p> {
                     project.repodata_gateway().clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),
-                    project.client().clone(),
+                    project.authenticated_client().clone(),
                     channel_priority,
                     self.build_context.clone(),
                 )
@@ -1245,7 +1272,13 @@ impl<'p> UpdateContext<'p> {
 
             // Get environment variables from the activation
             let env_variables = project
-                .get_activated_environment_variables(environment, CurrentEnvVarBehavior::Exclude)
+                .get_activated_environment_variables(
+                    environment,
+                    CurrentEnvVarBehavior::Exclude,
+                    None,
+                    false,
+                    false,
+                )
                 .await?;
 
             // Construct a future that will resolve when we have the repodata available
@@ -1664,7 +1697,7 @@ async fn spawn_solve_conda_environment_task(
     repodata_gateway: Gateway,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     channel_priority: ChannelPriority,
     build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
@@ -1688,6 +1721,16 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
+
+    let gateway = group.project().repodata_gateway().clone();
+
+    let build_channels = group
+        .project()
+        .manifest()
+        .build_section()
+        .map(|section| section.channels(&channel_config))
+        .transpose()
+        .into_diagnostic()?;
 
     tokio::spawn(
         async move {
@@ -1723,10 +1766,17 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
+            let build_channels = &build_channels;
+            let gateway = &gateway;
+
             let mut metadata_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
+                let build_channels = build_channels
+                    .clone()
+                    .ok_or_else(|| miette!("build section is not defined"))?;
+
                 // Create a metadata reporter if it doesn't exist yet.
                 let metadata_reporter = metadata_progress.get_or_insert_with(|| {
                     Arc::new(CondaMetadataProgress::new(
@@ -1739,12 +1789,15 @@ async fn spawn_solve_conda_environment_task(
                         .extract_source_metadata(
                             source_spec,
                             &channel_urls,
+                            build_channels.clone(),
                             platform,
                             virtual_packages.clone(),
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
                             build_id,
+                            gateway.clone(),
+                            client.clone(),
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(
@@ -1847,7 +1900,7 @@ async fn spawn_solve_conda_environment_task(
             if has_pypi_dependencies {
                 pb.set_message("extracting pypi packages");
                 pypi_mapping::amend_pypi_purls(
-                    client.into(),
+                    client,
                     &pypi_name_mapping_location,
                     records.iter_mut().filter_map(PixiRecord::as_binary_mut),
                     Some(pb.purl_amend_reporter()),
@@ -2197,6 +2250,14 @@ async fn spawn_create_prefix_task(
         .channel_urls(&group.project().channel_config())
         .into_diagnostic()?;
 
+    let build_channels = group
+        .project()
+        .manifest()
+        .build_section()
+        .map(|section| section.channels(&group.project().channel_config()))
+        .transpose()
+        .into_diagnostic()?;
+
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
         let prefix = prefix.clone();
@@ -2214,9 +2275,12 @@ async fn spawn_create_prefix_task(
 
     let build_virtual_packages = group.virtual_packages(Platform::current());
 
+    let gateway = group.project().repodata_gateway();
+
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
+        let gateway = gateway.clone();
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
@@ -2229,6 +2293,7 @@ async fn spawn_create_prefix_task(
                 pixi_records.records.clone(),
                 build_virtual_packages,
                 channels,
+                build_channels,
                 Platform::current(),
                 &format!(
                     "{} python environment to solve pypi packages for '{}'",
@@ -2242,6 +2307,7 @@ async fn spawn_create_prefix_task(
                 "  ",
                 io_concurrency_limit.into(),
                 build_context,
+                gateway.clone(),
             )
             .await?;
             let end = Instant::now();

@@ -96,8 +96,8 @@ impl ProtocolBuilder {
         }
     }
 
-    pub fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
-        let tool = tool.instantiate(self.backend_spec)?;
+    pub async fn finish(self, tool: &ToolCache) -> Result<Protocol, FinishError> {
+        let tool = tool.instantiate(self.backend_spec).await?;
         Ok(Protocol {
             _channel_config: self.channel_config,
             tool,

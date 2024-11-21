@@ -168,6 +168,27 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_broken_config(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    config = tmp_path.joinpath("config.toml")
+    toml = """
+    [repodata-config."https://prefix.dev/"]
+    disable-sharded = false
+    """
+    config.write_text(toml)
+
+    # Test basic commands
+    verify_cli_command([pixi, "info"], env=env)
+
+    toml_invalid = toml + "invalid"
+    config.write_text(toml_invalid)
+    verify_cli_command([pixi, "info"], env=env, stderr_contains="parse error")
+
+    toml_unknown = "invalid-key = true" + toml
+    config.write_text(toml_unknown)
+    verify_cli_command([pixi, "info"], env=env, stderr_contains="Ignoring 'invalid-key'")
+
+
 @pytest.mark.slow
 def test_search(pixi: Path) -> None:
     verify_cli_command(

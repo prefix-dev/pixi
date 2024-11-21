@@ -55,7 +55,9 @@ impl Display for FinishError {
             FinishError::Tool(ToolCacheError::Instantiate(tool, err)) => match err {
                 Error::CannotGetCurrentDirAndPathListEmpty|Error::CannotFindBinaryPath => write!(f, "failed to setup a build backend, the backend tool '{}' could not be found", tool.display()),
                 Error::CannotCanonicalize => write!(f, "failed to setup a build backend, although the backend tool  '{}' can be resolved it could not be canonicalized", tool.display()),
-            }
+            },
+            FinishError::Tool(ToolCacheError::Install(report)) => write!(f, "failed to setup a build backend, the backend tool could not be installed: {}", report),
+            FinishError::Tool(ToolCacheError::CacheDir(report)) => write!(f, "failed to setup a build backend, the cache dir could not be discovered: {}", report),
         }
     }
 }
@@ -122,7 +124,12 @@ impl ProtocolBuilder {
         let tool_spec = self
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
-        let tool = tool.instantiate(tool_spec).map_err(FinishError::Tool)?;
+
+        let tool = tool
+            .instantiate(tool_spec)
+            .await
+            .map_err(FinishError::Tool)?;
+
         Ok(Protocol::setup(
             self.source_dir,
             self.manifest.path,

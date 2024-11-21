@@ -4,7 +4,12 @@ use std::{path::PathBuf, sync::Arc};
 use miette::Diagnostic;
 use rattler_conda_types::ChannelConfig;
 
-use crate::{protocol, protocol_builder::ProtocolBuilder, tool::ToolCache, Protocol, SetupRequest};
+use crate::{
+    protocol,
+    protocol_builder::ProtocolBuilder,
+    tool::{ToolCache, ToolContext},
+    Protocol, SetupRequest,
+};
 
 /// The frontend for building packages.
 pub struct BuildFrontend {
@@ -66,6 +71,19 @@ impl BuildFrontend {
     pub fn with_cache_dir(self, cache_dir: PathBuf) -> Self {
         Self {
             cache_dir: Some(cache_dir),
+            ..self
+        }
+    }
+
+    /// Sets the tool context
+    pub fn with_tool_context(self, context: ToolContext) -> Self {
+        let tool_cache = ToolCache {
+            cache: self.tool_cache.cache.clone(),
+            context,
+        };
+
+        Self {
+            tool_cache: tool_cache.into(),
             ..self
         }
     }

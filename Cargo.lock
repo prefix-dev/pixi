@@ -3588,10 +3588,18 @@ dependencies = [
  "jsonrpsee",
  "miette 7.2.0",
  "pixi_build_types",
+ "pixi_config",
  "pixi_consts",
  "pixi_manifest",
+ "pixi_utils",
+ "rattler",
  "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "rattler_virtual_packages",
  "regex",
+ "reqwest-middleware",
  "rstest",
  "serde",
  "serde_json",
@@ -3647,7 +3655,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
- "rattler_cache 0.2.9",
+ "rattler_cache 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "url",
 ]
 
@@ -4197,7 +4205,7 @@ dependencies = [
  "memmap2 0.9.5",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.11",
+ "rattler_cache 0.2.11 (git+https://github.com/conda/rattler?branch=main)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -4219,9 +4227,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.9"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6fcc7980d8b4f0422145abbaec1f9f05ebd6e59f97fe4e5f9ba17fe2cf3846d"
+checksum = "465972d151a672bc000b64c19a67c4c3b4ffeb11bd433eaf4dfe4c9aa04d748a"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4452,7 +4460,7 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.11",
+ "rattler_cache 0.2.11 (git+https://github.com/conda/rattler?branch=main)",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",

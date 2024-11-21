@@ -571,7 +571,7 @@ async fn test_old_lock_install() {
         "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();
-    pixi::environment::update_prefix(
+    pixi::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         false,

@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use futures::TryFutureExt;
 use jsonrpsee::{
@@ -126,11 +126,7 @@ impl Protocol {
                     .stderr(std::process::Stdio::piped()) // TODO: Capture this?
                     .spawn()?;
 
-                let backend_identifier = tool
-                    .executable()
-                    .file_stem()
-                    .and_then(OsStr::to_str)
-                    .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
+                let backend_identifier = tool.executable().clone();
 
                 // Acquire the stdin/stdout handles.
                 let stdin = process

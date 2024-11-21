@@ -1,4 +1,5 @@
 use crate::{
+    build::{BuildError, BuildReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -24,9 +25,11 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+    Channel, ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::LockedPackageRef;
+use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -39,9 +42,10 @@ use std::{
 };
 use tokio::sync::Semaphore;
 
-use crate::build::{BuildContext, BuildReporter};
+use crate::build::BuildContext;
 use uv_distribution_types::{InstalledDist, Name};
 
+use crate::lock_file::LockFileDerivedData;
 use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied
@@ -392,12 +396,12 @@ impl LockFileUsage {
 /// takes up a lot of memory and takes a while to load. If `sparse_repo_data` is
 /// `None` it will be downloaded. If the lock-file is not updated, the
 /// `sparse_repo_data` is ignored.
-pub async fn update_prefix(
-    environment: &Environment<'_>,
+pub async fn get_update_lock_file_and_prefix<'env>(
+    environment: &Environment<'env>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
     update_mode: UpdateMode,
-) -> miette::Result<()> {
+) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.project();
 
@@ -419,11 +423,14 @@ pub async fn update_prefix(
         })
         .await?;
 
-    // Get the locked environment from the lock-file.
-    if !no_install {
-        lock_file.prefix(environment, update_mode).await?;
-    }
-    Ok(())
+    // Get the prefix from the lock-file.
+    let prefix = if no_install {
+        Prefix::new(environment.dir())
+    } else {
+        lock_file.prefix(environment, update_mode).await?
+    };
+
+    Ok((lock_file, prefix))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -738,11 +745,13 @@ pub async fn update_prefix_conda(
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
+    build_channels: Option<Vec<Channel>>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
     build_context: BuildContext,
+    gateway: Gateway,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -770,17 +779,27 @@ pub async fn update_prefix_conda(
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
+            let build_channels = &build_channels;
             let virtual_packages = &virtual_packages;
+            let client = authenticated_client.clone();
+            let gateway = gateway.clone();
             async move {
+                let build_channels = build_channels.clone().ok_or_else(|| {
+                    BuildError::BackendError(miette::miette!("no build section").into())
+                })?;
+
                 build_context
                     .build_source_record(
                         &record,
+                        build_channels,
                         channels,
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
                         build_id,
+                        client,
+                        gateway,
                     )
                     .await
             }
