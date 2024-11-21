@@ -16,7 +16,7 @@ pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 #[derive(Deserialize, Debug)]
 struct Metadata {
     exe: String,
-    path: String,
+    prefix: PathBuf,
     env: HashMap<String, String>,
 }
 
@@ -32,11 +32,29 @@ fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
     miette::bail!("Couldn't get the parent folder of the current executable: {:?}", current_exe);
 }
 
-fn prepend_path(extra_path: &str) -> miette::Result<String> {
+fn prepend_path(prefix: &Path) -> miette::Result<String> {
     let path = env::var("PATH").into_diagnostic().wrap_err("Couldn't get 'PATH'")?;
-    let mut split_path = env::split_paths(&path).collect::<Vec<_>>();
-    split_path.insert(0, PathBuf::from(extra_path));
-    let new_path = env::join_paths(&split_path).into_diagnostic().wrap_err(format!("Couldn't join PATH's: {:?}", &split_path))?;
+
+    #[cfg(target_os = "windows")]
+    let mut path_entries = vec![
+        prefix.to_path_buf(),
+        prefix.join("Library/mingw-w64/bin"),
+        prefix.join("Library/usr/bin"),
+        prefix.join("Library/bin"),
+        prefix.join("Scripts"),
+        prefix.join("bin"),
+    ];
+
+    #[cfg(target_family = "unix")]
+    let mut path_entries = vec![prefix.join("bin")];
+
+    let prev_path = env::split_paths(&path).collect::<Vec<_>>();
+    let new_path = path_entries.iter().chain(prev_path.iter());
+
+    let new_path = env::join_paths(&new_path)
+        .into_diagnostic()
+        .wrap_err(format!("Couldn't join PATH's: {:?}", &new_path))?;
+
     Ok(new_path.to_string_lossy().into_owned())
 }
 
