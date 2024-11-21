@@ -207,7 +207,7 @@ async fn test_pinning_index() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {
-    /// Do some platform magic, as the index does not contain wheels for each platform.
+    // Do some platform magic, as the index does not contain wheels for each platform.
     let platform = Platform::current();
     let platforms = match platform {
         Platform::Linux64 => "\"linux-64\"".to_string(),
