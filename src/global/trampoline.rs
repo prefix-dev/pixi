@@ -342,7 +342,10 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        if !self.trampoline_path().exists() {
+        // We need to check whether the trampoline binary is already saved and it have the trampoline content
+        if !self.trampoline_path().exists()
+            || !Trampoline::is_trampoline(&self.trampoline_path()).await?
+        {
             tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
                 .await
                 .into_diagnostic()?;
