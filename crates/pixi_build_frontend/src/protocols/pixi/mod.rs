@@ -51,7 +51,7 @@ impl Display for FinishError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             FinishError::Init(init) => write!(f, "{init}"),
-            FinishError::NoBuildSection(_) => write!(f, "failed to setup a build backend, the project manifest does not contain a [build] section"),
+            FinishError::NoBuildSection(_) => write!(f, "failed to setup a build backend, the project manifest does not contain a [build-system] section"),
             FinishError::Tool(ToolCacheError::Instantiate(tool, err)) => match err {
                 Error::CannotGetCurrentDirAndPathListEmpty|Error::CannotFindBinaryPath => write!(f, "failed to setup a build backend, the backend tool '{}' could not be found", tool.display()),
                 Error::CannotCanonicalize => write!(f, "failed to setup a build backend, although the backend tool  '{}' can be resolved it could not be canonicalized", tool.display()),

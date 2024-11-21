@@ -35,7 +35,9 @@ use crate::{
 #[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
     #[error("failed to setup communication with the build backend, an unexpected io error occurred while communicating with the pixi build backend")]
-    #[diagnostic(help("Ensure that the project manifest contains a valid [build] section."))]
+    #[diagnostic(help(
+        "Ensure that the project manifest contains a valid [build-system] section."
+    ))]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
