@@ -24,6 +24,7 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
+use nix::NixPath;
 use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use regex::Regex;
@@ -134,17 +135,49 @@ pub struct Configuration {
     /// Path to the original executable.
     pub exe: PathBuf,
     /// Root path of the original executable that should be prepended to the PATH.
-    pub path: PathBuf,
+    pub prefix: PathBuf,
+    /// Extra path entries to be prepended to the PATH.
+    pub path_variables: Vec<PathBuf>,
     /// Environment variables to be set before executing the original executable.
     pub env: HashMap<String, String>,
 }
 
+/// Compute the difference between two PATH variables (the entries split by `;` or `:`)
+fn compute_path_diff(new_path: String) -> Vec<PathBuf> {
+    // Get current PATH
+    let current_path = std::env::var("PATH").unwrap_or_default();
+
+    // Split paths into vectors using platform-specific delimiter
+    let current_paths: Vec<PathBuf> = std::env::split_paths(&current_path).collect();
+    let new_paths: Vec<PathBuf> = std::env::split_paths(&new_path).collect();
+
+    // Find paths that are in new_paths but not in current_paths
+    new_paths
+        .into_iter()
+        .filter(|p| !current_paths.contains(p))
+        // filter empty entries
+        .filter(|p| p.is_empty())
+        // filter non existent paths because we don't need them
+        .filter(|p| p.exists())
+        .collect()
+}
+
 impl Configuration {
     /// Create a new configuration of trampoline.
-    pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+    pub fn new(exe: PathBuf, prefix: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+        let path_variables = env
+            .as_ref()
+            .and_then(|env| {
+                env.iter()
+                    .find(|(k, _)| k.to_uppercase() == "PATH")
+                    .map(|(_, v)| compute_path_diff(v.to_string()))
+            })
+            .unwrap_or_default();
+
         Configuration {
             exe,
-            path,
+            prefix,
+            path_variables,
             env: env.unwrap_or_default(),
         }
     }
