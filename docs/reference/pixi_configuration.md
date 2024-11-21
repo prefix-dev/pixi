@@ -201,7 +201,7 @@ The above settings can be overridden on a per-channel basis by specifying a chan
 disable-sharded = false
 ```
 
-### `pypi-config`
+### `pypi-options`
 To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:
 
 - `index-url`: The default index URL to use for PyPI packages. This will be added to a manifest file on a `pixi init`.
@@ -209,7 +209,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and retrieve credentials.
 
 ```toml title="config.toml"
-[pypi-config]
+[pypi-options]
 # Main index url
 index-url = "https://pypi.org/simple"
 # list of additional urls
