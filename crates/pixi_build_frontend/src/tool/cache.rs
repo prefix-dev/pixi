@@ -187,7 +187,7 @@ impl ToolCache {
         let tool: CachedTool = match spec {
             CacheableToolSpec::Isolated(spec) => CachedTool::Isolated(if spec.specs.is_empty() {
                 return Err(ToolCacheError::Install(miette!(
-                    "No build specs provided for '{}' command.",
+                    "No build match specs provided for '{}' command.",
                     spec.command
                 )));
             } else {
