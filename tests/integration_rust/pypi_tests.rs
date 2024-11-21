@@ -36,12 +36,14 @@ async fn test_flat_links_based_index_returns_path() {
             .unwrap()
             .as_path()
             .unwrap()
-            .as_str(),
-        &pypi_indexes
+            .as_str()
+            .replace("\\", "/"),
+        pypi_indexes
             .join("multiple-indexes-a")
             .join("flat")
             .join("foo-1.0.0-py2.py3-none-any.whl")
             .to_string_lossy()
+            .replace("\\", "/"),
     );
 }
 
@@ -80,11 +82,13 @@ async fn test_file_based_index_returns_path() {
             .unwrap()
             .as_path()
             .unwrap()
-            .as_str(),
-        &pypi_indexes
+            .as_str()
+            .replace("\\", "/"),
+        pypi_indexes
             .join("multiple-indexes-a/index/foo")
             .join("foo-1.0.0-py2.py3-none-any.whl")
             .to_string_lossy()
+            .replace("\\", "/")
     );
 }
 
