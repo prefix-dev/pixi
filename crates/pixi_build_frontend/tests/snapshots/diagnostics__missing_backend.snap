@@ -2,4 +2,4 @@
 source: crates/pixi_build_frontend/tests/diagnostics.rs
 expression: snapshot
 ---
-  × failed to setup a build backend, the backend tool 'non-existing' could not be found
+  × failed to setup a build backend, the backend tool could not be installed: No build match specs provided for 'non-existing' command.
