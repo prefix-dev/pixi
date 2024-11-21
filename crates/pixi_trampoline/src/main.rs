@@ -46,22 +46,23 @@ fn trampoline() -> miette::Result<()> {
     let current_exe = env::current_exe().into_diagnostic().wrap_err("Couldn't get the `env::current_exe`")?;
 
     // ignore any ctrl-c signals
-    ctrlc::set_handler(move || {}).into_diagnostic().wrap_err("Couldn't set the ctrl-c handler")?;
+    ctrlc::set_handler(move || {}).into_diagnostic().wrap_err("Could not unset the ctrl-c handler")?;
 
     let metadata = read_metadata(&current_exe)?;
 
     // Create a new Command for the specified executable
     let mut cmd = Command::new(metadata.exe);
 
-    let new_path = prepend_path(&metadata.path)?;
-
-    // Set the PATH environment variable
-    cmd.env("PATH", new_path);
-
     // Set any additional environment variables
     for (key, value) in metadata.env.iter() {
         cmd.env(key, value);
     }
+
+    // Prepend the specified path to the PATH environment variable
+    let new_path = prepend_path(&metadata.path)?;
+
+    // Set the PATH environment variable
+    cmd.env("PATH", new_path);
 
     // Add any additional arguments
     cmd.args(&args[1..]);
