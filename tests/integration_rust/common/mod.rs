@@ -201,7 +201,7 @@ impl LockFileExt for LockFile {
                 env.packages(platform)
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
-            .map(|p| p.url_or_path().into_owned())
+            .map(|p| p.location().clone())
     }
 }
 

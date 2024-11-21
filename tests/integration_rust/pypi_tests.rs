@@ -35,11 +35,13 @@ async fn test_flat_links_based_index_returns_path() {
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
-            .unwrap(),
-        pypi_indexes
+            .unwrap()
+            .as_str(),
+        &pypi_indexes
             .join("multiple-indexes-a")
             .join("flat")
             .join("foo-1.0.0-py2.py3-none-any.whl")
+            .to_string_lossy()
     );
 }
 
@@ -77,10 +79,12 @@ async fn test_file_based_index_returns_path() {
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
-            .unwrap(),
-        pypi_indexes
+            .unwrap()
+            .as_str(),
+        &pypi_indexes
             .join("multiple-indexes-a/index/foo")
             .join("foo-1.0.0-py2.py3-none-any.whl")
+            .to_string_lossy()
     );
 }
 
