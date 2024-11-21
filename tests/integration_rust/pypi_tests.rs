@@ -194,14 +194,10 @@ async fn test_pinning_index() {
         lock_file
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
-            .as_url()
-            .unwrap()
-            .to_file_path()
+            .as_path()
             .unwrap(),
         pypi_indexes
             .join("multiple-indexes-a/index/foo")
             .join("foo-1.0.0-py2.py3-none-any.whl")
     );
-
-    eprintln!("path is {:?}", pypi_indexes);
 }
