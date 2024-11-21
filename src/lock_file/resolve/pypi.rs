@@ -596,13 +596,18 @@ fn get_url_or_path(
                 // This happens when it is relative to the non-standard index
                 // location on disk.
                 FileLocation::RelativeUrl(base, relative) => {
+                    // base is a file:// url, but we need to convert it to a path
                     // This is the same logic as the `AbsoluteUrl` case
                     // basically but we just make an absolute path first
-                    let absolute = PathBuf::from_str(base)
-                        .map_err(|_| GetUrlOrPathError::ExpectedPath(base.clone()))?;
+                    let base = Url::from_str(base)
+                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.clone()))?;
+                    let base = base
+                        .to_file_path()
+                        .map_err(|_| GetUrlOrPathError::ExpectedPath(base.to_string()))?;
+
                     let relative = PathBuf::from_str(relative)
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.clone()))?;
-                    let absolute = absolute.join(relative);
+                    let absolute = base.join(relative);
 
                     let relative = absolute.strip_prefix(abs_project_root);
                     let path = match relative {
