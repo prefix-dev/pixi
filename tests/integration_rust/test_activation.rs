@@ -15,7 +15,13 @@ async fn test_pixi_only_env_activation() {
     let default_env = project.default_environment();
 
     let pixi_only_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(
+            &default_env,
+            CurrentEnvVarBehavior::Exclude,
+            None,
+            false,
+            false,
+        )
         .await
         .unwrap();
 
@@ -38,7 +44,13 @@ async fn test_full_env_activation() {
     std::env::set_var("DIRTY_VAR", "Dookie");
 
     let full_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Include)
+        .get_activated_environment_variables(
+            &default_env,
+            CurrentEnvVarBehavior::Include,
+            None,
+            false,
+            false,
+        )
         .await
         .unwrap();
     assert!(full_env.get("CONDA_PREFIX").is_some());
@@ -58,7 +70,13 @@ async fn test_clean_env_activation() {
     std::env::set_var("DIRTY_VAR", "Dookie");
 
     let clean_env = project
-        .get_activated_environment_variables(&default_env, CurrentEnvVarBehavior::Clean)
+        .get_activated_environment_variables(
+            &default_env,
+            CurrentEnvVarBehavior::Clean,
+            None,
+            false,
+            false,
+        )
         .await
         .unwrap();
     assert!(clean_env.get("CONDA_PREFIX").is_some());

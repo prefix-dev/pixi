@@ -68,4 +68,8 @@ Config {
             true,
         ),
     ),
+    force_activate: None,
+    experimental: ExperimentalConfig {
+        use_environment_activation_cache: None,
+    },
 }
