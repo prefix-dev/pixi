@@ -24,7 +24,6 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
-use nix::NixPath;
 use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use regex::Regex;
@@ -135,8 +134,9 @@ pub struct Configuration {
     /// Path to the original executable.
     pub exe: PathBuf,
     /// Root path of the original executable that should be prepended to the PATH.
-    pub prefix: PathBuf,
+    pub path: PathBuf,
     /// Extra path entries to be prepended to the PATH.
+    #[serde(default)]
     pub path_variables: Vec<PathBuf>,
     /// Environment variables to be set before executing the original executable.
     pub env: HashMap<String, String>,
@@ -156,7 +156,7 @@ fn compute_path_diff(new_path: String) -> Vec<PathBuf> {
         .into_iter()
         .filter(|p| !current_paths.contains(p))
         // filter empty entries
-        .filter(|p| p.is_empty())
+        .filter(|p| !p.as_os_str().is_empty())
         // filter non existent paths because we don't need them
         .filter(|p| p.exists())
         .collect()
@@ -164,7 +164,7 @@ fn compute_path_diff(new_path: String) -> Vec<PathBuf> {
 
 impl Configuration {
     /// Create a new configuration of trampoline.
-    pub fn new(exe: PathBuf, prefix: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+    pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
         let path_variables = env
             .as_ref()
             .and_then(|env| {
@@ -176,7 +176,7 @@ impl Configuration {
 
         Configuration {
             exe,
-            prefix,
+            path,
             path_variables,
             env: env.unwrap_or_default(),
         }
