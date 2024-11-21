@@ -117,6 +117,7 @@ rattler_shell = { version = "0.22.6", default-features = false }
 rattler_solve = { version = "1.2.2", default-features = false }
 rattler_virtual_packages = { version = "1.1.9", default-features = false }
 
+
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.2"
 uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }

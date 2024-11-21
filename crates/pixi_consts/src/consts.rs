@@ -31,6 +31,7 @@ pub const CONDA_META_DIR: &str = "conda-meta";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_PYPI_MAPPING_CACHE_DIR: &str = "conda-pypi-mapping";
 pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
+pub const CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 
 pub const CONDA_INSTALLER: &str = "conda";
 

@@ -107,6 +107,7 @@ impl ProtocolBuilder {
             Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(
                 protocol
                     .finish(tool_cache)
+                    .await
                     .map_err(FinishError::CondaBuild)?,
             )),
         }

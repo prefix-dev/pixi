@@ -14,7 +14,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::SetupRequest;
+use pixi_build_frontend::{SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -27,10 +27,13 @@ use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+    Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform,
+    RepoDataRecord,
 };
 use rattler_digest::Sha256;
+use rattler_repodata_gateway::Gateway;
 pub use reporters::{BuildMetadataReporter, BuildReporter};
+use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -131,24 +134,30 @@ impl BuildContext {
         &self,
         source_spec: &SourceSpec,
         channels: &[ChannelUrl],
+        build_channels: Vec<Channel>,
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
+        gateway: Gateway,
+        client: ClientWithMiddleware,
     ) -> Result<SourceMetadata, BuildError> {
         let source = self.fetch_source(source_spec).await?;
         let records = self
             .extract_records(
                 &source,
                 channels,
+                build_channels,
                 host_platform,
                 host_virtual_packages,
                 build_platform,
                 build_virtual_packages,
                 metadata_reporter.clone(),
                 build_id,
+                gateway,
+                client,
             )
             .await?;
 
@@ -161,17 +170,21 @@ impl BuildContext {
     pub async fn build_source_record(
         &self,
         source_spec: &SourceRecord,
+        build_channels: Vec<Channel>,
         channels: &[ChannelUrl],
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
         build_id: usize,
+        authenticated_client: ClientWithMiddleware,
+        gateway: Gateway,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
             pinned: source_spec.source.clone(),
         };
+        eprintln!("passed build channels {:?}", build_channels);
 
         let channels_urls: Vec<Url> = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
@@ -241,10 +254,16 @@ impl BuildContext {
             }
         }
 
+        let tool_config = ToolContext::builder(build_channels.to_vec())
+            .with_gateway(gateway.clone())
+            .with_client(authenticated_client.clone())
+            .build();
+
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
             .with_cache_dir(self.cache_dir.clone())
+            .with_tool_context(tool_config)
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
                 build_tool_override: Default::default(),
@@ -428,12 +447,15 @@ impl BuildContext {
         &self,
         source: &SourceCheckout,
         channels: &[ChannelUrl],
+        build_channels: Vec<Channel>,
         host_platform: Platform,
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
+        gateway: Gateway,
+        client: ClientWithMiddleware,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let channel_urls = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
@@ -481,10 +503,16 @@ impl BuildContext {
                 ));
             }
         }
+        // tool config
+        let tool_config = ToolContext::builder(build_channels)
+            .with_gateway(gateway)
+            .with_client(client)
+            .build();
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
+            .with_tool_context(tool_config)
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
                 build_tool_override: Default::default(),

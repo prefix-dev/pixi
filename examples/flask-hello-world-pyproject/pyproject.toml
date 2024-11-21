@@ -20,6 +20,7 @@ flask-hello-world-pyproject = { path = ".", editable = true }
 [tool.pixi.dependencies]
 flask = "2.*"
 
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
@@ -35,3 +36,12 @@ test = ["pytest>=8.3.3,<9"]
 
 [tool.pixi.host-dependencies]
 hatchling = "*"
+
+
+[tool.pixi.build]
+build-backend = "pixi-build-python"
+channels = [
+  "https://repo.prefix.dev/pixi-build-backends",
+  "https://fast.prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]
