@@ -176,7 +176,7 @@ impl WorkspaceManifest {
             // Check if we have enabled the build feature if we have a build section
             if !build_enabled {
                 return Err(miette::miette!(
-                    help = "enable the build preview feature to use the build section by setting `preview = ["pixi-build"]`",
+                    help = "enable the build preview feature to use the build section by setting `preview = [\"pixi-build\"]",
                     "the build section is defined, but the `pixi-build` preview feature is not enabled"
                 ));
             }

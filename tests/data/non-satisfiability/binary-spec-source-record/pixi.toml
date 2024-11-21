@@ -2,6 +2,7 @@
 channels = ["conda-forge"]
 name = "binary-spec-source-record"
 platforms = ["win-64"]
+preview = ["pixi-build"]
 
 [dependencies]
 source = "*"
