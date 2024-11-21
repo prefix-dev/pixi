@@ -1411,6 +1411,7 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
+
     use std::{
         ffi::OsStr,
         path::{Component, PathBuf},

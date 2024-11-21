@@ -1,4 +1,5 @@
 use crate::{
+    build::{BuildError, BuildReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -24,9 +25,11 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+    Channel, ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::LockedPackageRef;
+use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -39,7 +42,7 @@ use std::{
 };
 use tokio::sync::Semaphore;
 
-use crate::build::{BuildContext, BuildReporter};
+use crate::build::BuildContext;
 use uv_distribution_types::{InstalledDist, Name};
 
 use xxhash_rust::xxh3::Xxh3;
@@ -738,11 +741,13 @@ pub async fn update_prefix_conda(
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
+    build_channels: Option<Vec<Channel>>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
     build_context: BuildContext,
+    gateway: Gateway,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -770,17 +775,27 @@ pub async fn update_prefix_conda(
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
+            let build_channels = &build_channels;
             let virtual_packages = &virtual_packages;
+            let client = authenticated_client.clone();
+            let gateway = gateway.clone();
             async move {
+                let build_channels = build_channels.clone().ok_or_else(|| {
+                    BuildError::BackendError(miette::miette!("no build section").into())
+                })?;
+
                 build_context
                     .build_source_record(
                         &record,
+                        build_channels,
                         channels,
                         platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
                         build_id,
+                        client,
+                        gateway,
                     )
                     .await
             }

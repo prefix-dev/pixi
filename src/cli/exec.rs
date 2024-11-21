@@ -1,14 +1,10 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    path::Path,
-    str::FromStr,
-};
+use std::{path::Path, str::FromStr};
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, PrefixGuard};
+use pixi_utils::{reqwest::build_reqwest_clients, EnvironmentHash, PrefixGuard};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -44,40 +40,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
-}
-
-#[derive(Hash)]
-pub struct EnvironmentHash {
-    pub command: String,
-    pub specs: Vec<MatchSpec>,
-    pub channels: Vec<String>,
-}
-
-impl EnvironmentHash {
-    pub(crate) fn from_args(args: &Args, config: &Config) -> miette::Result<Self> {
-        Ok(Self {
-            command: args
-                .command
-                .first()
-                .cloned()
-                .expect("missing required command"),
-            specs: args.specs.clone(),
-            channels: args
-                .channels
-                .resolve_from_config(config)?
-                .iter()
-                .map(|c| c.base_url.to_string())
-                .collect(),
-        })
-    }
-
-    /// Returns the name of the environment.
-    pub(crate) fn name(&self) -> String {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        let hash = hasher.finish();
-        format!("{}-{:x}", &self.command, hash)
-    }
 }
 
 /// CLI entry point for `pixi runx`
@@ -117,11 +79,21 @@ pub async fn create_exec_prefix(
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
-    let environment_name = EnvironmentHash::from_args(args, config)?.name();
+    let command = args.command.first().expect("missing required command");
+    let specs = args.specs.clone();
+    let channels = args
+        .channels
+        .resolve_from_config(config)?
+        .iter()
+        .map(|c| c.base_url.to_string())
+        .collect();
+
+    let environment_hash = EnvironmentHash::new(command.clone(), specs, channels);
+
     let prefix = Prefix::new(
         cache_dir
             .join(pixi_consts::consts::CACHED_ENVS_DIR)
-            .join(environment_name),
+            .join(environment_hash.name()),
     );
 
     let mut guard = PrefixGuard::new(prefix.root())

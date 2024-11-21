@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 build-backend = "pixi-build-cmake"
 channels = [
   "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
+  "https://fast.prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-cmake"]
 
