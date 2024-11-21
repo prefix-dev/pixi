@@ -106,8 +106,6 @@ impl TomlManifest {
         mut self,
         name: Option<String>,
     ) -> Result<WorkspaceManifest, TomlError> {
-        dbg!(&self);
-
         let mut dependencies = HashMap::from_iter([(SpecType::Run, self.dependencies)]);
         if let Some(host_deps) = self.host_dependencies {
             dependencies.insert(SpecType::Host, host_deps);
