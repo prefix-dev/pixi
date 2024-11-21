@@ -114,7 +114,7 @@ impl IsolatedToolSpec {
             ))
             .install(&cached_dir, solved_records)
             .await
-            .unwrap();
+            .into_diagnostic()?;
 
         // Get the activation scripts
         let activator =
