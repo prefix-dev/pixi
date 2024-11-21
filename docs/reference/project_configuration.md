@@ -474,13 +474,13 @@ pytest = {version = "*", extras = ["dev"]}
 The index parameter allows you to specify the URL of a custom package index for the installation of a specific package.
 This feature is useful when you want to ensure that a package is retrieved from a particular source, rather than from the default index.
 
-For example, you can use either the official Python Package Index (PyPI) at https://pypi.org/simple or an alternative private index like https://example.com/simple.
-
-Use `index` in combination with `version`:
+For example, to use some other than the official Python Package Index (PyPI) at https://pypi.org/simple, you can use the `index` parameter:
 
 ```toml
 torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
+
+This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
 
 ##### `git`
 
