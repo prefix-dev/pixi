@@ -38,7 +38,7 @@ test = ["pytest>=8.3.3,<9"]
 hatchling = "*"
 
 
-[tool.pixi.build]
+[tool.pixi.build-system]
 build-backend = "pixi-build-python"
 channels = [
   "https://repo.prefix.dev/pixi-build-backends",
