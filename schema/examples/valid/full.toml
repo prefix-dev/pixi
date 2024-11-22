@@ -17,7 +17,7 @@ readme = "README.md"
 repository = "https://github.com/author/project"
 version = "0.1.0"
 
-[build]
+[build-system]
 build-backend = "pixi-build-python"
 channels = [
   "https://prefix.dev/pixi-build-backends",

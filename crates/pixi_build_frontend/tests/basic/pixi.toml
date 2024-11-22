@@ -9,7 +9,7 @@ version = "0.1.0"
 
 [tasks]
 
-[build]
+[build-system]
 build-backend = "pixi-build-python"
 dependencies = []
 

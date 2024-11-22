@@ -148,7 +148,6 @@ impl WorkspaceManifest {
                     "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
             }
         }
-
         // Check if the pixi build feature is enabled
         let build_enabled = self
             .workspace
@@ -170,18 +169,20 @@ impl WorkspaceManifest {
                     ));
                 }
             }
+
+            if let Some(_) = &self.build_system {
+                // Check if we have enabled the build feature if we have a build section
+                if !build_enabled {
+                    return Err(miette::miette!(
+                        help = "enable the build preview feature to use the build section by setting `preview = [\"pixi-build\"]",
+                        "the build section is defined, but the `pixi-build` preview feature is not enabled"
+                    ));
+                }
+            }
         }
 
-        if let Some(build) = &self.build {
-            // Check if we have enabled the build feature if we have a build section
-            if !build_enabled {
-                return Err(miette::miette!(
-                    help = "enable the build preview feature to use the build section by setting `preview = [\"pixi-build\"]",
-                    "the build section is defined, but the `pixi-build` preview feature is not enabled"
-                ));
-            }
-
-            // If there is a build section, make sure the build-string is not empty
+        // If there is a build section, make sure the build-string is not empty
+        if let Some(build) = &self.build_system {
             if build.build_backend.is_empty() {
                 return Err(miette::miette!(
                     help = "the build-backend must contain at least one command. e.g `pixi-build-python`",

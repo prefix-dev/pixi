@@ -105,7 +105,7 @@ async fn test_missing_backend() {
         platforms = []
         channels = []
 
-        [build]
+        [build-system]
         dependencies = []
         build-backend = "non-existing"
         channels = []

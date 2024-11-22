@@ -6,7 +6,7 @@ name = "sdl_example"
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
-[build]
+[build-system]
 build-backend = "pixi-build-cmake"
 channels = [
   "https://prefix.dev/pixi-build-backends",
