@@ -15,6 +15,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
+use crate::toml::TomlDocument;
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
@@ -26,7 +27,6 @@ use crate::{
     FeatureName, GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
     TargetSelector, Task, TaskName, WorkspaceManifest,
 };
-use crate::toml::TomlDocument;
 
 #[derive(Debug, Clone)]
 pub enum ManifestKind {

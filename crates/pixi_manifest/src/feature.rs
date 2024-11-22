@@ -10,7 +10,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use rattler_solve::ChannelPriority;
 use serde::{de::Error, Deserialize};
-use serde_with::{SerializeDisplay};
+use serde_with::SerializeDisplay;
 
 use crate::{
     channel::PrioritizedChannel,
@@ -18,7 +18,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     utils::PixiSpanned,
-    PyPiRequirement, SpecType, SystemRequirements
+    PyPiRequirement, SpecType, SystemRequirements,
 };
 
 /// The name of a feature. This is either a string or default for the default
