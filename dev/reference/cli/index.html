@@ -1817,18 +1817,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#project-export-conda_environment" class="md-nav__link">
+  <a href="#project-export-conda-environment" class="md-nav__link">
     <span class="md-ellipsis">
-      project export conda_environment
+      project export conda-environment
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#project-export-conda_explicit_spec" class="md-nav__link">
+  <a href="#project-export-conda-explicit-spec" class="md-nav__link">
     <span class="md-ellipsis">
-      project export conda_explicit_spec
+      project export conda-explicit-spec
     </span>
   </a>
   
@@ -2573,18 +2573,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#project-export-conda_environment" class="md-nav__link">
+  <a href="#project-export-conda-environment" class="md-nav__link">
     <span class="md-ellipsis">
-      project export conda_environment
+      project export conda-environment
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#project-export-conda_explicit_spec" class="md-nav__link">
+  <a href="#project-export-conda-explicit-spec" class="md-nav__link">
     <span class="md-ellipsis">
-      project export conda_explicit_spec
+      project export conda-explicit-spec
     </span>
   </a>
   
@@ -3807,7 +3807,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 <p>List the environments in the manifest file.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>list
 </span></code></pre></div>
-<h3 id="project-export-conda_environment"><code>project export conda_environment</code><a class="headerlink" href="#project-export-conda_environment" title="Permanent link">#</a></h3>
+<h3 id="project-export-conda-environment"><code>project export conda-environment</code><a class="headerlink" href="#project-export-conda-environment" title="Permanent link">#</a></h3>
 <p>Exports a conda <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file"><code>environment.yml</code> file</a>. The file can be used to create a conda environment using conda/mamba:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment<span class="w"> </span>environment.yml
 </span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>mamba<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>&lt;env&gt;<span class="w"> </span>--file<span class="w"> </span>environment.yml
@@ -3824,7 +3824,7 @@ When you add channels, the channels are tested for existence, added to the lock 
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment<span class="w"> </span>--environment<span class="w"> </span>lint
 </span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span>environment.linux-64.yml
 </span></code></pre></div>
-<h3 id="project-export-conda_explicit_spec"><code>project export conda_explicit_spec</code><a class="headerlink" href="#project-export-conda_explicit_spec" title="Permanent link">#</a></h3>
+<h3 id="project-export-conda-explicit-spec"><code>project export conda-explicit-spec</code><a class="headerlink" href="#project-export-conda-explicit-spec" title="Permanent link">#</a></h3>
 <p>Render a platform-specific conda <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments">explicit specification file</a>
 for an environment. The file can be then used to create a conda environment using conda/mamba:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>mamba<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>&lt;env&gt;<span class="w"> </span>--file<span class="w"> </span>&lt;explicit<span class="w"> </span>spec<span class="w"> </span>file&gt;
@@ -3840,8 +3840,8 @@ for an environment. The file can be then used to create a conda environment usin
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments.</li>
 <li><code>--ignore-pypi-errors</code>: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda_explicit_spec<span class="w"> </span>output
-</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda_explicit_spec<span class="w"> </span>-e<span class="w"> </span>default<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>linux-64<span class="w"> </span>output
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-explicit-spec<span class="w"> </span>output
+</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-explicit-spec<span class="w"> </span>-e<span class="w"> </span>default<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>linux-64<span class="w"> </span>output
 </span></code></pre></div>
 <h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
 <p>Adds a platform(s) to the manifest file and updates the lock file.</p>
