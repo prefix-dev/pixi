@@ -1,16 +1,18 @@
 mod protocol;
-mod stderr;
 
 use std::path::{Path, PathBuf};
 
 use miette::Diagnostic;
 use pixi_manifest::Manifest;
-use protocol::InitializeError;
+
 pub use protocol::Protocol;
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
-use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
+use super::{
+    pixi::{self, ProtocolBuildError as PixiProtocolBuildError},
+    BaseProtocol, InitializeError,
+};
 
 use crate::{
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
@@ -137,7 +139,7 @@ impl ProtocolBuilder {
 
         Ok(Protocol::setup(
             self.source_dir,
-            self.recipe_dir,
+            self.recipe_dir.join("recipe.yaml"),
             build_id,
             self.cache_dir,
             self.channel_config,

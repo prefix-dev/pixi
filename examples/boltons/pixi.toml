@@ -16,9 +16,9 @@ boltons = { path = "." }
 hatchling = "*"
 
 [build]
-build-backend = "pixi-build-python"
+build-backend = "pixi-build-rattler-build"
 channels = [
   "https://repo.prefix.dev/graf",
   "https://fast.prefix.dev/conda-forge",
 ]
-dependencies = ["pixi-build-python"]
+dependencies = ["pixi-build-rattler-build"]

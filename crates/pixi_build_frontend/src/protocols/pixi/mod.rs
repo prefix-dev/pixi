@@ -1,5 +1,4 @@
 mod protocol;
-mod stderr;
 
 use std::{
     fmt,
@@ -10,9 +9,8 @@ use std::{
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
-pub use protocol::{InitializeError, Protocol};
+pub use protocol::Protocol;
 use rattler_conda_types::ChannelConfig;
-pub(crate) use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use which::Error;
 
@@ -20,6 +18,8 @@ use crate::{
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
     BackendOverride,
 };
+
+use super::{BaseProtocol, InitializeError};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]

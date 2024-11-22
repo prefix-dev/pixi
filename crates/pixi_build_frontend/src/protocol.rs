@@ -7,8 +7,8 @@ use pixi_build_types::procedures::{
 };
 
 use crate::{
-    conda_build_protocol, pixi_protocol, rattler_build_protocol, CondaBuildReporter,
-    CondaMetadataReporter,
+    conda_build_protocol, pixi_protocol, protocols::BaseProtocol, rattler_build_protocol,
+    CondaBuildReporter, CondaMetadataReporter,
 };
 
 /// Top-level error type for protocol errors.
