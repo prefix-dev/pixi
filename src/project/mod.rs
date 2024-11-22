@@ -1001,18 +1001,12 @@ impl Project {
 
     /// Returns true if all preview features are enabled
     pub fn all_preview_features_enabled(&self) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.all_enabled())
-            .unwrap_or(false)
+        self.manifest.preview().all_enabled()
     }
 
     /// Returns true if the given preview feature is enabled
     pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.is_enabled(feature))
-            .unwrap_or(false)
+        self.manifest.preview().is_enabled(feature)
     }
 }
 
@@ -1229,6 +1223,12 @@ mod tests {
     #[test]
     fn test_dependency_set_with_build_section() {
         let file_contents = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = ["linux-64", "win-64"]
+        preview = ["pixi-build"]
         [dependencies]
         foo = "1.0"
 
@@ -1244,11 +1244,7 @@ mod tests {
         bar = "1.0"
         "#;
 
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-        )
-        .unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(

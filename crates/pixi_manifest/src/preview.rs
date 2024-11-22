@@ -24,6 +24,12 @@ pub enum Preview {
     Features(Vec<PreviewFeature>), // For `preview = ["feature"]`
 }
 
+impl Default for Preview {
+    fn default() -> Self {
+        Self::Features(Vec::new())
+    }
+}
+
 impl Preview {
     /// Returns true if all preview features are enabled
     pub fn all_enabled(&self) -> bool {
@@ -92,7 +98,8 @@ impl PartialEq<KnownPreviewFeature> for PreviewFeature {
 #[serde(rename_all = "kebab-case")]
 /// Currently supported preview features are listed here
 pub enum KnownPreviewFeature {
-    // Add known features here
+    /// Build feature, to enable conda source builds
+    PixiBuild,
 }
 
 impl<'de> Deserialize<'de> for PreviewFeature {

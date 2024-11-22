@@ -836,9 +836,8 @@
               "items": {
                 "anyOf": [
                   {
-                    "title": "KnownPreviewFeature",
-                    "description": "The preview features of the project.",
-                    "enum": []
+                    "description": "Enables building of source records",
+                    "const": "pixi-build"
                   },
                   {
                     "type": "string"
