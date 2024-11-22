@@ -10,8 +10,9 @@ use crate::{
     BackendOverride, BuildFrontendError, Protocol,
 };
 
+/// Configuration to enable or disable certain protocols discovery.
 #[derive(Debug)]
-pub struct DiscoveryConfig {
+pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,
     /// Enable the pixi protocol.
@@ -20,8 +21,8 @@ pub struct DiscoveryConfig {
     pub enable_conda_build: bool,
 }
 
-impl Default for DiscoveryConfig {
-    /// Create a new `DiscoveryConfig` with all protocols enabled.
+impl Default for EnabledProtocols {
+    /// Create a new `EnabledProtocols` with all protocols enabled.
     fn default() -> Self {
         Self {
             enable_rattler_build: true,
@@ -67,7 +68,7 @@ impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
     pub fn discover(
         source_dir: &Path,
-        discovery_config: &DiscoveryConfig,
+        discovery_config: &EnabledProtocols,
     ) -> Result<Self, DiscoveryError> {
         if source_dir.is_file() {
             return Err(DiscoveryError::NotADirectory);

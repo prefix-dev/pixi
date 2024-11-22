@@ -6,7 +6,7 @@ use rattler_conda_types::ChannelConfig;
 
 use crate::{
     protocol,
-    protocol_builder::{DiscoveryConfig, ProtocolBuilder},
+    protocol_builder::{EnabledProtocols, ProtocolBuilder},
     tool::{ToolCache, ToolContext},
     Protocol, SetupRequest,
 };
@@ -23,7 +23,7 @@ pub struct BuildFrontend {
     cache_dir: Option<PathBuf>,
 
     /// The configuration to use when discovering the protocol.
-    discovery_config: DiscoveryConfig,
+    discovery_config: EnabledProtocols,
 }
 
 impl Default for BuildFrontend {
@@ -32,7 +32,7 @@ impl Default for BuildFrontend {
             tool_cache: Arc::new(ToolCache::new()),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
-            discovery_config: DiscoveryConfig::default(),
+            discovery_config: EnabledProtocols::default(),
         }
     }
 }
@@ -93,7 +93,7 @@ impl BuildFrontend {
     }
 
     /// Sets the discovery config.
-    pub fn with_discovery_config(self, discovery_config: DiscoveryConfig) -> Self {
+    pub fn with_discovery_config(self, discovery_config: EnabledProtocols) -> Self {
         Self {
             discovery_config,
             ..self

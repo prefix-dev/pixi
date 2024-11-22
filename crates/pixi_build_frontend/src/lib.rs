@@ -23,7 +23,7 @@ use url::Url;
 
 pub use crate::protocol::Protocol;
 
-pub use protocol_builder::DiscoveryConfig;
+pub use protocol_builder::EnabledProtocols;
 
 #[derive(Debug)]
 pub enum BackendOverride {
