@@ -12,7 +12,6 @@ version = "0.1.0"
 boltons = { path = "." }
 
 [host-dependencies]
-# This ensures that SDL2 is available at build time.
 hatchling = "*"
 
 [build]
