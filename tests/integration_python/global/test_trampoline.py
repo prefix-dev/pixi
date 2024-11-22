@@ -203,7 +203,7 @@ def test_trampoline_migrate_with_newer_trampoline(
         stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
     )
 
-    # now change the trampoline binary , and verify that it will install newever
+    # now change the trampoline binary , and verify that it will install the new one
     dummy_trampoline.unlink()
     dummy_trampoline.write_bytes(b"new content")
 
