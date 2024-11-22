@@ -15,6 +15,7 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
+    AliasChoices,
 )
 
 #: latest version currently supported by the `taplo` TOML linter and language server
@@ -104,10 +105,10 @@ KnownPreviewFeature = PixiBuildFeature
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
-class Project(StrictBaseModel):
+class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
-    name: NonEmptyStr = Field(
+    name: NonEmptyStr | None = Field(
         description="The name of the project; we advise use of the name of the repository"
     )
     version: NonEmptyStr | None = Field(
@@ -158,6 +159,38 @@ class Project(StrictBaseModel):
         None, description="Defines the enabling of preview features of the project"
     )
 
+class Package(StrictBaseModel):
+    """The package's metadata information."""
+
+    name: NonEmptyStr | None = Field(
+        description="The name of the package"
+    )
+    version: NonEmptyStr | None = Field(
+        None,
+        description="The version of the project; we advise use of [SemVer](https://semver.org)",
+        examples=["1.2.3"],
+    )
+    description: NonEmptyStr | None = Field(None, description="A short description of the project")
+    authors: list[NonEmptyStr] | None = Field(
+        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
+    )
+    license: NonEmptyStr | None = Field(
+        None,
+        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+    )
+    license_file: PathNoBackslash | None = Field(
+        None, description="The path to the license file of the project"
+    )
+    readme: PathNoBackslash | None = Field(
+        None, description="The path to the readme file of the project"
+    )
+    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
+    repository: AnyHttpUrl | None = Field(
+        None, description="The URL of the repository of the project"
+    )
+    documentation: AnyHttpUrl | None = Field(
+        None, description="The URL of the documentation of the project"
+    )
 
 ########################
 # Dependencies section #
@@ -557,6 +590,10 @@ class BaseManifest(StrictBaseModel):
             "$id": SCHEMA_URI,
             "$schema": SCHEMA_DRAFT,
             "title": "`pixi.toml` manifest file",
+            "oneOf": [
+                {"required": ["project"]},
+                {"required": ["workspace"]}
+            ],
         }
 
     schema_: str | None = Field(
@@ -567,7 +604,9 @@ class BaseManifest(StrictBaseModel):
         format="uri-reference",
     )
 
-    project: Project = Field(..., description="The project's metadata information")
+    workspace: Workspace|None = Field(None, description="The workspace's metadata information")
+    project: Workspace|None = Field(None, description="The project's metadata information")
+    package: Package|None = Field(None, description="The package's metadata information")
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
