@@ -170,7 +170,7 @@ impl WorkspaceManifest {
                 }
             }
 
-            if let Some(_) = &self.build_system {
+            if self.build_system.is_some() {
                 // Check if we have enabled the build feature if we have a build section
                 if !build_enabled {
                     return Err(miette::miette!(
