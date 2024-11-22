@@ -205,7 +205,7 @@ def test_trampoline_migrate_with_newer_trampoline(
 
     # now change the trampoline binary , and verify that it will install the new one
     dummy_trampoline.unlink()
-    dummy_trampoline.write_bytes(b"new content")
+    dummy_trampoline.write_text("new content")
 
     # run an update again it should remove the old trampoline and install the new one
     verify_cli_command(
