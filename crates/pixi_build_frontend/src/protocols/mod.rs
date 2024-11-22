@@ -118,8 +118,6 @@ pub struct JsonRPCBuildProtocol {
 }
 
 impl JsonRPCBuildProtocol {
-    /// Return the manifests that are used as input globs.
-    // fn manifests(&self) -> Vec<String>;
 
     /// Create a new instance of the protocol.
     #[allow(clippy::too_many_arguments)]
