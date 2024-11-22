@@ -40,7 +40,7 @@ pub(crate) enum ProtocolBuilder {
     /// conda-build.
     CondaBuild(conda_build_protocol::ProtocolBuilder),
 
-    /// A directory containing a `recipe.yaml` that can be interpreted by
+    /// A directory containing a `recipe.yaml` that can be built with
     /// rattler-build.
     RattlerBuild(rattler_build_protocol::ProtocolBuilder),
 }
