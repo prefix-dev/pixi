@@ -7,14 +7,14 @@ use crate::{
     prefix::Executable,
     prefix::Prefix,
 };
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_utils::executable_from_path;
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
 
@@ -161,39 +161,6 @@ pub(crate) async fn create_executable_trampolines(
         }
     }
     Ok(state_changes)
-}
-
-/// Warn user on dangerous package installations, interactive yes no prompt
-#[allow(unused)]
-pub(crate) fn prompt_user_to_continue(
-    packages: &IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<bool> {
-    let dangerous_packages = HashMap::from([
-        ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
-        ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
-    ]);
-
-    // Check if any of the packages are dangerous, and prompt the user to ask if
-    // they want to continue, including the advice.
-    for (name, _spec) in packages {
-        if let Some(advice) = dangerous_packages.get(&name.as_normalized()) {
-            let prompt = format!(
-                "{}\nDo you want to continue?",
-                console::style(advice).yellow()
-            );
-            if !dialoguer::Confirm::new()
-                .with_prompt(prompt)
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?
-            {
-                return Ok(false);
-            }
-        }
-    }
-
-    Ok(true)
 }
 
 /// Checks if the local environment matches the given specifications.

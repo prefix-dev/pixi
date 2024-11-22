@@ -16,8 +16,6 @@ pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 #[derive(Deserialize, Debug)]
 struct Metadata {
     exe: String,
-    #[allow(unused)]
-    path: String,
     env: HashMap<String, String>,
 }
 
