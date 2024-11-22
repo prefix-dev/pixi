@@ -252,7 +252,7 @@ where
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
+    #[serde_as(as = "IndexSet<pixi_manifest::toml::TomlPrioritizedChannel>")]
     pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
     pub platform: Option<Platform>,

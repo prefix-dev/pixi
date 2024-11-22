@@ -5,7 +5,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use toml_edit::{value, Array, Item, Table, Value};
 
-use crate::manifests::toml::TomlManifest;
+use crate::toml::TomlDocument;
 use crate::{
     manifests::project::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
     PypiDependencyLocation, SpecType, Task, TomlError,
@@ -14,8 +14,8 @@ use crate::{
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
 #[derive(Debug, Clone)]
 pub enum ManifestSource {
-    PyProjectToml(TomlManifest),
-    PixiToml(TomlManifest),
+    PyProjectToml(TomlDocument),
+    PixiToml(TomlDocument),
 }
 
 impl fmt::Display for ManifestSource {
@@ -31,13 +31,13 @@ impl ManifestSource {
     /// Returns a new empty pixi manifest.
     #[cfg(test)]
     fn empty_pixi() -> Self {
-        ManifestSource::PixiToml(TomlManifest::default())
+        ManifestSource::PixiToml(TomlDocument::default())
     }
 
     /// Returns a new empty pyproject manifest.
     #[cfg(test)]
     fn empty_pyproject() -> Self {
-        ManifestSource::PyProjectToml(TomlManifest::default())
+        ManifestSource::PyProjectToml(TomlDocument::default())
     }
 
     /// Returns the file name of the manifest
@@ -56,7 +56,7 @@ impl ManifestSource {
         }
     }
 
-    fn manifest(&mut self) -> &mut TomlManifest {
+    fn manifest(&mut self) -> &mut TomlDocument {
         match self {
             ManifestSource::PyProjectToml(document) => document,
             ManifestSource::PixiToml(document) => document,

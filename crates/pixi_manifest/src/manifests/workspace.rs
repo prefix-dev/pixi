@@ -1,31 +1,15 @@
-use std::{collections::HashMap, hash::Hash, iter::FromIterator};
+use std::hash::Hash;
 
 use indexmap::{map::IndexMap, Equivalent};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::PackageName;
-use serde::de::{Deserialize, Deserializer};
-use serde_with::{serde_as, serde_derive::Deserialize};
-use toml_edit::DocumentMut;
 
 use crate::{
-    activation::Activation,
     consts,
-    environment::{Environment, EnvironmentIdx, EnvironmentName, TomlEnvironmentMapOrSeq},
+    environment::{Environment, EnvironmentName},
     environments::Environments,
-    error::TomlError,
     feature::{Feature, FeatureName},
-    pypi::{
-        pypi_options::PypiOptions, pypi_requirement::PyPiRequirement,
-        pypi_requirement_types::PyPiPackageName,
-    },
     solve_group::SolveGroups,
-    spec_type::SpecType,
-    system_requirements::SystemRequirements,
-    target::{Target, TargetSelector, Targets},
-    task::{Task, TaskName},
-    utils::PixiSpanned,
     workspace::Workspace,
-    BuildSystem,
+    BuildSystem, TomlError,
 };
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
@@ -49,18 +33,10 @@ pub struct WorkspaceManifest {
 }
 
 impl WorkspaceManifest {
-    /// Parses a toml string into a project manifest.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        let manifest: WorkspaceManifest =
-            toml_edit::de::from_str(source).map_err(TomlError::from)?;
-
-        // Make sure project.name is defined
-        if manifest.workspace.name.is_none() {
-            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["project"].span();
-            return Err(TomlError::NoProjectName(span));
-        }
-
-        Ok(manifest)
+    /// Parses a TOML string into a `WorkspaceManifest`.
+    pub fn from_toml_str(toml_str: &str) -> Result<Self, TomlError> {
+        let manifest = crate::toml::TomlManifest::from_toml_str(toml_str)?;
+        manifest.into_workspace_manifest(None)
     }
 
     /// Returns the default feature.
@@ -101,186 +77,6 @@ impl WorkspaceManifest {
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         self.environments.find(name)
-    }
-}
-
-impl<'de> Deserialize<'de> for WorkspaceManifest {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-        pub struct TomlProjectManifest {
-            #[serde(alias = "project")]
-            workspace: Workspace,
-            #[serde(default)]
-            system_requirements: SystemRequirements,
-            #[serde(default)]
-            target: IndexMap<PixiSpanned<TargetSelector>, Target>,
-
-            // HACK: If we use `flatten`, unknown keys will point to the wrong location in the
-            // file.  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
-            //
-            // Instead we currently copy the keys from the Target deserialize implementation which
-            // is really ugly.
-            //
-            // #[serde(flatten)]
-            // default_target: Target,
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_package_map"
-            )]
-            dependencies: IndexMap<PackageName, PixiSpec>,
-
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-            )]
-            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-            )]
-            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
-
-            /// Additional information to activate an environment.
-            #[serde(default)]
-            activation: Option<Activation>,
-
-            /// Target specific tasks to run in the environment
-            #[serde(default)]
-            tasks: HashMap<TaskName, Task>,
-
-            /// The features defined in the project.
-            #[serde(default)]
-            feature: IndexMap<FeatureName, Feature>,
-
-            /// The environments the project can create.
-            #[serde(default)]
-            environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
-
-            /// pypi-options
-            #[serde(default)]
-            pypi_options: Option<PypiOptions>,
-
-            /// The tool configuration which is unused by pixi
-            #[serde(default, skip_serializing, rename = "tool")]
-            _tool: serde::de::IgnoredAny,
-
-            /// The build section
-            #[serde(default)]
-            build_system: Option<BuildSystem>,
-
-            /// The URI for the manifest schema which is unused by pixi
-            #[allow(dead_code)]
-            #[serde(rename = "$schema")]
-            schema: Option<String>,
-        }
-
-        let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, toml_manifest.dependencies)]);
-        if let Some(host_deps) = toml_manifest.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = toml_manifest.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
-
-        let default_target = Target {
-            dependencies,
-            pypi_dependencies: toml_manifest.pypi_dependencies,
-            activation: toml_manifest.activation,
-            tasks: toml_manifest.tasks,
-        };
-
-        // Construct a default feature
-        let default_feature = Feature {
-            name: FeatureName::Default,
-
-            // The default feature does not overwrite the platforms or channels from the project
-            // metadata.
-            platforms: None,
-            channels: None,
-
-            channel_priority: toml_manifest.workspace.channel_priority,
-
-            system_requirements: toml_manifest.system_requirements,
-
-            // Use the pypi-options from the manifest for
-            // the default feature
-            pypi_options: toml_manifest.pypi_options,
-
-            // Combine the default target with all user specified targets
-            targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
-        };
-
-        // Construct the features including the default feature
-        let features: IndexMap<FeatureName, Feature> =
-            IndexMap::from_iter([(FeatureName::Default, default_feature)]);
-        let named_features = toml_manifest
-            .feature
-            .into_iter()
-            .map(|(name, mut feature)| {
-                feature.name = name.clone();
-                (name, feature)
-            })
-            .collect::<IndexMap<FeatureName, Feature>>();
-        let features = features.into_iter().chain(named_features).collect();
-
-        // Construct the environments including the default environment
-        let mut environments = Environments::default();
-        let mut solve_groups = SolveGroups::default();
-
-        // Add the default environment first if it was not redefined.
-        if !toml_manifest
-            .environments
-            .contains_key(&EnvironmentName::Default)
-        {
-            environments.environments.push(Some(Environment::default()));
-            environments
-                .by_name
-                .insert(EnvironmentName::Default, EnvironmentIdx(0));
-        }
-
-        // Add all named environments
-        for (name, env) in toml_manifest.environments {
-            // Decompose the TOML
-            let (features, features_source_loc, solve_group, no_default_feature) = match env {
-                TomlEnvironmentMapOrSeq::Map(env) => (
-                    env.features.value,
-                    env.features.span,
-                    env.solve_group,
-                    env.no_default_feature,
-                ),
-                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None, false),
-            };
-
-            let environment_idx = EnvironmentIdx(environments.environments.len());
-            environments.by_name.insert(name.clone(), environment_idx);
-            environments.environments.push(Some(Environment {
-                name,
-                features,
-                features_source_loc,
-                solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
-                no_default_feature,
-            }));
-        }
-
-        let build = toml_manifest.build_system;
-
-        Ok(Self {
-            workspace: toml_manifest.workspace,
-            features,
-            environments,
-            solve_groups,
-            build_system: build,
-        })
     }
 }
 
@@ -572,7 +368,7 @@ mod tests {
             "#
         );
 
-        assert_snapshot!(toml_edit::de::from_str::<WorkspaceManifest>(&contents)
+        assert_snapshot!(WorkspaceManifest::from_toml_str(&contents)
             .expect("parsing should succeed!")
             .default_feature()
             .targets
@@ -600,7 +396,7 @@ mod tests {
             "#
         );
 
-        assert_yaml_snapshot!(toml_edit::de::from_str::<WorkspaceManifest>(&contents)
+        assert_yaml_snapshot!(WorkspaceManifest::from_toml_str(&contents)
             .expect("parsing should succeed!")
             .workspace
             .pypi_options
@@ -621,8 +417,8 @@ mod tests {
             "#
         );
 
-        let manifest = toml_edit::de::from_str::<WorkspaceManifest>(&contents)
-            .expect("parsing should succeed!");
+        let manifest =
+            WorkspaceManifest::from_toml_str(&contents).expect("parsing should succeed!");
         assert_yaml_snapshot!(manifest.workspace.pypi_options.clone().unwrap());
     }
 
@@ -701,8 +497,8 @@ mod tests {
         channels = []
         "#
         .to_string();
-        let manifest = toml_edit::de::from_str::<WorkspaceManifest>(&contents)
-            .expect("parsing should succeed!");
+        let manifest =
+            WorkspaceManifest::from_toml_str(&contents).expect("parsing should succeed!");
         assert_yaml_snapshot!(manifest.build_system.clone().unwrap());
     }
 

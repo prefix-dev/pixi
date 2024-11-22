@@ -3,23 +3,18 @@ use std::{collections::HashMap, path::PathBuf};
 use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 use rattler_solve::ChannelPriority;
-use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, utils::PixiSpanned};
+use crate::{preview::Preview, utils::PixiSpanned, PrioritizedChannel};
 
-/// Describes the contents of the `[package]` section of the project manifest.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+/// Describes the contents of the `[workspace]` section of the project manifest.
+#[derive(Debug, Clone)]
 pub struct Workspace {
     /// The name of the project
-    pub name: Option<String>, // set as optional to handle conversion from pyproject.toml
+    pub name: String,
 
     /// The version of the project
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub version: Option<Version>,
 
     /// An optional project description
@@ -29,11 +24,9 @@ pub struct Workspace {
     pub authors: Option<Vec<String>>,
 
     /// The channels used by the project
-    #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
-    pub channels: IndexSet<super::channel::PrioritizedChannel>,
+    pub channels: IndexSet<PrioritizedChannel>,
 
     /// Channel priority for the whole project
-    #[serde(default)]
     pub channel_priority: Option<ChannelPriority>,
 
     /// The platforms this project supports
@@ -66,6 +59,5 @@ pub struct Workspace {
     pub pypi_options: Option<PypiOptions>,
 
     /// Preview features
-    #[serde(default)]
     pub preview: Preview,
 }

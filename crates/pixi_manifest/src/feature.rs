@@ -1,6 +1,5 @@
 use std::{
     borrow::{Borrow, Cow},
-    collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
 };
@@ -10,17 +9,16 @@ use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use rattler_solve::ChannelPriority;
-use serde::{de::Error, Deserialize, Deserializer};
-use serde_with::{serde_as, SerializeDisplay};
+use serde::{de::Error, Deserialize};
+use serde_with::SerializeDisplay;
 
 use crate::{
-    channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
+    channel::PrioritizedChannel,
     consts,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
-    task::{Task, TaskName},
     utils::PixiSpanned,
-    Activation, PyPiRequirement, SpecType, SystemRequirements, Target, TargetSelector,
+    PyPiRequirement, SpecType, SystemRequirements,
 };
 
 /// The name of a feature. This is either a string or default for the default
@@ -373,93 +371,6 @@ impl Feature {
     /// Returns any pypi_options if they are set.
     pub fn pypi_options(&self) -> Option<&PypiOptions> {
         self.pypi_options.as_ref()
-    }
-}
-
-impl<'de> Deserialize<'de> for Feature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-        struct FeatureInner {
-            #[serde(default)]
-            platforms: Option<PixiSpanned<IndexSet<Platform>>>,
-            #[serde(default)]
-            channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
-            #[serde(default)]
-            channel_priority: Option<ChannelPriority>,
-            #[serde(default)]
-            system_requirements: SystemRequirements,
-            #[serde(default)]
-            target: IndexMap<PixiSpanned<TargetSelector>, Target>,
-
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_package_map"
-            )]
-            dependencies: IndexMap<PackageName, PixiSpec>,
-
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-            )]
-            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(
-                default,
-                deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-            )]
-            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
-
-            /// Additional information to activate an environment.
-            #[serde(default)]
-            activation: Option<Activation>,
-
-            /// Target specific tasks to run in the environment
-            #[serde(default)]
-            tasks: HashMap<TaskName, Task>,
-
-            /// Additional options for PyPi dependencies.
-            #[serde(default)]
-            pypi_options: Option<PypiOptions>,
-        }
-
-        let inner = FeatureInner::deserialize(deserializer)?;
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, inner.dependencies)]);
-        if let Some(host_deps) = inner.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = inner.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
-
-        let default_target = Target {
-            dependencies,
-            pypi_dependencies: inner.pypi_dependencies,
-            activation: inner.activation,
-            tasks: inner.tasks,
-        };
-
-        Ok(Feature {
-            name: FeatureName::Default,
-            platforms: inner.platforms,
-            channels: inner.channels.map(|channels| {
-                channels
-                    .into_iter()
-                    .map(|channel| channel.into_prioritized_channel())
-                    .collect()
-            }),
-            channel_priority: inner.channel_priority,
-            system_requirements: inner.system_requirements,
-            pypi_options: inner.pypi_options,
-            targets: Targets::from_default_and_user_defined(default_target, inner.target),
-        })
     }
 }
 
