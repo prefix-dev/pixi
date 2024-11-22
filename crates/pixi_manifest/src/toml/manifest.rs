@@ -320,8 +320,8 @@ impl TomlManifest {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
     use crate::utils::test_utils::expect_parse_failure;
+    use insta::assert_snapshot;
 
     use super::*;
 

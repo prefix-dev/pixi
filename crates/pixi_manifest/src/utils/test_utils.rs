@@ -1,11 +1,11 @@
-use miette::{GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 use crate::toml::{ExternalWorkspaceProperties, TomlManifest};
+use miette::{GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 
 /// A helper function that generates a snapshot of the error message when
 /// parsing a manifest TOML. The error is returned.
 #[must_use]
 pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
-    let parse_error = TomlManifest::from_toml_str(&pixi_toml)
+    let parse_error = TomlManifest::from_toml_str(pixi_toml)
         .and_then(|manifest| manifest.into_manifests(ExternalWorkspaceProperties::default()))
         .expect_err("parsing should fail");
 

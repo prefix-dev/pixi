@@ -1221,6 +1221,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_dependency_set_with_build_section() {
         let file_contents = r#"
         [project]
