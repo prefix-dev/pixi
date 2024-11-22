@@ -15,7 +15,6 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
-    AliasChoices,
 )
 
 #: latest version currently supported by the `taplo` TOML linter and language server
@@ -109,7 +108,7 @@ class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
     name: NonEmptyStr | None = Field(
-        description="The name of the project; we advise use of the name of the repository"
+        None, description="The name of the project; we advise use of the name of the repository"
     )
     version: NonEmptyStr | None = Field(
         None,
@@ -159,12 +158,11 @@ class Workspace(StrictBaseModel):
         None, description="Defines the enabling of preview features of the project"
     )
 
+
 class Package(StrictBaseModel):
     """The package's metadata information."""
 
-    name: NonEmptyStr | None = Field(
-        description="The name of the package"
-    )
+    name: NonEmptyStr | None = Field(None, description="The name of the package")
     version: NonEmptyStr | None = Field(
         None,
         description="The version of the project; we advise use of [SemVer](https://semver.org)",
@@ -191,6 +189,7 @@ class Package(StrictBaseModel):
     documentation: AnyHttpUrl | None = Field(
         None, description="The URL of the documentation of the project"
     )
+
 
 ########################
 # Dependencies section #
@@ -590,10 +589,7 @@ class BaseManifest(StrictBaseModel):
             "$id": SCHEMA_URI,
             "$schema": SCHEMA_DRAFT,
             "title": "`pixi.toml` manifest file",
-            "oneOf": [
-                {"required": ["project"]},
-                {"required": ["workspace"]}
-            ],
+            "oneOf": [{"required": ["project"]}, {"required": ["workspace"]}],
         }
 
     schema_: str | None = Field(
@@ -604,9 +600,9 @@ class BaseManifest(StrictBaseModel):
         format="uri-reference",
     )
 
-    workspace: Workspace|None = Field(None, description="The workspace's metadata information")
-    project: Workspace|None = Field(None, description="The project's metadata information")
-    package: Package|None = Field(None, description="The package's metadata information")
+    workspace: Workspace | None = Field(None, description="The workspace's metadata information")
+    project: Workspace | None = Field(None, description="The project's metadata information")
+    package: Package | None = Field(None, description="The package's metadata information")
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField

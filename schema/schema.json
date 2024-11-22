@@ -706,9 +706,6 @@
       "title": "Package",
       "description": "The package's metadata information.",
       "type": "object",
-      "required": [
-        "name"
-      ],
       "additionalProperties": false,
       "properties": {
         "authors": {
@@ -1400,7 +1397,6 @@
       "description": "The project's metadata information.",
       "type": "object",
       "required": [
-        "name",
         "platforms"
       ],
       "additionalProperties": false,
