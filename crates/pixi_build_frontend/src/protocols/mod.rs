@@ -156,7 +156,7 @@ impl JsonRPCBuildProtocol {
                 let mut process = tokio::process::Command::from(tool.command())
                     .stdout(std::process::Stdio::piped())
                     .stdin(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped()) // TODO: Capture this?
+                    .stderr(std::process::Stdio::piped())
                     .spawn()?;
 
                 let backend_identifier = tool.executable().clone();
