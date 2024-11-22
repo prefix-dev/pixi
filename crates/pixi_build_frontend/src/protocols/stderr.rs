@@ -8,7 +8,7 @@ use tokio::{
 
 /// Stderr sink that captures the stderr output of the backend
 /// but does not do anything with it.
-pub async fn stderr_null(
+pub(crate) async fn stderr_null(
     buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
     cancel: oneshot::Receiver<()>,
 ) -> Result<(), std::io::Error> {
@@ -30,7 +30,7 @@ pub async fn stderr_null(
 
 /// Stderr stream that captures the stderr output of the backend
 /// and sends it over the stream.
-pub async fn stderr_stream(
+pub(crate) async fn stderr_stream(
     buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
     sender: mpsc::Sender<String>,
     cancel: oneshot::Receiver<()>,

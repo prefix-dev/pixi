@@ -26,7 +26,7 @@ def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
 
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     parsed_manifest["tool"]["pixi"]["host-dependencies"] = {"hatchling": "*"}
-    parsed_manifest["tool"]["pixi"]["build"] = {
+    parsed_manifest["tool"]["pixi"]["build-system"] = {
         "build-backend": "pixi-build-python",
         "channels": [
             "https://repo.prefix.dev/pixi-build-backends",
@@ -55,12 +55,10 @@ def test_build_using_rattler_build_backend(pixi: Path, tmp_path: Path) -> None:
 
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     parsed_manifest["host-dependencies"] = {"hatchling": "*"}
-    parsed_manifest["build"] = {
+    parsed_manifest["build-system"] = {
         "build-backend": "pixi-build-rattler-build",
         "channels": [
-            # until rattler-build backend is merged in pixi build backend,
-            # we should use this channel
-            "https://repo.prefix.dev/graf",
+            "https://repo.prefix.dev/prefix-dev",
             "https://repo.prefix.dev/conda-forge",
         ],
         "dependencies": ["pixi-build-rattler-build"],
@@ -101,7 +99,7 @@ def test_build_conda_package_ignoring_recipe(pixi: Path, tmp_path: Path) -> None
 
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     parsed_manifest["tool"]["pixi"]["host-dependencies"] = {"hatchling": "*"}
-    parsed_manifest["tool"]["pixi"]["build"] = {
+    parsed_manifest["tool"]["pixi"]["build-system"] = {
         "build-backend": "pixi-build-python",
         "channels": [
             "https://repo.prefix.dev/pixi-build-backends",

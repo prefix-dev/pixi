@@ -117,7 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None
     };
 
-    let discovery_config = EnabledProtocols {
+    let enabled_protocols = EnabledProtocols {
         enable_rattler_build: !args.ignore_recipe,
         ..Default::default()
     };
@@ -125,7 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
         .with_tool_context(tool_config)
-        .with_discovery_config(discovery_config)
+        .with_enabled_protocols(enabled_protocols)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
             build_tool_override: backend_override,

@@ -23,7 +23,7 @@ pub struct BuildFrontend {
     cache_dir: Option<PathBuf>,
 
     /// The configuration to use when discovering the protocol.
-    discovery_config: EnabledProtocols,
+    enabled_protocols: EnabledProtocols,
 }
 
 impl Default for BuildFrontend {
@@ -32,7 +32,7 @@ impl Default for BuildFrontend {
             tool_cache: Arc::new(ToolCache::new()),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
-            discovery_config: EnabledProtocols::default(),
+            enabled_protocols: EnabledProtocols::default(),
         }
     }
 }
@@ -93,9 +93,9 @@ impl BuildFrontend {
     }
 
     /// Sets the discovery config.
-    pub fn with_discovery_config(self, discovery_config: EnabledProtocols) -> Self {
+    pub fn with_enabled_protocols(self, enabled_protocols: EnabledProtocols) -> Self {
         Self {
-            discovery_config,
+            enabled_protocols,
             ..self
         }
     }
@@ -107,7 +107,7 @@ impl BuildFrontend {
         request: SetupRequest,
     ) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
-        let protocol = ProtocolBuilder::discover(&request.source_dir, &self.discovery_config)?
+        let protocol = ProtocolBuilder::discover(&request.source_dir, &self.enabled_protocols)?
             .with_channel_config(self.channel_config.clone())
             .with_opt_cache_dir(self.cache_dir.clone());
 
