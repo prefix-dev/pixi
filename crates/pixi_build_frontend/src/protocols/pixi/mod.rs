@@ -141,7 +141,7 @@ impl ProtocolBuilder {
         .await?)
     }
 
-    /// Returns the manifest of pixi
+    /// Returns the pixi manifest
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
