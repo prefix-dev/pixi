@@ -35,7 +35,7 @@ jobs:
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
 
-          - name: "Linux-powerpc64"
+          - name: "Linux-powerpc64le"
             target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
