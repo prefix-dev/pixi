@@ -97,7 +97,7 @@ impl ProtocolError {
 /// This allow us to hide the jsonrpc communication hidden in this protocol.
 /// This protocol is generic over the manifest what are passed to the build backends.
 /// This means that, for rattler-build, the manifest is a recipe.yaml file,
-/// and for pixi it's a pixi.toml/pyproject.toml file.
+/// and for pixi it's a pixi.toml or a pyproject.toml file.
 #[derive(Debug)]
 pub struct JsonRPCBuildProtocol {
     backend_identifier: String,
