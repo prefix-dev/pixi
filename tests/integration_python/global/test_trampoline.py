@@ -169,7 +169,7 @@ def test_trampoline_migrate_with_newer_trampoline(
 
     # create a dummy bin that will act as already installed package
     dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
-    os.makedirs(dummy_trampoline.parent, exist_ok=True)
+    dummy_trampoline.parent.mkdir(exist_ok=True)
     dummy_trampoline.write_text("hello")
 
     # now run install again, this time it should migrate the script to the new trampoline
