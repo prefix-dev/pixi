@@ -1,8 +1,10 @@
 use std::path::Path;
 
-use crate::common::{LockFileExt, PixiControl};
 use rattler_conda_types::Platform;
+use typed_path::Utf8TypedPath;
 use url::Url;
+
+use crate::common::{LockFileExt, PixiControl};
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
@@ -35,15 +37,11 @@ async fn test_flat_links_based_index_returns_path() {
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
-            .unwrap()
-            .as_str()
-            .replace("\\", "/"),
-        pypi_indexes
+            .unwrap(),
+        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
             .join("multiple-indexes-a")
             .join("flat")
             .join("foo-1.0.0-py2.py3-none-any.whl")
-            .to_string_lossy()
-            .replace("\\", "/"),
     );
 }
 
@@ -81,14 +79,10 @@ async fn test_file_based_index_returns_path() {
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
-            .unwrap()
-            .as_str()
-            .replace("\\", "/"),
-        pypi_indexes
+            .unwrap(),
+        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
             .join("multiple-indexes-a/index/foo")
             .join("foo-1.0.0-py2.py3-none-any.whl")
-            .to_string_lossy()
-            .replace("\\", "/")
     );
 }
 

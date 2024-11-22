@@ -15,10 +15,11 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
+use crate::toml::TomlDocument;
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
-    manifests::{source::ManifestSource, toml::TomlManifest},
+    manifests::ManifestSource,
     preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
@@ -105,7 +106,7 @@ impl Manifest {
             ManifestKind::Pixi => (WorkspaceManifest::from_toml_str(&contents), "pixi.toml"),
             ManifestKind::Pyproject => {
                 let manifest = match PyProjectManifest::from_toml_str(&contents)
-                    .and_then(|m| m.ensure_pixi(&contents))
+                    .and_then(|m| m.ensure_pixi())
                 {
                     Ok(manifest) => Ok(manifest.try_into().into_diagnostic()?),
                     Err(e) => Err(e),
@@ -128,8 +129,8 @@ impl Manifest {
         manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
 
         let source = match manifest_kind {
-            ManifestKind::Pixi => ManifestSource::PixiToml(TomlManifest::new(document)),
-            ManifestKind::Pyproject => ManifestSource::PyProjectToml(TomlManifest::new(document)),
+            ManifestKind::Pixi => ManifestSource::PixiToml(TomlDocument::new(document)),
+            ManifestKind::Pyproject => ManifestSource::PyProjectToml(TomlDocument::new(document)),
         };
 
         Ok(Self {
@@ -733,8 +734,8 @@ impl Manifest {
     }
 
     /// Returns the preview field of the project
-    pub fn preview(&self) -> Option<&Preview> {
-        self.workspace.workspace.preview.as_ref()
+    pub fn preview(&self) -> &Preview {
+        &self.workspace.workspace.preview
     }
 
     /// Return the build section from the parsed manifest
@@ -790,7 +791,7 @@ mod tests {
         // From PathBuf
         let manifest = Manifest::from_path(path).unwrap();
 
-        assert_eq!(manifest.workspace.workspace.name.unwrap(), "foo");
+        assert_eq!(manifest.workspace.workspace.name, "foo");
         assert_eq!(
             manifest.workspace.workspace.version,
             Some(Version::from_str("0.1.0").unwrap())
@@ -2354,5 +2355,69 @@ bar = "*"
             .map(|c| c.channel.to_string())
             .collect();
         assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
+    }
+
+    #[test]
+    fn test_validation_failure_source_dependency() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"source dependencies are used in the feature 'default', but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_failure_build_section() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [build-system]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"the build-system is defined, but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_succeed_build() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [build-system]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        manifest.unwrap();
     }
 }

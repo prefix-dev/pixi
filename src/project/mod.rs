@@ -273,12 +273,7 @@ impl Project {
 
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        self.manifest
-            .workspace
-            .workspace
-            .name
-            .as_ref()
-            .expect("name should always be defined.")
+        &self.manifest.workspace.workspace.name
     }
 
     /// Returns the version of the project
@@ -655,11 +650,14 @@ impl Project {
         &self.manifest
     }
 
-    /// Update the manifest with the given package specs, and upgrade the packages if possible
+    /// Update the manifest with the given package specs, and upgrade the
+    /// packages if possible
     ///
-    /// 1. Modify the manifest with the given package specs, if no version is given, use `no-pin` strategy
+    /// 1. Modify the manifest with the given package specs, if no version is
+    ///    given, use `no-pin` strategy
     /// 2. Update the lock file
-    /// 3. Given packages without version restrictions will get a semver restriction
+    /// 3. Given packages without version restrictions will get a semver
+    ///    restriction
     #[allow(clippy::too_many_arguments)]
     pub async fn update_dependencies(
         &mut self,
@@ -839,7 +837,8 @@ impl Project {
         }))
     }
 
-    /// Constructs a new lock-file where some of the constraints have been removed.
+    /// Constructs a new lock-file where some of the constraints have been
+    /// removed.
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
@@ -861,8 +860,8 @@ impl Project {
         })
     }
 
-    /// Update the conda specs of newly added packages based on the contents of the
-    /// updated lock-file.
+    /// Update the conda specs of newly added packages based on the contents of
+    /// the updated lock-file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -888,8 +887,9 @@ impl Project {
         let mut pinning_strategy = self.config().pinning_strategy;
         let channel_config = self.channel_config();
         for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
-            // Edge case: some packages are a special case where we want to pin the minor version by default.
-            // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
+            // Edge case: some packages are a special case where we want to pin the minor
+            // version by default. This is done to avoid early user confusion
+            // when the minor version changes and environments magically start breaking.
             // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
             if NON_SEMVER_PACKAGES.contains(&name.as_normalized()) && pinning_strategy.is_none() {
                 tracing::info!(
@@ -929,8 +929,8 @@ impl Project {
         Ok(implicit_constraints)
     }
 
-    /// Update the pypi specs of newly added packages based on the contents of the
-    /// updated lock-file.
+    /// Update the pypi specs of newly added packages based on the contents of
+    /// the updated lock-file.
     #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
@@ -1001,18 +1001,12 @@ impl Project {
 
     /// Returns true if all preview features are enabled
     pub fn all_preview_features_enabled(&self) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.all_enabled())
-            .unwrap_or(false)
+        self.manifest.preview().all_enabled()
     }
 
     /// Returns true if the given preview feature is enabled
     pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.is_enabled(feature))
-            .unwrap_or(false)
+        self.manifest.preview().is_enabled(feature)
     }
 }
 
@@ -1229,6 +1223,12 @@ mod tests {
     #[test]
     fn test_dependency_set_with_build_section() {
         let file_contents = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = ["linux-64", "win-64"]
+        preview = ["pixi-build"]
         [dependencies]
         foo = "1.0"
 
@@ -1244,11 +1244,7 @@ mod tests {
         bar = "1.0"
         "#;
 
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-        )
-        .unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(

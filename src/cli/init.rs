@@ -304,7 +304,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
-            if pyproject.is_pixi() {
+            if pyproject.has_pixi_table() {
                 eprintln!(
                     "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
@@ -314,7 +314,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             let (name, pixi_name) = match pyproject.name() {
                 Some(name) => (name, false),
-                None => (default_name.clone(), true),
+                None => (default_name.as_str(), true),
             };
             let environments = pyproject.environments_from_extras().into_diagnostic()?;
             let rv = env

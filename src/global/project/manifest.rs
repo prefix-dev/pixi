@@ -12,8 +12,8 @@ use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManife
 use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
+use pixi_manifest::toml::TomlDocument;
 use pixi_manifest::PrioritizedChannel;
-use pixi_manifest::TomlManifest;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct Manifest {
     pub path: PathBuf,
 
     /// Editable toml document
-    pub document: TomlManifest,
+    pub document: TomlDocument,
 
     /// The parsed manifest
     pub parsed: ParsedManifest,
@@ -62,7 +62,7 @@ impl Manifest {
         let manifest = Self {
             path: manifest_path.to_path_buf(),
 
-            document: TomlManifest::new(document),
+            document: TomlDocument::new(document),
             parsed: manifest,
         };
 

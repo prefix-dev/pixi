@@ -93,8 +93,15 @@ class ChannelPriority(str, Enum):
     strict = "strict"
 
 
-class KnownPreviewFeature(str, Enum):
-    """The preview features of the project."""
+PixiBuildFeature = Annotated[
+    Literal["pixi-build"], Field(description="Enables building of source records")
+]
+KnownPreviewFeature = PixiBuildFeature
+
+
+# class KnownPreviewFeature(Enum):
+#     """The preview features of the project."""
+#     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
 class Project(StrictBaseModel):

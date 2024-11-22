@@ -1,5 +1,8 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use toml_edit::{Array, Item, Table, TableLike, Value};
 
 use crate::TomlError;
@@ -9,15 +12,15 @@ use crate::TomlError;
 /// This struct is exposed to other crates to allow for easy manipulation of the
 /// TOML document.
 #[derive(Debug, Clone, Default)]
-pub struct TomlManifest(toml_edit::DocumentMut);
+pub struct TomlDocument(toml_edit::DocumentMut);
 
-impl Display for TomlManifest {
+impl Display for TomlDocument {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl TomlManifest {
+impl TomlDocument {
     /// Create a new `TomlManifest` from a `toml_edit::DocumentMut` document.
     pub fn new(document: toml_edit::DocumentMut) -> Self {
         Self(document)
@@ -138,9 +141,9 @@ impl TomlManifest {
 mod tests {
     use std::str::FromStr;
 
-    use toml_edit::DocumentMut;
+    use toml_edit::{DocumentMut, Item};
 
-    use super::*;
+    use crate::toml::document::TomlDocument;
 
     #[test]
     fn test_get_or_insert_nested_table() {
@@ -151,7 +154,7 @@ channels = ["dummy-channel"]
 dummy = "3.11.*"
 "#;
         let dep_name = "test";
-        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
             .get_or_insert_nested_table("envs.python.dependencies")
             .unwrap()
@@ -173,7 +176,7 @@ channels = ["dummy-channel"]
 dependencies = { dummy = "3.11.*" }
 "#;
         let dep_name = "test";
-        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
             .get_or_insert_nested_table("envs.python.dependencies")
             .unwrap()
@@ -202,7 +205,7 @@ dependencies = { dummy = "3.11.*" }
 channels = ["dummy-channel"]
 "#;
         let table_name = "test";
-        let mut manifest = TomlManifest::new(DocumentMut::from_str(toml).unwrap());
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest.get_or_insert_nested_table(table_name).unwrap();
 
         // No empty table is being created
