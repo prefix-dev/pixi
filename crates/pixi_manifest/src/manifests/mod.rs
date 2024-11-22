@@ -11,9 +11,11 @@
 pub mod project;
 
 mod manifest;
+mod package;
 mod source;
 mod workspace;
 
 pub use manifest::{Manifest, ManifestKind};
+pub use package::PackageManifest;
 pub use source::ManifestSource;
 pub use workspace::WorkspaceManifest;

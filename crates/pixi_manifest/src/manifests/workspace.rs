@@ -8,8 +8,9 @@ use crate::{
     environments::Environments,
     feature::{Feature, FeatureName},
     solve_group::SolveGroups,
+    toml::ExternalWorkspaceProperties,
     workspace::Workspace,
-    BuildSystem, TomlError,
+    TomlError,
 };
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
@@ -27,16 +28,15 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
-
-    /// The build section of the project.
-    pub build_system: Option<BuildSystem>,
 }
 
 impl WorkspaceManifest {
     /// Parses a TOML string into a `WorkspaceManifest`.
     pub fn from_toml_str(toml_str: &str) -> Result<Self, TomlError> {
         let manifest = crate::toml::TomlManifest::from_toml_str(toml_str)?;
-        manifest.into_workspace_manifest(None)
+        Ok(manifest
+            .into_manifests(ExternalWorkspaceProperties::default())?
+            .0)
     }
 
     /// Returns the default feature.
@@ -86,7 +86,7 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
-    use crate::{TargetSelector, WorkspaceManifest};
+    use crate::{utils::test_utils::expect_parse_failure, TargetSelector, WorkspaceManifest};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -293,31 +293,25 @@ mod tests {
         let examples = [r#"[target.foobar.dependencies]
             invalid_platform = "henk""#];
 
-        assert_snapshot!(examples
-            .into_iter()
-            .map(|example| WorkspaceManifest::from_toml_str(&format!(
-                "{PROJECT_BOILERPLATE}\n{example}"
-            ))
-            .unwrap_err()
-            .to_string())
-            .collect::<Vec<_>>()
-            .join("\n"))
+        assert_snapshot!(expect_parse_failure(&format!(
+            "{PROJECT_BOILERPLATE}\n{}",
+            examples[0]
+        )));
     }
 
     #[test]
     fn test_invalid_key() {
-        let examples = [
-            format!("{PROJECT_BOILERPLATE}\n[foobar]"),
-            format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]"),
-            format!("{PROJECT_BOILERPLATE}\n[environments.INVALID]"),
-        ];
-        assert_snapshot!(examples
-            .into_iter()
-            .map(|example| WorkspaceManifest::from_toml_str(&example)
-                .unwrap_err()
-                .to_string())
-            .collect::<Vec<_>>()
-            .join("\n"))
+        insta::with_settings!({snapshot_suffix => "foobar"}, {
+            assert_snapshot!(expect_parse_failure(&format!("{PROJECT_BOILERPLATE}\n[foobar]")))
+        });
+
+        insta::with_settings!({snapshot_suffix => "hostdependencies"}, {
+            assert_snapshot!(expect_parse_failure(&format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]")))
+        });
+
+        insta::with_settings!({snapshot_suffix => "environment"}, {
+            assert_snapshot!(expect_parse_failure(&format!("{PROJECT_BOILERPLATE}\n[environments.INVALID]")))
+        });
     }
 
     #[test]
@@ -481,42 +475,5 @@ mod tests {
         test = "test"
         "#;
         let _manifest = WorkspaceManifest::from_toml_str(contents).unwrap();
-    }
-
-    #[test]
-    fn test_build_section_deserialization() {
-        let contents = r#"
-        [project]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [build-system]
-        dependencies = ["python-build-backend > 12"]
-        build-backend = "python-build-backend"
-        channels = []
-        "#
-        .to_string();
-        let manifest =
-            WorkspaceManifest::from_toml_str(&contents).expect("parsing should succeed!");
-        assert_yaml_snapshot!(manifest.build_system.clone().unwrap());
-    }
-
-    #[test]
-    fn test_build_invalid_matchspec() {
-        let contents = r#"
-        [project]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [build-system]
-        dependencies = ["python-build-backend > > 12"]
-        build-backend = "python-build-backend"
-        channels = []
-        "#
-        .to_string();
-        let err = WorkspaceManifest::from_toml_str(&contents).err();
-        assert_yaml_snapshot!(err.unwrap().to_string());
     }
 }

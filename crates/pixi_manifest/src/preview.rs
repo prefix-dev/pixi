@@ -12,7 +12,9 @@
 //! We do this for backwards compatibility with the old features that may have been used in the past.
 //! The [`KnownFeature`] enum contains all the known features. Extend this if you want to add support
 //! for new features.
+
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
 #[serde(untagged)]
@@ -102,6 +104,12 @@ pub enum KnownPreviewFeature {
     PixiBuild,
 }
 
+impl Display for KnownPreviewFeature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl<'de> Deserialize<'de> for PreviewFeature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -116,6 +124,15 @@ impl<'de> Deserialize<'de> for PreviewFeature {
                 .map(PreviewFeature::Unknown)
                 .map_err(serde::de::Error::custom)?;
             Ok(unknown)
+        }
+    }
+}
+
+impl KnownPreviewFeature {
+    /// Returns the string representation of the feature
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            KnownPreviewFeature::PixiBuild => "pixi-build",
         }
     }
 }

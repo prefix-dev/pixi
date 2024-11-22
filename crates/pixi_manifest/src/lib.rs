@@ -11,6 +11,7 @@ mod has_environment_dependencies;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
+mod package;
 mod preview;
 pub mod pypi;
 pub mod pyproject;

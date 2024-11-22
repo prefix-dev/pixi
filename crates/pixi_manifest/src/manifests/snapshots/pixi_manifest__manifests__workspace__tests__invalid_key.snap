@@ -2,20 +2,6 @@
 source: crates/pixi_manifest/src/manifests/workspace.rs
 expression: "examples.into_iter().map(|example|\nWorkspaceManifest::from_toml_str(&example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
 ---
-TOML parse error at line 8, column 2
-  |
-8 | [foobar]
-  |  ^^^^^^
-unknown field `foobar`, expected one of `project`, `workspace`, `system-requirements`, `target`, `dependencies`, `host-dependencies`, `build-dependencies`, `pypi-dependencies`, `activation`, `tasks`, `feature`, `environments`, `pypi-options`, `build-system`, `$schema`, `tool`
-
-TOML parse error at line 8, column 16
-  |
-8 | [target.win-64.hostdependencies]
-  |                ^^^^^^^^^^^^^^^^
+unknown field `foobar`, expected one of `project`, `workspace`, `package`, `system-requirements`, `target`, `dependencies`, `host-dependencies`, `build-dependencies`, `pypi-dependencies`, `activation`, `tasks`, `feature`, `environments`, `pypi-options`, `build-system`, `$schema`, `tool`
 unknown field `hostdependencies`, expected one of `dependencies`, `host-dependencies`, `build-dependencies`, `pypi-dependencies`, `activation`, `tasks`
-
-TOML parse error at line 8, column 15
-  |
-8 | [environments.INVALID]
-  |               ^^^^^^^
 Failed to parse environment name 'INVALID', please use only lowercase letters, numbers and dashes

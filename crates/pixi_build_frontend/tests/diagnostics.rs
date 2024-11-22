@@ -67,7 +67,7 @@ async fn test_invalid_manifest() {
     let manifest = source_dir
         .path()
         .join(pixi_consts::consts::PROJECT_MANIFEST);
-    tokio::fs::write(&manifest, "[project]").await.unwrap();
+    tokio::fs::write(&manifest, "[workspace]").await.unwrap();
     let err = BuildFrontend::default()
         .setup_protocol(SetupRequest {
             source_dir: source_dir.path().to_path_buf(),
@@ -100,11 +100,14 @@ async fn test_missing_backend() {
     tokio::fs::write(
         &manifest,
         r#"
-        [project]
-        name = "project"
+        [workspace]
         platforms = []
         channels = []
         preview = ['pixi-build']
+
+        [package]
+        name = "project"
+        version = "0.1.0"
 
         [build-system]
         dependencies = []
@@ -139,10 +142,11 @@ async fn test_invalid_backend() {
     tokio::fs::write(
         &manifest,
         r#"
-        [project]
+        [workspace]
         name = "project"
         platforms = []
         channels = []
+        preview = ['pixi-build']
         "#,
     )
     .await

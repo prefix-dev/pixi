@@ -10,22 +10,23 @@ use std::{
 
 use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
-use miette::{miette, IntoDiagnostic, NamedSource, WrapErr};
+use miette::{miette, IntoDiagnostic, NamedSource, Report, WrapErr};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
-use crate::toml::TomlDocument;
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
-    manifests::ManifestSource,
+    manifests::{ManifestSource, PackageManifest},
     preview::Preview,
     pypi::PyPiPackageName,
-    pyproject::PyProjectManifest,
-    to_options, BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
-    FeatureName, GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
-    TargetSelector, Task, TaskName, WorkspaceManifest,
+    pyproject::{PyProjectManifest, PyProjectToManifestError},
+    to_options,
+    toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
+    BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
+    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target, TargetSelector,
+    Task, TaskName, WorkspaceManifest,
 };
 
 #[derive(Debug, Clone)]
@@ -68,6 +69,9 @@ pub struct Manifest {
 
     /// The parsed workspace manifest
     pub workspace: WorkspaceManifest,
+
+    /// Optionally a package manifest
+    pub package: Option<PackageManifest>,
 }
 
 impl Borrow<WorkspaceManifest> for Manifest {
@@ -103,30 +107,43 @@ impl Manifest {
 
         let contents = contents.into();
         let (parsed, file_name) = match manifest_kind {
-            ManifestKind::Pixi => (WorkspaceManifest::from_toml_str(&contents), "pixi.toml"),
+            ManifestKind::Pixi => (
+                TomlManifest::from_toml_str(&contents).and_then(|manifest| {
+                    manifest.into_manifests(ExternalWorkspaceProperties::default())
+                }),
+                "pixi.toml",
+            ),
             ManifestKind::Pyproject => {
                 let manifest = match PyProjectManifest::from_toml_str(&contents)
                     .and_then(|m| m.ensure_pixi())
                 {
-                    Ok(manifest) => Ok(manifest.try_into().into_diagnostic()?),
+                    Ok(manifest) => match manifest.into_manifests() {
+                        Ok(manifests) => Ok(manifests),
+                        Err(PyProjectToManifestError::TomlError(err)) => Err(err),
+                        Err(e) => return Err(Report::from(e)),
+                    },
                     Err(e) => Err(e),
                 };
                 (manifest, "pyproject.toml")
             }
         };
 
-        let (manifest, document) = match parsed.and_then(|manifest| {
+        let ((workspace_manifest, package_manifest), document) = match parsed.and_then(|manifest| {
             contents
                 .parse::<DocumentMut>()
                 .map(|doc| (manifest, doc))
                 .map_err(TomlError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(file_name, &contents)?,
+            Err(e) => {
+                return Err(
+                    Report::from(e).with_source_code(NamedSource::new(file_name, contents.clone()))
+                );
+            }
         };
 
         // Validate the contents of the manifest
-        manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
+        workspace_manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
 
         let source = match manifest_kind {
             ManifestKind::Pixi => ManifestSource::PixiToml(TomlDocument::new(document)),
@@ -137,7 +154,8 @@ impl Manifest {
             path: manifest_path.to_path_buf(),
             contents: Some(contents),
             document: source,
-            workspace: manifest,
+            workspace: workspace_manifest,
+            package: package_manifest,
         })
     }
 
@@ -740,7 +758,7 @@ impl Manifest {
 
     /// Return the build section from the parsed manifest
     pub fn build_section(&self) -> Option<&BuildSystem> {
-        self.workspace.build_system.as_ref()
+        self.package.as_ref().map(|package| &package.build_system)
     }
 }
 
@@ -2372,52 +2390,5 @@ bar = "*"
         let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(err, @"source dependencies are used in the feature 'default', but the `pixi-build` preview feature is not enabled");
-    }
-
-    #[test]
-    fn test_validation_failure_build_section() {
-        let toml = r#"
-        [project]
-        name = "test"
-        channels = ['conda-forge']
-        platforms = ['linux-64']
-
-        [build-system]
-        build-backend = "pixi-build-cmake"
-        channels = [
-          "https://prefix.dev/pixi-build-backends",
-          "https://prefix.dev/conda-forge",
-        ]
-        dependencies = ["pixi-build-cmake"]
-        "#;
-
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
-        let err = manifest.unwrap_err();
-        insta::assert_snapshot!(err, @"the build-system is defined, but the `pixi-build` preview feature is not enabled");
-    }
-
-    #[test]
-    fn test_validation_succeed_build() {
-        let toml = r#"
-        [project]
-        name = "test"
-        channels = ['conda-forge']
-        platforms = ['linux-64']
-        preview = ["pixi-build"]
-
-        [build-system]
-        build-backend = "pixi-build-cmake"
-        channels = [
-          "https://prefix.dev/pixi-build-backends",
-          "https://prefix.dev/conda-forge",
-        ]
-        dependencies = ["pixi-build-cmake"]
-
-        [dependencies]
-        foo = { path = "./foo" }
-        "#;
-
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
-        manifest.unwrap();
     }
 }

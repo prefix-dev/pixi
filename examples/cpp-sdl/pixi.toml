@@ -1,10 +1,13 @@
 [project]
-authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["https://fast.prefix.dev/conda-forge"]
-description = "Showcases how to create a simple C++ executable with Pixi"
-name = "sdl_example"
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
+
+[package]
+name = "sdl_example"
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "Showcases how to create a simple C++ executable with Pixi"
+version = "0.1.0"
 
 [build-system]
 build-backend = "pixi-build-cmake"

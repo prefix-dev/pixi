@@ -1232,6 +1232,8 @@ mod tests {
         [dependencies]
         foo = "1.0"
 
+        [package]
+
         [build-system]
         channels = []
         dependencies = []
