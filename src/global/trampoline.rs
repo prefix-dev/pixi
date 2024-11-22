@@ -343,9 +343,25 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        self.update_trampoline().await?;
-
         let trampoline_path = self.trampoline_path();
+
+        // We need to check that there's indeed a trampoline at the path
+        if trampoline_path.is_file().not()
+            || Trampoline::is_trampoline(&self.trampoline_path())
+                .await?
+                .not()
+        {
+            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+                .await
+                .into_diagnostic()?;
+            tokio_fs::write(
+                self.trampoline_path(),
+                Trampoline::decompressed_trampoline(),
+            )
+            .await
+            .into_diagnostic()?;
+        }
+
         // If the path doesn't exist yet, create a hard link to the shared trampoline binary
         // If creating a hard link doesn't succeed, try copying
         // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
@@ -367,19 +383,6 @@ impl Trampoline {
                 .into_diagnostic()?;
         }
 
-        Ok(())
-    }
-
-    async fn update_trampoline(&self) -> Result<(), miette::Error> {
-        let trampoline_path = self.trampoline_path();
-        if trampoline_path.exists().not() || Self::is_trampoline(&trampoline_path).await?.not() {
-            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
-                .await
-                .into_diagnostic()?;
-            tokio_fs::write(trampoline_path, Trampoline::decompressed_trampoline())
-                .await
-                .into_diagnostic()?;
-        }
         Ok(())
     }
 

@@ -85,6 +85,8 @@ pub enum PyPiRequirement {
         version: VersionOrStar,
         #[serde(default)]
         extras: Vec<ExtraName>,
+        #[serde(default)]
+        index: Option<Url>,
     },
     RawVersion(VersionOrStar),
 }
@@ -138,6 +140,10 @@ struct RawPyPiRequirement {
 
     // Git and Url only
     pub subdirectory: Option<String>,
+
+    // Pinned index
+    #[serde(default)]
+    pub index: Option<Url>,
 }
 
 impl<'de> Deserialize<'de> for PyPiRequirement {
@@ -186,18 +192,24 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                     )));
                 }
 
-                let req = match (raw_req.url, raw_req.path, raw_req.git, raw_req.extras) {
-                    (Some(url), None, None, extras) => PyPiRequirement::Url {
+                let req = match (
+                    raw_req.url,
+                    raw_req.path,
+                    raw_req.git,
+                    raw_req.extras,
+                    raw_req.index,
+                ) {
+                    (Some(url), None, None, extras, None) => PyPiRequirement::Url {
                         url,
                         extras,
                         subdirectory: raw_req.subdirectory,
                     },
-                    (None, Some(path), None, extras) => PyPiRequirement::Path {
+                    (None, Some(path), None, extras, None) => PyPiRequirement::Path {
                         path,
                         editable: raw_req.editable,
                         extras,
                     },
-                    (None, None, Some(git), extras) => PyPiRequirement::Git {
+                    (None, None, Some(git), extras, None) => PyPiRequirement::Git {
                         url: ParsedGitUrl {
                             git,
                             branch: raw_req.branch,
@@ -207,13 +219,15 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                         },
                         extras,
                     },
-                    (None, None, None, extras) => PyPiRequirement::Version {
+                    (None, None, None, extras, index) => PyPiRequirement::Version {
                         version: raw_req.version.unwrap_or(VersionOrStar::Star),
                         extras,
+                        index,
                     },
-                    (_, _, _, extras) if !extras.is_empty() => PyPiRequirement::Version {
+                    (_, _, _, extras, index) if !extras.is_empty() => PyPiRequirement::Version {
                         version: raw_req.version.unwrap_or(VersionOrStar::Star),
                         extras,
+                        index,
                     },
                     _ => {
                         return Err(serde_untagged::de::Error::custom(
@@ -278,17 +292,35 @@ impl From<PyPiRequirement> for toml_edit::Value {
             }
         }
 
+        fn insert_index(table: &mut toml_edit::InlineTable, index: &Option<Url>) {
+            if let Some(index) = index {
+                table.insert(
+                    "index",
+                    toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
+                );
+            }
+        }
+
         match &val {
-            PyPiRequirement::Version { version, extras } if extras.is_empty() => {
+            PyPiRequirement::Version {
+                version,
+                extras,
+                index,
+            } if extras.is_empty() && index.is_none() => {
                 toml_edit::Value::from(version.to_string())
             }
-            PyPiRequirement::Version { version, extras } => {
+            PyPiRequirement::Version {
+                version,
+                extras,
+                index,
+            } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "version",
                     toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
                 );
                 insert_extras(&mut table, extras);
+                insert_index(&mut table, index);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Git {
@@ -423,6 +455,7 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
                     version: v.into(),
                     extras: req.extras,
+                    index: None,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => {
                     let url = u.to_url();
@@ -494,6 +527,7 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
             PyPiRequirement::Version {
                 version: VersionOrStar::Star,
                 extras: req.extras,
+                index: None,
             }
         } else {
             PyPiRequirement::RawVersion(VersionOrStar::Star)
@@ -616,6 +650,7 @@ mod tests {
             &PyPiRequirement::Version {
                 version: ">=3.12".parse().unwrap(),
                 extras: vec![ExtraName::from_str("bar").unwrap()],
+                index: None,
             }
         );
 
@@ -636,6 +671,7 @@ mod tests {
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
                 ],
+                index: None,
             }
         );
     }
@@ -659,6 +695,7 @@ mod tests {
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
                 ],
+                index: None,
             }
         );
     }
