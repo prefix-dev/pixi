@@ -97,7 +97,7 @@ impl ProtocolError {
 /// This allow us to hide the jsonrpc communication hidden in this protocol.
 /// This protocol is generic over the manifest what are passed to the build backends.
 /// This means that, for rattler-build, the manifest is a recipe.yaml file,
-/// and for pixi it's a pixi.toml/pyproject.toml file.
+/// and for pixi it's a pixi.toml or a pyproject.toml file.
 #[derive(Debug)]
 pub struct JsonRPCBuildProtocol {
     backend_identifier: String,
@@ -118,8 +118,6 @@ pub struct JsonRPCBuildProtocol {
 }
 
 impl JsonRPCBuildProtocol {
-    /// Return the manifests that are used as input globs.
-    // fn manifests(&self) -> Vec<String>;
 
     /// Create a new instance of the protocol.
     #[allow(clippy::too_many_arguments)]
@@ -158,7 +156,7 @@ impl JsonRPCBuildProtocol {
                 let mut process = tokio::process::Command::from(tool.command())
                     .stdout(std::process::Stdio::piped())
                     .stdin(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped()) // TODO: Capture this?
+                    .stderr(std::process::Stdio::piped())
                     .spawn()?;
 
                 let backend_identifier = tool.executable().clone();

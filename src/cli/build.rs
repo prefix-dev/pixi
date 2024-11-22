@@ -39,7 +39,7 @@ pub struct Args {
     #[arg(long, action = ArgAction::SetTrue)]
     pub with_system: bool,
 
-    /// If recipe.yaml is present in the source directory, ignore it
+    /// If a recipe.yaml is present in the source directory, ignore it
     /// and build the package using manifest only
     #[arg(long, action = ArgAction::SetTrue)]
     pub ignore_recipe: bool,
