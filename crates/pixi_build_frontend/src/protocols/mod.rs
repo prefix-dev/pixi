@@ -23,7 +23,6 @@ use pixi_build_types::{
     },
     BackendCapabilities, FrontendCapabilities,
 };
-use rattler_conda_types::ChannelConfig;
 use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use tokio::{
@@ -38,10 +37,8 @@ use crate::{
     CondaBuildReporter, CondaMetadataReporter,
 };
 
-pub(super) mod conda_build;
+pub mod builders;
 mod error;
-pub(super) mod pixi;
-pub(super) mod rattler_build;
 pub(super) mod stderr;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -101,23 +98,50 @@ impl ProtocolError {
 /// This protocol is generic over the manifest what are passed to the build backends.
 /// This means that, for rattler-build, the manifest is a recipe.yaml file,
 /// and for pixi it's a pixi.toml/pyproject.toml file.
-#[async_trait::async_trait]
-pub(crate) trait BaseProtocol: Sized {
+#[derive(Debug)]
+pub struct JsonRPCBuildProtocol {
+    backend_identifier: String,
+
+    client: Client,
+
+    build_id: usize,
+
+    /// The directory that contains the source files.
+    source_dir: PathBuf,
+
+    /// The directory that contains the `recipe.yaml` or `pixi.toml` in the source directory.
+    manifest_path: PathBuf,
+
+    _backend_capabilities: BackendCapabilities,
+
+    stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
+}
+
+impl JsonRPCBuildProtocol {
     /// Return the manifests that are used as input globs.
-    fn manifests(&self) -> Vec<String>;
+    // fn manifests(&self) -> Vec<String>;
 
     /// Create a new instance of the protocol.
     #[allow(clippy::too_many_arguments)]
     fn new(
         client: Client,
         backend_identifier: String,
-        channel_config: ChannelConfig,
         source_dir: PathBuf,
         manifest_path: PathBuf,
         backend_capabilities: BackendCapabilities,
         build_id: usize,
         stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
-    ) -> Self;
+    ) -> Self {
+        Self {
+            client,
+            backend_identifier,
+            source_dir,
+            manifest_path,
+            _backend_capabilities: backend_capabilities,
+            build_id,
+            stderr,
+        }
+    }
 
     /// Setup a new protocol instance.
     /// This will spawn a new backend process and establish a JSON-RPC connection.
@@ -126,7 +150,6 @@ pub(crate) trait BaseProtocol: Sized {
         manifest_path: PathBuf,
         build_id: usize,
         cache_dir: Option<PathBuf>,
-        channel_config: ChannelConfig,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
         match tool.try_into_executable() {
@@ -161,7 +184,6 @@ pub(crate) trait BaseProtocol: Sized {
                     manifest_path,
                     build_id,
                     cache_dir,
-                    channel_config,
                     tx,
                     rx,
                     Some(stderr),
@@ -175,7 +197,6 @@ pub(crate) trait BaseProtocol: Sized {
                     manifest_path,
                     build_id,
                     cache_dir,
-                    channel_config,
                     Sender::from(ipc.rpc_out),
                     Receiver::from(ipc.rpc_in),
                     None,
@@ -194,7 +215,6 @@ pub(crate) trait BaseProtocol: Sized {
         manifest_path: PathBuf,
         build_id: usize,
         cache_dir: Option<PathBuf>,
-        channel_config: ChannelConfig,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
         stderr: Option<Lines<BufReader<ChildStderr>>>,
@@ -224,10 +244,9 @@ pub(crate) trait BaseProtocol: Sized {
             })
             .unwrap();
 
-        Ok(BaseProtocol::new(
+        Ok(JsonRPCBuildProtocol::new(
             client,
             backend_identifier,
-            channel_config,
             source_dir,
             manifest_path,
             result.capabilities,
@@ -237,13 +256,13 @@ pub(crate) trait BaseProtocol: Sized {
     }
 
     /// Extract metadata from the recipe.
-    async fn get_conda_metadata(
+    pub async fn get_conda_metadata(
         &self,
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
     ) -> Result<CondaMetadataResult, ProtocolError> {
         // Capture all of stderr and discard it
-        let stderr = self.stderr().as_ref().map(|stderr| {
+        let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
             // Spawn the stderr forwarding task
@@ -252,10 +271,10 @@ pub(crate) trait BaseProtocol: Sized {
         });
 
         // Start the metadata operation
-        let operation = reporter.on_metadata_start(self.build_id());
+        let operation = reporter.on_metadata_start(self.build_id);
 
         let result = self
-            .client()
+            .client
             .request(
                 procedures::conda_metadata::METHOD_NAME,
                 RpcParams::from(request),
@@ -263,7 +282,7 @@ pub(crate) trait BaseProtocol: Sized {
             .await
             .map_err(|err| {
                 ProtocolError::from_client_error(
-                    self.backend_identifier().to_string(),
+                    self.backend_identifier.clone(),
                     err,
                     procedures::conda_metadata::METHOD_NAME,
                 )
@@ -289,29 +308,29 @@ pub(crate) trait BaseProtocol: Sized {
     }
 
     /// Build a specific conda package output
-    async fn conda_build(
+    pub async fn conda_build(
         &self,
         request: &CondaBuildParams,
         reporter: &dyn CondaBuildReporter,
     ) -> Result<CondaBuildResult, ProtocolError> {
         // Captures stderr output
-        let stderr = self.stderr().as_ref().map(|stderr| {
+        let stderr = self.stderr.as_ref().map(|stderr| {
             let (sender, receiver) = tokio::sync::mpsc::channel(100);
             let (cancel_tx, cancel_rx) = oneshot::channel();
             let handle = tokio::spawn(stderr_stream(stderr.clone(), sender, cancel_rx));
             (cancel_tx, receiver, handle)
         });
 
-        let operation = reporter.on_build_start(self.build_id());
+        let operation = reporter.on_build_start(self.build_id);
         let request = self
-            .client()
+            .client
             .request(
                 procedures::conda_build::METHOD_NAME,
                 RpcParams::from(request),
             )
             .map_err(|err| {
                 ProtocolError::from_client_error(
-                    self.backend_identifier().to_string(),
+                    self.backend_identifier.clone(),
                     err,
                     procedures::conda_build::METHOD_NAME,
                 )
@@ -367,15 +386,18 @@ pub(crate) trait BaseProtocol: Sized {
         result
     }
 
-    /// Returns a unique identifier for the backend.
-    fn backend_identifier(&self) -> &str;
+    pub fn backend_identifier(&self) -> &str {
+        &self.backend_identifier
+    }
 
-    /// Returns the client used to communicate with the backend.
-    fn client(&self) -> &Client;
-
-    /// Returns a unique identifier for the build.
-    fn build_id(&self) -> usize;
-
-    /// Returns the handle to the stderr of the backend process.
-    fn stderr(&self) -> Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>;
+    pub fn manifests(&self) -> Vec<String> {
+        self.manifest_path
+            .strip_prefix(self.source_dir.clone())
+            .unwrap_or(&self.manifest_path)
+            .to_path_buf()
+            .to_str()
+            .into_iter()
+            .map(ToString::to_string)
+            .collect()
+    }
 }

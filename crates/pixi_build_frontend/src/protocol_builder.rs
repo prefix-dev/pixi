@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
-    conda_build_protocol, pixi_protocol,
+    conda_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
     rattler_build_protocol,
     tool::ToolCache,
@@ -38,7 +38,7 @@ pub(crate) enum ProtocolBuilder {
 
     /// A directory containing a `meta.yaml` that can be interpreted by
     /// conda-build.
-    CondaBuild(conda_build_protocol::ProtocolBuilder),
+    CondaBuild(conda_protocol::ProtocolBuilder),
 
     /// A directory containing a `recipe.yaml` that can be built with
     /// rattler-build.
@@ -51,8 +51,8 @@ impl From<pixi_protocol::ProtocolBuilder> for ProtocolBuilder {
     }
 }
 
-impl From<conda_build_protocol::ProtocolBuilder> for ProtocolBuilder {
-    fn from(value: conda_build_protocol::ProtocolBuilder) -> Self {
+impl From<conda_protocol::ProtocolBuilder> for ProtocolBuilder {
+    fn from(value: conda_protocol::ProtocolBuilder) -> Self {
         Self::CondaBuild(value)
     }
 }
@@ -93,9 +93,7 @@ impl ProtocolBuilder {
         // Try to discover as a conda build project
         // Unwrap because error is Infallible
         if discovery_config.enable_conda_build {
-            if let Some(protocol) =
-                conda_build_protocol::ProtocolBuilder::discover(source_dir).unwrap()
-            {
+            if let Some(protocol) = conda_protocol::ProtocolBuilder::discover(source_dir).unwrap() {
                 return Ok(protocol.into());
             }
         }
@@ -156,24 +154,21 @@ impl ProtocolBuilder {
         build_id: usize,
     ) -> Result<Protocol, BuildFrontendError> {
         match self {
-            Self::Pixi(protocol) => Ok(Protocol::Pixi(
-                protocol
-                    .finish(tool_cache, build_id)
-                    .await
-                    .map_err(FinishError::Pixi)?,
-            )),
-            Self::CondaBuild(protocol) => Ok(Protocol::CondaBuild(
-                protocol
-                    .finish(tool_cache)
-                    .await
-                    .map_err(FinishError::CondaBuild)?,
-            )),
-            Self::RattlerBuild(protocol) => Ok(Protocol::RattlerBuild(
-                protocol
-                    .finish(tool_cache, build_id)
-                    .await
-                    .map_err(FinishError::RattlerBuild)?,
-            )),
+            Self::Pixi(protocol) => Ok(protocol
+                .finish(tool_cache, build_id)
+                .await
+                .map_err(FinishError::Pixi)?
+                .into()),
+            Self::CondaBuild(protocol) => Ok(protocol
+                .finish(tool_cache, build_id)
+                .await
+                .map_err(FinishError::CondaBuild)?
+                .into()),
+            Self::RattlerBuild(protocol) => Ok(protocol
+                .finish(tool_cache, build_id)
+                .await
+                .map_err(FinishError::RattlerBuild)?
+                .into()),
         }
     }
 }

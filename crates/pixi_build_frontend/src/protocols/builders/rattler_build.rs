@@ -1,20 +1,16 @@
-mod protocol;
-
 use std::path::{Path, PathBuf};
 
 use miette::Diagnostic;
 use pixi_manifest::Manifest;
 
-pub use protocol::Protocol;
+// pub use protocol::Protocol;
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
-use super::{
-    pixi::{self, ProtocolBuildError as PixiProtocolBuildError},
-    BaseProtocol, InitializeError,
-};
+use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
 
 use crate::{
+    protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
     BackendOverride,
 };
@@ -55,7 +51,7 @@ pub struct ProtocolBuilder {
     backend_spec: Option<ToolSpec>,
 
     /// The channel configuration used by this instance.
-    channel_config: ChannelConfig,
+    _channel_config: ChannelConfig,
 
     /// The cache directory the backend should use. (not used atm)
     cache_dir: Option<PathBuf>,
@@ -98,7 +94,7 @@ impl ProtocolBuilder {
             recipe_dir: recipe_dir.to_path_buf(),
             manifest_path: manifest.path.clone(),
             backend_spec: backend_spec.map(Into::into),
-            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
         }
     }
@@ -116,7 +112,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            channel_config,
+            _channel_config: channel_config,
             ..self
         }
     }
@@ -127,7 +123,11 @@ impl ProtocolBuilder {
     }
 
     /// Create the protocol instance.
-    pub async fn finish(self, tool: &ToolCache, build_id: usize) -> Result<Protocol, FinishError> {
+    pub async fn finish(
+        self,
+        tool: &ToolCache,
+        build_id: usize,
+    ) -> Result<JsonRPCBuildProtocol, FinishError> {
         let tool_spec = self
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest_path.clone()))?;
@@ -137,12 +137,11 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
-        Ok(Protocol::setup(
+        Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.recipe_dir.join("recipe.yaml"),
             build_id,
             self.cache_dir,
-            self.channel_config,
             tool,
         )
         .await?)

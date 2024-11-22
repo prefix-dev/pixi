@@ -14,7 +14,7 @@ boltons = { path = "." }
 [host-dependencies]
 hatchling = "*"
 
-[build]
+[build-system]
 build-backend = "pixi-build-rattler-build"
 channels = [
   "https://repo.prefix.dev/graf",
