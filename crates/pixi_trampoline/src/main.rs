@@ -25,11 +25,9 @@ fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
     // the metadata file is next to the current executable parent folder,
     // under trampoline_configuration/current_exe_name.json
     if let Some(exe_parent) = current_exe.parent() {
-        let metadata_path = exe_parent.join(TRAMPOLINE_CONFIGURATION).join(format!(
-            "{}{}",
-            executable_from_path(current_exe),
-            ".json"
-        ));
+        let metadata_path = exe_parent
+            .join(TRAMPOLINE_CONFIGURATION)
+            .join(format!("{}.json", executable_from_path(current_exe),));
         let metadata_file = File::open(&metadata_path)
             .into_diagnostic()
             .wrap_err(format!("Couldn't open {:?}", metadata_path))?;
