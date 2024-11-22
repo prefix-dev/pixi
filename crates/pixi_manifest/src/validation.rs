@@ -163,7 +163,7 @@ impl WorkspaceManifest {
             for feature in self.features.values() {
                 if is_using_source_deps(feature, supported_platforms.iter()) {
                     return Err(miette::miette!(
-                        help = "enable the `build` preview feature to use source dependencies",
+                        help = "enable the `pixi-build` preview feature to use source dependencies",
                         "source dependencies are used in the feature '{}', but the `pixi-build` preview feature is not enabled",
                         feature.name
                     ));
@@ -174,8 +174,8 @@ impl WorkspaceManifest {
                 // Check if we have enabled the build feature if we have a build section
                 if !build_enabled {
                     return Err(miette::miette!(
-                        help = "enable the build preview feature to use the build section by setting `preview = [\"pixi-build\"]",
-                        "the build section is defined, but the `pixi-build` preview feature is not enabled"
+                        help = "enable the `pixi-build` preview feature to use the build-system section by setting `preview = [\"pixi-build\"]",
+                        "the build-system is defined, but the `pixi-build` preview feature is not enabled"
                     ));
                 }
             }

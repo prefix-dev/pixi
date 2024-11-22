@@ -2381,7 +2381,7 @@ bar = "*"
         channels = ['conda-forge']
         platforms = ['linux-64']
 
-        [build]
+        [build-system]
         build-backend = "pixi-build-cmake"
         channels = [
           "https://prefix.dev/pixi-build-backends",
@@ -2392,7 +2392,7 @@ bar = "*"
 
         let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
         let err = manifest.unwrap_err();
-        insta::assert_snapshot!(err, @"the build section is defined, but the `pixi-build` preview feature is not enabled");
+        insta::assert_snapshot!(err, @"the build-system is defined, but the `pixi-build` preview feature is not enabled");
     }
 
     #[test]
@@ -2404,7 +2404,7 @@ bar = "*"
         platforms = ['linux-64']
         preview = ["pixi-build"]
 
-        [build]
+        [build-system]
         build-backend = "pixi-build-cmake"
         channels = [
           "https://prefix.dev/pixi-build-backends",
