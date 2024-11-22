@@ -25,7 +25,7 @@ use crate::{
     task::{Task, TaskName},
     utils::PixiSpanned,
     workspace::Workspace,
-    BuildSection,
+    BuildSystem,
 };
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
@@ -45,7 +45,7 @@ pub struct WorkspaceManifest {
     pub solve_groups: SolveGroups,
 
     /// The build section of the project.
-    pub build: Option<BuildSection>,
+    pub build_system: Option<BuildSystem>,
 }
 
 impl WorkspaceManifest {
@@ -175,7 +175,7 @@ impl<'de> Deserialize<'de> for WorkspaceManifest {
 
             /// The build section
             #[serde(default)]
-            build: Option<BuildSection>,
+            build_system: Option<BuildSystem>,
 
             /// The URI for the manifest schema which is unused by pixi
             #[allow(dead_code)]
@@ -272,14 +272,14 @@ impl<'de> Deserialize<'de> for WorkspaceManifest {
             }));
         }
 
-        let build = toml_manifest.build;
+        let build = toml_manifest.build_system;
 
         Ok(Self {
             workspace: toml_manifest.workspace,
             features,
             environments,
             solve_groups,
-            build,
+            build_system: build,
         })
     }
 }
@@ -695,7 +695,7 @@ mod tests {
         channels = []
         platforms = []
 
-        [build]
+        [build-system]
         dependencies = ["python-build-backend > 12"]
         build-backend = "python-build-backend"
         channels = []
@@ -703,7 +703,7 @@ mod tests {
         .to_string();
         let manifest = toml_edit::de::from_str::<WorkspaceManifest>(&contents)
             .expect("parsing should succeed!");
-        assert_yaml_snapshot!(manifest.build.clone().unwrap());
+        assert_yaml_snapshot!(manifest.build_system.clone().unwrap());
     }
 
     #[test]
@@ -714,7 +714,7 @@ mod tests {
         channels = []
         platforms = []
 
-        [build]
+        [build-system]
         dependencies = ["python-build-backend > > 12"]
         build-backend = "python-build-backend"
         channels = []

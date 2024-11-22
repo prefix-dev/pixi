@@ -501,6 +501,7 @@ mod tests {
     use indexmap::IndexSet;
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_consts::consts::DEFAULT_CHANNELS;
     use rattler_conda_types::ParseStrictness;
 
     use super::*;
@@ -769,7 +770,17 @@ mod tests {
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest
+            .add_environment(
+                &env_name,
+                Some(
+                    DEFAULT_CHANNELS
+                        .iter()
+                        .map(|&name| NamedChannelOrUrl::Name(name.to_string()))
+                        .collect(),
+                ),
+            )
+            .unwrap();
 
         // Add dependency
         manifest

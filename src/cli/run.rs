@@ -19,6 +19,7 @@ use crate::task::{
     InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
 use crate::Project;
+use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
@@ -37,6 +38,9 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub activation_config: ConfigCliActivation,
+
     /// The environment to run the task in.
     #[arg(long, short)]
     pub environment: Option<String>,
@@ -53,9 +57,13 @@ pub struct Args {
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let cli_config = args
+        .activation_config
+        .merge_config(args.prefix_update_config.config.clone().into());
+
     // Load the project
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(cli_config);
 
     // Extract the passed in environment name.
     let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
@@ -158,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // check task cache
         let task_cache = match executable_task
-            .can_skip(&lock_file)
+            .can_skip(&lock_file.lock_file)
             .await
             .into_diagnostic()?
         {
@@ -190,6 +198,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
+                    Some(&lock_file.lock_file),
+                    project.config().force_activate(),
+                    project.config().experimental_activation_cache_usage(),
                 )
                 .await?;
                 entry.insert(command_env)

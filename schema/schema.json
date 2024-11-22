@@ -20,10 +20,6 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
-    "build": {
-      "$ref": "#/$defs/BuildSection",
-      "description": "The build section of the project"
-    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",
@@ -39,6 +35,10 @@
           }
         ]
       }
+    },
+    "build-system": {
+      "$ref": "#/$defs/BuildSystem",
+      "description": "The build-system used to build the package."
     },
     "dependencies": {
       "title": "Dependencies",
@@ -229,8 +229,8 @@
         }
       }
     },
-    "BuildSection": {
-      "title": "BuildSection",
+    "BuildSystem": {
+      "title": "BuildSystem",
       "type": "object",
       "additionalProperties": false,
       "properties": {

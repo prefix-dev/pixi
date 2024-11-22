@@ -12,7 +12,7 @@ start = "python -m flask run --port=5050"
 [dependencies]
 flask = "2.*"
 
-[build]
+[build-system]
 build-backend = "pixi-build-python"
 channels = [
   "https://fast.prefix.dev/pixi-build-backends",

@@ -1,6 +1,6 @@
 use miette::IntoDiagnostic;
 use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
-use pixi_manifest::BuildSection;
+use pixi_manifest::BuildSystem;
 use pixi_utils::EnvironmentHash;
 use rattler::{install::Installer, package_cache::PackageCache};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
@@ -44,7 +44,7 @@ impl IsolatedToolSpec {
     }
 
     /// Construct a new instance from a build section
-    pub fn from_build_section(build_section: &BuildSection) -> Self {
+    pub fn from_build_section(build_section: &BuildSystem) -> Self {
         Self {
             specs: build_section.dependencies.clone(),
             command: build_section.build_backend.clone(),
@@ -114,7 +114,7 @@ impl IsolatedToolSpec {
             ))
             .install(&cached_dir, solved_records)
             .await
-            .unwrap();
+            .into_diagnostic()?;
 
         // Get the activation scripts
         let activator =

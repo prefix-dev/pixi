@@ -1,6 +1,6 @@
 use crate::lock_file::UpdateMode;
 use crate::{
-    environment::{update_prefix, LockFileUsage},
+    environment::{get_update_lock_file_and_prefix, LockFileUsage},
     Project,
 };
 
@@ -13,7 +13,7 @@ pub async fn execute(mut project: Project, args: AddRemoveArgs) -> miette::Resul
         .remove_channels(args.prioritized_channels(), &args.feature_name())?;
 
     // Try to update the lock-file without the removed channels
-    update_prefix(
+    get_update_lock_file_and_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
