@@ -36,7 +36,7 @@ jobs:
             os: ubuntu-latest
 
           - name: "Linux-powerpc64"
-            target: powerpc64le-unknown-linux-musl
+            target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
           - name: "macOS-x86"
