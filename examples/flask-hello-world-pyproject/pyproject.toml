@@ -38,6 +38,7 @@ test = ["pytest>=8.3.3,<9"]
 [tool.pixi.host-dependencies]
 hatchling = "*"
 
+[tool.pixi.package]
 
 [tool.pixi.build-system]
 build-backend = "pixi-build-python"
