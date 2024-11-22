@@ -733,8 +733,8 @@ impl Manifest {
     }
 
     /// Returns the preview field of the project
-    pub fn preview(&self) -> Option<&Preview> {
-        self.workspace.workspace.preview.as_ref()
+    pub fn preview(&self) -> &Preview {
+        &self.workspace.workspace.preview
     }
 
     /// Return the build section from the parsed manifest

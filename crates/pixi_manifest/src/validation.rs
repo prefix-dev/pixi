@@ -134,27 +134,24 @@ impl WorkspaceManifest {
         }
 
         // Warn on any unknown preview features
-        if let Some(preview) = self.workspace.preview.as_ref() {
-            let preview = preview.unknown_preview_features();
-            if !preview.is_empty() {
-                let are = if preview.len() > 1 { "are" } else { "is" };
-                let s = if preview.len() > 1 { "s" } else { "" };
-                let preview_array = if preview.len() == 1 {
-                    format!("{:?}", preview)
-                } else {
-                    format!("[{:?}]", preview.iter().format(", "))
-                };
-                tracing::warn!(
-                    "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
-            }
+        let preview = self.workspace.preview.unknown_preview_features();
+        if !preview.is_empty() {
+            let are = if preview.len() > 1 { "are" } else { "is" };
+            let s = if preview.len() > 1 { "s" } else { "" };
+            let preview_array = if preview.len() == 1 {
+                format!("{:?}", preview)
+            } else {
+                format!("[{:?}]", preview.iter().format(", "))
+            };
+            tracing::warn!(
+                "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
         }
+
         // Check if the pixi build feature is enabled
         let build_enabled = self
             .workspace
             .preview
-            .as_ref()
-            .map(|p| p.is_enabled(KnownPreviewFeature::PixiBuild))
-            .unwrap_or(false);
+            .is_enabled(KnownPreviewFeature::PixiBuild);
 
         // Error any conda source dependencies are used and is not set
         if !build_enabled {

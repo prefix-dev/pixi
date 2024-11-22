@@ -24,6 +24,12 @@ pub enum Preview {
     Features(Vec<PreviewFeature>), // For `preview = ["feature"]`
 }
 
+impl Default for Preview {
+    fn default() -> Self {
+        Self::Features(Vec::new())
+    }
+}
+
 impl Preview {
     /// Returns true if all preview features are enabled
     pub fn all_enabled(&self) -> bool {

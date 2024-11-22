@@ -1001,18 +1001,12 @@ impl Project {
 
     /// Returns true if all preview features are enabled
     pub fn all_preview_features_enabled(&self) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.all_enabled())
-            .unwrap_or(false)
+        self.manifest.preview().all_enabled()
     }
 
     /// Returns true if the given preview feature is enabled
     pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
-        self.manifest
-            .preview()
-            .map(|preview| preview.is_enabled(feature))
-            .unwrap_or(false)
+        self.manifest.preview().is_enabled(feature)
     }
 }
 
