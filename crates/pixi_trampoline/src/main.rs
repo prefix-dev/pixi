@@ -15,6 +15,7 @@ pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 #[derive(Deserialize, Debug)]
 struct Metadata {
     exe: String,
+    #[allow(unused)]
     path: String,
     env: HashMap<String, String>,
 }
@@ -41,13 +42,13 @@ fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
-fn update_path(cached_path: String) -> String {
+fn update_path(cached_path: &str) -> String {
     // Get current PATH
     let current_path = std::env::var("PATH").unwrap_or_default();
 
     // Split paths into vectors using platform-specific delimiter
     let current_paths: Vec<PathBuf> = std::env::split_paths(&current_path).collect();
-    let cached_paths: Vec<PathBuf> = std::env::split_paths(&cached_path).collect();
+    let cached_paths: Vec<PathBuf> = std::env::split_paths(cached_path).collect();
 
     // Stick all new elements in the front of the cached path
     let new_elements = current_paths.iter().filter(|p| !cached_paths.contains(p));
@@ -55,7 +56,7 @@ fn update_path(cached_path: String) -> String {
     // Join the new elements with the current path
     let new_path = std::env::join_paths(new_elements.chain(cached_paths.iter()))
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(cached_path);
+        .unwrap_or(cached_path.to_string());
 
     new_path
 }
@@ -79,19 +80,12 @@ fn trampoline() -> miette::Result<()> {
 
     // Set any additional environment variables
     for (key, value) in metadata.env.iter() {
-        cmd.env(key, value);
-    }
-
-    // Update the PATH environment variable
-    if let Some(path) = metadata
-        .env
-        .iter()
-        .find(|(key, _)| key.to_uppercase() == "PATH")
-        .map(|(_, value)| value.clone())
-    {
-        let new_path = update_path(path);
-        // Set the PATH environment variable
-        cmd.env("PATH", new_path);
+        // Special case for PATH, which needs to be updated with the current PATH elements
+        if key.to_uppercase() == "PATH" {
+            cmd.env("PATH", update_path(&value));
+        } else {
+            cmd.env(key, value);
+        }
     }
 
     // Add any additional arguments
