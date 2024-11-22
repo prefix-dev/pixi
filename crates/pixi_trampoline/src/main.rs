@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
+use std::ops::Not;
 #[cfg(target_family = "unix")]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -51,7 +52,9 @@ fn update_path(cached_path: &str) -> String {
     let cached_paths: Vec<PathBuf> = std::env::split_paths(cached_path).collect();
 
     // Stick all new elements in the front of the cached path
-    let new_elements = current_paths.iter().filter(|p| !cached_paths.contains(p));
+    let new_elements = current_paths
+        .iter()
+        .filter(|p| cached_paths.contains(p).not());
 
     // Join the new elements with the current path
     let new_path = std::env::join_paths(new_elements.chain(cached_paths.iter()))
@@ -82,7 +85,7 @@ fn trampoline() -> miette::Result<()> {
     for (key, value) in metadata.env.iter() {
         // Special case for PATH, which needs to be updated with the current PATH elements
         if key.to_uppercase() == "PATH" {
-            cmd.env("PATH", update_path(&value));
+            cmd.env("PATH", update_path(value));
         } else {
             cmd.env(key, value);
         }
