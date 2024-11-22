@@ -22,7 +22,7 @@ pub struct BuildFrontend {
     /// The cache directory to use or `None` to use the default cache directory.
     cache_dir: Option<PathBuf>,
 
-    /// The configuration to use when discovering the protocol.
+    /// The configuration to use when enabling the protocols.
     enabled_protocols: EnabledProtocols,
 }
 
@@ -92,7 +92,7 @@ impl BuildFrontend {
         }
     }
 
-    /// Sets the discovery config.
+    /// Sets the enabling protocols.
     pub fn with_enabled_protocols(self, enabled_protocols: EnabledProtocols) -> Self {
         Self {
             enabled_protocols,

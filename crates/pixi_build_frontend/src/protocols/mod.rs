@@ -118,7 +118,6 @@ pub struct JsonRPCBuildProtocol {
 }
 
 impl JsonRPCBuildProtocol {
-
     /// Create a new instance of the protocol.
     #[allow(clippy::too_many_arguments)]
     fn new(
