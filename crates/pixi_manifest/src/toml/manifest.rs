@@ -8,9 +8,9 @@ use serde_with::serde_as;
 use crate::{
     environment::EnvironmentIdx,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{environment::TomlEnvironmentList, TomlWorkspace},
+    toml::{environment::TomlEnvironmentList, TomlFeature, TomlTarget, TomlWorkspace},
     utils::PixiSpanned,
-    Activation, BuildSection, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    Activation, BuildSystem, Environment, EnvironmentName, Environments, Feature, FeatureName,
     PyPiRequirement, SolveGroups, SpecType, SystemRequirements, Target, TargetSelector, Targets,
     Task, TaskName, TomlError, Workspace, WorkspaceManifest,
 };
@@ -28,7 +28,7 @@ pub struct TomlManifest {
     pub system_requirements: SystemRequirements,
 
     #[serde(default)]
-    pub target: IndexMap<PixiSpanned<TargetSelector>, Target>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
 
     // HACK: If we use `flatten`, unknown keys will point to the wrong location in the
     // file.  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
@@ -69,7 +69,7 @@ pub struct TomlManifest {
 
     /// The features defined in the project.
     #[serde(default)]
-    pub feature: IndexMap<FeatureName, Feature>,
+    pub feature: IndexMap<FeatureName, TomlFeature>,
 
     /// The environments the project can create.
     #[serde(default)]
@@ -81,7 +81,7 @@ pub struct TomlManifest {
 
     /// The build section
     #[serde(default)]
-    pub build: Option<BuildSection>,
+    pub build_system: Option<BuildSystem>,
 
     /// The URI for the manifest schema which is unused by pixi
     #[serde(rename = "$schema")]
@@ -139,7 +139,13 @@ impl TomlManifest {
             pypi_options: self.pypi_options,
 
             // Combine the default target with all user specified targets
-            targets: Targets::from_default_and_user_defined(default_target, self.target),
+            targets: Targets::from_default_and_user_defined(
+                default_target,
+                self.target
+                    .into_iter()
+                    .map(|(selector, target)| (selector, target.into_target()))
+                    .collect(),
+            ),
         };
 
         // Construct the features including the default feature
@@ -148,10 +154,7 @@ impl TomlManifest {
         let named_features = self
             .feature
             .into_iter()
-            .map(|(name, mut feature)| {
-                feature.name = name.clone();
-                (name, feature)
-            })
+            .map(|(name, feature)| (name.clone(), feature.into_future(name)))
             .collect::<IndexMap<FeatureName, Feature>>();
         let features = features.into_iter().chain(named_features).collect();
 
@@ -191,7 +194,7 @@ impl TomlManifest {
             }));
         }
 
-        let build = self.build;
+        let build_system = self.build_system;
 
         // Raise an error if the workspace name is not set.
         let name = self
@@ -225,7 +228,7 @@ impl TomlManifest {
             features,
             environments,
             solve_groups,
-            build,
+            build_system,
         })
     }
 }

@@ -3,14 +3,13 @@ use std::{collections::HashMap, path::PathBuf};
 use indexmap::IndexSet;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 use rattler_solve::ChannelPriority;
-use serde::Deserialize;
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{preview::Preview, utils::PixiSpanned, PrioritizedChannel};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Workspace {
     /// The name of the project
     pub name: String,
@@ -60,5 +59,5 @@ pub struct Workspace {
     pub pypi_options: Option<PypiOptions>,
 
     /// Preview features
-    pub preview: Option<Preview>,
+    pub preview: Preview,
 }

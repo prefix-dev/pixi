@@ -104,8 +104,9 @@ async fn test_missing_backend() {
         name = "project"
         platforms = []
         channels = []
+        preview = ['pixi-build']
 
-        [build]
+        [build-system]
         dependencies = []
         build-backend = "non-existing"
         channels = []

@@ -184,7 +184,6 @@ impl BuildContext {
             path: self.fetch_pinned_source(&source_spec.source).await?,
             pinned: source_spec.source.clone(),
         };
-        eprintln!("passed build channels {:?}", build_channels);
 
         let channels_urls: Vec<Url> = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
 

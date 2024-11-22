@@ -4,6 +4,7 @@ channels = ["conda-forge"]
 description = "Example how to get started with flask in a pixi environment."
 name = "flask-hello-world"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
 version = "0.1.0"
 
 [tasks]
@@ -12,7 +13,7 @@ start = "python -m flask run --port=5050"
 [dependencies]
 flask = "2.*"
 
-[build]
+[build-system]
 build-backend = "pixi-build-python"
 channels = [
   "https://fast.prefix.dev/pixi-build-backends",

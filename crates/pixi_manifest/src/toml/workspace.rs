@@ -40,5 +40,7 @@ pub struct TomlWorkspace {
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
-    pub preview: Option<Preview>,
+
+    #[serde(default)]
+    pub preview: Preview,
 }

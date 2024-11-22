@@ -9,7 +9,7 @@ use crate::{
     feature::{Feature, FeatureName},
     solve_group::SolveGroups,
     workspace::Workspace,
-    BuildSection, TomlError,
+    BuildSystem, TomlError,
 };
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
@@ -29,7 +29,7 @@ pub struct WorkspaceManifest {
     pub solve_groups: SolveGroups,
 
     /// The build section of the project.
-    pub build: Option<BuildSection>,
+    pub build_system: Option<BuildSystem>,
 }
 
 impl WorkspaceManifest {
@@ -491,7 +491,7 @@ mod tests {
         channels = []
         platforms = []
 
-        [build]
+        [build-system]
         dependencies = ["python-build-backend > 12"]
         build-backend = "python-build-backend"
         channels = []
@@ -499,7 +499,7 @@ mod tests {
         .to_string();
         let manifest =
             WorkspaceManifest::from_toml_str(&contents).expect("parsing should succeed!");
-        assert_yaml_snapshot!(manifest.build.clone().unwrap());
+        assert_yaml_snapshot!(manifest.build_system.clone().unwrap());
     }
 
     #[test]
@@ -510,7 +510,7 @@ mod tests {
         channels = []
         platforms = []
 
-        [build]
+        [build-system]
         dependencies = ["python-build-backend > > 12"]
         build-backend = "python-build-backend"
         channels = []

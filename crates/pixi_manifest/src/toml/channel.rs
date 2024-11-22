@@ -14,6 +14,7 @@ use crate::PrioritizedChannel;
 /// channel = "https://prefix.dev/some-channel"
 /// channel = { channel = "some-channel", priority = 10 }
 /// ```
+#[derive(Debug)]
 pub enum TomlPrioritizedChannel {
     Map(PrioritizedChannel),
     Str(NamedChannelOrUrl),

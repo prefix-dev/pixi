@@ -5,7 +5,6 @@ use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Deserializer};
-use serde_with::serde_as;
 
 use super::error::DependencyError;
 use crate::{
@@ -311,56 +310,6 @@ impl<'de> Deserialize<'de> for TargetSelector {
                 .map(TargetSelector::Platform)
                 .map_err(serde::de::Error::custom),
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for Target {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Debug, Clone, Default, Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        #[serde(deny_unknown_fields)]
-        pub struct TomlTarget {
-            #[serde(default)]
-            dependencies: IndexMap<PackageName, PixiSpec>,
-
-            #[serde(default)]
-            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
-
-            /// Additional information to activate an environment.
-            #[serde(default)]
-            activation: Option<Activation>,
-
-            /// Target specific tasks to run in the environment
-            #[serde(default)]
-            tasks: HashMap<TaskName, Task>,
-        }
-
-        let target = TomlTarget::deserialize(deserializer)?;
-
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, target.dependencies)]);
-        if let Some(host_deps) = target.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = target.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
-
-        Ok(Self {
-            dependencies,
-            pypi_dependencies: target.pypi_dependencies,
-            activation: target.activation,
-            tasks: target.tasks,
-        })
     }
 }
 

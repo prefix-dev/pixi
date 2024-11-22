@@ -22,12 +22,11 @@ use crate::{
     preview::Preview,
     pypi::PyPiPackageName,
     pyproject::PyProjectManifest,
-    to_options,
-    toml::TomlDocument,
-    BuildSection, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target, TargetSelector,
-    Task, TaskName, WorkspaceManifest,
+    to_options, BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature,
+    FeatureName, GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target,
+    TargetSelector, Task, TaskName, WorkspaceManifest,
 };
+use crate::toml::TomlDocument;
 
 #[derive(Debug, Clone)]
 pub enum ManifestKind {
@@ -735,13 +734,13 @@ impl Manifest {
     }
 
     /// Returns the preview field of the project
-    pub fn preview(&self) -> Option<&Preview> {
-        self.workspace.workspace.preview.as_ref()
+    pub fn preview(&self) -> &Preview {
+        &self.workspace.workspace.preview
     }
 
     /// Return the build section from the parsed manifest
-    pub fn build_section(&self) -> Option<&BuildSection> {
-        self.workspace.build.as_ref()
+    pub fn build_section(&self) -> Option<&BuildSystem> {
+        self.workspace.build_system.as_ref()
     }
 }
 
@@ -2356,5 +2355,69 @@ bar = "*"
             .map(|c| c.channel.to_string())
             .collect();
         assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
+    }
+
+    #[test]
+    fn test_validation_failure_source_dependency() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"source dependencies are used in the feature 'default', but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_failure_build_section() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+
+        [build-system]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        let err = manifest.unwrap_err();
+        insta::assert_snapshot!(err, @"the build-system is defined, but the `pixi-build` preview feature is not enabled");
+    }
+
+    #[test]
+    fn test_validation_succeed_build() {
+        let toml = r#"
+        [project]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [build-system]
+        build-backend = "pixi-build-cmake"
+        channels = [
+          "https://prefix.dev/pixi-build-backends",
+          "https://prefix.dev/conda-forge",
+        ]
+        dependencies = ["pixi-build-cmake"]
+
+        [dependencies]
+        foo = { path = "./foo" }
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), toml);
+        manifest.unwrap();
     }
 }
