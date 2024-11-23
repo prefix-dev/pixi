@@ -371,7 +371,8 @@ impl Project {
             .map(PathBuf::from)
             .map(|dir| dir.join("pixi").join(MANIFEST_DEFAULT_NAME))
             .or_else(|| {
-                dirs::home_dir().map(|dir| dir.join(".config").join("pixi").join(MANIFEST_DEFAULT_NAME))
+                dirs::home_dir()
+                    .map(|dir| dir.join(".config").join("pixi").join(MANIFEST_DEFAULT_NAME))
             })
             .filter(|dir| dir.exists())
             .or_else(|| {
