@@ -367,7 +367,19 @@ impl Project {
 
     /// Get the default path to the global manifest file
     pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
-        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .map(|dir| dir.join("pixi").join(MANIFEST_DEFAULT_NAME))
+            .or_else(|| {
+                dirs::home_dir().map(|dir| dir.join(".config").join("pixi").join(MANIFEST_DEFAULT_NAME))
+            })
+            .filter(|dir| dir.exists())
+            .or_else(|| {
+                Self::manifest_dir()
+                    .map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+                    .ok()
+            })
+            .ok_or_else(|| miette::miette!("could not determine default manifest path"))
     }
 
     /// Loads a project from manifest file.
