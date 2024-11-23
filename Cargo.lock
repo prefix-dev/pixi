@@ -3237,6 +3237,7 @@ dependencies = [
  "csv",
  "deno_task_shell",
  "dialoguer",
+ "dirs",
  "dunce",
  "fake",
  "fancy_display",

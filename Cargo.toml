@@ -195,6 +195,7 @@ console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 deno_task_shell = { workspace = true }
+dirs = {workspace = true }
 dialoguer = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
