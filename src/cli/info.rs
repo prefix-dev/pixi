@@ -6,7 +6,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeatureName, HasEnvironmentDependencies};
+use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
@@ -391,7 +391,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
-                            .environment_dependencies(Some(env.best_platform()))
+                            .combined_dependencies(Some(env.best_platform()))
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),

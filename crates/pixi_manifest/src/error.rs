@@ -55,6 +55,8 @@ pub enum TomlError {
     },
     #[error("Could not convert pep508 to pixi pypi requirement")]
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
+    #[error(transparent)]
+    InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
 }
 
 impl From<toml_edit::TomlError> for TomlError {
@@ -113,6 +115,7 @@ impl Diagnostic for TomlError {
                 span.clone().map(SourceSpan::from)
             }
             TomlError::FeatureNotEnabled(err) => return err.labels(),
+            TomlError::InvalidNonPackageDependencies(err) => return err.labels(),
             _ => None,
         };
 
@@ -137,6 +140,7 @@ impl Diagnostic for TomlError {
                 Some(Box::new("Run `pixi init` to create a new project manifest"))
             }
             TomlError::FeatureNotEnabled(err) => err.help(),
+            TomlError::InvalidNonPackageDependencies(err) => err.help(),
             _ => None,
         }
     }
@@ -212,5 +216,27 @@ impl miette::Diagnostic for UnknownFeature {
         } else {
             None
         }
+    }
+}
+
+/// An error that indicates that some package sections are only valid when the
+/// manifest describes a package instead of a workspace.
+#[derive(Debug, Error, Clone)]
+#[error("build-, host- and run-dependency sections are only valid for packages.")]
+pub struct InvalidNonPackageDependencies {
+    pub invalid_dependency_sections: Vec<Range<usize>>,
+}
+
+impl Diagnostic for InvalidNonPackageDependencies {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        Some(Box::new(
+            "These sections are only valid when the manifest describes a package instead of a workspace.\nAdd a `[package]` section to the manifest to fix this error or remove the offending sections.",
+        ))
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(self.invalid_dependency_sections.iter().map(
+            |range| LabeledSpan::new_with_span(None, SourceSpan::from(range.clone())),
+        )))
     }
 }

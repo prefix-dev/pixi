@@ -463,8 +463,7 @@ impl Project {
 
         let (match_specs, dependencies_names) = environment
             .dependencies
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, spec)| {
                 if let Some(nameless_spec) = spec
                     .clone()
@@ -473,7 +472,7 @@ impl Project {
                 {
                     Ok((
                         MatchSpec::from_nameless(nameless_spec, Some(name.clone())),
-                        name,
+                        name.clone(),
                     ))
                 } else {
                     Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
@@ -759,8 +758,7 @@ impl Project {
 
         let specs = environment
             .dependencies
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
                     spec.clone()

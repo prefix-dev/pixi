@@ -36,6 +36,10 @@ pub enum ProtocolBuildError {
     #[error("failed to setup a build backend, the {} could not be parsed", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest"))]
     #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()))]
     FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
+
+    #[error("the {} does not describe a package", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest"))]
+    #[diagnostic(help("A [package] section is missing in the manifest"))]
+    NotAPackage(PathBuf),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -106,6 +110,11 @@ impl ProtocolBuilder {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
             match Manifest::from_path(&manifest_path) {
                 Ok(manifest) => {
+                    // Make sure the manifest describes a package.
+                    if manifest.package.is_none() {
+                        return Err(ProtocolBuildError::NotAPackage(manifest_path));
+                    }
+
                     let builder = Self::new(source_dir.to_path_buf(), manifest)?;
                     return Ok(Some(builder));
                 }

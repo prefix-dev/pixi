@@ -9,7 +9,7 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
@@ -424,7 +424,7 @@ fn direct_dependencies(
     dep_map: &HashMap<String, Package>,
 ) -> HashSet<String> {
     let mut project_dependency_names = environment
-        .environment_dependencies(Some(*platform))
+        .combined_dependencies(Some(*platform))
         .names()
         .filter(|p| {
             if let Some(value) = dep_map.get(p.as_source()) {
