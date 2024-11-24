@@ -47,18 +47,15 @@ pub(crate) fn script_exec_mapping<'a>(
 
     let target_executable_opt = if executable_count > 1 {
         // keep only the first executable in a known binary folder
-        matching_executables
-            .iter()
-            .filter(|executable| {
-                if let Some(parent) = executable.path.parent() {
-                    is_binary_folder(parent)
-                } else {
-                    false
-                }
-            })
-            .next()
+        matching_executables.iter().find(|executable| {
+            if let Some(parent) = executable.path.parent() {
+                is_binary_folder(parent)
+            } else {
+                false
+            }
+        })
     } else {
-        matching_executables.iter().next()
+        matching_executables.first()
     };
 
     match target_executable_opt {
@@ -452,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_script_exec_mapping() {
-        let exposed_executables = vec![
+        let exposed_executables = [
             Executable::new("python".to_string(), PathBuf::from("nested/python")),
             Executable::new("python".to_string(), PathBuf::from("bin/python")),
         ];
