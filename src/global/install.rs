@@ -454,7 +454,7 @@ mod tests {
     fn test_script_exec_mapping() {
         let exposed_executables = vec![
             Executable::new("python".to_string(), PathBuf::from("nested/python")),
-            Executable::new("python".to_string(), PathBuf::from("python")),
+            Executable::new("python".to_string(), PathBuf::from("bin/python")),
         ];
 
         let exposed_name = ExposedName::from_str("python");

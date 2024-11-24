@@ -153,19 +153,19 @@ mod tests {
     #[test]
     fn test_is_binary_folder() {
         let path = Path::new("subdir");
-        let result = is_binary_folder(&path);
-        assert_eq!(result, false);
+        let result = is_binary_folder(path);
+        assert!(!result);
 
         let path = Path::new("bin");
-        let result = is_binary_folder(&path);
-        assert_eq!(result, true);
+        let result = is_binary_folder(path);
+        assert!(result);
 
         let path = Path::new("Library/bin/");
-        let result = is_binary_folder(&path);
+        let result = is_binary_folder(path);
         if cfg!(windows) {
-            assert_eq!(result, true);
+            assert!(result);
         } else {
-            assert_eq!(result, false);
+            assert!(!result);
         }
     }
 
