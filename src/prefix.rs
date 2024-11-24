@@ -7,7 +7,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_utils::strip_executable_extension;
+use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -140,31 +140,16 @@ impl Prefix {
         executables
     }
 
+
     /// Checks if the given relative path points to an executable file.
     pub(crate) fn is_executable(&self, relative_path: &Path) -> bool {
-        // Check if the file is in a known executable directory.
-        let binary_folders = if cfg!(windows) {
-            &([
-                "",
-                "Library/mingw-w64/bin/",
-                "Library/usr/bin/",
-                "Library/bin/",
-                "Scripts/",
-                "bin/",
-            ][..])
-        } else {
-            &(["bin"][..])
-        };
 
         let parent_folder = match relative_path.parent() {
             Some(dir) => dir,
             None => return false,
         };
 
-        if !binary_folders
-            .iter()
-            .any(|bin_path| Path::new(bin_path) == parent_folder)
-        {
+        if !is_binary_folder(parent_folder){
             return false;
         }
 

@@ -10,7 +10,7 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_utils::executable_from_path;
+use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
@@ -34,23 +34,47 @@ use fs_err::tokio as tokio_fs;
 pub(crate) fn script_exec_mapping<'a>(
     exposed_name: &ExposedName,
     entry_point: &str,
-    mut executables: impl Iterator<Item = &'a Executable>,
+    executables: impl Iterator<Item = &'a Executable>,
     bin_dir: &BinDir,
     env_dir: &EnvDir,
 ) -> miette::Result<ScriptExecMapping> {
-    executables
-        .find(|executable| executable.name == entry_point)
-        .map(|executable| ScriptExecMapping {
+    let all_executables = executables.collect_vec();
+    let matching_executables = all_executables
+        .iter()
+        .filter(|executable| executable.name == entry_point)
+        .collect_vec();
+    let executable_count = matching_executables.len();
+
+    let target_executable_opt = if executable_count > 1 {
+        // keep only the first executable in a known binary folder
+        matching_executables
+            .iter()
+            .filter(|executable| {
+                if let Some(parent) = executable.path.parent() {
+                    is_binary_folder(parent)
+                } else {
+                    false
+                }
+            })
+            .next()
+    } else {
+        matching_executables.iter().next()
+    };
+
+    match target_executable_opt {
+        Some(target_executable) => Ok(ScriptExecMapping {
             global_script_path: bin_dir.executable_trampoline_path(exposed_name),
-            original_executable: executable.path.clone(),
-        })
-        .ok_or_else(|| {
-            miette::miette!(
-                "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
-                env_dir.path().display(),
-                executables.map(|exec| exec.name.clone()).collect_vec()
-            )
-        })
+            original_executable: target_executable.path.clone(),
+        }),
+        _ => Err(miette::miette!(
+            "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
+            env_dir.path().display(),
+            all_executables
+                .iter()
+                .map(|exec| exec.name.clone())
+                .collect_vec()
+        )),
+    }
 }
 
 /// Mapping from the global script location to an executable in a package
@@ -424,6 +448,42 @@ mod tests {
             !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),
             "The record contains linux-64 entries, so the function should always return `false`"
         );
+    }
+
+    #[test]
+    fn test_script_exec_mapping() {
+        let exposed_executables = vec![
+            Executable::new("python".to_string(), PathBuf::from("nested/python")),
+            Executable::new("python".to_string(), PathBuf::from("python")),
+        ];
+
+        let exposed_name = ExposedName::from_str("python");
+        let path = PathBuf::from("/home/user/.pixi");
+        let env_path = PathBuf::from("/home/user/.pixi/envs/python");
+        let bin_dir = BinDir::new(path.clone()).unwrap();
+        let env_dir = EnvDir::from_path(env_path.clone());
+        let actual = script_exec_mapping(
+            &exposed_name.unwrap(),
+            "python",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap();
+        let expected = if cfg!(windows) {
+            ScriptExecMapping {
+                global_script_path: PathBuf::from("/home/user/.pixi\\bin\\python.exe"),
+                original_executable: PathBuf::from("python"),
+            }
+        } else {
+            ScriptExecMapping {
+                global_script_path: PathBuf::from("/home/user/.pixi/bin/python"),
+                original_executable: PathBuf::from("python"),
+            }
+        };
+
+        assert_eq!(actual.global_script_path, expected.global_script_path, "testing global_script_path");
+        assert_eq!(actual.original_executable, expected.original_executable, "testing original_executable");
     }
 
     #[cfg(windows)]

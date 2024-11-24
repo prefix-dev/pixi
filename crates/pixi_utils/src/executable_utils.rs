@@ -67,6 +67,26 @@ pub fn strip_executable_extension(file_name: String) -> String {
     }
 }
 
+/// Checks if the given relative path points to an identified binary folder.
+pub fn is_binary_folder(relative_path: &Path) -> bool {
+    // Check if the file is in a known executable directory.
+    let binary_folders = if cfg!(windows) {
+        &([
+            "",
+            "Library/mingw-w64/bin/",
+            "Library/usr/bin/",
+            "Library/bin/",
+            "Scripts/",
+            "bin/",
+        ][..])
+    } else {
+        &(["bin"][..])
+    };
+    binary_folders
+        .iter()
+        .any(|bin_path| Path::new(bin_path) == relative_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +143,24 @@ mod tests {
         // Make sure running it twice doesn't break it
         let result = strip_executable_extension(result);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_is_binary_folder() {
+        let path = Path::new("subdir");
+        let result = is_binary_folder(&path);
+        assert_eq!(result, false);
+
+        let path = Path::new("bin");
+        let result = is_binary_folder(&path);
+        assert_eq!(result, true);
+
+        let path = Path::new("Library/bin/");
+        let result = is_binary_folder(&path);
+        if cfg!(windows) {
+            assert_eq!(result, true);
+        } else {
+            assert_eq!(result, false);
+        }
     }
 }
