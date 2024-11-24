@@ -482,8 +482,14 @@ mod tests {
             }
         };
 
-        assert_eq!(actual.global_script_path, expected.global_script_path, "testing global_script_path");
-        assert_eq!(actual.original_executable, expected.original_executable, "testing original_executable");
+        assert_eq!(
+            actual.global_script_path, expected.global_script_path,
+            "testing global_script_path"
+        );
+        assert_eq!(
+            actual.original_executable, expected.original_executable,
+            "testing original_executable"
+        );
     }
 
     #[cfg(windows)]

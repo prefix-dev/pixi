@@ -140,16 +140,14 @@ impl Prefix {
         executables
     }
 
-
     /// Checks if the given relative path points to an executable file.
     pub(crate) fn is_executable(&self, relative_path: &Path) -> bool {
-
         let parent_folder = match relative_path.parent() {
             Some(dir) => dir,
             None => return false,
         };
 
-        if !is_binary_folder(parent_folder){
+        if !is_binary_folder(parent_folder) {
             return false;
         }
 

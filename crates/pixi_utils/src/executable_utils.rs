@@ -166,6 +166,9 @@ mod tests {
             assert_eq!(result, true);
         } else {
             assert_eq!(result, false);
+        }
+    }
+
     #[test]
     fn test_unix_extensions() {
         let test_cases = vec![
@@ -201,7 +204,6 @@ mod tests {
                 strip_windows_executable_extension(input.to_string()),
                 expected
             );
-
         }
     }
 }
