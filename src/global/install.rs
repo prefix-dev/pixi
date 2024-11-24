@@ -454,13 +454,13 @@ mod tests {
             Executable::new("python".to_string(), PathBuf::from("bin/python")),
         ];
 
-        let exposed_name = ExposedName::from_str("python");
+        let exposed_name = ExposedName::from_str("python").unwrap();
         let path = PathBuf::from("/home/user/.pixi");
         let env_path = PathBuf::from("/home/user/.pixi/envs/python");
         let bin_dir = BinDir::new(path.clone()).unwrap();
         let env_dir = EnvDir::from_path(env_path.clone());
         let actual = script_exec_mapping(
-            &exposed_name.unwrap(),
+            &exposed_name,
             "python",
             exposed_executables.iter(),
             &bin_dir,
@@ -470,12 +470,12 @@ mod tests {
         let expected = if cfg!(windows) {
             ScriptExecMapping {
                 global_script_path: PathBuf::from("/home/user/.pixi\\bin\\python.exe"),
-                original_executable: PathBuf::from("python"),
+                original_executable: PathBuf::from("bin/python"),
             }
         } else {
             ScriptExecMapping {
                 global_script_path: PathBuf::from("/home/user/.pixi/bin/python"),
-                original_executable: PathBuf::from("python"),
+                original_executable: PathBuf::from("bin/python"),
             }
         };
 
