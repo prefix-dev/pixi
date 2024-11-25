@@ -1,6 +1,3 @@
-mod protocol;
-mod stderr;
-
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -10,24 +7,26 @@ use std::{
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
-pub use protocol::{InitializeError, Protocol};
+// pub use protocol::Protocol;
 use rattler_conda_types::ChannelConfig;
-pub(crate) use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use which::Error;
 
 use crate::{
+    protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
     BackendOverride,
 };
 
+// use super::{InitializeError, JsonRPCBuildProtocol};
+
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]
-pub(crate) struct ProtocolBuilder {
+pub struct ProtocolBuilder {
     source_dir: PathBuf,
     manifest: Manifest,
     backend_spec: Option<ToolSpec>,
-    channel_config: ChannelConfig,
+    _channel_config: ChannelConfig,
     cache_dir: Option<PathBuf>,
 }
 
@@ -73,7 +72,7 @@ impl ProtocolBuilder {
             source_dir,
             manifest,
             backend_spec: backend_spec.map(Into::into),
-            channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
         })
     }
@@ -91,7 +90,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            channel_config,
+            _channel_config: channel_config,
             ..self
         }
     }
@@ -120,7 +119,11 @@ impl ProtocolBuilder {
         Ok(None)
     }
 
-    pub async fn finish(self, tool: &ToolCache, build_id: usize) -> Result<Protocol, FinishError> {
+    pub async fn finish(
+        self,
+        tool: &ToolCache,
+        build_id: usize,
+    ) -> Result<JsonRPCBuildProtocol, FinishError> {
         let tool_spec = self
             .backend_spec
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
@@ -130,15 +133,19 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
-        Ok(Protocol::setup(
+        Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest.path,
             build_id,
             self.cache_dir,
-            self.channel_config,
             tool,
         )
         .await?)
+    }
+
+    /// Returns the pixi manifest
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
     }
 }
 

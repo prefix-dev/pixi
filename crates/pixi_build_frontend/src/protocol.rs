@@ -6,7 +6,9 @@ use pixi_build_types::procedures::{
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
 
-use crate::{conda_build_protocol, pixi_protocol, CondaBuildReporter, CondaMetadataReporter};
+use crate::protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
+
+use crate::{protocols::JsonRPCBuildProtocol, CondaBuildReporter, CondaMetadataReporter};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -17,7 +19,11 @@ pub enum FinishError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CondaBuild(#[from] conda_build_protocol::FinishError),
+    CondaBuild(#[from] conda_protocol::FinishError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RattlerBuild(#[from] rattler_build_protocol::FinishError),
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -37,6 +43,10 @@ pub enum DiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Pixi(#[from] pixi_protocol::ProtocolBuildError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RattlerBuild(#[from] rattler_build_protocol::ProtocolBuildError),
 }
 
 /// A protocol describes how to communicate with a build backend. A build
@@ -68,18 +78,20 @@ pub enum DiscoveryError {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Protocol {
-    Pixi(pixi_protocol::Protocol),
-    CondaBuild(conda_build_protocol::Protocol),
+    PixiBuild(JsonRPCBuildProtocol),
+    // It should be more like subprocess protocol
+    // as we invoke the tool directly
+    CondaBuild(conda_protocol::Protocol),
 }
 
-impl From<pixi_protocol::Protocol> for Protocol {
-    fn from(value: pixi_protocol::Protocol) -> Self {
-        Self::Pixi(value)
+impl From<JsonRPCBuildProtocol> for Protocol {
+    fn from(value: JsonRPCBuildProtocol) -> Self {
+        Self::PixiBuild(value)
     }
 }
 
-impl From<conda_build_protocol::Protocol> for Protocol {
-    fn from(value: conda_build_protocol::Protocol) -> Self {
+impl From<conda_protocol::Protocol> for Protocol {
+    fn from(value: conda_protocol::Protocol) -> Self {
         Self::CondaBuild(value)
     }
 }
@@ -89,7 +101,7 @@ impl Protocol {
     /// the files that are used to determine the build configuration.
     pub fn manifests(&self) -> Vec<String> {
         match self {
-            Self::Pixi(protocol) => protocol.manifests(),
+            Self::PixiBuild(protocol) => protocol.manifests(),
             Self::CondaBuild(protocol) => protocol.manifests(),
         }
     }
@@ -100,7 +112,7 @@ impl Protocol {
         reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
-            Self::Pixi(protocol) => protocol
+            Self::PixiBuild(protocol) => protocol
                 .get_conda_metadata(request, reporter.as_ref())
                 .await
                 .into_diagnostic(),
@@ -114,7 +126,7 @@ impl Protocol {
         reporter: Arc<dyn CondaBuildReporter>,
     ) -> miette::Result<CondaBuildResult> {
         match self {
-            Self::Pixi(protocol) => protocol
+            Self::PixiBuild(protocol) => protocol
                 .conda_build(request, reporter.as_ref())
                 .await
                 .into_diagnostic(),
@@ -124,7 +136,7 @@ impl Protocol {
 
     pub fn identifier(&self) -> &str {
         match self {
-            Self::Pixi(protocol) => protocol.backend_identifier(),
+            Self::PixiBuild(protocol) => protocol.backend_identifier(),
             Self::CondaBuild(protocol) => protocol.backend_identifier(),
         }
     }

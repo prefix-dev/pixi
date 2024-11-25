@@ -36,7 +36,7 @@ test = "pytest -v tests/*"
 test = ["pytest>=8.3.3,<9"]
 
 [tool.pixi.host-dependencies]
-hatchling = "*"
+hatchling = "==1.26.3"
 
 [tool.pixi.package]
 
