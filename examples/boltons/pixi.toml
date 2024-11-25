@@ -12,9 +12,10 @@ version = "0.1.0"
 [dependencies]
 # boltons = { path = "." }
 boltons = "*"
-
-[host-dependencies]
 hatchling = "==1.26.3"
+
+
+[package]
 
 [build-system]
 build-backend = "pixi-build-rattler-build"
