@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from .common import verify_cli_command, ExitCode, default_env_path
+import tempfile
+import os
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
 
@@ -12,7 +14,7 @@ platforms = {ALL_PLATFORMS}
 """
 
 
-def test_run_in_shell(pixi: Path, tmp_path: Path) -> None:
+def test_run_in_shell_environment(pixi: Path, tmp_path: Path) -> None:
     manifest = tmp_path.joinpath("pixi.toml")
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
@@ -31,7 +33,6 @@ def test_run_in_shell(pixi: Path, tmp_path: Path) -> None:
     # Run the default task
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--environment", "default", "task"],
-        ExitCode.SUCCESS,
         stdout_contains="default",
         stderr_excludes="default1",
     )
@@ -39,7 +40,6 @@ def test_run_in_shell(pixi: Path, tmp_path: Path) -> None:
     # Run the a task
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--environment", "a", "task"],
-        ExitCode.SUCCESS,
         stdout_contains=["a", "a1"],
     )
 
@@ -54,10 +54,73 @@ def test_run_in_shell(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_IN_SHELL": "true", "PIXI_ENVIRONMENT_NAME": "a"}
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        ExitCode.SUCCESS,
         stdout_contains=["a", "a1"],
         env=env,
     )
+
+
+def test_run_in_shell_project(pixi: Path) -> None:
+    # We don't want a `pixi.toml` in our parent directory
+    # so let's use tempfile here
+    with tempfile.TemporaryDirectory() as tmp_str:
+        tmp_path = Path(tmp_str)
+        manifest_1_dir = tmp_path.joinpath("manifest_1")
+        manifest_1_dir.mkdir()
+        manifest_1 = manifest_1_dir.joinpath("pixi.toml")
+        toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [tasks]
+        task = "echo manifest_1"
+        """
+        manifest_1.write_text(toml)
+
+        manifest_2_dir = tmp_path.joinpath("manifest_2")
+        manifest_2_dir.mkdir()
+        manifest_2 = manifest_2_dir.joinpath("pixi.toml")
+        toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [tasks]
+        task = "echo manifest_2"
+        """
+        manifest_2.write_text(toml)
+
+        base_env = dict(os.environ)
+        base_env.pop("PIXI_IN_SHELL", None)
+        base_env.pop("PIXI_PROJECT_MANIFEST", None)
+        extended_env = base_env | {
+            "PIXI_IN_SHELL": "true",
+            "PIXI_PROJECT_MANIFEST": str(manifest_2),
+        }
+
+        # Run task with PIXI_PROJECT_MANIFEST set to manifest_2
+        verify_cli_command(
+            [pixi, "run", "task"],
+            stdout_contains="manifest_2",
+            env=extended_env,
+            cwd=tmp_path,
+            reset_env=True,
+        )
+
+        # Run with working directory at manifest_1_dir
+        verify_cli_command(
+            [pixi, "run", "task"],
+            stdout_contains="manifest_1",
+            env=base_env,
+            cwd=manifest_1_dir,
+            reset_env=True,
+        )
+
+        # Run task with PIXI_PROJECT_MANIFEST set to manifest_2 and working directory at manifest_1_dir
+        # working directory should win
+        # pixi should warn that it uses the local manifest rather than PIXI_PROJECT_MANIFEST
+        verify_cli_command(
+            [pixi, "run", "task"],
+            stdout_contains="manifest_1",
+            stderr_contains="manifest_2",
+            env=extended_env,
+            cwd=manifest_1_dir,
+            reset_env=True,
+        )
 
 
 def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -128,7 +191,6 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     # Run the installation
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
     # Validate creation of the pixi file with the hash
@@ -147,7 +209,6 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     # Run with revalidation to force reinstallation
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--revalidate", "echo", "hello"],
-        ExitCode.SUCCESS,
         stdout_contains="hello",
     )
 
@@ -170,7 +231,6 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     # Run the default task
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        ExitCode.SUCCESS,
         stdout_contains="test123",
     )
 
@@ -189,13 +249,11 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
             "experimental.use-environment-activation-cache",
             "true",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Run the default task and create cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        ExitCode.SUCCESS,
         stdout_contains="test123",
     )
 
@@ -207,7 +265,6 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        ExitCode.SUCCESS,
         # Contain overwritten value
         stdout_contains="test456",
         stdout_excludes="test123",
@@ -216,6 +273,5 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     # Ignore activation cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
-        ExitCode.SUCCESS,
         stdout_contains="test123",
     )
