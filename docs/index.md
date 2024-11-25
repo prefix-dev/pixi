@@ -51,7 +51,7 @@ To get autocompletion follow the instructions for your shell.
 Afterwards, restart the shell or source the shell config file.
 
 
-#### Bash (default on most Linux systems)
+### Bash (default on most Linux systems)
 
 Add the following to the end of `~/.bashrc`:
 
@@ -59,7 +59,7 @@ Add the following to the end of `~/.bashrc`:
 
 eval "$(pixi completion --shell bash)"
 ```
-#### Zsh (default on macOS)
+### Zsh (default on macOS)
 
 Add the following to the end of `~/.zshrc`:
 
@@ -69,7 +69,7 @@ Add the following to the end of `~/.zshrc`:
 eval "$(pixi completion --shell zsh)"
 ```
 
-#### PowerShell (pre-installed on all Windows systems)
+### PowerShell (pre-installed on all Windows systems)
 
 Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
 You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
@@ -80,7 +80,7 @@ Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` 
 (& pixi completion --shell powershell) | Out-String | Invoke-Expression
 ```
 
-#### Fish
+### Fish
 
 Add the following to the end of `~/.config/fish/config.fish`:
 
@@ -89,7 +89,7 @@ Add the following to the end of `~/.config/fish/config.fish`:
 pixi completion --shell fish | source
 ```
 
-#### Nushell
+### Nushell
 
 Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
 
@@ -104,7 +104,7 @@ And add the following to the end of your Nushell configuration (find it by runni
 use ~/.cache/pixi/completions.nu *
 ```
 
-#### Elvish
+### Elvish
 
 Add the following to the end of `~/.elvish/rc.elv`:
 
