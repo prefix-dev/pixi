@@ -339,6 +339,8 @@ mod tests {
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
 
+    use crate::global::EnvRoot;
+
     use super::*;
 
     #[fixture]
@@ -447,18 +449,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_script_exec_mapping() {
+    #[tokio::test]
+    async fn test_script_exec_mapping() {
         let exposed_executables = [
             Executable::new("python".to_string(), PathBuf::from("nested/python")),
             Executable::new("python".to_string(), PathBuf::from("bin/python")),
         ];
 
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
         let exposed_name = ExposedName::from_str("python").unwrap();
-        let path = PathBuf::from("/home/user/.pixi");
-        let env_path = PathBuf::from("/home/user/.pixi/envs/python");
-        let bin_dir = BinDir::new(path.clone()).unwrap();
-        let env_dir = EnvDir::from_path(env_path.clone());
         let actual = script_exec_mapping(
             &exposed_name,
             "python",
@@ -469,12 +474,12 @@ mod tests {
         .unwrap();
         let expected = if cfg!(windows) {
             ScriptExecMapping {
-                global_script_path: PathBuf::from("/home/user/.pixi\\bin\\python.exe"),
+                global_script_path: tmp_home_dir_path.join("bin\\python.exe"),
                 original_executable: PathBuf::from("bin/python"),
             }
         } else {
             ScriptExecMapping {
-                global_script_path: PathBuf::from("/home/user/.pixi/bin/python"),
+                global_script_path: tmp_home_dir_path.join("bin/python"),
                 original_executable: PathBuf::from("bin/python"),
             }
         };
