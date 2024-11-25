@@ -133,6 +133,40 @@ async fn test_missing_backend() {
 }
 
 #[tokio::test]
+async fn test_not_a_package() {
+    // Setup a temporary project
+    let source_dir = tempfile::TempDir::new().unwrap();
+    let manifest = source_dir
+        .path()
+        .join(pixi_consts::consts::PROJECT_MANIFEST);
+    tokio::fs::write(
+        &manifest,
+        r#"
+        [workspace]
+        name = "some-workspace"
+        platforms = []
+        channels = []
+        preview = ['pixi-build']
+        "#,
+    )
+    .await
+    .unwrap();
+
+    let err = BuildFrontend::default()
+        .setup_protocol(SetupRequest {
+            source_dir: source_dir.path().to_path_buf(),
+            build_tool_override: Default::default(),
+            build_id: 0,
+        })
+        .await
+        .unwrap_err();
+
+    let snapshot = error_to_snapshot(&err);
+    let snapshot = replace_source_dir(&snapshot, source_dir.path());
+    insta::assert_snapshot!(snapshot);
+}
+
+#[tokio::test]
 async fn test_invalid_backend() {
     // Setup a temporary project
     let source_dir = tempfile::TempDir::new().unwrap();
@@ -143,10 +177,18 @@ async fn test_invalid_backend() {
         &manifest,
         r#"
         [workspace]
-        name = "project"
         platforms = []
         channels = []
         preview = ['pixi-build']
+
+        [package]
+        version = "0.1.0"
+        name = "project"
+
+        [build-system]
+        dependencies = []
+        channels = []
+        build-backend = "ipc"
         "#,
     )
     .await

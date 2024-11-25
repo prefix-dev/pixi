@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use pixi_spec::PixiSpec;
+use itertools::chain;
 use serde::Deserialize;
 use serde_with::serde_as;
 
 use crate::{
     environment::EnvironmentIdx,
-    error::FeatureNotEnabled,
+    error::{FeatureNotEnabled, InvalidNonPackageDependencies},
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
         PackageError, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace, WorkspaceError,
     },
-    utils::PixiSpanned,
+    utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, BuildSystem, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PyPiRequirement, SolveGroups, SpecType, SystemRequirements, Target,
-    TargetSelector, Targets, Task, TaskName, TomlError, WorkspaceManifest,
+    KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
+    Task, TaskName, TomlError, WorkspaceManifest,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -45,23 +45,17 @@ pub struct TomlManifest {
     //
     // #[serde(flatten)]
     // default_target: Target,
-    #[serde(
-        default,
-        deserialize_with = "crate::utils::package_map::deserialize_package_map"
-    )]
-    pub dependencies: IndexMap<rattler_conda_types::PackageName, PixiSpec>,
+    #[serde(default)]
+    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
 
-    #[serde(
-        default,
-        deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-    )]
-    pub host_dependencies: Option<IndexMap<rattler_conda_types::PackageName, PixiSpec>>,
+    #[serde(default)]
+    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
 
-    #[serde(
-        default,
-        deserialize_with = "crate::utils::package_map::deserialize_opt_package_map"
-    )]
-    pub build_dependencies: Option<IndexMap<rattler_conda_types::PackageName, PixiSpec>>,
+    #[serde(default)]
+    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+
+    #[serde(default)]
+    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
 
     #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
@@ -105,6 +99,70 @@ impl TomlManifest {
         toml_edit::de::from_str(source).map_err(TomlError::from)
     }
 
+    pub fn is_pixi_build_enabled(&self) -> bool {
+        self.workspace
+            .value
+            .preview
+            .is_enabled(KnownPreviewFeature::PixiBuild)
+    }
+
+    /// Check if some dependency types are used which will not be used.
+    fn check_dependency_usage(&self) -> Result<(), TomlError> {
+        // If `pixi-build` is not enabled then we can ignore the checks.
+        if !self.is_pixi_build_enabled() {
+            return Ok(());
+        }
+
+        // If the `[package]` section is present then we can ignore the checks.
+        if self.package.is_some() {
+            return Ok(());
+        }
+
+        // Find all the dependency sections which are not allowed without the
+        // `[package]` section.
+        let top_level_dependencies = vec![
+            self.run_dependencies.as_ref().and_then(PixiSpanned::span),
+            self.host_dependencies.as_ref().and_then(PixiSpanned::span),
+            self.build_dependencies.as_ref().and_then(PixiSpanned::span),
+        ];
+        let target_dependencies = self.target.values().flat_map(|t| {
+            [
+                t.run_dependencies.as_ref().and_then(PixiSpanned::span),
+                t.host_dependencies.as_ref().and_then(PixiSpanned::span),
+                t.build_dependencies.as_ref().and_then(PixiSpanned::span),
+            ]
+        });
+        let feature_dependencies = self.feature.values().flat_map(|f| {
+            let top_level_dependencies = [
+                f.host_dependencies.as_ref().and_then(PixiSpanned::span),
+                f.build_dependencies.as_ref().and_then(PixiSpanned::span),
+            ];
+            let target_dependencies = f.target.values().flat_map(|t| {
+                [
+                    t.host_dependencies.as_ref().and_then(PixiSpanned::span),
+                    t.build_dependencies.as_ref().and_then(PixiSpanned::span),
+                ]
+            });
+            chain!(top_level_dependencies, target_dependencies)
+        });
+        let invalid_dependency_sections = chain!(
+            top_level_dependencies,
+            target_dependencies,
+            feature_dependencies
+        )
+        .flatten()
+        .collect::<Vec<_>>();
+
+        if invalid_dependency_sections.is_empty() {
+            Ok(())
+        } else {
+            Err(InvalidNonPackageDependencies {
+                invalid_dependency_sections,
+            }
+            .into())
+        }
+    }
+
     /// Converts the raw manifest into a workspace manifest.
     ///
     /// The `name` is used to set the workspace name in the manifest if it is
@@ -113,26 +171,33 @@ impl TomlManifest {
         self,
         external: ExternalWorkspaceProperties,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>), TomlError> {
-        let pixi_build_enabled = self
-            .workspace
-            .value
-            .preview
-            .is_enabled(KnownPreviewFeature::PixiBuild);
+        self.check_dependency_usage()?;
 
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, self.dependencies)]);
-        if let Some(host_deps) = self.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = self.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
+        let preview = &self.workspace.value.preview;
+        let pixi_build_enabled = self.is_pixi_build_enabled();
 
-        let default_target = Target {
-            dependencies,
+        let default_top_level_target = TomlTarget {
+            dependencies: self.dependencies,
+            host_dependencies: self.host_dependencies,
+            build_dependencies: self.build_dependencies,
+            run_dependencies: self.run_dependencies,
             pypi_dependencies: self.pypi_dependencies,
             activation: self.activation,
             tasks: self.tasks,
         };
+
+        let (default_workspace_target, default_package_target) =
+            default_top_level_target.into_top_level_targets(preview)?;
+
+        let mut workspace_targets = IndexMap::new();
+        let mut package_targets = IndexMap::new();
+        for (selector, target) in self.target {
+            let (workspace_target, package_target) = target.into_top_level_targets(preview)?;
+            if let Some(package_target) = package_target {
+                package_targets.insert(selector.clone(), package_target);
+            }
+            workspace_targets.insert(selector, workspace_target);
+        }
 
         // Construct a default feature
         let default_feature = Feature {
@@ -153,11 +218,8 @@ impl TomlManifest {
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(
-                default_target,
-                self.target
-                    .into_iter()
-                    .map(|(selector, target)| (selector, target.into_target()))
-                    .collect(),
+                default_workspace_target,
+                workspace_targets,
             ),
         };
 
@@ -167,8 +229,11 @@ impl TomlManifest {
         let named_features = self
             .feature
             .into_iter()
-            .map(|(name, feature)| (name.clone(), feature.into_future(name)))
-            .collect::<IndexMap<FeatureName, Feature>>();
+            .map(|(name, feature)| {
+                let feature = feature.into_feature(name.clone(), preview)?;
+                Ok((name, feature))
+            })
+            .collect::<Result<IndexMap<FeatureName, Feature>, TomlError>>()?;
         let features = features.into_iter().chain(named_features).collect();
 
         // Construct the environments including the default environment
@@ -278,6 +343,10 @@ impl TomlManifest {
             Some(PackageManifest {
                 package,
                 build_system,
+                targets: Targets::from_default_and_user_defined(
+                    default_package_target.unwrap_or_default(),
+                    package_targets,
+                ),
             })
         } else {
             // If we do have a build-system section we have to error out.
@@ -320,10 +389,10 @@ impl TomlManifest {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_utils::expect_parse_failure;
     use insta::assert_snapshot;
 
     use super::*;
+    use crate::utils::test_utils::expect_parse_failure;
 
     #[test]
     fn test_build_section_without_preview() {
@@ -428,5 +497,94 @@ mod test {
         .unwrap();
 
         assert_eq!(workspace_manifest.workspace.name, "foo");
+    }
+
+    #[test]
+    fn test_run_dependencies_without_pixi_build() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_run_dependencies_in_target_without_pixi_build() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [target.win.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_run_dependencies_in_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_host_dependencies_in_feature_with_pixi_build() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+
+        [feature.foobar.host-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_build_dependencies_in_feature_with_pixi_build() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+
+        [feature.foobar.build-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_invalid_non_package_sections() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [build-dependencies]
+
+        [host-dependencies]
+
+        [target.win.host-dependencies]
+        "#,
+        ));
     }
 }

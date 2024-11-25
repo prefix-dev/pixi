@@ -21,7 +21,7 @@ use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr}
 
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasEnvironmentDependencies, HasFeaturesIter};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -1702,7 +1702,7 @@ async fn spawn_solve_conda_environment_task(
     build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
-    let dependencies = group.environment_dependencies(Some(platform));
+    let dependencies = group.combined_dependencies(Some(platform));
 
     // Get the virtual packages for this platform
     let virtual_packages = group.virtual_packages(platform);
@@ -1977,7 +1977,7 @@ async fn spawn_extract_environment_task(
 
     // Determine the conda packages we need.
     let conda_package_names = environment
-        .environment_dependencies(Some(platform))
+        .combined_dependencies(Some(platform))
         .names()
         .cloned()
         .map(PackageName::Conda)

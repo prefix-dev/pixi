@@ -18,7 +18,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     utils::PixiSpanned,
-    PyPiRequirement, SpecType, SystemRequirements,
+    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
 
 /// The name of a feature. This is either a string or default for the default
@@ -143,7 +143,7 @@ pub struct Feature {
     pub pypi_options: Option<PypiOptions>,
 
     /// Target specific configuration.
-    pub targets: Targets,
+    pub targets: Targets<WorkspaceTarget>,
 }
 
 impl Feature {
@@ -157,7 +157,7 @@ impl Feature {
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
 
-            targets: <Targets as Default>::default(),
+            targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }
 

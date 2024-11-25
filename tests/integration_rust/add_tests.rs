@@ -8,9 +8,7 @@ use crate::common::{
 use pixi::{DependencyType, Project};
 use pixi_consts::consts;
 use pixi_manifest::pypi::VersionOrStar;
-use pixi_manifest::{
-    pypi::PyPiPackageName, FeaturesExt, HasEnvironmentDependencies, PyPiRequirement, SpecType,
-};
+use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 
@@ -97,7 +95,7 @@ async fn add_with_channel() {
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
-        .environment_dependencies(Some(Platform::current()))
+        .combined_dependencies(Some(Platform::current()))
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();

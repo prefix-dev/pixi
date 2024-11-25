@@ -1131,7 +1131,7 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::{FeatureName, HasEnvironmentDependencies};
+    use pixi_manifest::FeatureName;
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use tempfile::tempdir;
@@ -1216,7 +1216,7 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .environment_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(Platform::Linux64))
         ));
     }
 
@@ -1253,7 +1253,7 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .environment_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(Platform::Linux64))
         ));
     }
 
@@ -1288,7 +1288,7 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .environment_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(Platform::Linux64))
         ));
     }
 

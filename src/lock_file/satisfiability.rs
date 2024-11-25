@@ -11,7 +11,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
-use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
+use pixi_manifest::FeaturesExt;
 use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
@@ -768,7 +768,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Determine the dependencies requested by the environment
     let environment_dependencies = environment
-        .environment_dependencies(Some(platform))
+        .combined_dependencies(Some(platform))
         .into_specs()
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();

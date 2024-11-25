@@ -199,7 +199,7 @@ async fn test_pinning_index() {
             .unwrap()
             .as_path()
             .unwrap(),
-        pypi_indexes
+        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
             .join("multiple-indexes-a/index/foo")
             .join("foo-1.0.0-py2.py3-none-any.whl")
     );

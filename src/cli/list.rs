@@ -12,7 +12,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
-use pixi_manifest::{FeaturesExt, HasEnvironmentDependencies};
+use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
 };
@@ -210,7 +210,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the explicit project dependencies
     let mut project_dependency_names = environment
-        .environment_dependencies(Some(platform))
+        .combined_dependencies(Some(platform))
         .names()
         .map(|p| p.as_source().to_string())
         .collect_vec();

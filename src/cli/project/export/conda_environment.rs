@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
-    FeaturesExt, HasEnvironmentDependencies, PyPiRequirement,
+    FeaturesExt, PyPiRequirement,
 };
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
@@ -143,7 +143,7 @@ fn build_env_yaml(
     let mut pip_dependencies: Vec<String> = Vec::new();
 
     for (name, pixi_spec) in environment
-        .environment_dependencies(Some(*platform))
+        .combined_dependencies(Some(*platform))
         .into_specs()
     {
         if let Some(nameless_spec) = pixi_spec

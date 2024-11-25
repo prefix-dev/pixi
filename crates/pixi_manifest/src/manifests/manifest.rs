@@ -25,8 +25,8 @@ use crate::{
     to_options,
     toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
     BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, Target, TargetSelector,
-    Task, TaskName, WorkspaceManifest,
+    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task,
+    TaskName, WorkspaceManifest, WorkspaceTarget,
 };
 
 #[derive(Debug, Clone)]
@@ -668,7 +668,7 @@ impl Manifest {
         &mut self,
         platform: Option<Platform>,
         name: Option<&FeatureName>,
-    ) -> &mut Target {
+    ) -> &mut WorkspaceTarget {
         let feature = match name {
             Some(feature) => self.get_or_insert_feature_mut(feature),
             None => self.default_feature_mut(),
@@ -683,7 +683,7 @@ impl Manifest {
         &mut self,
         platform: Option<Platform>,
         name: &FeatureName,
-    ) -> Option<&mut Target> {
+    ) -> Option<&mut WorkspaceTarget> {
         self.feature_mut(name)
             .unwrap()
             .targets
