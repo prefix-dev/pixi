@@ -238,8 +238,7 @@ impl JsonRPCBuildProtocol {
                     err,
                     procedures::initialize::METHOD_NAME,
                 )
-            })
-            .unwrap();
+            })?;
 
         Ok(JsonRPCBuildProtocol::new(
             client,

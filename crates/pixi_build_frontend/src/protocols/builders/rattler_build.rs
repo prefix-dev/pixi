@@ -62,7 +62,13 @@ impl ProtocolBuilder {
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
         // first we need to discover that pixi protocol also can be built.
         // it is used to get the manifest
-        let pixi_protocol = pixi::ProtocolBuilder::discover(source_dir)?;
+
+        // Ignore the error if we cannot find the pixi protocol.
+        let pixi_protocol = match pixi::ProtocolBuilder::discover(source_dir) {
+            Ok(inner_value) => inner_value,
+            Err(_) => return Ok(None), // Handle the case where the Option is None
+        };
+
         // we cannot find pixi protocol, so we cannot build rattler-build protocol.
         let manifest = if let Some(pixi_protocol) = pixi_protocol {
             pixi_protocol.manifest().clone()
