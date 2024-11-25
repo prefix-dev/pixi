@@ -1,12 +1,16 @@
-use std::{borrow::Borrow, fmt::Display};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt::Display,
+    ops::Range,
+};
 
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
 use thiserror::Error;
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::WorkspaceManifest;
+use crate::{KnownPreviewFeature, WorkspaceManifest};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -30,14 +34,18 @@ pub enum RequirementConversionError {
     InvalidVersion(#[from] ParseVersionSpecError),
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum TomlError {
-    #[error(transparent)]
-    Error(#[from] toml_edit::TomlError),
+    #[error("{}", .0.message())]
+    Error(toml_edit::TomlError),
     #[error("Missing table `[tool.pixi.project]`. Try running `pixi init`")]
     NoPixiTable,
-    #[error("Missing field `name`")]
-    NoProjectName(Option<std::ops::Range<usize>>),
+    #[error("Missing field `{0}`")]
+    MissingField(Cow<'static, str>, Option<Range<usize>>),
+    #[error("{0}")]
+    Generic(Cow<'static, str>, Option<Range<usize>>),
+    #[error(transparent)]
+    FeatureNotEnabled(#[from] FeatureNotEnabled),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
     TableError { part: String, table_name: String },
     #[error("Could not find or access array '{array_name}' in '[{table_name}]'")]
@@ -49,35 +57,92 @@ pub enum TomlError {
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
-impl TomlError {
-    pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
-        if let Some(span) = self.span() {
-            Err(miette::miette!(
-                labels = vec![LabeledSpan::new_primary_with_span(None, span)],
-                "{}",
-                self.message(),
-            )
-            .with_source_code(NamedSource::new(file_name, contents.into())))
-        } else {
-            Err(self.clone()).into_diagnostic()
+impl From<toml_edit::TomlError> for TomlError {
+    fn from(e: toml_edit::TomlError) -> Self {
+        TomlError::Error(e)
+    }
+}
+
+#[derive(Error, Debug, Clone)]
+#[error("{message}")]
+pub struct FeatureNotEnabled {
+    pub feature: Cow<'static, str>,
+    pub message: Cow<'static, str>,
+    pub span: Option<std::ops::Range<usize>>,
+}
+
+impl FeatureNotEnabled {
+    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
+        Self {
+            feature: feature.as_str().into(),
+            message: message.into(),
+            span: None,
         }
     }
 
-    fn span(&self) -> Option<std::ops::Range<usize>> {
+    pub fn with_opt_span(self, span: Option<std::ops::Range<usize>>) -> Self {
+        Self { span, ..self }
+    }
+}
+
+impl Diagnostic for FeatureNotEnabled {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        Some(Box::new(format!(
+            "Add `preview = [\"{}\"]` under [workspace] to enable the preview feature",
+            self.feature
+        )))
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        if let Some(span) = self.span.clone() {
+            Some(Box::new(std::iter::once(
+                LabeledSpan::new_primary_with_span(None, span),
+            )))
+        } else {
+            None
+        }
+    }
+}
+
+impl Diagnostic for TomlError {
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        let span = match self {
+            TomlError::Error(err) => err.span().map(SourceSpan::from),
+            TomlError::NoPixiTable => Some(SourceSpan::new(SourceOffset::from(0), 1)),
+            TomlError::Generic(_, span) | TomlError::MissingField(_, span) => {
+                span.clone().map(SourceSpan::from)
+            }
+            TomlError::FeatureNotEnabled(err) => return err.labels(),
+            _ => None,
+        };
+
+        // This is here to make it easier to add more match arms in the future.
+        #[allow(clippy::match_single_binding)]
+        let message = match self {
+            _ => None,
+        };
+
+        if let Some(span) = span {
+            Some(Box::new(std::iter::once(
+                LabeledSpan::new_primary_with_span(message, span),
+            )))
+        } else {
+            None
+        }
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         match self {
-            TomlError::Error(e) => e.span(),
-            TomlError::NoPixiTable => Some(0..1),
-            TomlError::NoProjectName(span) => span.clone(),
+            TomlError::NoPixiTable => {
+                Some(Box::new("Run `pixi init` to create a new project manifest"))
+            }
+            TomlError::FeatureNotEnabled(err) => err.help(),
             _ => None,
         }
     }
-    fn message(&self) -> String {
-        match self {
-            TomlError::Error(e) => e.message().to_owned(),
-            _ => self.to_string(),
-        }
-    }
+}
 
+impl TomlError {
     pub fn table_error(part: &str, table_name: &str) -> Self {
         Self::TableError {
             part: part.into(),

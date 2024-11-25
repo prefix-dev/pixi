@@ -7,12 +7,17 @@ use serde_with::serde_as;
 
 use crate::{
     environment::EnvironmentIdx,
+    error::FeatureNotEnabled,
+    manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{environment::TomlEnvironmentList, TomlFeature, TomlTarget, TomlWorkspace},
+    toml::{
+        environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
+        PackageError, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace, WorkspaceError,
+    },
     utils::PixiSpanned,
     Activation, BuildSystem, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    PyPiRequirement, SolveGroups, SpecType, SystemRequirements, Target, TargetSelector, Targets,
-    Task, TaskName, TomlError, Workspace, WorkspaceManifest,
+    KnownPreviewFeature, PyPiRequirement, SolveGroups, SpecType, SystemRequirements, Target,
+    TargetSelector, Targets, Task, TaskName, TomlError, WorkspaceManifest,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -23,6 +28,8 @@ use crate::{
 pub struct TomlManifest {
     #[serde(alias = "project")]
     pub workspace: PixiSpanned<TomlWorkspace>,
+
+    pub package: Option<PixiSpanned<TomlPackage>>,
 
     #[serde(default)]
     pub system_requirements: SystemRequirements,
@@ -81,7 +88,7 @@ pub struct TomlManifest {
 
     /// The build section
     #[serde(default)]
-    pub build_system: Option<BuildSystem>,
+    pub build_system: Option<PixiSpanned<BuildSystem>>,
 
     /// The URI for the manifest schema which is unused by pixi
     #[serde(rename = "$schema")]
@@ -102,10 +109,16 @@ impl TomlManifest {
     ///
     /// The `name` is used to set the workspace name in the manifest if it is
     /// not set there. A missing name in the manifest is not allowed.
-    pub fn into_workspace_manifest(
-        mut self,
-        name: Option<String>,
-    ) -> Result<WorkspaceManifest, TomlError> {
+    pub fn into_manifests(
+        self,
+        external: ExternalWorkspaceProperties,
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), TomlError> {
+        let pixi_build_enabled = self
+            .workspace
+            .value
+            .preview
+            .is_enabled(KnownPreviewFeature::PixiBuild);
+
         let mut dependencies = HashMap::from_iter([(SpecType::Run, self.dependencies)]);
         if let Some(host_deps) = self.host_dependencies {
             dependencies.insert(SpecType::Host, host_deps);
@@ -194,41 +207,226 @@ impl TomlManifest {
             }));
         }
 
-        let build_system = self.build_system;
+        // Get the name from the [package] section if it's missing from the workspace.
+        let project_name = self
+            .package
+            .as_ref()
+            .and_then(|p| p.value.name.as_ref())
+            .cloned();
 
-        // Raise an error if the workspace name is not set.
-        let name = self
-            .workspace
-            .value
-            .name
-            .take()
-            .or(name)
-            .ok_or_else(|| TomlError::NoProjectName(self.workspace.span()))?;
+        let PixiSpanned {
+            span: workspace_span,
+            value: workspace,
+        } = self.workspace;
+        let workspace = workspace
+            .into_workspace(ExternalWorkspaceProperties {
+                name: project_name.or(external.name),
+                ..external
+            })
+            .map_err(|e| match e {
+                WorkspaceError::MissingName => {
+                    TomlError::MissingField("name".into(), workspace_span)
+                }
+            })?;
 
-        let workspace = self.workspace.value;
-        Ok(WorkspaceManifest {
-            workspace: Workspace {
-                name,
-                version: workspace.version,
-                description: workspace.description,
-                authors: workspace.authors,
-                channels: workspace.channels,
-                channel_priority: workspace.channel_priority,
-                platforms: workspace.platforms,
-                license: workspace.license,
-                license_file: workspace.license_file,
-                readme: workspace.readme,
-                homepage: workspace.homepage,
-                repository: workspace.repository,
-                documentation: workspace.documentation,
-                conda_pypi_map: workspace.conda_pypi_map,
-                pypi_options: workspace.pypi_options,
-                preview: workspace.preview,
-            },
+        let package_manifest = if let Some(PixiSpanned {
+            value: package,
+            span: package_span,
+        }) = self.package
+        {
+            if !pixi_build_enabled {
+                return Err(FeatureNotEnabled::new(
+                    format!(
+                        "[package] section is only allowed when the `{}` feature is enabled",
+                        KnownPreviewFeature::PixiBuild
+                    ),
+                    KnownPreviewFeature::PixiBuild,
+                )
+                .with_opt_span(package_span)
+                .into());
+            }
+
+            let PixiSpanned {
+                value: build_system,
+                span: _build_system_span,
+            } = self
+                .build_system
+                .ok_or_else(|| TomlError::MissingField("[build-system]".into(), None))?;
+
+            let package = package
+                .into_package(ExternalPackageProperties {
+                    name: Some(workspace.name.clone()),
+                    version: workspace.version.clone(),
+                    description: workspace.description.clone(),
+                    authors: workspace.authors.clone(),
+                    license: workspace.license.clone(),
+                    license_file: workspace.license_file.clone(),
+                    readme: workspace.readme.clone(),
+                    homepage: workspace.homepage.clone(),
+                    repository: workspace.repository.clone(),
+                    documentation: workspace.documentation.clone(),
+                })
+                .map_err(|e| match e {
+                    PackageError::MissingName => {
+                        TomlError::MissingField("name".into(), package_span)
+                    }
+                    PackageError::MissingVersion => {
+                        TomlError::MissingField("version".into(), package_span)
+                    }
+                })?;
+
+            Some(PackageManifest {
+                package,
+                build_system,
+            })
+        } else {
+            // If we do have a build-system section we have to error out.
+            if let Some(PixiSpanned {
+                value: _,
+                span: build_system_span,
+            }) = self.build_system
+            {
+                return if !pixi_build_enabled {
+                    Err(FeatureNotEnabled::new(
+                        format!(
+                            "[build-system] section is only allowed when the `{}` feature is enabled",
+                            KnownPreviewFeature::PixiBuild
+                        ),
+                        KnownPreviewFeature::PixiBuild,
+                    )
+                        .with_opt_span(build_system_span)
+                        .into())
+                } else {
+                    Err(TomlError::Generic(
+                        "Cannot use [build-system] without [package]".into(),
+                        build_system_span,
+                    ))
+                };
+            }
+
+            None
+        };
+
+        let workspace_manifest = WorkspaceManifest {
+            workspace,
             features,
             environments,
             solve_groups,
-            build_system,
-        })
+        };
+
+        Ok((workspace_manifest, package_manifest))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::utils::test_utils::expect_parse_failure;
+    use insta::assert_snapshot;
+
+    use super::*;
+
+    #[test]
+    fn test_build_section_without_preview() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [build-system]
+        dependencies = ["python-build-backend > 12"]
+        build-backend = "python-build-backend"
+        channels = []
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_build_section_without_package() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [build-system]
+        dependencies = ["python-build-backend > 12"]
+        build-backend = "python-build-backend"
+        channels = []
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_package_without_build_section() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [package]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_missing_version() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+
+        [build-system]
+        dependencies = ["python-build-backend > 12"]
+        build-backend = "python-build-backend"
+        channels = []
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_workspace_name_required() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_workspace_name_from_workspace() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+        name = "foo"
+        version = "0.1.0"
+
+        [build-system]
+        dependencies = ["python-build-backend > 12"]
+        build-backend = "python-build-backend"
+        channels = []
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(workspace_manifest.workspace.name, "foo");
     }
 }
