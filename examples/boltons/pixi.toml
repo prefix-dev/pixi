@@ -10,7 +10,8 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-boltons = { path = "." }
+# boltons = { path = "." }
+boltons = "*"
 
 [host-dependencies]
 hatchling = "==1.26.3"
