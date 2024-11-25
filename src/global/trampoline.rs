@@ -18,6 +18,7 @@
 use std::{
     collections::HashMap,
     io::ErrorKind,
+    ops::Not,
     path::{Path, PathBuf},
     str::FromStr,
     sync::LazyLock,
@@ -342,9 +343,13 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
+        let trampoline_path = self.trampoline_path();
+
         // We need to check that there's indeed a trampoline at the path
-        if !self.trampoline_path().is_file()
-            || !Trampoline::is_trampoline(&self.trampoline_path()).await?
+        if trampoline_path.is_file().not()
+            || Trampoline::is_trampoline(&self.trampoline_path())
+                .await?
+                .not()
         {
             tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
                 .await
@@ -361,11 +366,11 @@ impl Trampoline {
         // If creating a hard link doesn't succeed, try copying
         // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
         if !self.path().exists()
-            && tokio_fs::hard_link(self.trampoline_path(), self.path())
+            && tokio_fs::hard_link(&trampoline_path, self.path())
                 .await
                 .is_err()
         {
-            tokio_fs::copy(self.trampoline_path(), self.path())
+            tokio_fs::copy(&trampoline_path, self.path())
                 .await
                 .into_diagnostic()?;
         }
@@ -401,13 +406,19 @@ impl Trampoline {
     }
 
     /// Checks if executable is a saved trampoline
-    /// by reading only first 1048 bytes of the file
+    /// by comparing the file size and then by reading the first 1048 bytes of the file
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
+        let metadata = bin_file.metadata().await.into_diagnostic()?;
+        let file_size = metadata.len();
 
-        let mut buf = [0; 1048];
-        match bin_file.read_exact(buf.as_mut()).await {
-            Ok(_) => Ok(buf == Trampoline::decompressed_trampoline()[..1048]),
+        if file_size != Trampoline::decompressed_trampoline().len() as u64 {
+            return Ok(false);
+        }
+
+        let mut buf = vec![0; file_size as usize];
+        match bin_file.read_exact(&mut buf).await {
+            Ok(_) => Ok(buf == Trampoline::decompressed_trampoline()),
             Err(err) => {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     Ok(false)

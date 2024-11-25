@@ -114,6 +114,10 @@ jobs:
           # and remove the original file
           # by using -f we allow overwriting the file
           for file in trampolines/*; do
+            # Skip files that are already compressed (end with .zst)
+            if [[ "$file" == *.zst ]]; then
+              continue
+            fi
             zstd "$file" -f
             rm "$file"
           done
