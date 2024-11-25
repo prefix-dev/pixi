@@ -54,12 +54,12 @@ Afterwards, restart the shell or source the shell config file.
 ### Bash (default on most Linux systems)
 
 ```bash
-echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+echo -e "\neval \"\$(pixi completion --shell bash)\"" >> ~/.bashrc
 ```
 ### Zsh (default on macOS)
 
 ```zsh
-echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+echo -e "\neval \"\$(pixi completion --shell zsh)\"" >> ~/.zhsrc
 ```
 
 ### PowerShell (pre-installed on all Windows systems)
@@ -87,7 +87,7 @@ Add the following to the end of your Nushell env file (find it by running `$nu.e
 
 ```nushell
 mkdir ~/.cache/pixi
-pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
+pixi completion --shell nushell | save --force ~/.cache/pixi/completions.nu
 ```
 
 And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
