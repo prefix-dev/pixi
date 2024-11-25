@@ -166,26 +166,6 @@ impl WorkspaceManifest {
                     ));
                 }
             }
-
-            if self.build_system.is_some() {
-                // Check if we have enabled the build feature if we have a build section
-                if !build_enabled {
-                    return Err(miette::miette!(
-                        help = "enable the `pixi-build` preview feature to use the build-system section by setting `preview = [\"pixi-build\"]",
-                        "the build-system is defined, but the `pixi-build` preview feature is not enabled"
-                    ));
-                }
-            }
-        }
-
-        // If there is a build section, make sure the build-string is not empty
-        if let Some(build) = &self.build_system {
-            if build.build_backend.is_empty() {
-                return Err(miette::miette!(
-                    help = "the build-backend must contain at least one command. e.g `pixi-build-python`",
-                    "the build-backend is empty"
-                ));
-            }
         }
 
         Ok(())

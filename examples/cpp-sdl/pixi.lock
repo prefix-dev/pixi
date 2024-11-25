@@ -598,7 +598,7 @@ packages:
   - libgcc >=14
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: 70eac94ef4c575446e3ffb073098f21ec3e98334c4c0f3af4bf3f2cefdd110aa
+    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
     globs:
     - pixi.toml
 - conda: .
@@ -610,7 +610,7 @@ packages:
   - libcxx >=19
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: 70eac94ef4c575446e3ffb073098f21ec3e98334c4c0f3af4bf3f2cefdd110aa
+    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
     globs:
     - pixi.toml
 - conda: .
@@ -622,7 +622,7 @@ packages:
   - libcxx >=19
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: 70eac94ef4c575446e3ffb073098f21ec3e98334c4c0f3af4bf3f2cefdd110aa
+    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
     globs:
     - pixi.toml
 - conda: .
@@ -635,7 +635,7 @@ packages:
   - vc14_runtime >=14.16.27033
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: 70eac94ef4c575446e3ffb073098f21ec3e98334c4c0f3af4bf3f2cefdd110aa
+    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
     globs:
     - pixi.toml
 - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda

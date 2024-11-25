@@ -14,7 +14,12 @@ use super::{
     error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
-use crate::{error::DependencyError, toml::TomlManifest, FeatureName};
+use crate::{
+    error::DependencyError,
+    manifests::PackageManifest,
+    toml::{ExternalWorkspaceProperties, TomlManifest},
+    FeatureName,
+};
 
 #[derive(Deserialize, Debug)]
 pub struct PyProjectManifest {
@@ -72,7 +77,7 @@ impl PyProjectManifest {
             let span = self
                 .pixi_manifest()
                 .and_then(|manifest| manifest.workspace.span());
-            return Err(TomlError::NoProjectName(span));
+            return Err(TomlError::MissingField("name".into(), span));
         }
 
         Ok(self)
@@ -216,15 +221,16 @@ impl From<pyproject_toml::Project> for PyProjectFields {
     }
 }
 
-impl TryFrom<PyProjectManifest> for WorkspaceManifest {
-    type Error = PyProjectToManifestError;
-
-    fn try_from(item: PyProjectManifest) -> Result<Self, Self::Error> {
+impl PyProjectManifest {
+    #[allow(clippy::result_large_err)]
+    pub fn into_manifests(
+        self,
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), PyProjectToManifestError> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
             pixi: Some(pixi),
             poetry,
-        }) = item.tool
+        }) = self.tool
         else {
             return Err(PyProjectToManifestError::MissingPixiTable);
         };
@@ -234,43 +240,42 @@ impl TryFrom<PyProjectManifest> for WorkspaceManifest {
             project,
             dependency_groups,
             ..
-        } = item.inner;
+        } = self.inner;
         let project = project.map(PyProjectFields::from).unwrap_or_default();
 
         // Extract some of the values we are interested in from the poetry table.
         let poetry = poetry.unwrap_or_default();
 
         // Convert the TOML document into a pixi manifest.
-        let mut manifest = pixi.into_workspace_manifest(project.name)?;
-
-        // Extract some of the values from the pyproject.toml if they are not present in
-        // the pixi manifest.
-        manifest.workspace.description = manifest
-            .workspace
-            .description
-            .or(project.description)
-            .or(poetry.description);
-        manifest.workspace.version = manifest
-            .workspace
-            .version
-            .or(project.version.and_then(|v| v.to_string().parse().ok()))
-            .or(poetry.version.and_then(|v| v.parse().ok()));
-        manifest.workspace.authors = manifest
-            .workspace
-            .authors
-            .or_else(move || project.authors.map(contacts_to_authors))
-            .or(poetry.authors);
-
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
+        let (mut workspace_manifest, package_manifest) =
+            pixi.into_manifests(ExternalWorkspaceProperties {
+                name: project.name,
+                version: project
+                    .version
+                    .and_then(|v| v.to_string().parse().ok())
+                    .or(poetry.version.and_then(|v| v.parse().ok())),
+                description: project.description.or(poetry.description),
+                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+                license: None,
+                license_file: None,
+                readme: None,
+                homepage: None,
+                repository: None,
+                documentation: None,
+            })?;
 
         // Add python as dependency based on the `project.requires_python` property
         let python_spec = project.requires_python;
 
-        let target = manifest.default_feature_mut().targets.default_mut();
+        let target = workspace_manifest
+            .default_feature_mut()
+            .targets
+            .default_mut();
         let python = PackageName::from_str("python").unwrap();
         // If the target doesn't have any python dependency, we add it from the
         // `requires-python`
@@ -320,10 +325,11 @@ impl TryFrom<PyProjectManifest> for WorkspaceManifest {
         // create a feature of the same name if it does not exist,
         // and add pypi dependencies, filtering out self-references in optional
         // dependencies
-        let project_name = pep508_rs::PackageName::new(manifest.workspace.name.clone()).ok();
+        let project_name =
+            pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
         for (group, reqs) in groups {
             let feature_name = FeatureName::Named(group.to_string());
-            let target = manifest
+            let target = workspace_manifest
                 .features
                 .entry(feature_name.clone())
                 .or_insert_with(move || Feature::new(feature_name))
@@ -345,7 +351,7 @@ impl TryFrom<PyProjectManifest> for WorkspaceManifest {
             }
         }
 
-        Ok(manifest)
+        Ok((workspace_manifest, package_manifest))
     }
 }
 
