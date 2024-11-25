@@ -51,37 +51,45 @@ To get autocompletion follow the instructions for your shell.
 Afterwards, restart the shell or source the shell config file.
 
 
-### Bash (default on most Linux systems)
+#### Bash (default on most Linux systems)
 
-```bash
-echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+Add the following to the end of `~/.bashrc`:
+
+```bash title="~/.bashrc"
+
+eval "$(pixi completion --shell bash)"
 ```
-### Zsh (default on macOS)
+#### Zsh (default on macOS)
 
-```zsh
-echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+Add the following to the end of `~/.zshrc`:
+
+
+```zsh title="~/.zshrc"
+
+eval "$(pixi completion --shell zsh)"
 ```
 
-### PowerShell (pre-installed on all Windows systems)
+#### PowerShell (pre-installed on all Windows systems)
+
+Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
+You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
+Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
+`~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
 
 ```pwsh
-Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
+(& pixi completion --shell powershell) | Out-String | Invoke-Expression
 ```
 
-!!! tip "Failure because no profile file exists"
-    Make sure your profile file exists, otherwise create it with:
-    ```PowerShell
-    New-Item -Path $PROFILE -ItemType File -Force
-    ```
+#### Fish
 
+Add the following to the end of `~/.config/fish/config.fish`:
 
-### Fish
+```fish title="~/.config/fish/config.fish"
 
-```fish
-echo 'pixi completion --shell fish | source' > ~/.config/fish/completions/pixi.fish
+pixi completion --shell fish | source
 ```
 
-### Nushell
+#### Nushell
 
 Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
 
@@ -96,11 +104,15 @@ And add the following to the end of your Nushell configuration (find it by runni
 use ~/.cache/pixi/completions.nu *
 ```
 
-### Elvish
+#### Elvish
 
-```elv
-echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+Add the following to the end of `~/.elvish/rc.elv`:
+
+```elv title="~/.elvish/rc.elv"
+
+eval (pixi completion --shell elvish | slurp)
 ```
+
 
 ## Alternative installation methods
 
