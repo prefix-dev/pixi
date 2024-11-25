@@ -43,7 +43,7 @@ hatchling = "==1.26.3"
 [tool.pixi.build-system]
 build-backend = "pixi-build-python"
 channels = [
-  "https://repo.prefix.dev/pixi-build-backends",
-  "https://fast.prefix.dev/conda-forge",
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-python"]
