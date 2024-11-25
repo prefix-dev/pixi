@@ -13,7 +13,7 @@ version = "0.1.0"
 build-backend = "pixi-build-cmake"
 channels = [
   "https://prefix.dev/pixi-build-backends",
-  "https://fast.prefix.dev/conda-forge",
+  "https://prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-cmake"]
 
