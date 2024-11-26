@@ -339,26 +339,6 @@ jobs:
           path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
           retention-days: 1
 
-  test-common-wheels-linux-x86_64:
-    name: "test wheel installation | linux x86_64"
-    needs:
-      - build-binary-linux-x86_64
-    uses: ./.github/workflows/test_common_wheels.yml
-    with:
-        sha: ${{ github.sha }}
-        arch: linux-x86_64
-        runs-on: 8core_ubuntu_latest_runner
-
-  test-common-wheels-windows-x86_64:
-    name: "test wheel installation | windows x86_64"
-    needs:
-      - build-binary-windows-x86_64
-    uses: ./.github/workflows/test_common_wheels.yml
-    with:
-      sha: ${{ github.sha }}
-      arch: windows-x86_64
-      runs-on: windows-latest
-
   #
   # Run integration tests on important platforms
   #
@@ -428,7 +408,7 @@ jobs:
   test-integration-linux-x86_64:
     timeout-minutes: 30
     name: pytest integration | linux x86_64
-    runs-on: macos-14
+    runs-on: ubuntu-20.04
     needs: build-binary-linux-x86_64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -453,3 +433,27 @@ jobs:
         run: bash tests/scripts/test-examples.sh
       - name: Test export
         run: pixi run --locked test-export
+
+  #
+  # Install a number of common wheels on some platforms
+  #
+
+  test-common-wheels-linux-x86_64:
+    name: "test wheel installation | linux x86_64"
+    needs:
+      - build-binary-linux-x86_64
+    uses: ./.github/workflows/test_common_wheels.yml
+    with:
+        sha: ${{ github.sha }}
+        arch: linux-x86_64
+        runs-on: 8core_ubuntu_latest_runner
+
+  test-common-wheels-windows-x86_64:
+    name: "test wheel installation | windows x86_64"
+    needs:
+      - build-binary-windows-x86_64
+    uses: ./.github/workflows/test_common_wheels.yml
+    with:
+      sha: ${{ github.sha }}
+      arch: windows-x86_64
+      runs-on: windows-latest
