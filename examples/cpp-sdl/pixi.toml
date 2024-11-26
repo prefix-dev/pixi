@@ -1,5 +1,5 @@
 [project]
-channels = ["https://fast.prefix.dev/conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
@@ -13,7 +13,7 @@ version = "0.1.0"
 build-backend = "pixi-build-cmake"
 channels = [
   "https://prefix.dev/pixi-build-backends",
-  "https://fast.prefix.dev/conda-forge",
+  "https://prefix.dev/conda-forge",
 ]
 dependencies = ["pixi-build-cmake"]
 

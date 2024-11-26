@@ -2,7 +2,7 @@ version: 6
 environments:
   default:
     channels:
-    - url: https://fast.prefix.dev/conda-forge/
+    - url: https://prefix.dev/conda-forge/
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -74,7 +74,7 @@ packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
   md5: d7c89558ba9fa0495403155b64376d81
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: None
   size: 2562
   timestamp: 1578324546067
@@ -87,7 +87,7 @@ packages:
   - libgomp >=7.5.0
   constrains:
   - openmp_impl 9999
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 23621
@@ -97,7 +97,7 @@ packages:
   md5: d9c69a24ad678ffce24c6543a0176b00
   depends:
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-2.0-or-later
   license_family: GPL
   size: 71042
@@ -108,7 +108,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: bzip2-1.0.6
   license_family: BSD
   size: 252783
@@ -120,7 +120,7 @@ packages:
   - expat >=2.4.2,<3.0a0
   - libgcc-ng >=9.4.0
   - libglib >=2.70.2,<3.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-2.0-or-later
   license_family: GPL
   size: 618596
@@ -132,7 +132,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libexpat 2.6.4 h5888daf_0
   - libgcc >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 138145
@@ -149,7 +149,7 @@ packages:
   - libgettextpo 0.22.5 he02047a_3
   - libgettextpo-devel 0.22.5 he02047a_3
   - libstdcxx-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later AND GPL-3.0-or-later
   size: 479452
   timestamp: 1723626088190
@@ -159,7 +159,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-or-later
   license_family: GPL
   size: 2750908
@@ -169,7 +169,7 @@ packages:
   md5: a8832b479f93521a9e7b5b743803be51
   depends:
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.0-only
   license_family: LGPL
   size: 508258
@@ -181,7 +181,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
   - libstdcxx-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   size: 42817
   timestamp: 1723626012203
@@ -192,7 +192,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libasprintf 0.22.5 he8f35ee_3
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   size: 34172
   timestamp: 1723626026096
@@ -202,7 +202,7 @@ packages:
   depends:
   - attr >=2.5.1,<2.6.0a0
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 100582
@@ -212,7 +212,7 @@ packages:
   md5: 86801fc56d4641e3ef7a63f5d996b960
   depends:
   - __osx >=10.13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
   size: 528991
@@ -222,7 +222,7 @@ packages:
   md5: bf691071fba4734984231617783225bc
   depends:
   - __osx >=11.0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
   size: 520771
@@ -235,7 +235,7 @@ packages:
   - libgcc >=13
   constrains:
   - expat 2.6.4.*
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 73304
@@ -245,7 +245,7 @@ packages:
   md5: d645c6d2ac96843a2bfaccd2d62b3ac3
   depends:
   - libgcc-ng >=9.4.0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 58292
@@ -259,7 +259,7 @@ packages:
   - libogg 1.3.*
   - libogg >=1.3.4,<1.4.0a0
   - libstdcxx-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 394383
@@ -273,7 +273,7 @@ packages:
   constrains:
   - libgomp 14.2.0 h77fa898_1
   - libgcc-ng ==14.2.0=*_1
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   size: 848745
@@ -283,7 +283,7 @@ packages:
   md5: e39480b9ca41323497b05492a63bc35b
   depends:
   - libgcc 14.2.0 h77fa898_1
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   size: 54142
@@ -294,7 +294,7 @@ packages:
   depends:
   - libgcc-ng >=12
   - libgpg-error >=1.50,<2.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later AND GPL-2.0-or-later
   license_family: GPL
   size: 684307
@@ -305,7 +305,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-or-later
   license_family: GPL
   size: 170646
@@ -317,7 +317,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
   - libgettextpo 0.22.5 he02047a_3
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-or-later
   license_family: GPL
   size: 36790
@@ -334,7 +334,7 @@ packages:
   - pcre2 >=10.44,<10.45.0a0
   constrains:
   - glib 2.82.2 *_0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   size: 3931898
   timestamp: 1729191404130
@@ -343,7 +343,7 @@ packages:
   md5: cc3573974587f12dda90d96e3e55a702
   depends:
   - _libgcc_mutex 0.1 conda_forge
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   size: 460992
@@ -355,7 +355,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
   - libstdcxx >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-only
   license_family: GPL
   size: 268740
@@ -365,7 +365,7 @@ packages:
   md5: d66573916ffcf376178462f1b61c941e
   depends:
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-only
   size: 705775
   timestamp: 1702682170569
@@ -374,7 +374,7 @@ packages:
   md5: 601bfb4b3c6f0b844443bb81a56651e0
   depends:
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 205914
@@ -384,7 +384,7 @@ packages:
   md5: 15345e56d527b330e1cacbdf58676e8f
   depends:
   - libgcc-ng >=9.3.0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 260658
@@ -401,7 +401,7 @@ packages:
   - libstdcxx-ng >=12
   - libvorbis >=1.3.7,<1.4.0a0
   - mpg123 >=1.32.1,<1.33.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   license_family: LGPL
   size: 354372
@@ -411,7 +411,7 @@ packages:
   md5: 234a5554c53625688d51062645337328
   depends:
   - libgcc 14.2.0 h77fa898_1
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   size: 3893695
@@ -421,7 +421,7 @@ packages:
   md5: 8371ac6457591af2cf6159439c1fd051
   depends:
   - libstdcxx 14.2.0 hc0a3c3a_1
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   size: 54105
@@ -437,7 +437,7 @@ packages:
   - lz4-c >=1.9.3,<1.10.0a0
   - xz >=5.2.6,<6.0a0
   - zstd >=1.5.6,<1.6.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   size: 411535
   timestamp: 1729786797378
@@ -448,7 +448,7 @@ packages:
   - libgcc-ng >=9.3.0
   - libogg >=1.3.4,<1.4.0a0
   - libstdcxx-ng >=9.3.0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 286280
@@ -462,7 +462,7 @@ packages:
   - pthread-stubs
   - xorg-libxau >=1.0.11,<2.0a0
   - xorg-libxdmcp
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 395888
@@ -475,7 +475,7 @@ packages:
   - libgcc >=13
   constrains:
   - zlib 1.3.1 *_2
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Zlib
   license_family: Other
   size: 60963
@@ -486,7 +486,7 @@ packages:
   depends:
   - libgcc-ng >=12
   - libstdcxx-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-2-Clause
   license_family: BSD
   size: 143402
@@ -498,7 +498,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
   - libstdcxx >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-only
   license_family: LGPL
   size: 491140
@@ -511,7 +511,7 @@ packages:
   - bzip2 >=1.0.8,<2.0a0
   - libgcc-ng >=12
   - libzlib >=1.3.1,<2.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 952308
@@ -522,7 +522,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 8252
@@ -538,7 +538,7 @@ packages:
   - libsystemd0 >=255
   constrains:
   - pulseaudio 17.0 *_0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1-or-later
   license_family: LGPL
   size: 757633
@@ -553,7 +553,7 @@ packages:
   - pulseaudio-client >=17.0,<17.1.0a0
   - xorg-libx11 >=1.8.9,<2.0a0
   - xorg-libxext >=1.3.4,<2.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Zlib
   size: 1391142
   timestamp: 1725255009793
@@ -563,7 +563,7 @@ packages:
   depends:
   - __osx >=10.13
   - libcxx >=17
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Zlib
   size: 1232457
   timestamp: 1725255027620
@@ -573,7 +573,7 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=17
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Zlib
   size: 1256184
   timestamp: 1725254933792
@@ -584,7 +584,7 @@ packages:
   - ucrt >=10.0.20348.0
   - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: Zlib
   size: 2243873
   timestamp: 1725255268158
@@ -598,7 +598,7 @@ packages:
   - libgcc >=14
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
+    hash: 79c9bbbc1183f8f6756b316c22af27aec3b721f7c5a8d2cba0e2aae59cc1cb25
     globs:
     - pixi.toml
 - conda: .
@@ -610,7 +610,7 @@ packages:
   - libcxx >=19
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
+    hash: 79c9bbbc1183f8f6756b316c22af27aec3b721f7c5a8d2cba0e2aae59cc1cb25
     globs:
     - pixi.toml
 - conda: .
@@ -622,7 +622,7 @@ packages:
   - libcxx >=19
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
+    hash: 79c9bbbc1183f8f6756b316c22af27aec3b721f7c5a8d2cba0e2aae59cc1cb25
     globs:
     - pixi.toml
 - conda: .
@@ -635,7 +635,7 @@ packages:
   - vc14_runtime >=14.16.27033
   - sdl2 >=2.30.7,<3.0a0
   input:
-    hash: f67c1bf6c9fee694955630c2e665ccfc0dc48f2ae12ea33f36251f91e3d6194b
+    hash: 79c9bbbc1183f8f6756b316c22af27aec3b721f7c5a8d2cba0e2aae59cc1cb25
     globs:
     - pixi.toml
 - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
@@ -643,7 +643,7 @@ packages:
   md5: 6797b005cd0f439c4c5c9ac565783700
   constrains:
   - vs2015_runtime >=14.29.30037
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LicenseRef-MicrosoftWindowsSDK10
   size: 559710
   timestamp: 1728377334097
@@ -652,7 +652,7 @@ packages:
   md5: 7c10ec3158d1eb4ddff7007c9101adb0
   depends:
   - vc14_runtime >=14.38.33135
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   track_features:
   - vc14
   license: BSD-3-Clause
@@ -666,7 +666,7 @@ packages:
   - ucrt >=10.0.20348.0
   constrains:
   - vs2015_runtime 14.42.34433.* *_23
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LicenseRef-MicrosoftVisualCpp2015-2022Runtime
   license_family: Proprietary
   size: 754247
@@ -679,7 +679,7 @@ packages:
   - libgcc >=13
   - libxcb >=1.17.0,<2.0a0
   - xorg-xorgproto
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 838308
@@ -690,7 +690,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 14679
@@ -701,7 +701,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 19901
@@ -713,7 +713,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
   - xorg-libx11 >=1.8.10,<2.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 50060
@@ -724,7 +724,7 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: MIT
   license_family: MIT
   size: 565425
@@ -734,7 +734,7 @@ packages:
   md5: 2161070d867d1b1204ea749c8eec4ef0
   depends:
   - libgcc-ng >=12
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: LGPL-2.1 and GPL-2.0
   size: 418368
   timestamp: 1660346797927
@@ -745,7 +745,7 @@ packages:
   - libgcc-ng >=12
   - libstdcxx-ng >=12
   - libzlib >=1.2.13,<2.0.0a0
-  channel: https://fast.prefix.dev/conda-forge
+  channel: https://prefix.dev/conda-forge
   license: BSD-3-Clause
   license_family: BSD
   size: 554846
