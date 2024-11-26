@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use pixi_manifest::Manifest;
 
 // pub use protocol::Protocol;
-use rattler_conda_types::{ChannelConfig, MatchSpec};
+use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
 use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
@@ -61,24 +61,13 @@ pub struct ProtocolBuilder {
 
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
+    /// We discover a `pixi.toml` file in the source directory and/or a `recipe.yaml / recipe/recipe.yaml` file.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
-        // first we need to discover that pixi protocol also can be built.
-        // it is used to get the manifest
-
-        // // Ignore the error if we cannot find the pixi protocol.
-        // let pixi_protocol = match pixi::ProtocolBuilder::discover(source_dir) {
-        //     Ok(inner_value) => inner_value,
-        //     Err(_) => return Ok(None), // Handle the case where the Option is None
-        // };
-
-        // // we cannot find pixi protocol, so we cannot build rattler-build protocol.
-        // let manifest = if let Some(pixi_protocol) = pixi_protocol {
-        //     pixi_protocol.manifest().clone()
-        // } else {
-        //     return Ok(None);
-        // };
-
-        let manifest = None;
+        // Ignore the error if we cannot find the pixi protocol.
+        let manifest = match pixi::ProtocolBuilder::discover(source_dir) {
+            Ok(protocol) => protocol.map(|protocol| protocol.manifest().clone()),
+            Err(_) => None,
+        };
 
         let recipe_dir = source_dir.join("recipe");
 
@@ -142,20 +131,23 @@ impl ProtocolBuilder {
         tool: &ToolCache,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let tool_spec = self.backend_spec.unwrap_or_else(|| {
-            ToolSpec::Isolated(IsolatedToolSpec::from_specs(["pixi-build-rattler-build"
-                .parse()
-                .unwrap()]).with_command("pixi-build-rattler-build"))
-        });
+        // If we have a manifest path, that means we found a `pixi.toml` file. In that case
+        // we should use the backend spec from the manifest.
+        let tool_spec = if let Some(manifest_path) = &self.manifest_path {
+            self.backend_spec
+                .ok_or(FinishError::NoBuildSection(manifest_path.clone()))?
+        } else {
+            ToolSpec::Isolated(
+                IsolatedToolSpec::from_specs(["pixi-build-rattler-build".parse().unwrap()])
+                    .with_command("pixi-build-rattler-build"),
+            )
+        };
 
         let tool = tool
             .instantiate(tool_spec)
             .await
             .map_err(FinishError::Tool)?;
 
-        tracing::warn!("Tool instantiated .... {:?}", tool);
-
-        tracing::warn!("Cache dir / build id: {:?} / {:?}", self.cache_dir, build_id);
         if let Some(cache_dir) = self.cache_dir.as_ref() {
             let _ = std::fs::create_dir_all(cache_dir).map_err(|e| {
                 tracing::warn!("Failed to create cache dir: {:?}", e);
