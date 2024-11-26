@@ -294,7 +294,7 @@ jobs:
         run: >
           cargo build
           --locked
-          --profile $CARGO_BUILD_PROFILE
+          --profile $env:CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
@@ -326,7 +326,7 @@ jobs:
           cargo build
           --locked
           --target aarch64-pc-windows-msvc
-          --profile $CARGO_BUILD_PROFILE
+          --profile $env:CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
