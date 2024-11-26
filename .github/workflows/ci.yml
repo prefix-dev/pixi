@@ -131,6 +131,7 @@ jobs:
 
   cargo-test-linux:
     name: "cargo test | ubuntu"
+    timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: 8core_ubuntu_latest_runner
@@ -149,6 +150,7 @@ jobs:
 
   cargo-test-macos-aarch64:
     name: "cargo test | macos aarch64"
+    timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: macos-14
@@ -167,6 +169,7 @@ jobs:
 
   cargo-test-macos-x86_64:
     name: "cargo test | macos x86_64"
+    timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
     runs-on: macos-13
@@ -185,6 +188,7 @@ jobs:
 
   cargo-test-windows:
     name: "cargo test | windows"
+    timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: 16core_windows_latest_runner
@@ -365,16 +369,41 @@ jobs:
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
       - name: Verify pixi installation
         run: pixi --version
-      - name: Run integration tests
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-ci
+
       - name: Install pixi
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi install -v
+
+      - name: Run integration tests
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi run --locked test-integration-ci
+
       - name: Test examples
         shell: bash
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: bash tests/scripts/test-examples.sh
+
+      - name: "Checkout Deltares/Ribasim"
+        uses: actions/checkout@v4
+        with:
+          repository: Deltares/Ribasim
+          path: ribasim
+      - name: "Install Deltares/Ribasim"
+        run: |
+          Copy-Item -Path "${{ github.workspace }}/ribasim" -Destination "${{ env.PIXI_WORKSPACE }}/ribasim" -Recurse
+          pixi install
+        working-directory: env.PIXI_WORKSPACE/ribasim
+
+      - name: "Checkout quantco/polarify"
+        uses: actions/checkout@v4
+        with:
+          repository: quantco/polarify
+          path: polarify
+      - name: "Install quantco/polarify"
+        run: |
+          Copy-Item -Path "${{ github.workspace }}/polarify" -Destination "${{ env.PIXI_WORKSPACE }}/polarify" -Recurse
+          pixi install
+        working-directory: polarify
 
   test-integration-macos-aarch64:
     timeout-minutes: 30
@@ -396,19 +425,41 @@ jobs:
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi --version
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+
       - name: Install pixi
         run: pixi install -v
+
+      - name: Run integration tests
+        run: pixi run --locked test-integration-ci
+
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
+
       - name: Test export
         run: pixi run --locked test-export
+
+      - name: "Checkout Deltares/Ribasim"
+        uses: actions/checkout@v4
+        with:
+          repository: Deltares/Ribasim
+          path: ribasim
+      - name: "Install Deltares/Ribasim"
+        run: pixi install
+        working-directory: ribasim
+
+      - name: "Checkout quantco/polarify"
+        uses: actions/checkout@v4
+        with:
+          repository: quantco/polarify
+          path: polarify
+      - name: "Install quantco/polarify"
+        run: pixi install
+        working-directory: polarify
 
   test-integration-linux-x86_64:
     timeout-minutes: 30
     name: pytest integration | linux x86_64
-    runs-on: ubuntu-20.04
+    runs-on: 8core_ubuntu_latest_runner
     needs: build-binary-linux-x86_64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -425,14 +476,45 @@ jobs:
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi --version
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+
       - name: Install pixi
         run: pixi install -v
-      - name: Test examples
+
+      - name: Run integration tests
+        run: pixi run --locked test-integration-ci
+
+      - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
-      - name: Test export
+
+      - name: "Test export"
         run: pixi run --locked test-export
+
+      - name: "Checkout nerfstudio-project/nerfstudio"
+        uses: actions/checkout@v4
+        with:
+          repository: nerfstudio-project/nerfstudio
+          path: nerfstudio
+      - name: "Install nerfstudio-project/nerfstudio"
+        run: pixi install
+        working-directory: nerfstudio
+
+      - name: "Checkout Deltares/Ribasim"
+        uses: actions/checkout@v4
+        with:
+          repository: Deltares/Ribasim
+          path: ribasim
+      - name: "Install Deltares/Ribasim"
+        run: pixi install
+        working-directory: ribasim
+
+      - name: "Checkout quantco/polarify"
+        uses: actions/checkout@v4
+        with:
+          repository: quantco/polarify
+          path: polarify
+      - name: "Install quantco/polarify"
+        run: pixi install
+        working-directory: polarify
 
   #
   # Install a number of common wheels on some platforms
@@ -457,3 +539,13 @@ jobs:
       sha: ${{ github.sha }}
       arch: windows-x86_64
       runs-on: windows-latest
+
+  test-common-wheels-macos-aarch64:
+    name: "test wheel installation | macos aarch64"
+    needs:
+      - build-binary-macos-aarch64
+    uses: ./.github/workflows/test_common_wheels.yml
+    with:
+      sha: ${{ github.sha }}
+      arch: macos-aarch64
+      runs-on: macos-14
