@@ -248,6 +248,10 @@ class PyPIVersion(_PyPIRequirement):
         None,
         description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
     )
+    index: NonEmptyStr | None = Field(
+        None,
+        description="The index to fetch the package from",
+    )
 
 
 PyPIRequirement = (

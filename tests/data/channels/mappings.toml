@@ -6,3 +6,4 @@
 "non_self_expose_channel_2.yaml" = "non_self_expose_channel_2"
 "trampoline/trampoline_1.yaml" = "trampoline_1"
 "trampoline/trampoline_2.yaml" = "trampoline_2"
+"trampoline/trampoline_path.yaml" = "trampoline_path_channel"

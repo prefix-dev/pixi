@@ -49,6 +49,7 @@ requests = { version = ">= 2.8.1, ==2.8.*", extras = [
   "security",
   "tests",
 ] } # Using the map allows the user to add `extras`
+test-pinning-index = { version = "*", index = "https://example.com/test" }
 testpypi = "*"
 testpypi1 = "*"
 

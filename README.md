@@ -109,32 +109,43 @@ Afterwards, restart the shell or source the shell config file.
 
 #### Bash (default on most Linux systems)
 
+Add the following to the end of `~/.bashrc`:
+
 ```bash
-echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+# ~/.bashrc
+
+eval "$(pixi completion --shell bash)"
 ```
 #### Zsh (default on macOS)
 
+Add the following to the end of `~/.zshrc`:
+
+
 ```zsh
-echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+# ~/.zshrc
+
+eval "$(pixi completion --shell zsh)"
 ```
 
 #### PowerShell (pre-installed on all Windows systems)
 
+Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
+You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
+Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
+`~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
+
 ```pwsh
-Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
-```
-
-If this fails with "Failure because no profile file exists", make sure your profile file exists.
-If not, create it with:
-
-```PowerShell
-New-Item -Path $PROFILE -ItemType File -Force
+(& pixi completion --shell powershell) | Out-String | Invoke-Expression
 ```
 
 #### Fish
 
+Add the following to the end of `~/.config/fish/config.fish`:
+
 ```fish
-echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+# ~/.config/fish/config.fish
+
+pixi completion --shell fish | source
 ```
 
 #### Nushell
@@ -154,8 +165,12 @@ use ~/.cache/pixi/completions.nu *
 
 #### Elvish
 
+Add the following to the end of `~/.elvish/rc.elv`:
+
 ```elv
-echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+# ~/.elvish/rc.elv
+
+eval (pixi completion --shell elvish | slurp)
 ```
 
 ### Distro Packages

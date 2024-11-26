@@ -1351,7 +1351,7 @@ List the environments in the manifest file.
 pixi project environment list
 ```
 
-### `project export conda_environment`
+### `project export conda-environment`
 
 Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
 
@@ -1374,7 +1374,7 @@ pixi project export conda-environment --environment lint
 pixi project export conda-environment --platform linux-64 environment.linux-64.yml
 ```
 
-### `project export conda_explicit_spec`
+### `project export conda-explicit-spec`
 
 Render a platform-specific conda [explicit specification file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments)
 for an environment. The file can be then used to create a conda environment using conda/mamba:
@@ -1396,8 +1396,8 @@ As the explicit specification file format does not support pypi-dependencies, us
 - `--ignore-pypi-errors`: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present.
 
 ```sh
-pixi project export conda_explicit_spec output
-pixi project export conda_explicit_spec -e default -e test -p linux-64 output
+pixi project export conda-explicit-spec output
+pixi project export conda-explicit-spec -e default -e test -p linux-64 output
 ```
 
 

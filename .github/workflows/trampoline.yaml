@@ -35,8 +35,8 @@ jobs:
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
 
-          - name: "Linux-powerpc64"
-            target: powerpc64-unknown-linux-gnu
+          - name: "Linux-powerpc64le"
+            target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
           - name: "macOS-x86"
@@ -114,6 +114,10 @@ jobs:
           # and remove the original file
           # by using -f we allow overwriting the file
           for file in trampolines/*; do
+            # Skip files that are already compressed (end with .zst)
+            if [[ "$file" == *.zst ]]; then
+              continue
+            fi
             zstd "$file" -f
             rm "$file"
           done

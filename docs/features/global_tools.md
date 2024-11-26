@@ -149,6 +149,22 @@ exposed = { ansible = "ansible" } # (1)!
 
 1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
 
+It's also possible to expose an executable which is located in a nested directory.
+For example dotnet.exe executable is located in a dotnet folder,
+to expose `dotnet` you must specify its relative path :
+
+```
+pixi global install dotnet --expose dotnet=dotnet\dotnet
+```
+
+Which will create the following entry in the manifest:
+```toml
+[envs.dotnet]
+channels = ["conda-forge"]
+dependencies = { dotnet = "*" }
+exposed = { dotnet = 'dotnet\dotnet' }
+```
+
 ### Dependencies
 Dependencies are the **Conda** packages that will be installed into your environment. For example, running:
 ```
