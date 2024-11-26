@@ -31,6 +31,7 @@ env:
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+  PYTEST_ADDOPTS: "--color=yes"
 
   #
   # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
@@ -386,7 +387,7 @@ jobs:
         run: pixi --version
       - name: Run integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run test-integration-ci
+        run: pixi run --locked test-integration-ci
       - name: Install pixi
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi install -v
@@ -398,7 +399,7 @@ jobs:
   test-integration-macos-aarch64:
     timeout-minutes: 30
     name: pytest integration | macos aarch64
-    runs-on: ubuntu-20.04
+    runs-on: macos-14
     needs: build-binary-macos-aarch64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -416,12 +417,13 @@ jobs:
       - name: Verify pixi installation
         run: pixi --version
       - name: Run integration tests
-        run: pixi run test-integration-ci
+        run: pixi run --locked test-integration-ci
       - name: Install pixi
         run: pixi install -v
       - name: Test examples
-        shell: bash
         run: bash tests/scripts/test-examples.sh
+      - name: Test export
+        run: pixi run --locked test-export
 
   test-integration-linux-x86_64:
     timeout-minutes: 30
@@ -444,9 +446,10 @@ jobs:
       - name: Verify pixi installation
         run: pixi --version
       - name: Run integration tests
-        run: pixi run test-integration-ci
+        run: pixi run --locked test-integration-ci
       - name: Install pixi
         run: pixi install -v
       - name: Test examples
-        shell: bash
         run: bash tests/scripts/test-examples.sh
+      - name: Test export
+        run: pixi run --locked test-export
