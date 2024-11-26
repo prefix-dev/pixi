@@ -1,21 +1,11 @@
+name: CI
+
 on:
   push:
-    tags:
-      - "v*.*.*"
     branches:
       - main
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "*.md"
   workflow_dispatch:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "*.md"
-
-name: Rust
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
@@ -42,7 +32,7 @@ env:
   #
   # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
   #
-  CARGO_BUILD_PROFILE: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dist' || 'ci' }}
+  CARGO_BUILD_PROFILE: ci
 
 jobs:
   # Check if the code has changed in such a way that a rebuild is needed.
