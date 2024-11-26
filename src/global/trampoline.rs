@@ -66,6 +66,7 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
 );
 
 #[cfg(target_arch = "powerpc64")]
+#[cfg(target_endian = "little")]
 #[cfg(target_os = "linux")]
 const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst"
