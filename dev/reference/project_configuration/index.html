@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Learn what you can do in the pixi.toml configuration.">
+        <meta name="description" content="Learn what you can do in the pixi manifest.">
       
       
       
@@ -24,7 +24,7 @@
     
     
       
-        <title>Configuration - Pixi by prefix.dev</title>
+        <title>Manifest - Pixi by prefix.dev</title>
       
     
     
@@ -61,9 +61,9 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Configuration - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Manifest - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Learn what you can do in the pixi.toml configuration." >
+        <meta  property="og:description"  content="Learn what you can do in the pixi manifest." >
       
         <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/project_configuration.png" >
       
@@ -77,9 +77,9 @@
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Configuration - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Manifest - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Learn what you can do in the pixi.toml configuration." >
+        <meta  name="twitter:description"  content="Learn what you can do in the pixi manifest." >
       
         <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/project_configuration.png" >
       
@@ -104,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-project-table" class="md-skip">
+        <a href="#manifest-discovery" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Configuration
+              Manifest
             
           </span>
         </div>
@@ -1267,6 +1267,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#manifest-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest discovery
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-project-table" class="md-nav__link">
     <span class="md-ellipsis">
       The project table
@@ -1801,6 +1810,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#manifest-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest discovery
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-project-table" class="md-nav__link">
     <span class="md-ellipsis">
       The project table
@@ -2146,15 +2164,57 @@
 
   <h1>Project Configuration</h1>
 
-<p>The <code>pixi.toml</code> is the pixi project configuration file, also known as the project manifest.</p>
+<p>The <code>pixi.toml</code> is the project manifest, also known as the pixi project configuration file.</p>
 <p>A <code>toml</code> file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">crates.io</a>.</p>
+For more technical documentation check pixi on <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">docs.rs</a>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>We also support the <code>pyproject.toml</code> file. It has the same structure as the <code>pixi.toml</code> file. except that you need to prepend the tables with <code>tool.pixi</code> instead of just the table name.
 For example, the <code>[project]</code> table becomes <code>[tool.pixi.project]</code>.
 There are also some small extras that are available in the <code>pyproject.toml</code> file, checkout the <a href="../../advanced/pyproject_toml/">pyproject.toml</a> documentation for more information.</p>
+</div>
+<h2 id="manifest-discovery">Manifest discovery<a class="headerlink" href="#manifest-discovery" title="Permanent link">#</a></h2>
+<p>The manifest can be found at the following locations depending on your operating system.</p>
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>6</td>
+<td><code>--manifest-path</code></td>
+<td>Command-line argument</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>pixi.toml</code></td>
+<td>In your current working directory.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>pyproject.toml</code></td>
+<td>In your current working directory.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>pixi.toml</code> or <code>pyproject.toml</code></td>
+<td>Iterate through all parent directories. The first discovered manifest is used.</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>$PIXI_PROJECT_MANIFEST</code></td>
+<td>If <code>$PIXI_IN_SHELL</code> is set. This happens with <code>pixi shell</code> or <code>pixi run</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If multiple locations exist, the manifest with the highest priority will be used.</p>
 </div>
 <h2 id="the-project-table">The <code>project</code> table<a class="headerlink" href="#the-project-table" title="Permanent link">#</a></h2>
 <p>The minimally required information in the <code>project</code> table is:</p>

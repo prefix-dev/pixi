@@ -1810,14 +1810,19 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td><code>/etc/pixi/config.toml</code></td>
-<td>System-wide configuration</td>
+<td>6</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>2</td>
-<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
-<td>XDG compliant user-specific configuration</td>
+<td>5</td>
+<td><code>your_project/.pixi/config.toml</code></td>
+<td>Project-specific configuration</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$PIXI_HOME/config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
 </tr>
 <tr>
 <td>3</td>
@@ -1825,19 +1830,14 @@ The configuration is loaded in the following order:</p>
 <td>User-specific configuration</td>
 </tr>
 <tr>
-<td>4</td>
-<td><code>$PIXI_HOME/config.toml</code></td>
-<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
+<td>XDG compliant user-specific configuration</td>
 </tr>
 <tr>
-<td>5</td>
-<td><code>your_project/.pixi/config.toml</code></td>
-<td>Project-specific configuration</td>
-</tr>
-<tr>
-<td>6</td>
-<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
-<td>Configuration via command line arguments</td>
+<td>1</td>
+<td><code>/etc/pixi/config.toml</code></td>
+<td>System-wide configuration</td>
 </tr>
 </tbody>
 </table>
@@ -1853,14 +1853,19 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td><code>/etc/pixi/config.toml</code></td>
-<td>System-wide configuration</td>
+<td>6</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>2</td>
-<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
-<td>XDG compliant user-specific configuration</td>
+<td>5</td>
+<td><code>your_project/.pixi/config.toml</code></td>
+<td>Project-specific configuration</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$PIXI_HOME/config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
 </tr>
 <tr>
 <td>3</td>
@@ -1868,19 +1873,14 @@ The configuration is loaded in the following order:</p>
 <td>User-specific configuration</td>
 </tr>
 <tr>
-<td>4</td>
-<td><code>$PIXI_HOME/config.toml</code></td>
-<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
+<td>XDG compliant user-specific configuration</td>
 </tr>
 <tr>
-<td>5</td>
-<td><code>your_project/.pixi/config.toml</code></td>
-<td>Project-specific configuration</td>
-</tr>
-<tr>
-<td>6</td>
-<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
-<td>Configuration via command line arguments</td>
+<td>1</td>
+<td><code>/etc/pixi/config.toml</code></td>
+<td>System-wide configuration</td>
 </tr>
 </tbody>
 </table>
@@ -1896,19 +1896,9 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td><code>C:\ProgramData\pixi\config.toml</code></td>
-<td>System-wide configuration</td>
-</tr>
-<tr>
-<td>2</td>
-<td><code>%APPDATA%\pixi\config.toml</code></td>
-<td>User-specific configuration</td>
-</tr>
-<tr>
-<td>3</td>
-<td><code>$PIXI_HOME\config.toml</code></td>
-<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>%USERPROFILE%/.pixi</code></td>
+<td>5</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
 </tr>
 <tr>
 <td>4</td>
@@ -1916,9 +1906,19 @@ The configuration is loaded in the following order:</p>
 <td>Project-specific configuration</td>
 </tr>
 <tr>
-<td>5</td>
-<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
-<td>Configuration via command line arguments</td>
+<td>3</td>
+<td><code>$PIXI_HOME\config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>%USERPROFILE%/.pixi</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>%APPDATA%\pixi\config.toml</code></td>
+<td>User-specific configuration</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>C:\ProgramData\pixi\config.toml</code></td>
+<td>System-wide configuration</td>
 </tr>
 </tbody>
 </table>
