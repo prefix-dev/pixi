@@ -93,22 +93,22 @@ The manifest can be found at the following locations depending on your operating
 
     | **Priority** | **Location**                                                           | **Comments**                                                                       |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
     | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
 
 === "macOS"
 
     | **Priority** | **Location**                                                           | **Comments**                                                                       |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
     | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
 
 === "Windows"
 
     | **Priority** | **Location**                                                           | **Comments**                                                                                   |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-    | 1            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml`                       | User-specific manifest                                                                         |
     | 2            | `$PIXI_HOME\manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `%USERPROFILE%/.pixi`      |
+    | 1            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml`                       | User-specific manifest                                                                         |
 
 !!! note
     If multiple locations exist, the manifest with the highest priority will be used.
@@ -148,6 +148,22 @@ exposed = { ansible = "ansible" } # (1)!
 ```
 
 1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
+
+It's also possible to expose an executable which is located in a nested directory.
+For example dotnet.exe executable is located in a dotnet folder,
+to expose `dotnet` you must specify its relative path :
+
+```
+pixi global install dotnet --expose dotnet=dotnet\dotnet
+```
+
+Which will create the following entry in the manifest:
+```toml
+[envs.dotnet]
+channels = ["conda-forge"]
+dependencies = { dotnet = "*" }
+exposed = { dotnet = 'dotnet\dotnet' }
+```
 
 ### Dependencies
 Dependencies are the **Conda** packages that will be installed into your environment. For example, running:

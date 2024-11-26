@@ -1,19 +1,37 @@
 ---
 part: pixi
-title: Configuration
-description: Learn what you can do in the pixi.toml configuration.
+title: Manifest
+description: Learn what you can do in the pixi manifest.
 ---
 
-The `pixi.toml` is the pixi project configuration file, also known as the project manifest.
+The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
     For example, the `[project]` table becomes `[tool.pixi.project]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
+
+## Manifest discovery
+
+The manifest can be found at the following locations depending on your operating system.
+
+
+| **Priority** | **Location**                                                           | **Comments**                                                                       |
+|--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| 6            | `--manifest-path`                                                      | Command-line argument                                                              |
+| 5            | `pixi.toml`                                                            | In your current working directory.                                                 |
+| 4            | `pyproject.toml`                                                       | In your current working directory.                                                 |
+| 3            | `pixi.toml` or `pyproject.toml`                                        | Iterate through all parent directories. The first discovered manifest is used.     |
+| 1            | `$PIXI_PROJECT_MANIFEST`                                               | If `$PIXI_IN_SHELL` is set. This happens with `pixi shell` or `pixi run`.          |
+
+
+!!! note
+    If multiple locations exist, the manifest with the highest priority will be used.
+
 
 ## The `project` table
 

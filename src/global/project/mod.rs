@@ -5,6 +5,7 @@ use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
 };
+use crate::global::find_executables_for_many_records;
 use crate::global::install::{create_executable_trampolines, script_exec_mapping};
 use crate::global::project::environment::environment_specs_in_sync;
 use crate::prefix::Executable;
@@ -679,9 +680,9 @@ impl Project {
             .filter_map(|mapping| {
                 // If the executable is still requested, do not remove the mapping
                 if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_name()
+                    executable_from_path(&executable.path) == mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
+                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
                     return None;
                 }
                 // Else do remove the mapping
@@ -832,7 +833,7 @@ impl Project {
 
         let prefix_records = &prefix.find_installed_packages(None).await?;
 
-        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed
