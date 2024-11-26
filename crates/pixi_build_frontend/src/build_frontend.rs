@@ -107,12 +107,10 @@ impl BuildFrontend {
         request: SetupRequest,
     ) -> Result<Protocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
-        eprintln!("before discovering");
         let protocol = ProtocolBuilder::discover(&request.source_dir, &self.enabled_protocols)?
             .with_channel_config(self.channel_config.clone())
             .with_opt_cache_dir(self.cache_dir.clone());
 
-        eprintln!("after discovering");
         tracing::info!(
             "discovered a {} source package at {}",
             protocol.name(),
