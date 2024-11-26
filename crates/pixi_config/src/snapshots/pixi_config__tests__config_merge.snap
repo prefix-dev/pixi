@@ -75,5 +75,6 @@ Config {
     },
     concurrency: ConcurrencyConfig {
         max_concurrent_solves: None,
+        network_requests: 50,
     },
 }

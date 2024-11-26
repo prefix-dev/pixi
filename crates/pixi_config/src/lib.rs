@@ -1,10 +1,3 @@
-use std::{
-    collections::{BTreeSet as Set, HashMap},
-    fs,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    str::FromStr,
-};
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
@@ -16,6 +9,13 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::{Gateway, SourceConfig};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use std::{
+    collections::{BTreeSet as Set, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    str::FromStr,
+};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -118,6 +118,10 @@ pub struct ConfigCli {
     /// Max concurrent solves, default is the number of CPUs
     #[arg(long, short = 'j', visible_alias = "solve-jobs")]
     pub max_concurrent_solves: Option<usize>,
+
+    /// Max concurrent network requests, default is 50
+    #[arg(long)]
+    pub network_concurrency: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -335,20 +339,40 @@ impl ExperimentalConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConcurrencyConfig {
     /// The maximum number of concurrent solves that can be run at once.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_concurrent_solves: Option<usize>,
+
+    /// The maximum number of concurrent HTTP requests to make.
+    #[serde(default)]
+    pub network_requests: usize,
 }
 
+impl Default for ConcurrencyConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent_solves: None,
+            network_requests: 50,
+        }
+    }
+}
 
 impl ConcurrencyConfig {
     /// Merge the given ConcurrencyConfig into the current one.
     pub fn merge(self, other: Self) -> Self {
         Self {
             max_concurrent_solves: other.max_concurrent_solves.or(self.max_concurrent_solves),
+            // Use the non default value if it is set otherwise
+            network_requests: if other.network_requests
+                != ConcurrencyConfig::default().network_requests
+            {
+                other.network_requests
+            } else {
+                self.network_requests
+            },
         }
     }
 
@@ -356,7 +380,6 @@ impl ConcurrencyConfig {
         ConcurrencyConfig::default() == *self
     }
 }
-
 
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
@@ -614,6 +637,9 @@ impl From<ConfigCli> for Config {
             detached_environments: None,
             concurrency: ConcurrencyConfig {
                 max_concurrent_solves: cli.max_concurrent_solves,
+                network_requests: cli
+                    .network_concurrency
+                    .unwrap_or(ConcurrencyConfig::default().network_requests),
             },
             ..Default::default()
         }
@@ -873,7 +899,8 @@ impl Config {
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
             experimental: other.experimental.merge(self.experimental),
-            concurrency: other.concurrency.merge(self.concurrency),
+            // Make other take precedence over self to allow for setting the value through the CLI
+            concurrency: self.concurrency.merge(other.concurrency),
         }
     }
 
@@ -942,6 +969,11 @@ impl Config {
     /// Retrieve the value for the max_concurrent_solves field.
     pub fn max_concurrent_solves(&self) -> Option<usize> {
         self.concurrency.max_concurrent_solves
+    }
+
+    /// Retrieve the value for the network_requests field.
+    pub fn network_requests(&self) -> usize {
+        self.concurrency.network_requests
     }
 
     /// Modify this config with the given key and value
@@ -1107,9 +1139,15 @@ impl Config {
                         self.concurrency.max_concurrent_solves =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
+                    "network-requests" => {
+                        if let Some(value) = value {
+                            self.concurrency.network_requests = value.parse().into_diagnostic()?;
+                        } else {
+                            return Err(miette!("'network-requests' requires a number value"));
+                        }
+                    }
                     _ => return Err(err),
                 }
-
             }
             _ => return Err(err),
         }
@@ -1147,6 +1185,7 @@ impl Config {
             .with_client(client)
             .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
+            .with_max_concurrent_requests(self.network_requests())
             .finish()
     }
 }
@@ -1242,6 +1281,7 @@ UNUSED = "unused"
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             max_concurrent_solves: None,
+            network_concurrency: None,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
@@ -1255,6 +1295,7 @@ UNUSED = "unused"
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
             max_concurrent_solves: None,
+            network_concurrency: None,
         };
 
         let config = Config::from(cli);
@@ -1294,8 +1335,9 @@ UNUSED = "unused"
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
-            concurrency: ConcurrencyConfig{
-                max_concurrent_solves: Some(5)
+            concurrency: ConcurrencyConfig {
+                max_concurrent_solves: Some(5),
+                ..ConcurrencyConfig::default()
             },
             ..Default::default()
         };
