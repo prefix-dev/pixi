@@ -335,17 +335,17 @@ tokio = { workspace = true, features = ["rt"] }
 # pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.5.4" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_cache = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_package_streaming = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
-rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/upgrade-middleware" }
+rattler = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_cache = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 
 #rattler = { path = "../rattler/crates/rattler" }
 #rattler_cache = { path = "../rattler/crates/rattler_cache" }

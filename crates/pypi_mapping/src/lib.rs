@@ -185,7 +185,8 @@ pub async fn amend_pypi_purls(
 
 /// Returns `true` if the specified record refers to a conda-forge package.
 pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
-    Url::from_str(&record.channel).map_or(false, |u| is_conda_forge_url(&u))
+    Url::from_str(&record.channel.as_ref().map_or("", String::as_str))
+        .map_or(false, |u| is_conda_forge_url(&u))
 }
 
 /// Returns `true` if the specified url refers to a conda-forge channel.
