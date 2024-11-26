@@ -183,7 +183,7 @@ jobs:
     name: "cargo test | windows"
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-14
+    runs-on: 16core_windows_latest_runner
     steps:
       - uses: actions/checkout@v4
       - name: Create Dev Drive using ReFS
@@ -219,10 +219,10 @@ jobs:
         - name: "Build"
           run: >
             cargo build
-              --locked
-              --target x86_64-unknown-linux-musl
-              --profile $CARGO_PROFILE
-              --features self_update
+            --locked
+            --target x86_64-unknown-linux-musl
+            --profile $CARGO_PROFILE
+            --features self_update
         - name: "Upload binary"
           uses: actions/upload-artifact@v4
           with:
@@ -242,9 +242,9 @@ jobs:
       - name: "Build"
         run: >
           cargo build
-            --locked
-            --profile $CARGO_PROFILE
-            --features self_update
+          --locked
+          --profile $CARGO_PROFILE
+          --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
@@ -264,9 +264,9 @@ jobs:
       - name: "Build"
         run: >
           cargo build
-            --locked
-            --profile $CARGO_PROFILE
-            --features self_update
+          --locked
+          --profile $CARGO_PROFILE
+          --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
@@ -293,9 +293,9 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
           cargo build
-            --locked
-            --profile $CARGO_PROFILE
-            --features self_update
+          --locked
+          --profile $CARGO_PROFILE
+          --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
@@ -324,10 +324,10 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
           cargo build
-            --locked
-            --target aarch64-pc-windows-msvc
-            --profile $CARGO_PROFILE
-            --features self_update
+          --locked
+          --target aarch64-pc-windows-msvc
+          --profile $CARGO_PROFILE
+          --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
