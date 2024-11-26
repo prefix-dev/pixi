@@ -15,6 +15,8 @@ use crate::{
     BackendOverride,
 };
 
+const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum FinishError {
     #[error(transparent)]
@@ -138,8 +140,8 @@ impl ProtocolBuilder {
                 .ok_or(FinishError::NoBuildSection(manifest_path.clone()))?
         } else {
             ToolSpec::Isolated(
-                IsolatedToolSpec::from_specs(["pixi-build-rattler-build".parse().unwrap()])
-                    .with_command("pixi-build-rattler-build"),
+                IsolatedToolSpec::from_specs([DEFAULT_BUILD_TOOL.parse().unwrap()])
+                    .with_command(DEFAULT_BUILD_TOOL),
             )
         };
 
@@ -147,13 +149,6 @@ impl ProtocolBuilder {
             .instantiate(tool_spec)
             .await
             .map_err(FinishError::Tool)?;
-
-        if let Some(cache_dir) = self.cache_dir.as_ref() {
-            let _ = std::fs::create_dir_all(cache_dir).map_err(|e| {
-                tracing::warn!("Failed to create cache dir: {:?}", e);
-                e
-            });
-        }
 
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
