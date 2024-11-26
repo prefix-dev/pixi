@@ -1,21 +1,21 @@
 use std::{
-    fmt,
-    fmt::{Display, Formatter},
+    fmt::{self, Display, Formatter},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
-use miette::Diagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_manifest::Manifest;
 // pub use protocol::Protocol;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
 use which::Error;
 
 use crate::{
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
-    BackendOverride,
+    BackendOverride, ToolContext,
 };
 
 // use super::{InitializeError, JsonRPCBuildProtocol};
@@ -26,6 +26,7 @@ pub struct ProtocolBuilder {
     source_dir: PathBuf,
     manifest: Manifest,
     backend_spec: Option<ToolSpec>,
+    backend_channels: Vec<ChannelUrl>,
     _channel_config: ChannelConfig,
     cache_dir: Option<PathBuf>,
 }
@@ -72,10 +73,23 @@ impl ProtocolBuilder {
             .build_section()
             .map(IsolatedToolSpec::from_build_section);
 
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
+
+        let backend_channels = manifest
+            .build_section()
+            .cloned()
+            .unwrap()
+            .channels
+            .into_iter()
+            .map(|channel| channel.into_base_url(&channel_config))
+            .collect::<Result<Vec<ChannelUrl>, _>>()
+            .unwrap();
+
         Ok(Self {
             source_dir,
             manifest,
             backend_spec: backend_spec.map(Into::into),
+            backend_channels,
             _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
         })
@@ -130,7 +144,7 @@ impl ProtocolBuilder {
 
     pub async fn finish(
         self,
-        tool: &ToolCache,
+        tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
         let tool_spec = self
@@ -138,7 +152,7 @@ impl ProtocolBuilder {
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
 
         let tool = tool
-            .instantiate(tool_spec)
+            .instantiate(tool_spec, &self._channel_config)
             .await
             .map_err(FinishError::Tool)?;
 

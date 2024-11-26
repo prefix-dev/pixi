@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use miette::Diagnostic;
 use pixi_manifest::Manifest;
@@ -12,7 +15,7 @@ use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
 use crate::{
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
-    BackendOverride,
+    BackendOverride, ToolContext,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -131,7 +134,7 @@ impl ProtocolBuilder {
     /// Create the protocol instance.
     pub async fn finish(
         self,
-        tool: &ToolCache,
+        tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
         let tool_spec = self
@@ -139,7 +142,7 @@ impl ProtocolBuilder {
             .ok_or(FinishError::NoBuildSection(self.manifest_path.clone()))?;
 
         let tool = tool
-            .instantiate(tool_spec)
+            .instantiate(tool_spec, &self._channel_config)
             .await
             .map_err(FinishError::Tool)?;
 

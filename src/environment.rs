@@ -784,17 +784,9 @@ pub async fn update_prefix_conda(
             let client = authenticated_client.clone();
             let gateway = gateway.clone();
             async move {
-                let build_channels = build_channels.clone().ok_or_else(|| {
-                    BuildError::BackendError(
-                        miette::miette!("`channels` are not defined in the `[build-system]`")
-                            .into(),
-                    )
-                })?;
-
                 build_context
                     .build_source_record(
                         &record,
-                        build_channels,
                         channels,
                         platform,
                         virtual_packages.clone(),

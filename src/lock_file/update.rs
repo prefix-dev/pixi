@@ -19,6 +19,7 @@ use itertools::Itertools;
 use miette::{miette, Report};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 
+use pixi_build_frontend::ToolContext;
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
@@ -703,6 +704,7 @@ pub async fn update_lock_file(
                 get_cache_dir()?,
                 project.pixi_dir(),
                 project.channel_config(),
+                Arc::new(ToolContext::default()),
             ),
             glob_hash_cache,
         });
@@ -731,6 +733,7 @@ pub async fn update_lock_file(
                 get_cache_dir()?,
                 project.pixi_dir(),
                 project.channel_config(),
+                Arc::new(ToolContext::default()),
             ),
             glob_hash_cache,
         });
@@ -1034,10 +1037,42 @@ impl<'p> UpdateContextBuilder<'p> {
             .max_concurrent_solves
             .unwrap_or_else(default_max_concurrent_solves);
 
+        let gateway = project.repodata_gateway().clone();
+        let client = project.authenticated_client().clone();
+
+        let channel_config = project.channel_config();
+
+        let build_channels = project
+            .manifest()
+            .package
+            .clone()
+            .unwrap()
+            .build_system
+            .channels
+            .into_iter()
+            .map(|channel| channel.into_channel(&channel_config))
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        // let build_channels = project.
+        // .project()
+        // .manifest()
+        // .build_section()
+        // .map(|section| section.channels(&channel_config))
+        // .transpose()
+        // .into_diagnostic()?;
+
+        // tool context
+        let tool_context = ToolContext::builder()
+            .with_gateway(gateway)
+            .with_client(client)
+            .build();
+
         let build_context = BuildContext::new(
             pixi_config::get_cache_dir()?,
             project.pixi_dir(),
             project.channel_config(),
+            tool_context.into(),
         );
 
         Ok(UpdateContext {
@@ -1722,16 +1757,6 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.project().channel_config();
 
-    let gateway = group.project().repodata_gateway().clone();
-
-    let build_channels = group
-        .project()
-        .manifest()
-        .build_section()
-        .map(|section| section.channels(&channel_config))
-        .transpose()
-        .into_diagnostic()?;
-
     tokio::spawn(
         async move {
             // Acquire a permit before we are allowed to solve the environment.
@@ -1766,17 +1791,10 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
-            let build_channels = &build_channels;
-            let gateway = &gateway;
-
             let mut metadata_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
-                let build_channels = build_channels
-                    .clone()
-                    .ok_or_else(|| miette!("`channels` are not defined in the `[build-system]`"))?;
-
                 // Create a metadata reporter if it doesn't exist yet.
                 let metadata_reporter = metadata_progress.get_or_insert_with(|| {
                     Arc::new(CondaMetadataProgress::new(
@@ -1789,15 +1807,12 @@ async fn spawn_solve_conda_environment_task(
                         .extract_source_metadata(
                             source_spec,
                             &channel_urls,
-                            build_channels.clone(),
                             platform,
                             virtual_packages.clone(),
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
                             build_id,
-                            gateway.clone(),
-                            client.clone(),
                         )
                         .map_err(|e| {
                             Report::new(e).wrap_err(format!(

@@ -1,9 +1,10 @@
 use miette::IntoDiagnostic;
 use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_manifest::BuildSystem;
-use pixi_utils::EnvironmentHash;
+use pixi_progress::wrap_in_progress;
+use pixi_utils::{EnvironmentHash, PrefixGuard};
 use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, Platform};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
@@ -32,6 +33,9 @@ pub struct IsolatedToolSpec {
 
     /// The command to invoke in the isolated environment.
     pub command: String,
+
+    /// Channels to use to fetch the build tools.
+    pub channels: Vec<NamedChannelOrUrl>,
 }
 
 impl IsolatedToolSpec {
@@ -40,6 +44,7 @@ impl IsolatedToolSpec {
         Self {
             specs: specs.into_iter().collect(),
             command: String::new(),
+            channels: Vec::new(),
         }
     }
 
@@ -48,6 +53,7 @@ impl IsolatedToolSpec {
         Self {
             specs: build_section.dependencies.clone(),
             command: build_section.build_backend.clone(),
+            channels: build_section.channels.clone(),
         }
     }
 
@@ -59,78 +65,6 @@ impl IsolatedToolSpec {
         }
     }
 
-    /// Installed the tool in the isolated environment.
-    pub async fn install(&self, context: ToolContext) -> miette::Result<IsolatedTool> {
-        let repodata = context
-            .gateway
-            .query(
-                context.channels.clone(),
-                [Platform::current(), Platform::NoArch],
-                self.specs.clone(),
-            )
-            .recursive(true)
-            .execute()
-            .await
-            .into_diagnostic()?;
-
-        // Determine virtual packages of the current platform
-        let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
-            .unwrap()
-            .iter()
-            .cloned()
-            .map(GenericVirtualPackage::from)
-            .collect();
-
-        let solved_records = Solver
-            .solve(SolverTask {
-                specs: self.specs.clone(),
-                virtual_packages,
-                ..SolverTask::from_iter(&repodata)
-            })
-            .into_diagnostic()?;
-
-        let cache = EnvironmentHash::new(
-            self.command.clone(),
-            self.specs.clone(),
-            context
-                .channels
-                .iter()
-                .map(|c| c.base_url.to_string())
-                .collect(),
-        );
-
-        let cached_dir = context
-            .cache_dir
-            .join(CACHED_BUILD_ENVS_DIR)
-            .join(cache.name());
-
-        // Install the environment
-        Installer::new()
-            .with_download_client(context.client.clone())
-            .with_package_cache(PackageCache::new(
-                context
-                    .cache_dir
-                    .join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-            ))
-            .install(&cached_dir, solved_records)
-            .await
-            .into_diagnostic()?;
-
-        // Get the activation scripts
-        let activator =
-            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current())
-                .into_diagnostic()?;
-
-        let activation_scripts = activator
-            .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
-            .into_diagnostic()?;
-
-        Ok(IsolatedTool::new(
-            self.command.clone(),
-            cached_dir,
-            activation_scripts,
-        ))
-    }
 }
 
 impl From<IsolatedToolSpec> for ToolSpec {

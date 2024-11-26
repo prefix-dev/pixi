@@ -94,14 +94,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Instantiate a protocol for the source directory.
     let channel_config = project.channel_config();
-    let channels = project
-        .manifest()
-        .build_section()
-        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?
-        .channels(&channel_config)
-        .into_diagnostic()?;
 
-    let tool_config = pixi_build_frontend::ToolContext::builder(channels)
+    let tool_context = pixi_build_frontend::ToolContext::builder()
         .with_gateway(project.repodata_gateway().clone())
         .with_client(project.authenticated_client().clone())
         .build();
@@ -124,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
-        .with_tool_context(tool_config)
+        .with_tool_context(Arc::new(tool_context))
         .with_enabled_protocols(enabled_protocols)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
