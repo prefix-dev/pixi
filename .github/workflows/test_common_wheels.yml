@@ -48,16 +48,16 @@ jobs:
       - name: Test common wheels
         run: ${{ env.TARGET_RELEASE }}/pixi run --locked test-common-wheels-ci --pixi-exec ${{ env.TARGET_RELEASE }}/pixi
       - name: Write .summary.md to Github Summary
-        if: ${{ always() }}
+        if: ${{ !contains(inputs.arch, 'windows') && always() }}
         shell: bash
         run: |
           cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
-#      - name: Write .summary.md to GitHub Summary (Windows)
-#        if: ${{ contains(inputs.arch, 'windows') && always() }}
-#        shell: pwsh
-#        run: |
-#          $resolvedPath = Resolve-Path $env:SUMMARY_FILE
-#          Get-Content $resolvedPath | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+      - name: Write .summary.md to GitHub Summary (Windows)
+        if: ${{ contains(inputs.arch, 'windows') && always() }}
+        shell: pwsh
+        run: |
+          $resolvedPath = Resolve-Path $env:SUMMARY_FILE
+          Get-Content $resolvedPath | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         if: ${{ always() }}
