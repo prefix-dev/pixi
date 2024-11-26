@@ -212,6 +212,8 @@ This setting can also be set from the command line with `pixi run --clean-env TA
     On Windows it's hard to create a "clean environment" as `conda-forge` doesn't ship Windows compilers and Windows needs a lot of base variables.
     Making this feature not worthy of implementing as the amount of edge cases will make it unusable.
 
+
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
