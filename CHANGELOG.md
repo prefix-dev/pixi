@@ -19,6 +19,9 @@ pytorch ={ version = "*", index = "https://download.pytorch.org/whl/cu118" }
 test = ["pytest"]
 docs = ["sphinx"]
 dev = [{include-group = "test"}, {include-group = "docs"}]
+
+[tool.pixi.environments]
+dev = ["dev"]
 ```
 - Much improved `pixi search` output!
 
