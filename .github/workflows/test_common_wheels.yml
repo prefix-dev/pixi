@@ -21,22 +21,34 @@ jobs:
     name: Test Installation of Common Wheels | ${{ inputs.arch }}
     runs-on: ${{ inputs.runs-on }}
     env:
-      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
+      TARGET_RELEASE: "${{ github.workspace }}/target/release"
       LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
       SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
       PYTHONIOENCODING: utf-8
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - name: Create Dev Drive using ReFS
+        if: ${{ contains(inputs.arch, 'windows') }}
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      - name: Copy Git Repo to Dev Drive
+        if: ${{ contains(inputs.arch, 'windows') }}
+        run: |
+          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:
           name: pixi-${{ inputs.arch }}-${{ inputs.sha }}
           path: ${{ env.TARGET_RELEASE }}
+      - name: "Prepare binary"
+        if: ${{ !contains(inputs.arch, 'windows') }}
+        run: chmod +x ${{ env.TARGET_RELEASE }}/*
       - name: Test common wheels
-        run: ${{ env.TARGET_RELEASE }}/pixi run test-common-wheels-ci --pixi-exec ${{ env.TARGET_RELEASE }}
+        run: ${{ env.TARGET_RELEASE }}/pixi run --locked test-common-wheels-ci --pixi-exec ${{ env.TARGET_RELEASE }}/pixi
       - name: Write .summary.md to Github Summary
-#        if: ${{ !contains(inputs.arch, 'windows') && always() }}
+        if: ${{ always() }}
         shell: bash
         run: |
           cat ${{ env.SUMMARY_FILE }} >> $GITHUB_STEP_SUMMARY
