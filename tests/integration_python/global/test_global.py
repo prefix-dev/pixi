@@ -270,7 +270,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
     assert dummy_a.is_file()
 
-    # Add dummy1 and dummy3 and nested_dummy
+    # Add dummy1 and dummy3 and nested/dummy
     verify_cli_command(
         [
             pixi,
