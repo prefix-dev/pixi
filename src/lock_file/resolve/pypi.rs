@@ -364,6 +364,7 @@ pub async fn resolve_pypi(
             let source = RequirementSource::Registry {
                 specifier: specifier.into(),
                 index: None,
+                conflict: None,
             };
 
             Ok::<_, ConversionError>(uv_pypi_types::Requirement {
@@ -466,6 +467,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
         resolver_env,
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
+        Conflicts::default(),
         &resolver_in_memory_index,
         &git_resolver,
         &context.capabilities,
@@ -688,7 +690,7 @@ async fn lock_pypi_packages<'a>(
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
                         .into_diagnostic()?,
                     editable: false,
-                    url_or_path,
+                    location: url_or_path,
                     hash,
                 }
             }
@@ -785,7 +787,7 @@ async fn lock_pypi_packages<'a>(
                         .into_diagnostic()?,
                     requires_dist: to_requirements(metadata.requires_dist.iter())
                         .into_diagnostic()?,
-                    url_or_path,
+                    location: url_or_path,
                     hash,
                     editable,
                 }

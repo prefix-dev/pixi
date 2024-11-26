@@ -70,7 +70,11 @@ pub async fn amend_pypi_purls(
     trim_conda_packages_channel_url_suffix(conda_packages);
     let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.mapping.contains_key(&package.channel))
+        .filter(|package| {
+            !mapping_url
+                .mapping
+                .contains_key(package.channel.as_ref().map_or("", String::as_str))
+        })
         .cloned()
         .collect();
 
@@ -92,7 +96,10 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
         for record in conda_packages.iter_mut() {
-            if !mapping_url.mapping.contains_key(&record.channel) {
+            if !mapping_url
+                .mapping
+                .contains_key(record.channel.as_ref().map_or("", String::as_str))
+            {
                 prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                     record,
                     &prefix_mapping,
@@ -130,7 +137,9 @@ fn amend_pypi_purls_for_record(
     let mut purls = Vec::new();
 
     // we verify if we have package channel and name in user provided mapping
-    if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
+    if let Some(mapped_channel) =
+        custom_mapping.get(record.channel.as_ref().map_or("", String::as_str))
+    {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
             // we have a pypi name for it so we record a purl
             if let Some(name) = mapped_name {
@@ -176,6 +185,9 @@ pub fn _amend_only_custom_pypi_purls(
 
 fn trim_conda_packages_channel_url_suffix(conda_packages: &mut [RepoDataRecord]) {
     for package in conda_packages {
-        package.channel = package.channel.trim_end_matches('/').to_string();
+        package.channel = package
+            .channel
+            .as_ref()
+            .map(|c| c.trim_end_matches("/").to_string());
     }
 }
