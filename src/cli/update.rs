@@ -2,6 +2,7 @@ use std::{cmp::Ordering, collections::HashSet};
 
 use fancy_display::FancyDisplay;
 
+use crate::lock_file::default_max_concurrent_solves;
 use crate::{
     cli::cli_config::ProjectConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
@@ -155,10 +156,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Unlock dependencies in the lock-file that we want to update.
     let relaxed_lock_file = unlock_packages(&project, &loaded_lock_file, &specs);
 
+    let max_concurrent_solves = project
+        .config()
+        .max_concurrent_solves()
+        .unwrap_or_else(default_max_concurrent_solves);
+
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&project)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
+        .with_max_concurrent_solves(max_concurrent_solves)
         .finish()?
         .update()
         .await?;

@@ -13,7 +13,7 @@ use crate::lock_file::UpdateMode;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
-    Project,
+    Project, UpdateLockFileOptions,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use pixi_manifest::EnvironmentName;
@@ -246,9 +246,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
-        args.prefix_update_config.lock_file_usage(),
-        false,
         UpdateMode::QuickValidate,
+        UpdateLockFileOptions {
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install(),
+            max_concurrent_solves: project.config().max_concurrent_solves,
+        },
     )
     .await?;
 

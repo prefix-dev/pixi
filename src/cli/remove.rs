@@ -2,8 +2,8 @@ use clap::Parser;
 use miette::Context;
 
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::DependencyType;
 use crate::Project;
+use crate::{DependencyType, UpdateLockFileOptions};
 
 use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::UpdateMode;
@@ -81,9 +81,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if !prefix_update_config.no_lockfile_update {
         get_update_lock_file_and_prefix(
             &project.default_environment(),
-            prefix_update_config.lock_file_usage(),
-            prefix_update_config.no_install,
             UpdateMode::Revalidate,
+            UpdateLockFileOptions {
+                lock_file_usage: prefix_update_config.lock_file_usage(),
+                no_install: prefix_update_config.no_install,
+                max_concurrent_solves: prefix_update_config.config.max_concurrent_solves,
+            },
         )
         .await?;
     }

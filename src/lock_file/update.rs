@@ -592,7 +592,7 @@ impl<'p> UpdateContext<'p> {
 }
 
 /// Returns the default number of concurrent solves.
-fn default_max_concurrent_solves() -> usize {
+pub fn default_max_concurrent_solves() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 

@@ -1,18 +1,23 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::Project;
+use crate::{cli::cli_config::ProjectConfig, Project};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 pub struct Args {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
     /// Whether to display the channel's names or urls
     #[clap(long)]
     pub urls: bool,
 }
 
-pub(crate) fn execute(project: Project, args: Args) -> miette::Result<()> {
+pub(crate) fn execute(args: Args) -> miette::Result<()> {
+    // Project without cli config as it shouldn't be needed here.
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+
     let channel_config = project.channel_config();
     project
         .environments()

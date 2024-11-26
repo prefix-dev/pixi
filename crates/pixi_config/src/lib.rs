@@ -116,6 +116,10 @@ pub struct ConfigCli {
     /// Specifies if we want to use uv keyring provider
     #[arg(long)]
     pypi_keyring_provider: Option<KeyringProvider>,
+
+    /// Max concurrent solves, default is the number of CPUs
+    #[arg(long, short = 'j', visible_alias = "solve-jobs")]
+    pub max_concurrent_solves: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -549,6 +553,10 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "ExperimentalConfig::is_default")]
     pub experimental: ExperimentalConfig,
+
+    /// Max concurrent solves, defaults
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_concurrent_solves: Option<usize>,
 }
 
 impl Default for Config {
@@ -567,6 +575,7 @@ impl Default for Config {
             pinning_strategy: Default::default(),
             force_activate: None,
             experimental: Default::default(),
+            max_concurrent_solves: None,
         }
     }
 }
@@ -581,6 +590,7 @@ impl From<ConfigCli> for Config {
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
             detached_environments: None,
+            max_concurrent_solves: cli.max_concurrent_solves,
             ..Default::default()
         }
     }
@@ -798,6 +808,7 @@ impl Config {
             "mirrors",
             "detached-environments",
             "pinning-strategy",
+            "max-concurrent-solves",
             "repodata-config",
             "repodata-config.disable-jlap",
             "repodata-config.disable-bzip2",
@@ -838,6 +849,7 @@ impl Config {
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
             experimental: other.experimental.merge(self.experimental),
+            max_concurrent_solves: other.max_concurrent_solves.or(self.max_concurrent_solves),
         }
     }
 
@@ -901,6 +913,11 @@ impl Config {
 
     pub fn experimental_activation_cache_usage(&self) -> bool {
         self.experimental.use_environment_activation_cache()
+    }
+
+    /// Retrieve the value for the max_concurrent_solves field.
+    pub fn max_concurrent_solves(&self) -> Option<usize> {
+        self.max_concurrent_solves
     }
 
     /// Modify this config with the given key and value
@@ -1049,6 +1066,10 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            "max-concurrent-solves" => {
+                self.max_concurrent_solves =
+                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
             _ => return Err(err),
         }
 
@@ -1131,6 +1152,7 @@ mod tests {
 tls-no-verify = true
 detached-environments = "{}"
 pinning-strategy = "no-pin"
+max-concurrent-solves = 5
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
@@ -1145,6 +1167,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
+        assert_eq!(config.max_concurrent_solves(), Some(5));
         assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
@@ -1177,6 +1200,7 @@ UNUSED = "unused"
             tls_no_verify: true,
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
+            max_concurrent_solves: None,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
@@ -1189,6 +1213,7 @@ UNUSED = "unused"
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
+            max_concurrent_solves: None,
         };
 
         let config = Config::from(cli);
@@ -1228,6 +1253,7 @@ UNUSED = "unused"
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
+            max_concurrent_solves: Some(5),
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -1261,6 +1287,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
+        assert_eq!(config.max_concurrent_solves(), Some(5));
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -1435,6 +1462,15 @@ UNUSED = "unused"
 
         config.set("change-ps1", None).unwrap();
         assert_eq!(config.change_ps1, None);
+
+        config
+            .set("max-concurrent-solves", Some("10".to_string()))
+            .unwrap();
+        assert_eq!(config.max_concurrent_solves(), Some(10));
+        config
+            .set("max-concurrent-solves", Some("1".to_string()))
+            .unwrap();
+        assert_eq!(config.max_concurrent_solves(), Some(1));
 
         config.set("unknown-key", None).unwrap_err();
     }

@@ -331,7 +331,6 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub manifest_path: Option<PathBuf>,
     pub args: project::channel::AddRemoveArgs,
 }
 
@@ -361,7 +360,6 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
             command: project::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -394,7 +392,6 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
             command: project::channel::Command::Remove(self.args),
         })
         .boxed_local()

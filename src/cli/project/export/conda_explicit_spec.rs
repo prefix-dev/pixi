@@ -146,7 +146,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
-            ..UpdateLockFileOptions::default()
+            max_concurrent_solves: args.prefix_update_config.config.max_concurrent_solves,
         })
         .await?
         .lock_file;

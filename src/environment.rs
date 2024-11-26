@@ -391,14 +391,14 @@ impl LockFileUsage {
 /// `sparse_repo_data` is ignored.
 pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
-    lock_file_usage: LockFileUsage,
-    mut no_install: bool,
     update_mode: UpdateMode,
+    update_lock_file_options: UpdateLockFileOptions,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.project();
 
     // Do not install if the platform is not supported
+    let mut no_install = update_lock_file_options.no_install;
     if !no_install && !environment.platforms().contains(&current_platform) {
         tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
         no_install = true;
@@ -410,9 +410,9 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage,
+            lock_file_usage: update_lock_file_options.lock_file_usage,
             no_install,
-            ..UpdateLockFileOptions::default()
+            max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
         })
         .await?;
 

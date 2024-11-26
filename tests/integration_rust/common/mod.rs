@@ -375,10 +375,18 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
-            manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 channel: vec![],
-                no_install: true,
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                    config: Default::default(),
+                    revalidate: false,
+                },
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -391,8 +399,17 @@ impl PixiControl {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 channel: vec![],
-                no_install: true,
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                    config: Default::default(),
+                    revalidate: false,
+                },
                 feature: None,
                 priority: None,
                 prepend: false,

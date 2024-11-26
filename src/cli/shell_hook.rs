@@ -17,7 +17,7 @@ use crate::{
     activation::get_activator,
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
     project::{Environment, HasProjectRef},
-    Project,
+    Project, UpdateLockFileOptions,
 };
 
 /// Print the pixi environment activation script.
@@ -127,9 +127,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
-        args.prefix_update_config.lock_file_usage(),
-        false,
         args.prefix_update_config.update_mode(),
+        UpdateLockFileOptions {
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install(),
+            max_concurrent_solves: project.config().max_concurrent_solves,
+        },
     )
     .await?;
 
