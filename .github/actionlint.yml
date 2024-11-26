@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - 8core_ubuntu_latest_runner
+    - 16core_windows_latest_runner

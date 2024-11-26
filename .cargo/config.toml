@@ -1,6 +1,10 @@
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 
+# Statically link the C runtime so the executable does not depend on the MSVC runtime DLLs.
+[target.'cfg(all(target_env = "msvc", target_os = "windows"))']
+rustflags = ["-C", "target-feature=+crt-static"]
+
 [target.'cfg(all(windows, debug_assertions))']
 rustflags = [
   # increase the stack size to prevent overflowing the stack in debug
