@@ -1,12 +1,10 @@
 use std::{
-    cmp::PartialEq,
     collections::{BTreeSet as Set, HashMap},
     fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
-
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
@@ -337,6 +335,29 @@ impl ExperimentalConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ConcurrencyConfig {
+    /// The maximum number of concurrent solves that can be run at once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_concurrent_solves: Option<usize>,
+}
+
+
+impl ConcurrencyConfig {
+    /// Merge the given ConcurrencyConfig into the current one.
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            max_concurrent_solves: other.max_concurrent_solves.or(self.max_concurrent_solves),
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        ConcurrencyConfig::default() == *self
+    }
+}
+
+
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
     pub fn merge(self, other: Self) -> Self {
@@ -554,9 +575,10 @@ pub struct Config {
     #[serde(skip_serializing_if = "ExperimentalConfig::is_default")]
     pub experimental: ExperimentalConfig,
 
-    /// Max concurrent solves, defaults
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_concurrent_solves: Option<usize>,
+    /// Concurrency configuration for pixi
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
+    pub concurrency: ConcurrencyConfig,
 }
 
 impl Default for Config {
@@ -575,7 +597,7 @@ impl Default for Config {
             pinning_strategy: Default::default(),
             force_activate: None,
             experimental: Default::default(),
-            max_concurrent_solves: None,
+            concurrency: Default::default(),
         }
     }
 }
@@ -590,7 +612,9 @@ impl From<ConfigCli> for Config {
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
             detached_environments: None,
-            max_concurrent_solves: cli.max_concurrent_solves,
+            concurrency: ConcurrencyConfig {
+                max_concurrent_solves: cli.max_concurrent_solves,
+            },
             ..Default::default()
         }
     }
@@ -849,7 +873,7 @@ impl Config {
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
             experimental: other.experimental.merge(self.experimental),
-            max_concurrent_solves: other.max_concurrent_solves.or(self.max_concurrent_solves),
+            concurrency: other.concurrency.merge(self.concurrency),
         }
     }
 
@@ -917,7 +941,7 @@ impl Config {
 
     /// Retrieve the value for the max_concurrent_solves field.
     pub fn max_concurrent_solves(&self) -> Option<usize> {
-        self.max_concurrent_solves
+        self.concurrency.max_concurrent_solves
     }
 
     /// Modify this config with the given key and value
@@ -1066,9 +1090,26 @@ impl Config {
                     _ => return Err(err),
                 }
             }
-            "max-concurrent-solves" => {
-                self.max_concurrent_solves =
-                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            key if key.starts_with("concurrency") => {
+                if key == "concurrency" {
+                    if let Some(value) = value {
+                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.pypi_config = PyPIConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("concurrency.") {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix("concurrency.").unwrap();
+                match subkey {
+                    "max-concurrent-solves" => {
+                        self.concurrency.max_concurrent_solves =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+
             }
             _ => return Err(err),
         }
@@ -1152,7 +1193,7 @@ mod tests {
 tls-no-verify = true
 detached-environments = "{}"
 pinning-strategy = "no-pin"
-max-concurrent-solves = 5
+concurrency.max-concurrent-solves = 5
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
@@ -1253,7 +1294,9 @@ UNUSED = "unused"
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
-            max_concurrent_solves: Some(5),
+            concurrency: ConcurrencyConfig{
+                max_concurrent_solves: Some(5)
+            },
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -1464,11 +1507,11 @@ UNUSED = "unused"
         assert_eq!(config.change_ps1, None);
 
         config
-            .set("max-concurrent-solves", Some("10".to_string()))
+            .set("concurrency.max-concurrent-solves", Some("10".to_string()))
             .unwrap();
         assert_eq!(config.max_concurrent_solves(), Some(10));
         config
-            .set("max-concurrent-solves", Some("1".to_string()))
+            .set("concurrency.max-concurrent-solves", Some("1".to_string()))
             .unwrap();
         assert_eq!(config.max_concurrent_solves(), Some(1));
 

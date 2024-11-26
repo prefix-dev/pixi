@@ -59,7 +59,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             UpdateLockFileOptions {
                 lock_file_usage: args.lock_file_usage.into(),
                 no_install: false,
-                max_concurrent_solves: project.config().max_concurrent_solves,
+                max_concurrent_solves: project.config().max_concurrent_solves(),
             },
         )
         .await?;

@@ -73,5 +73,7 @@ Config {
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
     },
-    max_concurrent_solves: None,
+    concurrency: ConcurrencyConfig {
+        max_concurrent_solves: None,
+    },
 }
