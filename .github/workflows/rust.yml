@@ -221,13 +221,13 @@ jobs:
             cargo build
             --locked
             --target x86_64-unknown-linux-musl
-            --profile $CARGO_PROFILE
+            --profile $CARGO_BUILD_PROFILE
             --features self_update
         - name: "Upload binary"
           uses: actions/upload-artifact@v4
           with:
             name: pixi-linux-x86_64-${{ github.sha }}
-            path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_PROFILE }}/pixi
+            path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
             retention-days: 1
 
   build-binary-macos-aarch64:
@@ -243,13 +243,13 @@ jobs:
         run: >
           cargo build
           --locked
-          --profile $CARGO_PROFILE
+          --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_PROFILE }}/pixi
+          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 1
 
   build-binary-macos-x86_64:
@@ -265,13 +265,13 @@ jobs:
         run: >
           cargo build
           --locked
-          --profile $CARGO_PROFILE
+          --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_PROFILE }}/pixi
+          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 1
 
   build-binary-windows-x86_64:
@@ -294,13 +294,13 @@ jobs:
         run: >
           cargo build
           --locked
-          --profile $CARGO_PROFILE
+          --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_PROFILE }}/pixi
+          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 1
 
   build-binary-windows-aarch64:
@@ -326,13 +326,13 @@ jobs:
           cargo build
           --locked
           --target aarch64-pc-windows-msvc
-          --profile $CARGO_PROFILE
+          --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
-          path: ./target/aarch64-pc-windows-msvc/${{ env.CARGO_PROFILE }}/pixi
+          path: ./target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 1
 #
 #  build:
@@ -370,7 +370,7 @@ jobs:
 #
 #      # Pick the profile to build, as defined in Cargo.toml
 #
-#      CARGO_PROFILE: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dist' || 'ci' }}
+#      CARGO_BUILD_PROFILE: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dist' || 'ci' }}
 #    steps:
 #      - name: Checkout source code
 #        uses: actions/checkout@v4
@@ -427,7 +427,7 @@ jobs:
 #        run: >
 #          cargo build
 #          --locked
-#          --profile $CARGO_PROFILE
+#          --profile $CARGO_BUILD_PROFILE
 #          --features self_update
 #          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 #
@@ -436,7 +436,7 @@ jobs:
 #        run: >
 #          cargo build
 #          --locked
-#          --profile $env:CARGO_PROFILE
+#          --profile $env:CARGO_BUILD_PROFILE
 #          --features self_update
 #          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 #
@@ -452,7 +452,7 @@ jobs:
 #
 #          # Setup paths
 #          BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_SUFFIX}"
-#          BIN_PATH="target/${{ matrix.target }}/${CARGO_PROFILE}/${BIN_NAME}"
+#          BIN_PATH="target/${{ matrix.target }}/${CARGO_BUILD_PROFILE}/${BIN_NAME}"
 #
 #          # Let subsequent steps know where to find the binary
 #          {
@@ -464,7 +464,7 @@ jobs:
 #        if: startsWith(matrix.name, 'Windows') && matrix.target != 'aarch64-pc-windows-msvc'
 #        run: >
 #          cargo wix -v --no-build --nocapture -I install/windows/main.wxs
-#          --profile $env:CARGO_PROFILE
+#          --profile $env:CARGO_BUILD_PROFILE
 #          --package pixi
 #          --target ${{ matrix.target }}
 #          --output target/wix/pixi-${{ matrix.target }}.msi
