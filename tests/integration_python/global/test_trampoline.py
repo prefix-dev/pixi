@@ -2,6 +2,7 @@ import json
 import pathlib
 from pathlib import Path
 import platform
+import os
 
 from ..common import verify_cli_command, exec_extension, is_binary
 
@@ -226,4 +227,34 @@ def test_trampoline_migrate_with_newer_trampoline(
         env=env,
         stderr_contains="Environment dummy-trampoline was already up-to-date",
         stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+
+def test_trampoline_extends_path(pixi: Path, tmp_path: Path, trampoline_path_channel: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_trampoline_path = tmp_path / "bin" / exec_extension("dummy-trampoline-path")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_path_channel,
+            "dummy-trampoline-path",
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=["/test/path", os.environ["PATH"]],
+    )
+
+    os.environ["PATH"] = "/another/test/path" + os.pathsep + os.environ["PATH"]
+
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=["/another/test/path", "/test/path"],
     )
