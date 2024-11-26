@@ -93,22 +93,22 @@ The manifest can be found at the following locations depending on your operating
 
     | **Priority** | **Location**                                                           | **Comments**                                                                       |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
     | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
 
 === "macOS"
 
     | **Priority** | **Location**                                                           | **Comments**                                                                       |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
     | 2            | `$PIXI_HOME/manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `~/.pixi`      |
+    | 1            | `$HOME/.pixi/manifests/pixi-global.toml`                               | User-specific manifest                                                             |
 
 === "Windows"
 
     | **Priority** | **Location**                                                           | **Comments**                                                                                   |
     |--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-    | 1            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml`                       | User-specific manifest                                                                         |
     | 2            | `$PIXI_HOME\manifests/pixi-global.toml`                                | Global manifest in the user home directory. `PIXI_HOME` defaults to `%USERPROFILE%/.pixi`      |
+    | 1            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml`                       | User-specific manifest                                                                         |
 
 !!! note
     If multiple locations exist, the manifest with the highest priority will be used.
