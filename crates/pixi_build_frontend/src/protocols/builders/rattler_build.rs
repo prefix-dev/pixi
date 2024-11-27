@@ -18,13 +18,17 @@ use crate::{
     BackendOverride, ToolContext,
 };
 
+const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum FinishError {
     #[error(transparent)]
     Tool(#[from] ToolCacheError),
+
     #[error(transparent)]
     #[diagnostic(transparent)]
     Init(#[from] InitializeError),
+
     #[error("failed to setup a build backend, the project manifest at {0} does not contain a [build] section")]
     NoBuildSection(PathBuf),
 }
@@ -48,7 +52,7 @@ pub struct ProtocolBuilder {
     recipe_dir: PathBuf,
 
     /// The path to the manifest file.
-    manifest_path: PathBuf,
+    manifest_path: Option<PathBuf>,
 
     /// The backend tool to install.
     backend_spec: Option<ToolSpec>,
@@ -62,29 +66,20 @@ pub struct ProtocolBuilder {
 
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
+    /// We discover a `pixi.toml` file in the source directory and/or a `recipe.yaml / recipe/recipe.yaml` file.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
-        // first we need to discover that pixi protocol also can be built.
-        // it is used to get the manifest
-
         // Ignore the error if we cannot find the pixi protocol.
-        let pixi_protocol = match pixi::ProtocolBuilder::discover(source_dir) {
-            Ok(inner_value) => inner_value,
-            Err(_) => return Ok(None), // Handle the case where the Option is None
-        };
-
-        // we cannot find pixi protocol, so we cannot build rattler-build protocol.
-        let manifest = if let Some(pixi_protocol) = pixi_protocol {
-            pixi_protocol.manifest().clone()
-        } else {
-            return Ok(None);
+        let manifest = match pixi::ProtocolBuilder::discover(source_dir) {
+            Ok(protocol) => protocol.map(|protocol| protocol.manifest().clone()),
+            Err(_) => None,
         };
 
         let recipe_dir = source_dir.join("recipe");
 
         let protocol = if source_dir.join("recipe.yaml").is_file() {
-            Self::new(source_dir, source_dir, &manifest)
+            Self::new(source_dir, source_dir, manifest)
         } else if recipe_dir.join("recipe.yaml").is_file() {
-            Self::new(source_dir, &recipe_dir, &manifest)
+            Self::new(source_dir, &recipe_dir, manifest)
         } else {
             return Ok(None);
         };
@@ -93,15 +88,19 @@ impl ProtocolBuilder {
     }
 
     /// Constructs a new instance from a manifest.
-    pub fn new(source_dir: &Path, recipe_dir: &Path, manifest: &Manifest) -> Self {
-        let backend_spec = manifest
-            .build_section()
-            .map(IsolatedToolSpec::from_build_section);
+    pub fn new(source_dir: &Path, recipe_dir: &Path, manifest: Option<Manifest>) -> Self {
+        let backend_spec = if let Some(manifest) = &manifest {
+            manifest
+                .build_section()
+                .map(IsolatedToolSpec::from_build_section)
+        } else {
+            None
+        };
 
         Self {
             source_dir: source_dir.to_path_buf(),
             recipe_dir: recipe_dir.to_path_buf(),
-            manifest_path: manifest.path.clone(),
+            manifest_path: manifest.map(|m| m.path.clone()),
             backend_spec: backend_spec.map(Into::into),
             _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
@@ -137,9 +136,17 @@ impl ProtocolBuilder {
         tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let tool_spec = self
-            .backend_spec
-            .ok_or(FinishError::NoBuildSection(self.manifest_path.clone()))?;
+        // If we have a manifest path, that means we found a `pixi.toml` file. In that case
+        // we should use the backend spec from the manifest.
+        let tool_spec = if let Some(manifest_path) = &self.manifest_path {
+            self.backend_spec
+                .ok_or(FinishError::NoBuildSection(manifest_path.clone()))?
+        } else {
+            ToolSpec::Isolated(
+                IsolatedToolSpec::from_specs([DEFAULT_BUILD_TOOL.parse().unwrap()])
+                    .with_command(DEFAULT_BUILD_TOOL),
+            )
+        };
 
         let tool = tool
             .instantiate(tool_spec, &self._channel_config)
