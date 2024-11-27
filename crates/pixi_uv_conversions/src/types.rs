@@ -272,5 +272,5 @@ pub fn to_version_specifiers(
 pub fn to_uv_trusted_host(
     trusted_host: &str,
 ) -> Result<uv_configuration::TrustedHost, ConversionError> {
-    Ok(uv_configuration::TrustedHost::from_str(&trusted_host)?)
+    Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }
