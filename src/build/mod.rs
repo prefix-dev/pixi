@@ -1,6 +1,7 @@
 mod cache;
 mod reporters;
 
+use fs_err as fs;
 use std::{
     ffi::OsStr,
     hash::{Hash, Hasher},
@@ -114,8 +115,11 @@ impl BuildContext {
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
         tool_context: Arc<ToolContext>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, std::io::Error> {
+        let work_dir = dot_pixi_dir.join("build-v0");
+        fs::create_dir_all(&work_dir)?;
+
+        Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
@@ -123,7 +127,7 @@ impl BuildContext {
             cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
-        }
+        })
     }
 
     /// Sets the input hash cache to use for caching input hashes.

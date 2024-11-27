@@ -1,10 +1,15 @@
 from pathlib import Path
 import shutil
 import tomllib
+import json
 
 import tomli_w
 
 from ..common import verify_cli_command
+
+
+def test_data_dir(backend: str) -> Path:
+    return Path(__file__).parent / "test-data" / backend
 
 
 def test_build_conda_package(pixi: Path, tmp_path: Path) -> None:
@@ -68,7 +73,10 @@ def test_build_using_rattler_build_backend(pixi: Path, tmp_path: Path) -> None:
     manifest_path.write_text(tomli_w.dumps(parsed_manifest))
 
     # now copy recipe.yaml to the project
-    shutil.copy(Path(__file__).parent / "recipes" / "boltons_recipe.yaml", tmp_path / "recipe.yaml")
+    shutil.copy(
+        Path(__file__).parent / "test-data/rattler-build-backend/recipes/boltons_recipe.yaml",
+        tmp_path / "recipe.yaml",
+    )
 
     # Running pixi build should build the recipe.yaml
     verify_cli_command(
@@ -112,7 +120,10 @@ def test_build_conda_package_ignoring_recipe(pixi: Path, tmp_path: Path) -> None
     }
 
     # now copy recipe.yaml to the project
-    shutil.copy(Path(__file__).parent / "recipes" / "boltons_recipe.yaml", tmp_path / "recipe.yaml")
+    shutil.copy(
+        Path(__file__).parent / "test-data/rattler-build-backend/recipes/boltons_recipe.yaml",
+        tmp_path / "recipe.yaml",
+    )
 
     manifest_path.write_text(tomli_w.dumps(parsed_manifest))
     # build it
@@ -135,3 +146,26 @@ def test_build_conda_package_ignoring_recipe(pixi: Path, tmp_path: Path) -> None
     assert "test_build_conda_package" in package_to_be_built.name
 
     assert package_to_be_built.exists()
+
+
+def test_smokey(pixi: Path, tmp_path: Path) -> None:
+    test_data = test_data_dir("rattler-build-backend")
+    # copy the whole smokey project to the tmp_path
+    shutil.copytree(test_data, tmp_path / "test_data")
+    manifest_path = tmp_path / "test_data" / "smokey" / "pixi.toml"
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ]
+    )
+
+    # load the json file
+    conda_meta = (
+        (manifest_path.parent / ".pixi/envs/default/conda-meta").glob("smokey-*.json").__next__()
+    )
+    metadata = json.loads(conda_meta.read_text())
+
+    assert metadata["name"] == "smokey"
