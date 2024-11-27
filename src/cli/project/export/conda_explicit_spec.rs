@@ -11,11 +11,18 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
 
-use crate::{cli::cli_config::PrefixUpdateConfig, lock_file::UpdateLockFileOptions, Project};
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    lock_file::UpdateLockFileOptions,
+    Project,
+};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,
 
@@ -152,12 +159,15 @@ fn render_env_platform(
     Ok(())
 }
 
-pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+        .with_cli_config(args.prefix_update_config.config.clone());
+
     let lockfile = project
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
-            max_concurrent_solves: args.prefix_update_config.config.max_concurrent_solves,
+            max_concurrent_solves: project.config().max_concurrent_solves(),
         })
         .await?
         .lock_file;

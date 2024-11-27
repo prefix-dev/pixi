@@ -116,12 +116,12 @@ pub struct ConfigCli {
     pypi_keyring_provider: Option<KeyringProvider>,
 
     /// Max concurrent solves, default is the number of CPUs
-    #[arg(long, short = 'j', visible_alias = "solve-jobs")]
-    pub max_concurrent_solves: Option<usize>,
+    #[arg(long)]
+    pub concurrent_solves: Option<usize>,
 
     /// Max concurrent network requests, default is 50
     #[arg(long)]
-    pub network_concurrency: Option<usize>,
+    pub concurrent_downloads: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -339,23 +339,39 @@ impl ExperimentalConfig {
     }
 }
 
+// Making the default values part of pixi_config to allow for printing the default settings in the future.
+/// The default maximum number of concurrent solves that can be run at once.
+/// Defaulting to the number of CPUs available.
+fn default_max_concurrent_solves() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
+}
+
+/// The default maximum number of concurrent downloads that can be run at once.
+/// 50 is a reasonable default for the number of concurrent downloads.
+/// More verification is needed to determine the optimal number.
+fn default_max_concurrent_downloads() -> usize {
+    50
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConcurrencyConfig {
     /// The maximum number of concurrent solves that can be run at once.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_concurrent_solves: Option<usize>,
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    #[serde(default = "default_max_concurrent_solves")]
+    pub solves: usize,
 
     /// The maximum number of concurrent HTTP requests to make.
-    #[serde(default)]
-    pub network_requests: usize,
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    #[serde(default = "default_max_concurrent_downloads")]
+    pub downloads: usize,
 }
 
 impl Default for ConcurrencyConfig {
     fn default() -> Self {
         Self {
-            max_concurrent_solves: None,
-            network_requests: 50,
+            solves: default_max_concurrent_solves(),
+            downloads: default_max_concurrent_downloads(),
         }
     }
 }
@@ -363,15 +379,17 @@ impl Default for ConcurrencyConfig {
 impl ConcurrencyConfig {
     /// Merge the given ConcurrencyConfig into the current one.
     pub fn merge(self, other: Self) -> Self {
+        // Merging means using the other value if they are none default.
         Self {
-            max_concurrent_solves: other.max_concurrent_solves.or(self.max_concurrent_solves),
-            // Use the non default value if it is set otherwise
-            network_requests: if other.network_requests
-                != ConcurrencyConfig::default().network_requests
-            {
-                other.network_requests
+            solves: if other.solves != ConcurrencyConfig::default().solves {
+                other.solves
             } else {
-                self.network_requests
+                self.solves
+            },
+            downloads: if other.downloads != ConcurrencyConfig::default().downloads {
+                other.downloads
+            } else {
+                self.downloads
             },
         }
     }
@@ -617,10 +635,10 @@ impl Default for Config {
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
-            pinning_strategy: Default::default(),
+            pinning_strategy: None,
             force_activate: None,
-            experimental: Default::default(),
-            concurrency: Default::default(),
+            experimental: ExperimentalConfig::default(),
+            concurrency: ConcurrencyConfig::default(),
         }
     }
 }
@@ -636,10 +654,12 @@ impl From<ConfigCli> for Config {
                 .unwrap_or_default(),
             detached_environments: None,
             concurrency: ConcurrencyConfig {
-                max_concurrent_solves: cli.max_concurrent_solves,
-                network_requests: cli
-                    .network_concurrency
-                    .unwrap_or(ConcurrencyConfig::default().network_requests),
+                solves: cli
+                    .concurrent_solves
+                    .unwrap_or(ConcurrencyConfig::default().solves),
+                downloads: cli
+                    .concurrent_downloads
+                    .unwrap_or(ConcurrencyConfig::default().downloads),
             },
             ..Default::default()
         }
@@ -967,13 +987,13 @@ impl Config {
     }
 
     /// Retrieve the value for the max_concurrent_solves field.
-    pub fn max_concurrent_solves(&self) -> Option<usize> {
-        self.concurrency.max_concurrent_solves
+    pub fn max_concurrent_solves(&self) -> usize {
+        self.concurrency.solves
     }
 
     /// Retrieve the value for the network_requests field.
-    pub fn network_requests(&self) -> usize {
-        self.concurrency.network_requests
+    pub fn max_concurrent_downloads(&self) -> usize {
+        self.concurrency.downloads
     }
 
     /// Modify this config with the given key and value
@@ -1135,15 +1155,18 @@ impl Config {
                 }
                 let subkey = key.strip_prefix("concurrency.").unwrap();
                 match subkey {
-                    "max-concurrent-solves" => {
-                        self.concurrency.max_concurrent_solves =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
-                    }
-                    "network-requests" => {
+                    "solves" => {
                         if let Some(value) = value {
-                            self.concurrency.network_requests = value.parse().into_diagnostic()?;
+                            self.concurrency.solves = value.parse().into_diagnostic()?;
                         } else {
-                            return Err(miette!("'network-requests' requires a number value"));
+                            return Err(miette!("'solves' requires a number value"));
+                        }
+                    }
+                    "downloads" => {
+                        if let Some(value) = value {
+                            self.concurrency.downloads = value.parse().into_diagnostic()?;
+                        } else {
+                            return Err(miette!("'downloads' requires a number value"));
                         }
                     }
                     _ => return Err(err),
@@ -1185,7 +1208,7 @@ impl Config {
             .with_client(client)
             .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
-            .with_max_concurrent_requests(self.network_requests())
+            .with_max_concurrent_requests(self.max_concurrent_downloads())
             .finish()
     }
 }
@@ -1226,7 +1249,7 @@ mod tests {
 tls-no-verify = true
 detached-environments = "{}"
 pinning-strategy = "no-pin"
-concurrency.max-concurrent-solves = 5
+concurrency.solves = 5
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
@@ -1241,7 +1264,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
-        assert_eq!(config.max_concurrent_solves(), Some(5));
+        assert_eq!(config.max_concurrent_solves(), 5);
         assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
@@ -1274,8 +1297,8 @@ UNUSED = "unused"
             tls_no_verify: true,
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
-            max_concurrent_solves: None,
-            network_concurrency: None,
+            concurrent_solves: None,
+            concurrent_downloads: None,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
@@ -1288,8 +1311,8 @@ UNUSED = "unused"
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
-            max_concurrent_solves: None,
-            network_concurrency: None,
+            concurrent_solves: None,
+            concurrent_downloads: None,
         };
 
         let config = Config::from(cli);
@@ -1322,6 +1345,14 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn test_default_config() {
+        let config = Config::default();
+        // This depends on the system so it's hard to test.
+        assert!(config.concurrency.solves > 0);
+        assert_eq!(config.concurrency.downloads, 50);
+    }
+
+    #[test]
     fn test_config_merge() {
         let mut config = Config::default();
         let other = Config {
@@ -1330,7 +1361,7 @@ UNUSED = "unused"
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
-                max_concurrent_solves: Some(5),
+                solves: 5,
                 ..ConcurrencyConfig::default()
             },
             ..Default::default()
@@ -1366,7 +1397,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
-        assert_eq!(config.max_concurrent_solves(), Some(5));
+        assert_eq!(config.max_concurrent_solves(), 5);
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -1543,13 +1574,22 @@ UNUSED = "unused"
         assert_eq!(config.change_ps1, None);
 
         config
-            .set("concurrency.max-concurrent-solves", Some("10".to_string()))
+            .set("concurrency.solves", Some("10".to_string()))
             .unwrap();
-        assert_eq!(config.max_concurrent_solves(), Some(10));
+        assert_eq!(config.max_concurrent_solves(), 10);
         config
-            .set("concurrency.max-concurrent-solves", Some("1".to_string()))
+            .set("concurrency.solves", Some("1".to_string()))
             .unwrap();
-        assert_eq!(config.max_concurrent_solves(), Some(1));
+
+        config
+            .set("concurrency.downloads", Some("10".to_string()))
+            .unwrap();
+        assert_eq!(config.max_concurrent_downloads(), 10);
+        config
+            .set("concurrency.downloads", Some("1".to_string()))
+            .unwrap();
+
+        assert_eq!(config.max_concurrent_downloads(), 1);
 
         config.set("unknown-key", None).unwrap_err();
     }

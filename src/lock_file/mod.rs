@@ -20,8 +20,8 @@ pub use satisfiability::{
     verify_environment_satisfiability, verify_platform_satisfiability, EnvironmentUnsat,
     PlatformUnsat,
 };
-pub use update::{default_max_concurrent_solves, UpdateLockFileOptions, UpdateMode};
 pub(crate) use update::{LockFileDerivedData, UpdateContext};
+pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
 
 /// A list of conda packages that are locked for a specific platform.
