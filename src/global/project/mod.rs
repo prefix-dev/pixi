@@ -362,11 +362,7 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         pixi_home()
-            .or_else(|| {
-                dirs::config_dir()
-                    .or_else(|| dirs::home_dir())
-                    .map(|dir| dir.join("pixi"))
-            })
+            .or_else(|| dirs::config_dir().map(|dir| dir.join("pixi")))
             .map(|dir| dir.join(MANIFESTS_DIR))
             .ok_or_else(|| miette::miette!("Couldn't get global manifest directory"))
     }
