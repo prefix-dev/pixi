@@ -1,6 +1,8 @@
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+
 use super::common::{get_install_changes, EnvironmentUpdate};
 use super::install::find_binary_by_name;
-use super::trampoline::GlobalBin;
+use super::trampoline::{self, GlobalExecutable};
 use super::{BinDir, EnvRoot, StateChange, StateChanges};
 use crate::global::common::{
     channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
@@ -22,6 +24,7 @@ use fs::tokio as tokio_fs;
 use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
+use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
@@ -113,7 +116,7 @@ impl ExposedData {
     /// the associated `conda-meta` directory.
     /// or it looks into the trampoline manifest to extract the metadata.
     pub async fn from_exposed_path(
-        bin: &GlobalBin,
+        bin: &GlobalExecutable,
         env_root: &EnvRoot,
         channel_config: &ChannelConfig,
     ) -> miette::Result<Self> {
@@ -278,17 +281,25 @@ impl Project {
         let env_root = EnvRoot::from_env().await?;
 
         if !manifest_path.exists() {
+            tracing::debug!(
+                "Global manifest {} doesn't exist yet. Creating a new one.",
+                manifest_path.display()
+            );
             tokio_fs::create_dir_all(&manifest_dir)
                 .await
                 .into_diagnostic()?;
 
             if !env_root.directories().await?.is_empty() {
+                tracing::debug!(
+                    "Existing installation found. Creating global manifest from that information."
+                );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
                     .wrap_err_with(|| {
                         "Failed to create global manifest from existing installation"
                     });
             } else {
+                tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
                     .await
                     .into_diagnostic()?;
@@ -306,7 +317,7 @@ impl Project {
         let config = Config::load(env_root.path());
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
-            .bins()
+            .executables()
             .await?
             .into_iter()
             .map(|bin| {
@@ -768,7 +779,7 @@ impl Project {
             return Ok(false);
         }
 
-        // Verify the binaries to be in sync with the environment
+        tracing::debug!("Verify that the binaries are in sync with the environment");
         let (to_remove, to_add) =
             get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
         if !to_remove.is_empty() || !to_add.is_empty() {
@@ -870,9 +881,9 @@ impl Project {
         // Prune environments that are not listed
         state_changes |= self.prune_old_environments().await?;
 
-        // Remove broken scripts
-        if let Err(err) = self.remove_broken_bins().await {
-            tracing::warn!("Couldn't remove broken exposed executables: {err}")
+        // Remove broken files
+        if let Err(err) = self.remove_broken_files().await {
+            tracing::warn!("Couldn't remove broken files: {err}")
         }
 
         for env_name in self.environments().keys() {
@@ -890,9 +901,14 @@ impl Project {
         removed_packages: Option<Vec<PackageName>>,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
-        if !self.environment_in_sync(env_name).await? {
+        if self.environment_in_sync(env_name).await? {
             tracing::debug!(
-                "Environment {} specs not up to date with manifest",
+                "Environment {} specs already up to date with global manifest",
+                env_name.fancy_display()
+            );
+        } else {
+            tracing::debug!(
+                "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
             );
             let mut environment_update = self.install_environment(env_name).await?;
@@ -914,37 +930,36 @@ impl Project {
     }
 
     /// Delete scripts in the bin folder that are broken
-    pub(crate) async fn remove_broken_bins(&self) -> miette::Result<()> {
-        for exposed_bin in self.bin_dir.bins().await? {
-            let executable = exposed_bin.executable().await;
+    pub(crate) async fn remove_broken_files(&self) -> miette::Result<()> {
+        // Get all the files in the global binary directory
+        // If there's a trampoline that couldn't be correctly parsed, remove it
+        let root_path = self.bin_dir.path();
+        let mut entries = tokio_fs::read_dir(&root_path).await.into_diagnostic()?;
 
-            if executable
-                .and_then(|path| {
-                    if path.is_file() {
-                        Ok(path)
-                    } else {
-                        miette::bail!("Path is not a file")
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
+                let exposed_name = Trampoline::name(&path)?;
+                match Configuration::from_root_path(root_path, &exposed_name).await {
+                    Ok(_) => (),
+                    Err(ConfigurationParseError::ReadError(config_path, err)) => {
+                        tracing::warn!("Couldn't read {}: {err}", config_path.display());
+                        tracing::warn!("Removing the trampoline at {}", path.display());
+                        tokio_fs::remove_file(path).await.into_diagnostic()?;
                     }
-                })
-                .is_err()
-            {
-                tokio_fs::remove_file(exposed_bin.path())
-                    .await
-                    .into_diagnostic()?;
-
-                if exposed_bin.is_trampoline() {
-                    tokio_fs::remove_file(
-                        exposed_bin
-                            .trampoline()
-                            .expect("we checked it")
-                            .manifest_path(),
-                    )
-                    .await
-                    .into_diagnostic()?;
+                    Err(ConfigurationParseError::ParseError(config_path, err)) => {
+                        tracing::warn!("Couldn't parse {}: {err}", config_path.display());
+                        tracing::warn!(
+                            "Removing the trampoline at {} and configuration at {}",
+                            path.display(),
+                            config_path.display()
+                        );
+                        tokio_fs::remove_file(path).await.into_diagnostic()?;
+                        tokio_fs::remove_file(config_path).await.into_diagnostic()?;
+                    }
                 }
             }
         }
-
         Ok(())
     }
 

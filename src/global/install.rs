@@ -107,6 +107,7 @@ pub(crate) async fn create_executable_trampolines(
         original_executable,
     } in mapped_executables
     {
+        tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
         let path = prefix
             .root()
@@ -118,7 +119,14 @@ pub(crate) async fn create_executable_trampolines(
             })?);
         let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
 
-        let json_path = Configuration::trampoline_configuration(global_script_path);
+        let parent_dir = global_script_path.parent().ok_or_else(|| {
+            miette::miette!(
+                "{} needs to have a parent directory",
+                global_script_path.display()
+            )
+        })?;
+        let exposed_name = Trampoline::name(&global_script_path)?;
+        let json_path = Configuration::path_from_trampoline(parent_dir, &exposed_name);
 
         // Check if an old bash script is present and remove it
         let mut changed = if global_script_path.exists()
@@ -463,7 +471,7 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
-        use crate::global::trampoline::GlobalBin;
+        use crate::global::trampoline::GlobalExecutable;
         use std::fs;
         use std::path::Path;
         let script_without_quote = r#"
@@ -502,7 +510,7 @@ mod tests {
     async fn test_extract_executable_from_script_unix() {
         use std::{fs, path::Path};
 
-        use crate::global::trampoline::GlobalBin;
+        use crate::global::trampoline::GlobalExecutable;
 
         let script = r#"#!/bin/sh
 export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
@@ -513,7 +521,7 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script).unwrap();
-        let script_global_bin = GlobalBin::Script(script_path);
+        let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,

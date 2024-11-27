@@ -5,8 +5,6 @@ import pytest
 import tomli_w
 from ..common import verify_cli_command, ExitCode, exec_extension, bat_extension
 import platform
-import os
-import stat
 
 MANIFEST_VERSION = 1
 
@@ -215,35 +213,6 @@ exposed = {{ dummy-1 = "dummy-b" }}
         env=env,
         stderr_contains="Duplicated exposed names found: dummy-1",
     )
-
-
-def test_sync_clean_up_broken_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    toml = f"""
-version = {MANIFEST_VERSION}
-
-[envs.one]
-channels = ["{dummy_channel_1}"]
-dependencies = {{ dummy-a = "*" }}
-exposed = {{ dummy-1 = "dummy-a" }}
-    """
-    manifest.write_text(toml)
-
-    bin_dir = manifests = tmp_path.joinpath("bin")
-    bin_dir.mkdir()
-    broken_exec = bin_dir.joinpath("broken.com")
-    broken_exec.write_text("Hello world")
-    if platform.system() != "Windows":
-        os.chmod(broken_exec, os.stat(broken_exec).st_mode | stat.S_IEXEC)
-
-    verify_cli_command(
-        [pixi, "global", "sync"],
-        env=env,
-    )
-    assert not broken_exec.is_file()
 
 
 def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
