@@ -3,6 +3,7 @@ mod protocol;
 use std::{
     convert::Infallible,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use miette::Diagnostic;
@@ -11,8 +12,8 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 use thiserror::Error;
 
 use crate::{
-    tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
-    BackendOverride,
+    tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
+    BackendOverride, ToolContext,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -96,8 +97,14 @@ impl ProtocolBuilder {
         }
     }
 
-    pub async fn finish(self, tool: &ToolCache, _build_id: usize) -> Result<Protocol, FinishError> {
-        let tool = tool.instantiate(self.backend_spec).await?;
+    pub async fn finish(
+        self,
+        tool: Arc<ToolContext>,
+        _build_id: usize,
+    ) -> Result<Protocol, FinishError> {
+        let tool = tool
+            .instantiate(self.backend_spec, &self.channel_config)
+            .await?;
         Ok(Protocol {
             _channel_config: self.channel_config,
             tool,

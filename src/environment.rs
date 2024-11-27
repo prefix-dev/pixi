@@ -1,5 +1,5 @@
 use crate::{
-    build::{BuildError, BuildReporter},
+    build::BuildReporter,
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -25,7 +25,7 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    Channel, ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+    ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_lock::LockedPackageRef;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
@@ -745,7 +745,6 @@ pub async fn update_prefix_conda(
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
-    build_channels: Option<Vec<Channel>>,
     platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
@@ -779,22 +778,13 @@ pub async fn update_prefix_conda(
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
-            let build_channels = &build_channels;
             let virtual_packages = &virtual_packages;
             let client = authenticated_client.clone();
             let gateway = gateway.clone();
             async move {
-                let build_channels = build_channels.clone().ok_or_else(|| {
-                    BuildError::BackendError(
-                        miette::miette!("`channels` are not defined in the `[build-system]`")
-                            .into(),
-                    )
-                })?;
-
                 build_context
                     .build_source_record(
                         &record,
-                        build_channels,
                         channels,
                         platform,
                         virtual_packages.clone(),

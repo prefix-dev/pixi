@@ -18,6 +18,7 @@ miette = { workspace = true, features = ["fancy", "serde"] }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_progress = { workspace = true }
 pixi_utils = { workspace = true, features = ["rustls-tls"] }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }

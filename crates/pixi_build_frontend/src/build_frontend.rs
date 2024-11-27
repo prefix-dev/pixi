@@ -7,14 +7,14 @@ use rattler_conda_types::ChannelConfig;
 use crate::{
     protocol,
     protocol_builder::{EnabledProtocols, ProtocolBuilder},
-    tool::{ToolCache, ToolContext},
+    tool::ToolContext,
     Protocol, SetupRequest,
 };
 
 /// The frontend for building packages.
 pub struct BuildFrontend {
     /// The cache for tools. This is used to avoid re-installing tools.
-    tool_cache: Arc<ToolCache>,
+    tool_context: Arc<ToolContext>,
 
     /// The channel configuration used by the frontend
     channel_config: ChannelConfig,
@@ -29,7 +29,7 @@ pub struct BuildFrontend {
 impl Default for BuildFrontend {
     fn default() -> Self {
         Self {
-            tool_cache: Arc::new(ToolCache::new()),
+            tool_context: Arc::new(ToolContext::default()),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
             cache_dir: None,
             enabled_protocols: EnabledProtocols::default(),
@@ -80,14 +80,9 @@ impl BuildFrontend {
     }
 
     /// Sets the tool context
-    pub fn with_tool_context(self, context: ToolContext) -> Self {
-        let tool_cache = ToolCache {
-            cache: self.tool_cache.cache.clone(),
-            context,
-        };
-
+    pub fn with_tool_context(self, context: Arc<ToolContext>) -> Self {
         Self {
-            tool_cache: tool_cache.into(),
+            tool_context: context,
             ..self
         }
     }
@@ -119,7 +114,7 @@ impl BuildFrontend {
 
         protocol
             .with_backend_override(request.build_tool_override)
-            .finish(&self.tool_cache, request.build_id)
+            .finish(self.tool_context.clone(), request.build_id)
             .await
     }
 }

@@ -3591,6 +3591,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_manifest",
+ "pixi_progress",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",

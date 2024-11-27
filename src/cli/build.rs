@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use clap::{ArgAction, Parser};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverride, CondaBuildReporter, EnabledProtocols, SetupRequest};
+use pixi_build_frontend::{CondaBuildReporter, EnabledProtocols, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -94,28 +94,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Instantiate a protocol for the source directory.
     let channel_config = project.channel_config();
-    let channels = project
-        .manifest()
-        .build_section()
-        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?
-        .channels(&channel_config)
-        .into_diagnostic()?;
 
-    let tool_config = pixi_build_frontend::ToolContext::builder(channels)
+    let tool_context = pixi_build_frontend::ToolContext::builder()
         .with_gateway(project.repodata_gateway().clone())
         .with_client(project.authenticated_client().clone())
         .build();
-
-    let build_section = project
-        .manifest()
-        .build_section()
-        .ok_or_else(|| miette::miette!("no build section found in the manifest"))?;
-
-    let backend_override = if args.with_system {
-        Some(BackendOverride::System(build_section.build_backend.clone()))
-    } else {
-        None
-    };
 
     let enabled_protocols = EnabledProtocols {
         enable_rattler_build: !args.ignore_recipe,
@@ -124,11 +107,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
-        .with_tool_context(tool_config)
+        .with_tool_context(Arc::new(tool_context))
         .with_enabled_protocols(enabled_protocols)
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_override: backend_override,
+            build_tool_override: None,
             build_id: 0,
         })
         .await

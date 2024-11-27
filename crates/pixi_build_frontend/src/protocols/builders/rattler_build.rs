@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use miette::Diagnostic;
 use pixi_manifest::Manifest;
@@ -11,8 +14,8 @@ use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
 
 use crate::{
     protocols::{InitializeError, JsonRPCBuildProtocol},
-    tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
-    BackendOverride,
+    tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
+    BackendOverride, ToolContext,
 };
 
 const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
@@ -55,7 +58,7 @@ pub struct ProtocolBuilder {
     backend_spec: Option<ToolSpec>,
 
     /// The channel configuration used by this instance.
-    _channel_config: ChannelConfig,
+    channel_config: ChannelConfig,
 
     /// The cache directory the backend should use. (not used atm)
     cache_dir: Option<PathBuf>,
@@ -94,12 +97,16 @@ impl ProtocolBuilder {
             None
         };
 
+        let channel_config = ChannelConfig::default_with_root_dir(
+            manifest.clone().map(|m| m.path).unwrap_or_default(),
+        );
+
         Self {
             source_dir: source_dir.to_path_buf(),
             recipe_dir: recipe_dir.to_path_buf(),
             manifest_path: manifest.map(|m| m.path.clone()),
             backend_spec: backend_spec.map(Into::into),
-            _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            channel_config,
             cache_dir: None,
         }
     }
@@ -117,7 +124,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            _channel_config: channel_config,
+            channel_config,
             ..self
         }
     }
@@ -130,7 +137,7 @@ impl ProtocolBuilder {
     /// Create the protocol instance.
     pub async fn finish(
         self,
-        tool: &ToolCache,
+        tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
         // If we have a manifest path, that means we found a `pixi.toml` file. In that case
@@ -146,7 +153,7 @@ impl ProtocolBuilder {
         };
 
         let tool = tool
-            .instantiate(tool_spec)
+            .instantiate(tool_spec, &self.channel_config)
             .await
             .map_err(FinishError::Tool)?;
 

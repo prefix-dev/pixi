@@ -1,13 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
     conda_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
-    rattler_build_protocol,
-    tool::ToolCache,
-    BackendOverride, BuildFrontendError, Protocol,
+    rattler_build_protocol, BackendOverride, BuildFrontendError, Protocol, ToolContext,
 };
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -151,22 +152,22 @@ impl ProtocolBuilder {
     /// Finish the construction of the protocol and return the protocol object
     pub async fn finish(
         self,
-        tool_cache: &ToolCache,
+        tool_context: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<Protocol, BuildFrontendError> {
         match self {
             Self::Pixi(protocol) => Ok(protocol
-                .finish(tool_cache, build_id)
+                .finish(tool_context, build_id)
                 .await
                 .map_err(FinishError::Pixi)?
                 .into()),
             Self::CondaBuild(protocol) => Ok(protocol
-                .finish(tool_cache, build_id)
+                .finish(tool_context, build_id)
                 .await
                 .map_err(FinishError::CondaBuild)?
                 .into()),
             Self::RattlerBuild(protocol) => Ok(protocol
-                .finish(tool_cache, build_id)
+                .finish(tool_context, build_id)
                 .await
                 .map_err(FinishError::RattlerBuild)?
                 .into()),
