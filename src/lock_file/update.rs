@@ -1775,7 +1775,7 @@ async fn spawn_solve_conda_environment_task(
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
                 let build_channels = build_channels
                     .clone()
-                    .ok_or_else(|| miette!("build section is not defined"))?;
+                    .ok_or_else(|| miette!("`channels` are not defined in the `[build-system]`"))?;
 
                 // Create a metadata reporter if it doesn't exist yet.
                 let metadata_reporter = metadata_progress.get_or_insert_with(|| {

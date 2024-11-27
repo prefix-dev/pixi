@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["nichmor <nmorkotilo@gmail.com>"]
 channels = ["conda-forge"]
 description = "Add a short description here"
@@ -16,6 +16,11 @@ hatchling = "==1.26.3"
 
 
 [package]
+authors = ["nichmor <nmorkotilo@gmail.com>"]
+description = "Add a short description here"
+name = "boltons"
+version = "0.1.0"
+
 
 [build-system]
 build-backend = "pixi-build-rattler-build"

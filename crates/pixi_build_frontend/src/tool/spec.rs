@@ -118,11 +118,12 @@ impl IsolatedToolSpec {
 
         // Get the activation scripts
         let activator =
-            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current()).unwrap();
+            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current())
+                .into_diagnostic()?;
 
         let activation_scripts = activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
-            .unwrap();
+            .into_diagnostic()?;
 
         Ok(IsolatedTool::new(
             self.command.clone(),
