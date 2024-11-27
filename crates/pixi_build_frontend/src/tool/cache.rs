@@ -275,7 +275,6 @@ impl ToolContext {
 pub struct ToolCache {
     /// The cache of tools.
     pub cache: DashMap<CacheableToolSpec, CachedTool>,
-    // pub inner_flights: Mutex<HashMap<Something, Weak<....>
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -329,7 +328,6 @@ impl ToolCache {
     pub fn new() -> Self {
         Self {
             cache: DashMap::default(),
-            // context: ToolContext::default(),
         }
     }
 }
@@ -360,8 +358,6 @@ mod tests {
         let tool_context = ToolContext::builder()
             .with_client(auth_client.clone())
             .build();
-
-        // cache.context = tool_context;
 
         let tool_spec = IsolatedToolSpec {
             specs: vec![MatchSpec::from_str("cowpy", ParseStrictness::Strict).unwrap()],
