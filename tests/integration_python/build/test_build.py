@@ -8,7 +8,7 @@ import tomli_w
 from ..common import verify_cli_command
 
 
-def test_data_dir(backend: str) -> Path:
+def get_data_dir(backend: str) -> Path:
     return Path(__file__).parent / "test-data" / backend
 
 
@@ -74,7 +74,7 @@ def test_build_using_rattler_build_backend(pixi: Path, tmp_path: Path) -> None:
 
     # now copy recipe.yaml to the project
     shutil.copy(
-        Path(__file__).parent / "test-data/rattler-build-backend/recipes/boltons_recipe.yaml",
+        get_data_dir("rattler-build-backend") / "recipes/boltons/recipe.yaml",
         tmp_path / "recipe.yaml",
     )
 
@@ -121,7 +121,7 @@ def test_build_conda_package_ignoring_recipe(pixi: Path, tmp_path: Path) -> None
 
     # now copy recipe.yaml to the project
     shutil.copy(
-        Path(__file__).parent / "test-data/rattler-build-backend/recipes/boltons_recipe.yaml",
+        get_data_dir("rattler-build-backend") / "recipes/boltons/recipe.yaml",
         tmp_path / "recipe.yaml",
     )
 
@@ -149,7 +149,7 @@ def test_build_conda_package_ignoring_recipe(pixi: Path, tmp_path: Path) -> None
 
 
 def test_smokey(pixi: Path, tmp_path: Path) -> None:
-    test_data = test_data_dir("rattler-build-backend")
+    test_data = get_data_dir("rattler-build-backend")
     # copy the whole smokey project to the tmp_path
     shutil.copytree(test_data, tmp_path / "test_data")
     manifest_path = tmp_path / "test_data" / "smokey" / "pixi.toml"
