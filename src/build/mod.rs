@@ -125,7 +125,7 @@ impl BuildContext {
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
             build_cache: BuildCache::new(cache_dir.clone()),
             cache_dir,
-            work_dir: dot_pixi_dir.join("build-v0"),
+            work_dir,
             tool_context,
         })
     }
