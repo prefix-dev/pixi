@@ -470,9 +470,8 @@ async fn add_sdist_functionality() {
         .unwrap();
 }
 
-#[rstest::rstest]
 #[tokio::test]
-async fn add_unconstrainted_dependency() {
+async fn add_unconstrained_dependency() {
     // Create a channel with a single package
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foobar", "1").finish());
