@@ -51,7 +51,6 @@ impl IsolatedToolSpec {
             ..self
         }
     }
-
 }
 
 impl From<IsolatedToolSpec> for ToolSpec {

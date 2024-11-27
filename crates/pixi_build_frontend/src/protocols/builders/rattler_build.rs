@@ -54,7 +54,7 @@ pub struct ProtocolBuilder {
     backend_spec: Option<ToolSpec>,
 
     /// The channel configuration used by this instance.
-    _channel_config: ChannelConfig,
+    channel_config: ChannelConfig,
 
     /// The cache directory the backend should use. (not used atm)
     cache_dir: Option<PathBuf>,
@@ -98,12 +98,14 @@ impl ProtocolBuilder {
             .build_section()
             .map(IsolatedToolSpec::from_build_section);
 
+        let channel_config = ChannelConfig::default_with_root_dir(manifest.path.clone());
+
         Self {
             source_dir: source_dir.to_path_buf(),
             recipe_dir: recipe_dir.to_path_buf(),
             manifest_path: manifest.path.clone(),
             backend_spec: backend_spec.map(Into::into),
-            _channel_config: ChannelConfig::default_with_root_dir(PathBuf::new()),
+            channel_config,
             cache_dir: None,
         }
     }
@@ -121,7 +123,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            _channel_config: channel_config,
+            channel_config,
             ..self
         }
     }
@@ -142,7 +144,7 @@ impl ProtocolBuilder {
             .ok_or(FinishError::NoBuildSection(self.manifest_path.clone()))?;
 
         let tool = tool
-            .instantiate(tool_spec, &self._channel_config)
+            .instantiate(tool_spec, &self.channel_config)
             .await
             .map_err(FinishError::Tool)?;
 

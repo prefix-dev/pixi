@@ -26,7 +26,7 @@ pub struct ProtocolBuilder {
     source_dir: PathBuf,
     manifest: Manifest,
     backend_spec: Option<ToolSpec>,
-    _channel_config: ChannelConfig,
+    channel_config: ChannelConfig,
     cache_dir: Option<PathBuf>,
 }
 
@@ -78,7 +78,7 @@ impl ProtocolBuilder {
             source_dir,
             manifest,
             backend_spec: backend_spec.map(Into::into),
-            _channel_config: channel_config,
+            channel_config,
             cache_dir: None,
         })
     }
@@ -96,7 +96,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            _channel_config: channel_config,
+            channel_config,
             ..self
         }
     }
@@ -140,7 +140,7 @@ impl ProtocolBuilder {
             .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
 
         let tool = tool
-            .instantiate(tool_spec, &self._channel_config)
+            .instantiate(tool_spec, &self.channel_config)
             .await
             .map_err(FinishError::Tool)?;
 
