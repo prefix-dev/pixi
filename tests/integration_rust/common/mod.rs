@@ -37,7 +37,7 @@ use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, Package, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -106,6 +106,13 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<String>;
+
+    fn get_pypi_package_url(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<UrlOrPath>;
 }
 
 impl LockFileExt for LockFile {
@@ -183,6 +190,20 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.version().to_string())
+    }
+
+    fn get_pypi_package_url(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<UrlOrPath> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.packages(platform)
+                    .and_then(|mut packages| packages.find(|p| p.name() == package))
+            })
+            .map(|p| p.url_or_path().into_owned())
     }
 }
 
@@ -446,7 +467,9 @@ impl PixiControl {
                     lock_file
                         .prefix(&task.run_environment, UpdateMode::Revalidate)
                         .await?;
-                    let env = get_task_env(&task.run_environment, args.clean_env).await?;
+                    let env =
+                        get_task_env(&task.run_environment, args.clean_env, None, false, false)
+                            .await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,

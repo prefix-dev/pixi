@@ -9,4 +9,3 @@ __pycache__
 site/
 .cache
 pytest-temp
-target-pixi

@@ -11,11 +11,11 @@ use rattler_shell::{
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::UpdateMode;
 use crate::{
-    activation::CurrentEnvVarBehavior, environment::update_prefix,
+    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project,
 };
-use pixi_config::ConfigCliPrompt;
+use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use pixi_manifest::EnvironmentName;
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
@@ -35,6 +35,9 @@ pub struct Args {
 
     #[clap(flatten)]
     prompt_config: ConfigCliPrompt,
+
+    #[clap(flatten)]
+    activation_config: ConfigCliActivation,
 }
 
 /// Set up Ctrl-C handler to ignore it (the child process should react on CTRL-C)
@@ -224,10 +227,13 @@ async fn start_nu_shell(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
-        .prompt_config
-        .merge_with_config(args.prefix_update_config.config.clone().into());
+        .activation_config
+        .merge_config(args.prompt_config.into())
+        .merge_config(args.prefix_update_config.config.clone().into());
+
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
+
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
@@ -238,7 +244,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    update_prefix(
+    let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
         args.prefix_update_config.lock_file_usage(),
         false,
@@ -248,7 +254,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = project
-        .get_activated_environment_variables(&environment, CurrentEnvVarBehavior::Exclude)
+        .get_activated_environment_variables(
+            &environment,
+            CurrentEnvVarBehavior::Exclude,
+            Some(&lock_file_data.lock_file),
+            project.config().force_activate(),
+            project.config().experimental_activation_cache_usage(),
+        )
         .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);

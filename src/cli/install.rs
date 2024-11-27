@@ -1,5 +1,5 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::environment::update_prefix;
+use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::UpdateMode;
 use crate::Project;
 use clap::Parser;
@@ -53,7 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let environment = project.environment_from_name_or_env_var(Some(env))?;
 
         // Update the prefix by installing all packages
-        update_prefix(
+        get_update_lock_file_and_prefix(
             &environment,
             args.lock_file_usage.into(),
             false,

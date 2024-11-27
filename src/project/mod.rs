@@ -199,31 +199,30 @@ impl Project {
     pub(crate) fn discover() -> miette::Result<Self> {
         let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
 
-        if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-                if let Some(project_toml) = project_toml {
+        if let Some(project_toml) = project_toml {
+            if std::env::var("PIXI_IN_SHELL").is_ok() {
+                if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
                     if env_manifest_path != project_toml.to_string_lossy() {
                         tracing::warn!(
-                            "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                            project_toml.to_string_lossy(),
                             env_manifest_path,
-                            project_toml.to_string_lossy()
                         );
                     }
                 }
-                return Self::from_path(Path::new(env_manifest_path.as_str()));
             }
+            return Self::from_path(&project_toml);
         }
 
-        let project_toml = match project_toml {
-            Some(file) => file,
-            None => miette::bail!(
-                "could not find {} or {} which is configured to use pixi",
-                consts::PROJECT_MANIFEST,
-                consts::PYPROJECT_MANIFEST
-            ),
-        };
+        if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+            return Self::from_path(Path::new(env_manifest_path.as_str()));
+        }
 
-        Self::from_path(&project_toml)
+        miette::bail!(
+            "could not find {} or {} which is configured to use pixi",
+            consts::PROJECT_MANIFEST,
+            consts::PYPROJECT_MANIFEST
+        );
     }
 
     /// Loads a project from manifest file.
@@ -253,9 +252,9 @@ impl Project {
                 if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
                     if env_path.as_str() != discover_path.to_str().unwrap() {
                         tracing::warn!(
-                            "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Used local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                            discover_path.to_string_lossy(),
                             env_path,
-                            discover_path.to_string_lossy()
                         );
                     }
                 }
@@ -436,6 +435,9 @@ impl Project {
         &self,
         environment: &Environment<'_>,
         current_env_var_behavior: CurrentEnvVarBehavior,
+        lock_file: Option<&LockFile>,
+        force_activate: bool,
+        experimental_cache: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -447,26 +449,48 @@ impl Project {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Exclude => {
                 vars.pixi_only()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Include => {
                 vars.full()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
         }
     }
+
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -524,6 +548,10 @@ impl Project {
 
     pub(crate) fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
+
+    pub(crate) fn activation_env_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 
     /// Returns what pypi mapping configuration we should use.
