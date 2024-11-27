@@ -1241,14 +1241,7 @@ UNUSED = "unused"
         let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(
             config.pypi_config().allow_insecure_host,
-            vec![
-                TrustedHost::Host {
-                    scheme: Some("https".into()),
-                    host: "localhost".into(),
-                    port: Some(1234),
-                },
-                TrustedHost::Wildcard,
-            ]
+            vec!["https://localhost:1234", "*",]
         );
     }
 
