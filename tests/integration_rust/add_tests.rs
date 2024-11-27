@@ -581,3 +581,68 @@ async fn pinning_dependency() {
         .to_string();
     assert_eq!(python_spec, r#""==3.13""#);
 }
+
+#[tokio::test]
+async fn add_dependency_pinning_strategy() {
+    // Create a channel with two packages
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add_multiple(vec!["foo", "python", "bar"])
+        .await
+        .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `foo` package
+    let foo_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("foo")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    assert_eq!(foo_spec, r#"">=1,<2""#);
+
+    // Get the specs for the `python` package
+    let python_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("python")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    // Testing to see if edge cases are handled correctly
+    // Python shouldn't be automatically pinned to a major version.
+    assert_eq!(python_spec, r#"">=3.13,<3.14""#);
+
+    // Get the specs for the `bar` package
+    let bar_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    // Testing to make sure bugfix did not regress
+    // Package should be automatically pinned to a major version
+    assert_eq!(bar_spec, r#"">=1,<2""#);
+}
