@@ -1105,7 +1105,7 @@ pub fn config_path_system() -> PathBuf {
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
         dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-        home_path().map(|d| d.join(consts::CONFIG_FILE)),
+        pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
     .flatten()
