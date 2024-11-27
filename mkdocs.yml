@@ -132,7 +132,7 @@ nav:
       - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
   - Reference:
-      - Project Configuration: reference/project_configuration.md
+      - Pixi Manifest: reference/project_configuration.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli.md
   - Misc:

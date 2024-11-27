@@ -27,7 +27,7 @@ pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
-use pixi_config::{default_channel_config, home_path, Config};
+use pixi_config::{default_channel_config, pixi_home, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -369,9 +369,25 @@ impl Project {
 
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
-        home_path()
+        // Potential directories, with the highest priority coming first
+        let potential_dirs = [pixi_home(), dirs::config_dir().map(|dir| dir.join("pixi"))]
+            .into_iter()
+            .flatten()
             .map(|dir| dir.join(MANIFESTS_DIR))
-            .ok_or_else(|| miette::miette!("Couldn't get home directory"))
+            .collect_vec();
+
+        // First, check if a `pixi-global.toml` already exists
+        for dir in &potential_dirs {
+            if dir.join(MANIFEST_DEFAULT_NAME).is_file() {
+                return Ok(dir.clone());
+            }
+        }
+
+        // If not, return the first option
+        potential_dirs
+            .first()
+            .cloned()
+            .ok_or_else(|| miette::miette!("Couldn't obtain global manifest directory"))
     }
 
     /// Get the default path to the global manifest file

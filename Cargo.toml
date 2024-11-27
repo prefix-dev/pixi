@@ -209,6 +209,7 @@ crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
+dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 flate2 = { workspace = true }
@@ -255,7 +256,6 @@ uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
-dirs = "5.0.1"
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
