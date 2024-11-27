@@ -24,7 +24,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install: args.prefix_update_config.no_install(),
-            max_concurrent_solves: args.prefix_update_config.config.max_concurrent_solves,
+            max_concurrent_solves: project.config().max_concurrent_solves(),
         },
     )
     .await?;

@@ -15,9 +15,13 @@ use rattler_conda_types::{
     ParseStrictness, Platform,
 };
 use rattler_lock::FindLinksUrlOrPath;
+use crate::cli::cli_config::ProjectConfig;
 
 #[derive(Debug, Parser)]
 pub struct Args {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
+
     /// Explicit path to export the environment to
     pub output_path: Option<PathBuf>,
 
@@ -220,7 +224,8 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
     channels
 }
 
-pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let config = project.config();
@@ -254,6 +259,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -279,6 +285,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -305,6 +312,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -331,6 +339,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -356,6 +365,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -381,6 +391,8 @@ mod tests {
             output_path: None,
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
+            project_config: ProjectConfig::default(),
+
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -414,6 +426,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: None,
+            project_config: ProjectConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)

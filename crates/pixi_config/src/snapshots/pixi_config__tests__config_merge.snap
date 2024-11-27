@@ -74,7 +74,7 @@ Config {
         use_environment_activation_cache: None,
     },
     concurrency: ConcurrencyConfig {
-        max_concurrent_solves: None,
-        network_requests: 50,
+        solves: 1,
+        downloads: 50,
     },
 }
