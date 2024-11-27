@@ -1414,7 +1414,7 @@
         
   
   <span class="md-ellipsis">
-    Project Configuration
+    Pixi Manifest
   </span>
   
 
@@ -1863,7 +1863,8 @@ The manifest can be edited, synced, checked in to a version control system, and 
 <li>The exposed binaries are the ones that will be available in the system path. In this case, <code>python</code> is exposed under the name <code>py3</code>.</li>
 </ol>
 <h3 id="manifest-locations">Manifest locations<a class="headerlink" href="#manifest-locations" title="Permanent link">#</a></h3>
-<p>The manifest can be found at the following locations depending on your operating system.</p>
+<p>The manifest can be found at the following locations depending on your operating system.
+Run <code>pixi info</code>, to find the currently used manifest on your system.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1877,14 +1878,24 @@ The manifest can be edited, synced, checked in to a version control system, and 
 </thead>
 <tbody>
 <tr>
-<td>2</td>
+<td>4</td>
 <td><code>$PIXI_HOME/manifests/pixi-global.toml</code></td>
-<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+<td>Global manifest in <code>PIXI_HOME</code>.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
+<td>Global manifest in user home directory.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/manifests/pixi-global.toml</code></td>
+<td>XDG compliant config directory.</td>
 </tr>
 <tr>
 <td>1</td>
-<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
-<td>User-specific manifest</td>
+<td><code>$HOME/.config/pixi/manifests/pixi-global.toml</code></td>
+<td>Config directory.</td>
 </tr>
 </tbody>
 </table>
@@ -1900,14 +1911,19 @@ The manifest can be edited, synced, checked in to a version control system, and 
 </thead>
 <tbody>
 <tr>
-<td>2</td>
+<td>3</td>
 <td><code>$PIXI_HOME/manifests/pixi-global.toml</code></td>
-<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+<td>Global manifest in <code>PIXI_HOME</code>.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
+<td>Global manifest in user home directory.</td>
 </tr>
 <tr>
 <td>1</td>
-<td><code>$HOME/.pixi/manifests/pixi-global.toml</code></td>
-<td>User-specific manifest</td>
+<td><code>$HOME/Library/Application Support/pixi/manifests/pixi-global.toml</code></td>
+<td>Config directory.</td>
 </tr>
 </tbody>
 </table>
@@ -1923,14 +1939,19 @@ The manifest can be edited, synced, checked in to a version control system, and 
 </thead>
 <tbody>
 <tr>
-<td>2</td>
+<td>3</td>
 <td><code>$PIXI_HOME\manifests/pixi-global.toml</code></td>
-<td>Global manifest in the user home directory. <code>PIXI_HOME</code> defaults to <code>%USERPROFILE%/.pixi</code></td>
+<td>Global manifest in <code>PIXI_HOME</code>.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>%USERPROFILE%\.pixi\manifests\pixi-global.toml</code></td>
+<td>Global manifest in user home directory.</td>
 </tr>
 <tr>
 <td>1</td>
-<td><code>%USERPROFILE%\.pixi\manifests\pixi-global.toml</code></td>
-<td>User-specific manifest</td>
+<td><code>%APPDATA%\pixi\manifests\pixi-global.toml</code></td>
+<td>Config directory.</td>
 </tr>
 </tbody>
 </table>
