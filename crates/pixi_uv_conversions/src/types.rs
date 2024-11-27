@@ -268,7 +268,7 @@ pub fn to_version_specifiers(
     )
 }
 
-/// Converts `TrustedHost` to `uv_configuration::TrustedHost`
+/// Converts trusted_host `string` to `uv_configuration::TrustedHost`
 pub fn to_uv_trusted_host(
     trusted_host: &str,
 ) -> Result<uv_configuration::TrustedHost, ConversionError> {
