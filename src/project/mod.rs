@@ -32,12 +32,13 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, ParsedManifest, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest,
+    PypiDependencyLocation, SpecType, WorkspaceManifest,
 };
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -147,8 +148,8 @@ impl Debug for Project {
     }
 }
 
-impl Borrow<ParsedManifest> for Project {
-    fn borrow(&self) -> &ParsedManifest {
+impl Borrow<WorkspaceManifest> for Project {
+    fn borrow(&self) -> &WorkspaceManifest {
         self.manifest.borrow()
     }
 }
@@ -156,7 +157,7 @@ impl Borrow<ParsedManifest> for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
-        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
+        let env_vars = Project::init_env_vars(&manifest.workspace.environments);
 
         let root = manifest
             .path
@@ -198,31 +199,30 @@ impl Project {
     pub(crate) fn discover() -> miette::Result<Self> {
         let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
 
-        if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-                if let Some(project_toml) = project_toml {
+        if let Some(project_toml) = project_toml {
+            if std::env::var("PIXI_IN_SHELL").is_ok() {
+                if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
                     if env_manifest_path != project_toml.to_string_lossy() {
                         tracing::warn!(
-                            "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                            project_toml.to_string_lossy(),
                             env_manifest_path,
-                            project_toml.to_string_lossy()
                         );
                     }
                 }
-                return Self::from_path(Path::new(env_manifest_path.as_str()));
             }
+            return Self::from_path(&project_toml);
         }
 
-        let project_toml = match project_toml {
-            Some(file) => file,
-            None => miette::bail!(
-                "could not find {} or {} which is configured to use pixi",
-                consts::PROJECT_MANIFEST,
-                consts::PYPROJECT_MANIFEST
-            ),
-        };
+        if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+            return Self::from_path(Path::new(env_manifest_path.as_str()));
+        }
 
-        Self::from_path(&project_toml)
+        miette::bail!(
+            "could not find {} or {} which is configured to use pixi",
+            consts::PROJECT_MANIFEST,
+            consts::PYPROJECT_MANIFEST
+        );
     }
 
     /// Loads a project from manifest file.
@@ -252,9 +252,9 @@ impl Project {
                 if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
                     if env_path.as_str() != discover_path.to_str().unwrap() {
                         tracing::warn!(
-                            "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Used local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                            discover_path.to_string_lossy(),
                             env_path,
-                            discover_path.to_string_lossy()
                         );
                     }
                 }
@@ -272,22 +272,17 @@ impl Project {
 
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        self.manifest
-            .parsed
-            .project
-            .name
-            .as_ref()
-            .expect("name should always be defined.")
+        &self.manifest.workspace.workspace.name
     }
 
     /// Returns the version of the project
     pub fn version(&self) -> &Option<Version> {
-        &self.manifest.parsed.project.version
+        &self.manifest.workspace.workspace.version
     }
 
     /// Returns the description of the project
     pub(crate) fn description(&self) -> &Option<String> {
-        &self.manifest.parsed.project.description
+        &self.manifest.workspace.workspace.description
     }
 
     /// Returns the root directory of the project
@@ -412,7 +407,7 @@ impl Project {
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> Vec<Environment> {
         self.manifest
-            .parsed
+            .workspace
             .environments
             .iter()
             .map(|env| Environment::new(self, env))
@@ -435,6 +430,9 @@ impl Project {
         &self,
         environment: &Environment<'_>,
         current_env_var_behavior: CurrentEnvVarBehavior,
+        lock_file: Option<&LockFile>,
+        force_activate: bool,
+        experimental_cache: bool,
     ) -> miette::Result<&HashMap<String, String>> {
         let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
             miette::miette!(
@@ -446,30 +444,52 @@ impl Project {
             CurrentEnvVarBehavior::Clean => {
                 vars.clean()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Exclude => {
                 vars.pixi_only()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
             CurrentEnvVarBehavior::Include => {
                 vars.full()
                     .get_or_try_init(async {
-                        initialize_env_variables(environment, current_env_var_behavior).await
+                        initialize_env_variables(
+                            environment,
+                            current_env_var_behavior,
+                            lock_file,
+                            force_activate,
+                            experimental_cache,
+                        )
+                        .await
                     })
                     .await
             }
         }
     }
+
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .iter()
             .map(|group| SolveGroup {
@@ -483,7 +503,7 @@ impl Project {
     /// exists.
     pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
         self.manifest
-            .parsed
+            .workspace
             .solve_groups
             .find(name)
             .map(|group| SolveGroup {
@@ -525,6 +545,10 @@ impl Project {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
 
+    pub(crate) fn activation_env_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
+    }
+
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
@@ -533,7 +557,7 @@ impl Project {
             manifest: &Manifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
-            match manifest.parsed.project.conda_pypi_map.clone() {
+            match manifest.workspace.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
                         .into_iter()
@@ -549,8 +573,8 @@ impl Project {
                     }
 
                     let project_channels: HashSet<_> = manifest
-                        .parsed
-                        .project
+                        .workspace
+                        .workspace
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
@@ -558,7 +582,7 @@ impl Project {
                         .into_diagnostic()?;
 
                     let feature_channels: HashSet<_> = manifest
-                        .parsed
+                        .workspace
                         .features
                         .values()
                         .flat_map(|feature| feature.channels.iter())
@@ -625,11 +649,14 @@ impl Project {
         &self.manifest
     }
 
-    /// Update the manifest with the given package specs, and upgrade the packages if possible
+    /// Update the manifest with the given package specs, and upgrade the
+    /// packages if possible
     ///
-    /// 1. Modify the manifest with the given package specs, if no version is given, use `no-pin` strategy
+    /// 1. Modify the manifest with the given package specs, if no version is
+    ///    given, use `no-pin` strategy
     /// 2. Update the lock file
-    /// 3. Given packages without version restrictions will get a semver restriction
+    /// 3. Given packages without version restrictions will get a semver
+    ///    restriction
     #[allow(clippy::too_many_arguments)]
     pub async fn update_dependencies(
         &mut self,
@@ -639,6 +666,7 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -670,6 +698,7 @@ impl Project {
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
+                location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
@@ -733,11 +762,14 @@ impl Project {
             uv_context,
             updated_conda_prefixes,
             updated_pypi_prefixes,
+            build_context,
+            glob_hash_cache,
             io_concurrency_limit,
         } = UpdateContext::builder(self)
             .with_lock_file(unlocked_lock_file)
             .with_no_install(prefix_update_config.no_install() || dry_run)
-            .finish()?
+            .finish()
+            .await?
             .update()
             .await?;
 
@@ -761,6 +793,7 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
+                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -778,6 +811,8 @@ impl Project {
             updated_pypi_prefixes,
             uv_context,
             io_concurrency_limit,
+            build_context,
+            glob_hash_cache,
         };
         if !prefix_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
@@ -801,7 +836,8 @@ impl Project {
         }))
     }
 
-    /// Constructs a new lock-file where some of the constraints have been removed.
+    /// Constructs a new lock-file where some of the constraints have been
+    /// removed.
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
@@ -812,10 +848,10 @@ impl Project {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    Package::Conda(package) => {
-                        !conda_packages.contains(&package.package_record().name)
+                    LockedPackageRef::Conda(package) => {
+                        !conda_packages.contains(&package.record().name)
                     }
-                    Package::Pypi(package) => !pypi_packages.contains(&package.data().package.name),
+                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
                 }
             } else {
                 true
@@ -823,8 +859,8 @@ impl Project {
         })
     }
 
-    /// Update the conda specs of newly added packages based on the contents of the
-    /// updated lock-file.
+    /// Update the conda specs of newly added packages based on the contents of
+    /// the updated lock-file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -842,9 +878,7 @@ impl Project {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                locked_env
-                    .conda_repodata_records_for_platform(platform)
-                    .ok()?
+                locked_env.conda_repodata_records(platform).ok()?
             })
             .flatten()
             .collect_vec();
@@ -852,8 +886,9 @@ impl Project {
         let mut pinning_strategy = self.config().pinning_strategy;
         let channel_config = self.channel_config();
         for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
-            // Edge case: some packages are a special case where we want to pin the minor version by default.
-            // This is done to avoid early user confusion when the minor version changes and environments magically start breaking.
+            // Edge case: some packages are a special case where we want to pin the minor
+            // version by default. This is done to avoid early user confusion
+            // when the minor version changes and environments magically start breaking.
             // This move a `>=3.13, <4` to a `>=3.13, <3.14` constraint.
             if NON_SEMVER_PACKAGES.contains(&name.as_normalized()) && pinning_strategy.is_none() {
                 tracing::info!(
@@ -893,8 +928,9 @@ impl Project {
         Ok(implicit_constraints)
     }
 
-    /// Update the pypi specs of newly added packages based on the contents of the
-    /// updated lock-file.
+    /// Update the pypi specs of newly added packages based on the contents of
+    /// the updated lock-file.
+    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -903,17 +939,22 @@ impl Project {
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
+        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
+        let affect_environment_and_platforms = affect_environment_and_platforms
+            .iter()
+            .filter_map(|(env, platform)| {
+                updated_lock_file.environment(env).map(|e| (e, *platform))
+            })
+            .collect_vec();
+
         let pypi_records = affect_environment_and_platforms
-            .into_iter()
             // Get all the conda and pypi records for the combination of environments and
             // platforms
-            .filter_map(|(env, platform)| {
-                let locked_env = updated_lock_file.environment(&env)?;
-                locked_env.pypi_packages_for_platform(platform)
-            })
+            .iter()
+            .filter_map(|(env, platform)| env.pypi_packages(*platform))
             .flatten()
             .collect_vec();
 
@@ -949,11 +990,22 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
+                    location,
                 )?;
             }
         }
 
         Ok(implicit_constraints)
+    }
+
+    /// Returns true if all preview features are enabled
+    pub fn all_preview_features_enabled(&self) -> bool {
+        self.manifest.preview().all_enabled()
+    }
+
+    /// Returns true if the given preview feature is enabled
+    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
+        self.manifest.preview().is_enabled(feature)
     }
 }
 
@@ -1074,17 +1126,16 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Write;
-    use std::str::FromStr;
+    use std::{fs::File, io::Write, str::FromStr};
 
-    use super::*;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::{FeatureName, FeaturesExt};
+    use pixi_manifest::FeatureName;
     use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use tempfile::tempdir;
+
+    use super::*;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1164,7 +1215,44 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .dependencies(None, Some(Platform::Linux64))
+                .combined_dependencies(Some(Platform::Linux64))
+        ));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_dependency_set_with_build_section() {
+        let file_contents = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = ["linux-64", "win-64"]
+        preview = ["pixi-build"]
+        [dependencies]
+        foo = "1.0"
+
+        [package]
+
+        [build-system]
+        channels = []
+        dependencies = []
+        build-backend = "foobar"
+
+        [host-dependencies]
+        libc = "2.12"
+
+        [build-dependencies]
+        bar = "1.0"
+        "#;
+
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let project = Project::from_manifest(manifest);
+
+        assert_snapshot!(format_dependencies(
+            project
+                .default_environment()
+                .combined_dependencies(Some(Platform::Linux64))
         ));
     }
 
@@ -1199,7 +1287,7 @@ mod tests {
         assert_snapshot!(format_dependencies(
             project
                 .default_environment()
-                .dependencies(None, Some(Platform::Linux64))
+                .combined_dependencies(Some(Platform::Linux64))
         ));
     }
 

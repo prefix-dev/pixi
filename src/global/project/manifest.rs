@@ -8,16 +8,17 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 
+use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
+use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
-use pixi_manifest::{PrioritizedChannel, TomlManifest};
+use pixi_manifest::toml::TomlDocument;
+use pixi_manifest::PrioritizedChannel;
 use pixi_spec::PixiSpec;
+use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
-
-use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
-use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
@@ -30,7 +31,7 @@ pub struct Manifest {
     pub path: PathBuf,
 
     /// Editable toml document
-    pub document: TomlManifest,
+    pub document: TomlDocument,
 
     /// The parsed manifest
     pub parsed: ParsedManifest,
@@ -62,7 +63,7 @@ impl Manifest {
         let manifest = Self {
             path: manifest_path.to_path_buf(),
 
-            document: TomlManifest::new(document),
+            document: TomlDocument::new(document),
             parsed: manifest,
         };
 
@@ -349,7 +350,7 @@ impl Manifest {
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
             &mapping.exposed_name.to_string(),
-            toml_edit::Value::from(mapping.executable_name.clone()),
+            toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 
         tracing::debug!("Added exposed mapping {mapping} to toml document");
@@ -431,14 +432,16 @@ impl Manifest {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct Mapping {
     exposed_name: ExposedName,
-    executable_name: String,
+    // The executable_relname is a executable name possibly with a parts of a path in it to match on.
+    // e.g. `dotnet/dotnet` will find `$PREFIX/lib/dotnet/dotnet`
+    executable_relname: String,
 }
 
 impl Mapping {
-    pub fn new(exposed_name: ExposedName, executable_name: String) -> Self {
+    pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
         Self {
             exposed_name,
-            executable_name,
+            executable_relname: strip_executable_extension(executable_relname),
         }
     }
 
@@ -446,14 +449,23 @@ impl Mapping {
         &self.exposed_name
     }
 
+    pub fn executable_relname(&self) -> &str {
+        &self.executable_relname
+    }
+
+    // Splitting the executable_relname by the last '/' and taking the last part
+    // e.g. 'nested/test_executable' -> 'test_executable'
     pub fn executable_name(&self) -> &str {
-        &self.executable_name
+        Path::new(&self.executable_relname)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.executable_relname)
     }
 }
 
 impl fmt::Display for Mapping {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}={}", self.exposed_name, self.executable_name)
+        write!(f, "{}={}", self.exposed_name, self.executable_relname)
     }
 }
 
@@ -461,10 +473,15 @@ impl FromStr for Mapping {
     type Err = miette::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        // If we can't parse exposed_name=executable_name, assume input=input
-        let (exposed_name, executable_name) = input.split_once('=').unwrap_or((input, input));
-        let exposed_name = ExposedName::from_str(exposed_name)?;
-        Ok(Mapping::new(exposed_name, executable_name.to_string()))
+        // If we can't parse exposed_name=executable_relname, assume input=input
+        let (exposed_name, executable_relname) = input.split_once('=').unwrap_or((input, input));
+
+        // Make sure we expose only the executable name, even with nested paths.
+        // e.g. lib/bin/exec.exe -> exec
+        let exposed_name = executable_from_path(Path::new(exposed_name));
+        let exposed_name = ExposedName::from_str(exposed_name.as_str())?;
+
+        Ok(Mapping::new(exposed_name, executable_relname.to_string()))
     }
 }
 
@@ -501,9 +518,40 @@ mod tests {
     use indexmap::IndexSet;
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_consts::consts::DEFAULT_CHANNELS;
     use rattler_conda_types::ParseStrictness;
 
     use super::*;
+
+    #[test]
+    fn test_mapping_executable_names() {
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("test_executable", mapping.executable_relname());
+
+        let executable_name = "nested/test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("nested/test_executable", mapping.executable_relname());
+
+        let executable_name: String;
+        let expected_exe_relname: &str;
+        #[cfg(windows)]
+        {
+            executable_name = "nested\\test_executable.exe".to_string();
+            expected_exe_relname = "nested\\test_executable";
+        }
+        #[cfg(unix)]
+        {
+            executable_name = "nested/test_executable.sh".to_string();
+            expected_exe_relname = "nested/test_executable";
+        }
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!(expected_exe_relname, mapping.executable_relname());
+    }
 
     #[test]
     fn test_add_exposed_mapping_new_env() {
@@ -540,7 +588,7 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value, actual_value)
     }
 
@@ -548,16 +596,16 @@ mod tests {
     fn test_add_exposed_mapping_existing_env() {
         let mut manifest = Manifest::default();
         let exposed_name1 = ExposedName::from_str("test_exposed1").unwrap();
-        let executable_name1 = "test_executable1".to_string();
-        let mapping1 = Mapping::new(exposed_name1.clone(), executable_name1);
+        let executable_relname1 = "test_executable1".to_string();
+        let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         manifest.add_environment(&env_name, None).unwrap();
 
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
         let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
-        let executable_name2 = "test_executable2".to_string();
-        let mapping2 = Mapping::new(exposed_name2.clone(), executable_name2);
+        let executable_relname2 = "nested/test_executable2".to_string();
+        let mapping2 = Mapping::new(exposed_name2.clone(), executable_relname2);
         let result = manifest.add_exposed_mapping(&env_name, &mapping2);
         assert!(result.is_ok());
 
@@ -583,11 +631,11 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name1)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value1, actual_value1);
 
         // Check document for executable2
-        let expected_value2 = "test_executable2";
+        let expected_value2 = "nested/test_executable2";
         let actual_value2 = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
@@ -608,7 +656,7 @@ mod tests {
             .iter()
             .find(|map| map.exposed_name() == &exposed_name2)
             .unwrap()
-            .executable_name();
+            .executable_relname();
         assert_eq!(expected_value2, actual_value2);
     }
 
@@ -769,7 +817,17 @@ mod tests {
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest
+            .add_environment(
+                &env_name,
+                Some(
+                    DEFAULT_CHANNELS
+                        .iter()
+                        .map(|&name| NamedChannelOrUrl::Name(name.to_string()))
+                        .collect(),
+                ),
+            )
+            .unwrap();
 
         // Add dependency
         manifest

@@ -1,4 +1,5 @@
 mod activation;
+mod build_system;
 pub(crate) mod channel;
 mod dependencies;
 mod environment;
@@ -9,8 +10,8 @@ mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
-mod metadata;
-mod parsed_manifest;
+mod package;
+mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod solve_group;
@@ -18,36 +19,38 @@ mod spec_type;
 mod system_requirements;
 mod target;
 pub mod task;
-mod utils;
+pub mod toml;
+pub mod utils;
 mod validation;
+mod workspace;
 
-pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
-
-pub use manifests::manifest::{Manifest, ManifestKind};
-pub use manifests::TomlManifest;
-
-pub use crate::environments::Environments;
-pub use crate::parsed_manifest::{deserialize_package_map, ParsedManifest};
-pub use crate::solve_group::{SolveGroup, SolveGroups};
 pub use activation::Activation;
-pub use channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+pub use build_system::BuildSystem;
+pub use channel::PrioritizedChannel;
+pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
+pub use features_ext::FeaturesExt;
+pub use has_features_iter::HasFeaturesIter;
+pub use has_manifest_ref::HasManifestRef;
 use itertools::Itertools;
-pub use metadata::ProjectMetadata;
+pub use manifests::{Manifest, ManifestKind, WorkspaceManifest};
 use miette::Diagnostic;
+pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
-pub use target::{Target, TargetSelector, Targets};
+pub use target::{TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+pub use workspace::Workspace;
 
-pub use features_ext::FeaturesExt;
-pub use has_features_iter::HasFeaturesIter;
-pub use has_manifest_ref::HasManifestRef;
+pub use crate::{
+    environments::Environments,
+    solve_group::{SolveGroup, SolveGroups},
+};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -70,6 +73,15 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+pub enum PypiDependencyLocation {
+    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
+    Pixi,
+    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    OptionalDependencies,
+    // The [dependency-groups] table in a 'pyproject.toml' manifest
+    DependencyGroups,
 }
 
 /// Converts an array of Platforms to a non-empty Vec of Option<Platform>

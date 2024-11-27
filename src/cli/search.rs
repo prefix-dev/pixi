@@ -1,27 +1,26 @@
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::future::{Future, IntoFuture};
-use std::io::{self, Write};
-use std::str::FromStr;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    future::{Future, IntoFuture},
+    io::{self, Write},
+    str::FromStr,
+};
 
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_config::default_channel_config;
+use pixi_config::{default_channel_config, Config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
-use rattler_conda_types::MatchSpec;
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
 use url::Url;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::Project;
-use pixi_config::Config;
-
 use super::cli_config::ChannelsConfig;
+use crate::{cli::cli_config::ProjectConfig, Project};
 
 /// Search a conda package
 ///
@@ -48,12 +47,14 @@ pub struct Args {
     pub limit: Option<usize>,
 }
 
-/// fetch packages from `repo_data` using `repodata_query_func` based on `filter_func`
+/// fetch packages from `repo_data` using `repodata_query_func` based on
+/// `filter_func`
 async fn search_package_by_filter<F, QF, FR>(
     package: &PackageName,
     all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     filter_func: F,
+    only_latest: bool,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
     F: Fn(&PackageName, &PackageName) -> bool,
@@ -76,32 +77,38 @@ where
 
     let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
 
-    let mut latest_packages: Vec<RepoDataRecord> = Vec::new();
+    let mut packages: Vec<RepoDataRecord> = Vec::new();
+    if only_latest {
+        for repo in repos {
+            // sort records by version, get the latest one of each package
+            let records_of_repo: HashMap<String, RepoDataRecord> = repo
+                .into_iter()
+                .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+                .map(|record| {
+                    (
+                        record.package_record.name.as_normalized().to_string(),
+                        record.clone(),
+                    )
+                })
+                .collect();
 
-    for repo in repos {
-        // sort records by version, get the latest one of each package
-        let records_of_repo: HashMap<String, RepoDataRecord> = repo
-            .into_iter()
-            .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
-            .map(|record| {
-                (
-                    record.package_record.name.as_normalized().to_string(),
-                    record.clone(),
-                )
-            })
-            .collect();
-
-        latest_packages.extend(records_of_repo.into_values().collect_vec());
+            packages.extend(records_of_repo.into_values().collect_vec());
+        }
+        // sort all versions across all channels and platforms
+        packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+    } else {
+        for repo in repos {
+            packages.extend(repo.into_iter().cloned().collect_vec());
+        }
     }
 
-    // sort all versions across all channels and platforms
-    latest_packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-
-    Ok(latest_packages)
+    Ok(packages)
 }
 
-pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let stdout = io::stdout();
+pub async fn execute_impl<W: Write>(
+    args: Args,
+    out: &mut W,
+) -> miette::Result<Option<Vec<RepoDataRecord>>> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     // Resolve channels from project / CLI args
@@ -131,9 +138,8 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
     .await
     .into_diagnostic()?;
 
-    // Compute the repodata query function that will be used to fetch the repodata for
-    // filtered package names
-
+    // Compute the repodata query function that will be used to fetch the repodata
+    // for filtered package names
     let repodata_query_func = |some_specs: Vec<MatchSpec>| {
         gateway
             .query(
@@ -156,7 +162,7 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
             all_names,
             repodata_query_func,
             args.limit,
-            stdout,
+            out,
         )
         .await?
     }
@@ -165,7 +171,7 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
 
-        search_exact_package(package_name, all_names, repodata_query_func, stdout).await?
+        search_exact_package(package_name, all_names, repodata_query_func, out).await?
     };
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
@@ -173,7 +179,8 @@ pub async fn execute_impl(args: Args) -> miette::Result<Option<Vec<RepoDataRecor
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    execute_impl(args).await?;
+    let mut out = io::stdout();
+    execute_impl(args, &mut out).await?;
     Ok(())
 }
 
@@ -181,7 +188,7 @@ async fn search_exact_package<W: Write, QF, FR>(
     package_name: PackageName,
     all_repodata_names: Vec<PackageName>,
     repodata_query_func: QF,
-    out: W,
+    out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR,
@@ -193,33 +200,85 @@ where
         all_repodata_names,
         repodata_query_func,
         |pn, n| pn == n,
+        false,
     )
     .await?;
+    // Sort packages by version, build number and build string
+    let packages = packages
+        .iter()
+        .sorted_by(|a, b| {
+            Ord::cmp(
+                &(
+                    &a.package_record.version,
+                    a.package_record.build_number,
+                    &a.package_record.build,
+                ),
+                &(
+                    &b.package_record.version,
+                    b.package_record.build_number,
+                    &b.package_record.build,
+                ),
+            )
+        })
+        .cloned()
+        .collect::<Vec<RepoDataRecord>>();
 
     if packages.is_empty() {
         let normalized_package_name = package_name.as_normalized();
         return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
     }
 
-    let package = packages.last();
-    if let Some(package) = package {
-        if let Err(e) = print_package_info(package, out) {
+    let newest_package = packages.last();
+    if let Some(newest_package) = newest_package {
+        let other_versions = packages
+            .iter()
+            .filter(|p| p.package_record != newest_package.package_record)
+            .collect::<Vec<_>>();
+        if let Err(e) = print_package_info(newest_package, &other_versions, out) {
             if e.kind() != std::io::ErrorKind::BrokenPipe {
                 return Err(e).into_diagnostic();
             }
         }
     }
 
-    Ok(package.map(|package| vec![package.clone()]))
+    Ok(newest_package.map(|package| vec![package.clone()]))
 }
 
-fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Result<()> {
+fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> String {
+    let builds = builds.unwrap_or_default();
+    match builds.len() {
+        0 => String::new(),
+        1 => " (+ 1 build)".to_string(),
+        _ => format!(" (+ {} builds)", builds.len()),
+    }
+}
+
+fn print_package_info<W: Write>(
+    package: &RepoDataRecord,
+    other_versions: &Vec<&RepoDataRecord>,
+    out: &mut W,
+) -> io::Result<()> {
     writeln!(out)?;
 
     let package = package.clone();
     let package_name = package.package_record.name.as_source();
     let build = &package.package_record.build;
-    let package_info = format!("{} {}", console::style(package_name), console::style(build));
+    let mut grouped_by_version = IndexMap::new();
+    for version in other_versions {
+        grouped_by_version
+            .entry(&version.package_record.version)
+            .or_insert_with(Vec::new)
+            .insert(0, *version);
+    }
+    let other_builds = grouped_by_version.shift_remove(&package.package_record.version);
+    let package_info = format!(
+        "{}-{}-{}{}",
+        console::style(package.package_record.name.as_source()),
+        console::style(package.package_record.version.to_string()),
+        console::style(&package.package_record.build),
+        console::style(format_additional_builds_string(other_builds))
+    );
+
     writeln!(out, "{}", package_info)?;
     writeln!(out, "{}\n", "-".repeat(package_info.chars().count()))?;
 
@@ -314,6 +373,55 @@ fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Res
         writeln!(out, " - {}", dependency)?;
     }
 
+    // Print summary of older versions for package
+    if !grouped_by_version.is_empty() {
+        writeln!(out, "\nOther Versions ({}):", grouped_by_version.len())?;
+        let version_width = grouped_by_version
+            .keys()
+            .map(|v| v.to_string().len())
+            .chain(["Version".len()].iter().cloned())
+            .max()
+            .unwrap()
+            + 1;
+        let build_width = other_versions
+            .iter()
+            .map(|v| v.package_record.build.len())
+            .chain(["Build".len()].iter().cloned())
+            .max()
+            .unwrap()
+            + 1;
+        writeln!(
+            out,
+            "{:version_width$} {:build_width$}",
+            console::style("Version").bold(),
+            console::style("Build").bold(),
+            version_width = version_width,
+            build_width = build_width
+        )?;
+        let max_displayed_versions = 4;
+        let mut counter = 0;
+        for (version, builds) in grouped_by_version.iter().rev() {
+            writeln!(
+                out,
+                "{:version_width$} {:build_width$}{}",
+                console::style(version.to_string()),
+                console::style(builds[0].package_record.build.clone()),
+                console::style(format_additional_builds_string(Some(builds[1..].to_vec()))).dim(),
+                version_width = version_width,
+                build_width = build_width
+            )?;
+            counter += 1;
+            if counter == max_displayed_versions {
+                writeln!(
+                    out,
+                    "... and {} more",
+                    grouped_by_version.len() - max_displayed_versions
+                )?;
+                break;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -323,7 +431,7 @@ async fn search_package_by_wildcard<W: Write, QF, FR>(
     all_package_names: Vec<PackageName>,
     repodata_query_func: QF,
     limit: Option<usize>,
-    out: W,
+    out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR + Clone,
@@ -340,6 +448,7 @@ where
             all_package_names.clone(),
             repodata_query_func.clone(),
             |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
+            true,
         )
         .await?;
 
@@ -354,6 +463,7 @@ where
             all_package_names,
             repodata_query_func,
             |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
+            true,
         )
         .await
     })
@@ -391,7 +501,7 @@ where
 
 fn print_matching_packages<W: Write>(
     packages: &[RepoDataRecord],
-    mut out: W,
+    out: &mut W,
     limit: Option<usize>,
 ) -> io::Result<()> {
     writeln!(
@@ -417,10 +527,13 @@ fn print_matching_packages<W: Write>(
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
 
-        let channel_name = Url::from_str(&package.channel)
-            .ok()
+        let channel_name = package
+            .channel
+            .as_ref()
+            .and_then(|channel| Url::from_str(channel).ok())
             .and_then(|url| channel_config.strip_channel_alias(&url))
-            .unwrap_or_else(|| package.channel.to_string());
+            .or_else(|| package.channel.clone())
+            .unwrap_or_else(|| "<unknown>".to_string());
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 

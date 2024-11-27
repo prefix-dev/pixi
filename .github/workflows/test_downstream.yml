@@ -156,7 +156,7 @@ jobs:
     timeout-minutes: 30
     runs-on: ${{ matrix.arch.os }}
     env:
-      TARGET_RELEASE: "${{ github.workspace }}/target-pixi/release"
+      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     strategy:
       fail-fast: false
       matrix:

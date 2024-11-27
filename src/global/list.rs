@@ -52,13 +52,13 @@ pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String>
 
 fn format_mapping(mapping: &Mapping) -> String {
     let exp = mapping.exposed_name().to_string();
-    if exp == mapping.executable_name() {
+    if exp == mapping.executable_relname() {
         console::style(exp).yellow().to_string()
     } else {
         format!(
             "{} -> {}",
             console::style(exp).yellow(),
-            console::style(mapping.executable_name()).yellow()
+            console::style(mapping.executable_relname()).yellow()
         )
     }
 }
@@ -217,6 +217,18 @@ pub async fn list_global_environments(
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
+    project_envs.retain(|env_name, parsed_environment| {
+        if parsed_environment.dependencies.is_empty() {
+            tracing::warn!(
+                "Environment {} doesn't contain dependencies. Skipping.",
+                env_name.fancy_display()
+            );
+            false
+        } else {
+            true
+        }
+    });
+
     if let Some(regex) = regex {
         let regex = regex::Regex::new(&regex).into_diagnostic()?;
         project_envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
@@ -231,7 +243,8 @@ pub async fn list_global_environments(
     let len = project_envs.len();
     for (idx, (env_name, env)) in project_envs.iter().enumerate() {
         let env_dir = project.env_root.path().join(env_name.as_str());
-        let records = find_package_records(&env_dir.join(consts::CONDA_META_DIR)).await?;
+        let conda_meta = env_dir.join(consts::CONDA_META_DIR);
+        let records = find_package_records(&conda_meta).await?;
 
         let last = (idx + 1) == len;
 

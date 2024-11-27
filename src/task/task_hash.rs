@@ -3,6 +3,7 @@ use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDir
 use miette::Diagnostic;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use thiserror::Error;
@@ -33,33 +34,63 @@ pub struct TaskCache {
     pub hash: ComputationHash,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EnvironmentHash(String);
 
 impl EnvironmentHash {
-    fn from_environment(run_environment: &project::Environment<'_>, lock_file: &LockFile) -> Self {
+    pub(crate) fn from_environment(
+        run_environment: &project::Environment<'_>,
+        input_environment_variables: &HashMap<String, Option<String>>,
+        lock_file: &LockFile,
+    ) -> Self {
         let mut hasher = Xxh3::new();
+
+        // Hash the environment variables
+        let mut sorted_input_environment_variables: Vec<_> =
+            input_environment_variables.iter().collect();
+        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
+        for (key, value) in sorted_input_environment_variables {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the activation scripts
         let activation_scripts =
             run_environment.activation_scripts(Some(run_environment.best_platform()));
-
         for script in activation_scripts {
             script.hash(&mut hasher);
         }
 
-        let mut urls = Vec::new();
+        // Hash the environment variables
+        let project_activation_env =
+            run_environment.activation_env(Some(run_environment.best_platform()));
+        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
+        env_vars.sort_by_key(|(key, _)| *key);
 
+        for (key, value) in env_vars {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the packages
+        let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
             if let Some(packages) = env.packages(run_environment.best_platform()) {
                 for package in packages {
-                    urls.push(package.url_or_path().into_owned().to_string())
+                    urls.push(package.location().to_string())
                 }
             }
         }
-
         urls.sort();
-
         urls.hash(&mut hasher);
+
         EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for EnvironmentHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -90,7 +121,12 @@ impl TaskHash {
             command: task.full_command(),
             outputs: output_hashes,
             inputs: input_hashes,
-            environment: EnvironmentHash::from_environment(&task.run_environment, lock_file),
+            // Skipping environment variables used for caching the task
+            environment: EnvironmentHash::from_environment(
+                &task.run_environment,
+                &HashMap::new(),
+                lock_file,
+            ),
         }))
     }
 

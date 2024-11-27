@@ -5,6 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.38.0] - 2024-11-26
+#### ✨ Highlights
+
+- Specify `pypi-index` per pypi-dependency
+```toml
+[pypi-dependencies]
+pytorch ={ version = "*", index = "https://download.pytorch.org/whl/cu118" }
+```
+- `[dependency-groups]` (PEP735) support in `pyproject.toml`
+```toml
+[dependency-groups]
+test = ["pytest"]
+docs = ["sphinx"]
+dev = [{include-group = "test"}, {include-group = "docs"}]
+
+[tool.pixi.environments]
+dev = ["dev"]
+```
+- Much improved `pixi search` output!
+
+#### Added
+- Add pypi index by @nichmor in [#2416](https://github.com/prefix-dev/pixi/pull/2416)
+- Implement PEP735 support by @olivier-lacroix in [#2448](https://github.com/prefix-dev/pixi/pull/2448)
+- Extends manifest to allow for `preview` features by @tdejager in [#2489](https://github.com/prefix-dev/pixi/pull/2489)
+- Add versions/build list to `pixi search` output by @delsner in [#2440](https://github.com/prefix-dev/pixi/pull/2440)
+- Expose nested executables in `pixi global` by @bahugo in [#2362](https://github.com/prefix-dev/pixi/pull/2362)
+
+#### Fixed
+
+- Always print a warning when config is invalid by @Hofer-Julian in [#2508](https://github.com/prefix-dev/pixi/pull/2508)
+- Incorrectly saving absolute base as path component by @tdejager in [#2501](https://github.com/prefix-dev/pixi/pull/2501)
+- Keep the case when getting the executable in `pixi global` by @wolfv in [#2528](https://github.com/prefix-dev/pixi/pull/2528)
+- Install script on `win-arm64` by @baszalmstra in [#2538](https://github.com/prefix-dev/pixi/pull/2538)
+- Trampoline installation on `pixi global update` by @nichmor in [#2530](https://github.com/prefix-dev/pixi/pull/2530)
+- Update the `PATH` env var with dynamic elements on `pixi global` by @wolfv in [#2541](https://github.com/prefix-dev/pixi/pull/2541)
+- Correct `ppc64le` arch by @wolfv in [#2540](https://github.com/prefix-dev/pixi/pull/2540)
+
+#### Performance
+
+- Experimental environment activation cache by @ruben-arts in [#2367](https://github.com/prefix-dev/pixi/pull/2367)
+
+#### Documentation
+- Update project structure in Python tutorial by @LiamConnors in [#2506](https://github.com/prefix-dev/pixi/pull/2506)
+- Fix typo in `pixi project export conda-environment` by @nmarticorena in [#2533](https://github.com/prefix-dev/pixi/pull/2533)
+- Fix wrong use of underscores in `pixi project export` by @traversaro in [#2539](https://github.com/prefix-dev/pixi/pull/2539)
+- Adapt completion instructions by @Hofer-Julian in [#2561](https://github.com/prefix-dev/pixi/pull/2561)
+
+#### New Contributors
+* @nmarticorena made their first contribution in [#2533](https://github.com/prefix-dev/pixi/pull/2533)
+* @delsner made their first contribution in [#2440](https://github.com/prefix-dev/pixi/pull/2440)
+
+### [0.37.0] - 2024-11-18
+#### ✨ Highlights
+
+We now allow the use of `prefix.dev` channels with sharded repodata:
+
+Running `pixi search rubin-env` using `hyperfine` on the default versus our channels gives these results:
+
+| Cache Status | Channel                                  | Mean [ms] | Relative |
+|:-------------|------------------------------------------|----------:|---------:|
+| With cache   | `https://prefix.dev/conda-forge`         |      69.3 |     1.00 |
+| Without      | `https://prefix.dev/conda-forge`         |     389.5 |     5.62 |
+| With cache   | `https://conda.anaconda.org/conda-forge` |    1043.3 |    15.06 |
+| Without      | `https://conda.anaconda.org/conda-forge` |    2420.3 |    34.94 |
+
+#### Breaking
+
+- Make sure that `[activation.env]` are not completely overridden by `[target.` tables, by @hameerabbasi in [#2396](https://github.com/prefix-dev/pixi/pull/2396)
+
+#### Changed
+
+- Allow using sharded repodata by @baszalmstra in [#2467](https://github.com/prefix-dev/pixi/pull/2467)
+
+#### Documentation
+
+- Update ros2.md turtlesim section by @nbbrooks in [#2442](https://github.com/prefix-dev/pixi/pull/2442)
+- Update pycharm.md to show optional installation by @plainerman in [#2487](https://github.com/prefix-dev/pixi/pull/2487)
+- Fix typo in documentation by @saraedum in [#2496](https://github.com/prefix-dev/pixi/pull/2496)
+- Update pixi install output by @LiamConnors in [#2495](https://github.com/prefix-dev/pixi/pull/2495)
+
+#### Fixed
+
+- Incorrect python version was used in some parts of the solve by @tdejager in [#2481](https://github.com/prefix-dev/pixi/pull/2481)
+- Wrong description on pixi upgrade by @notPlancha in [#2483](https://github.com/prefix-dev/pixi/pull/2483)
+- Extra test for mismatch in python versions by @tdejager in [#2485](https://github.com/prefix-dev/pixi/pull/2485)
+- Keep `build` in `pixi upgrade` by @ruben-arts in [#2476](https://github.com/prefix-dev/pixi/pull/2476)
+
+#### New Contributors
+* @saraedum made their first contribution in [#2496](https://github.com/prefix-dev/pixi/pull/2496)
+* @plainerman made their first contribution in [#2487](https://github.com/prefix-dev/pixi/pull/2487)
+* @hameerabbasi made their first contribution in [#2396](https://github.com/prefix-dev/pixi/pull/2396)
+* @nbbrooks made their first contribution in [#2442](https://github.com/prefix-dev/pixi/pull/2442)
+
 ### [0.36.0] - 2024-11-07
 #### ✨ Highlights
 

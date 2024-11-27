@@ -55,26 +55,6 @@ async fn specific_channel() {
     )
 }
 
-/// Tests that when initializing an empty project the default channel
-/// `conda-forge` is used.
-#[tokio::test]
-async fn default_channel() {
-    let pixi = PixiControl::new().unwrap();
-
-    // Init a new project
-    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
-
-    // Load the project
-    let project = pixi.project().unwrap();
-
-    // The only channel should be the "conda-forge" channel
-    let channels = Vec::from_iter(project.default_environment().channels());
-    assert_eq!(
-        channels,
-        [&NamedChannelOrUrl::Name(String::from("conda-forge"))]
-    )
-}
-
 // Test the initialization from an existing pyproject.toml file without the pixi information
 #[tokio::test]
 async fn init_from_existing_pyproject_toml() {

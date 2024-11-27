@@ -95,7 +95,7 @@ async fn add_with_channel() {
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
-        .dependencies(Some(SpecType::Run), Some(Platform::current()))
+        .combined_dependencies(Some(Platform::current()))
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();
@@ -159,17 +159,17 @@ async fn add_functionality_union() {
     // Should contain all added dependencies
     let dependencies = project
         .default_environment()
-        .dependencies(Some(SpecType::Run), Some(Platform::current()));
+        .dependencies(SpecType::Run, Some(Platform::current()));
     let (name, _) = dependencies.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("rattler").unwrap());
     let host_deps = project
         .default_environment()
-        .dependencies(Some(SpecType::Host), Some(Platform::current()));
+        .dependencies(SpecType::Host, Some(Platform::current()));
     let (name, _) = host_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libcomputer").unwrap());
     let build_deps = project
         .default_environment()
-        .dependencies(Some(SpecType::Build), Some(Platform::current()));
+        .dependencies(SpecType::Build, Some(Platform::current()));
     let (name, _) = build_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libidk").unwrap());
 
@@ -440,6 +440,7 @@ async fn add_pypi_extra_functionality() {
                     PyPiRequirement::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
+                        index: None
                     }
                 );
             }
@@ -492,7 +493,7 @@ async fn add_unconstrainted_dependency() {
     let foo_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .combined_dependencies(None)
         .unwrap_or_default()
         .get("foobar")
         .cloned()
@@ -505,7 +506,7 @@ async fn add_unconstrainted_dependency() {
         .manifest()
         .feature("unreferenced")
         .expect("feature 'unreferenced' is missing")
-        .dependencies(None, None)
+        .combined_dependencies(None)
         .unwrap_or_default()
         .get("bar")
         .cloned()
@@ -542,7 +543,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()
@@ -557,7 +558,7 @@ async fn pinning_dependency() {
     let foobar_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("foobar")
         .cloned()
@@ -572,7 +573,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()

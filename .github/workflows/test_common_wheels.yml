@@ -8,7 +8,7 @@ jobs:
     name: ${{ matrix.arch.name }} - Test Installation of Common Wheels
     runs-on: ${{ matrix.arch.os }}
     env:
-      TARGET_RELEASE: "${{ github.workspace }}/target-pixi/release"
+      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
       LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
       SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
       PYTHONIOENCODING: utf-8

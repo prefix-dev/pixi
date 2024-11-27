@@ -1,4 +1,11 @@
-use crate::Project;
+use std::{
+    cmp::PartialEq,
+    fs,
+    io::{Error, ErrorKind, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
@@ -9,16 +16,11 @@ use pixi_manifest::{
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
-use std::str::FromStr;
-use std::{
-    cmp::PartialEq,
-    fs,
-    io::{Error, ErrorKind, Write},
-    path::{Path, PathBuf},
-};
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
+
+use crate::Project;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -257,6 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
+                &None,
             )?;
         }
         project.save()?;
@@ -264,7 +267,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Created {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            // Canonicalize the path to make it more readable, but if it fails just use the path as
+            // is.
             project.manifest_path().display()
         );
     } else {
@@ -300,7 +304,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
-            if pyproject.is_pixi() {
+            if pyproject.has_pixi_table() {
                 eprintln!(
                     "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
@@ -310,9 +314,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             let (name, pixi_name) = match pyproject.name() {
                 Some(name) => (name, false),
-                None => (default_name.clone(), true),
+                None => (default_name.as_str(), true),
             };
-            let environments = pyproject.environments_from_extras();
+            let environments = pyproject.environments_from_extras().into_diagnostic()?;
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
@@ -345,11 +349,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     console::style(console::Emoji("✔ ", "")).green(),
                     name
                 );
-                // Inform about the addition of environments from extras (if any)
+                // Inform about the addition of environments from optional dependencies
+                // or dependency groups (if any)
                 if !environments.is_empty() {
                     let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
                     eprintln!(
-                        "{}Added environment{} '{}' from optional extras.",
+                        "{}Added environment{} '{}' from optional dependencies or dependency groups.",
                         console::style(console::Emoji("✔ ", "")).green(),
                         if envs.len() > 1 { "s" } else { "" },
                         envs.join("', '")

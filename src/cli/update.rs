@@ -18,7 +18,7 @@ use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
+use rattler_lock::{LockFile, LockedPackageRef};
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -88,7 +88,7 @@ impl UpdateSpecs {
         &self,
         environment_name: &EnvironmentName,
         platform: &Platform,
-        package: &Package,
+        package: LockedPackageRef<'_>,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms {
@@ -106,7 +106,7 @@ impl UpdateSpecs {
 
         // Check if the package is in the list of packages to update.
         if let Some(packages) = &self.packages {
-            if !packages.contains(&*package.name()) {
+            if !packages.contains(package.name()) {
                 return false;
             }
         }
@@ -159,7 +159,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let updated_lock_file = UpdateContext::builder(&project)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
-        .finish()?
+        .finish()
+        .await?
         .update()
         .await?;
 
