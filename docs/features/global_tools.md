@@ -105,7 +105,7 @@ Run `pixi info`, to find the currently used manifest on your system.
     |--------------|----------------------------------------------------------|-----------------------------------------------|
     | 3            | `$PIXI_HOME/manifests/pixi-global.toml`                  | Global manifest in `PIXI_HOME`.               |
     | 2            | `$HOME/.pixi/manifests/pixi-global.toml`                 | Global manifest in user home directory.       |
-    | 1            | `$HOME/Library/Application Support/pixi/pixi-global.toml`| Config directory.                             |
+    | 1            | `$HOME/Library/Application Support/pixi/manifests/pixi-global.toml`| Config directory.                             |
 
 
 === "Windows"
