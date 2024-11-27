@@ -28,7 +28,7 @@ use miette::{miette, Context, IntoDiagnostic};
 pub(crate) use parsed_manifest::ExposedName;
 pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-use pixi_config::{default_channel_config, home_path, Config};
+use pixi_config::{default_channel_config, pixi_home, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -361,27 +361,19 @@ impl Project {
 
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
-        home_path()
+        pixi_home()
+            .or_else(|| {
+                dirs::config_dir()
+                    .or_else(|| dirs::home_dir())
+                    .map(|dir| dir.join("pixi"))
+            })
             .map(|dir| dir.join(MANIFESTS_DIR))
-            .ok_or_else(|| miette::miette!("Couldn't get home directory"))
+            .ok_or_else(|| miette::miette!("Couldn't get global manifest directory"))
     }
 
     /// Get the default path to the global manifest file
     pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .map(|dir| dir.join("pixi").join(MANIFEST_DEFAULT_NAME))
-            .or_else(|| {
-                dirs::home_dir()
-                    .map(|dir| dir.join(".config").join("pixi").join(MANIFEST_DEFAULT_NAME))
-            })
-            .filter(|dir| dir.exists())
-            .or_else(|| {
-                Self::manifest_dir()
-                    .map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
-                    .ok()
-            })
-            .ok_or_else(|| miette::miette!("could not determine default manifest path"))
+        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
     }
 
     /// Loads a project from manifest file.
