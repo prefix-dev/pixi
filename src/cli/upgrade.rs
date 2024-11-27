@@ -68,7 +68,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: Also support build and host
     let spec_type = SpecType::Run;
     let match_spec_iter = feature
-        .dependencies(Some(spec_type), None)
+        .dependencies(spec_type, None)
         .into_iter()
         .flat_map(|deps| deps.into_owned());
 

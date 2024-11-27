@@ -16,28 +16,25 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
     cli::{
         add,
-        cli_config::{PrefixUpdateConfig, ProjectConfig},
+        cli_config::{ChannelsConfig, PrefixUpdateConfig, ProjectConfig},
         init::{self, GitAttributes},
         install::Args,
-        project, remove, run,
+        project, remove, run, search,
         task::{self, AddArgs, AliasArgs},
         update, LockFileUsageArgs,
     },
+    lock_file::UpdateMode,
     task::{
         get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName,
     },
     Project, UpdateLockFileOptions,
 };
-use pixi::{
-    cli::{cli_config::ChannelsConfig, search},
-    lock_file::UpdateMode,
-};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, Package, UrlOrPath};
+use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -124,8 +121,8 @@ impl LockFileExt for LockFile {
             .packages(platform)
             .into_iter()
             .flatten()
-            .filter_map(Package::into_conda)
-            .any(|package| package.package_record().name.as_normalized() == name);
+            .filter_map(LockedPackageRef::as_conda)
+            .any(|package| package.record().name.as_normalized() == name);
         package_found
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
@@ -136,8 +133,8 @@ impl LockFileExt for LockFile {
             .packages(platform)
             .into_iter()
             .flatten()
-            .filter_map(Package::into_pypi)
-            .any(|pkg| pkg.data().package.name.as_ref() == name);
+            .filter_map(LockedPackageRef::as_pypi)
+            .any(|(data, _)| data.name.as_ref() == name);
         package_found
     }
 
@@ -155,7 +152,7 @@ impl LockFileExt for LockFile {
             .packages(platform)
             .into_iter()
             .flatten()
-            .filter_map(Package::into_conda)
+            .filter_map(LockedPackageRef::as_conda)
             .any(move |p| p.satisfies(&match_spec));
         package_found
     }
@@ -173,8 +170,8 @@ impl LockFileExt for LockFile {
             .packages(platform)
             .into_iter()
             .flatten()
-            .filter_map(Package::into_pypi)
-            .any(move |p| p.satisfies(&requirement));
+            .filter_map(LockedPackageRef::as_pypi)
+            .any(move |(data, _)| data.satisfies(&requirement));
         package_found
     }
 
@@ -186,10 +183,11 @@ impl LockFileExt for LockFile {
     ) -> Option<String> {
         self.environment(environment)
             .and_then(|env| {
-                env.packages(platform)
-                    .and_then(|mut packages| packages.find(|p| p.name() == package))
+                env.pypi_packages(platform).and_then(|mut packages| {
+                    packages.find(|(data, _)| data.name.as_ref() == package)
+                })
             })
-            .map(|p| p.version().to_string())
+            .map(|(data, _)| data.version.to_string())
     }
 
     fn get_pypi_package_url(
@@ -203,7 +201,7 @@ impl LockFileExt for LockFile {
                 env.packages(platform)
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
-            .map(|p| p.url_or_path().into_owned())
+            .map(|p| p.location().clone())
     }
 }
 

@@ -12,10 +12,20 @@ license = "MIT"
 license-file = "LICENSE"
 name = "project"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
-preview = ["new-resolve"]
+preview = ["pixi-build"]
 readme = "README.md"
 repository = "https://github.com/author/project"
 version = "0.1.0"
+
+[package]
+
+[build-system]
+build-backend = "pixi-build-python"
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]
 
 [dependencies]
 detailed = { version = ">=1.2.3" }

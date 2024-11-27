@@ -21,14 +21,16 @@ def check_openssl_dependency() -> None:
         text=True,
     )
 
-    if result.returncode == 0:
+    if (
+        "package ID specification `openssl` did not match any packages" in result.stderr
+        or "nothing to print" in result.stderr
+    ):
+        colored_print("Success: openssl is not part of the dependencies tree.", Colors.GREEN)
+        sys.exit(0)
+    elif result.returncode == 0 and "nothing to print" not in result.stderr:
         colored_print("Error: openssl is part of the dependencies tree", Colors.RED)
         print(result.stdout)
         sys.exit(1)
-
-    # Check if the error message matches the expected message
-    if "package ID specification `openssl` did not match any packages" in result.stderr:
-        colored_print("Success: openssl is not part of the dependencies tree.", Colors.GREEN)
     else:
         colored_print("Error: Unexpected error message.", Colors.RED)
         print(result.stderr)

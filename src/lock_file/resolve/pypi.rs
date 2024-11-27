@@ -14,6 +14,7 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
     names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
@@ -23,11 +24,11 @@ use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
+use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
@@ -50,9 +51,8 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        package_identifier, records_by_name::HasNameVersion,
-        resolve::resolver_provider::CondaResolverProvider, LockedPypiPackages,
-        PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+        records_by_name::HasNameVersion, resolve::resolver_provider::CondaResolverProvider,
+        LockedPypiPackages, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -137,8 +137,7 @@ fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> Result<PathBuf, Pro
     }
 }
 
-type CondaPythonPackages =
-    HashMap<uv_normalize::PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
+type CondaPythonPackages = HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>;
 
 /// Prints the number of overridden uv PyPI package requests
 fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageName, u32>) {
@@ -161,7 +160,7 @@ pub async fn resolve_pypi(
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
-    locked_conda_records: &[RepoDataRecord],
+    locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
@@ -173,10 +172,19 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
-    let conda_python_packages = locked_conda_records
+    let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {
-            package_identifier::PypiPackageIdentifier::from_record(record).map_or_else(
+            let result = match record {
+                PixiRecord::Binary(repodata_record) => {
+                    PypiPackageIdentifier::from_repodata_record(repodata_record)
+                }
+                PixiRecord::Source(source_record) => {
+                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                }
+            };
+
+            result.map_or_else(
                 |err| Either::Right(once(Err(err))),
                 |identifiers| {
                     Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
@@ -222,9 +230,12 @@ pub async fn resolve_pypi(
     use pixi_consts::consts::PROJECT_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda
     // packages.
-    let python_record = locked_conda_records
+    let python_record = locked_pixi_records
         .iter()
-        .find(|r| is_python_record(r))
+        .find(|r| match r {
+            PixiRecord::Binary(r) => is_python_record(r),
+            _ => false,
+        })
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Construct the marker environment for the target platform
@@ -303,12 +314,13 @@ pub async fn resolve_pypi(
     };
 
     // Create a shared in-memory index.
-    // We need two in-memory indexes, one for the build dispatch and one for the resolver.
-    // because we manually override requests for the resolver,
+    // We need two in-memory indexes, one for the build dispatch and one for the
+    // resolver. because we manually override requests for the resolver,
     // but we don't want to override requests for the build dispatch.
     //
-    // The BuildDispatch might resolve or install when building wheels which will be mostly
-    // with build isolation. In that case we want to use fresh non-tampered requests.
+    // The BuildDispatch might resolve or install when building wheels which will be
+    // mostly with build isolation. In that case we want to use fresh
+    // non-tampered requests.
     let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
@@ -457,8 +469,8 @@ pub async fn resolve_pypi(
         package_requests: package_requests.clone(),
     };
 
-    // We need a new in-memory index for the resolver so that it does not conflict with the build dispatch
-    // one. As we have noted in the comment above.
+    // We need a new in-memory index for the resolver so that it does not conflict
+    // with the build dispatch one. As we have noted in the comment above.
     let resolver_in_memory_index = InMemoryIndex::default();
     let resolution = Resolver::new_custom_io(
         manifest,
@@ -579,7 +591,7 @@ fn get_url_or_path(
                         // so we just return the absolute path
                         Err(_) => absolute,
                     };
-                    UrlOrPath::Path(path)
+                    UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 }
                 // This happens when it is relative to the non-standard index
                 // location on disk.
@@ -606,7 +618,7 @@ fn get_url_or_path(
                             .join(relative),
                         Err(_) => absolute,
                     };
-                    UrlOrPath::Path(path)
+                    UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 }
             };
             Ok(url)
@@ -639,7 +651,7 @@ async fn lock_pypi_packages<'a>(
             }
 
             ResolvedDist::Installable(Dist::Built(dist)) => {
-                let (url_or_path, hash) = match &dist {
+                let (location, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let best_wheel = dist.best_wheel();
                         let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
@@ -663,7 +675,12 @@ async fn lock_pypi_packages<'a>(
                         (UrlOrPath::Url(direct_url), None)
                     }
                     BuiltDist::Path(dist) => (
-                        UrlOrPath::Path(process_uv_path_url(&dist.url).into_diagnostic()?),
+                        UrlOrPath::Path(Utf8TypedPathBuf::from(
+                            process_uv_path_url(&dist.url)
+                                .into_diagnostic()?
+                                .to_string_lossy()
+                                .to_string(),
+                        )),
                         None,
                     ),
                 };
@@ -688,7 +705,7 @@ async fn lock_pypi_packages<'a>(
                     requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
                         .into_diagnostic()?,
                     editable: false,
-                    url_or_path,
+                    location,
                     hash,
                 }
             }
@@ -712,7 +729,7 @@ async fn lock_pypi_packages<'a>(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let (url_or_path, hash, editable) = match source {
+                let (location, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
                         let url_or_path =
                             get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
@@ -747,7 +764,9 @@ async fn lock_pypi_packages<'a>(
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
                         // the requirement.
-                        let url_or_path = UrlOrPath::Path(given_path);
+                        let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
+                            given_path.to_string_lossy().to_string(),
+                        ));
                         (url_or_path, hash, false)
                     }
                     SourceDist::Directory(dir) => {
@@ -769,7 +788,9 @@ async fn lock_pypi_packages<'a>(
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
                         // the requirement.
-                        let url_or_path = UrlOrPath::Path(given_path);
+                        let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
+                            given_path.to_string_lossy().to_string(),
+                        ));
                         (url_or_path, hash, dir.editable)
                     }
                 };
@@ -783,9 +804,9 @@ async fn lock_pypi_packages<'a>(
                         .map(|r| to_version_specifiers(&r))
                         .transpose()
                         .into_diagnostic()?,
+                    location,
                     requires_dist: to_requirements(metadata.requires_dist.iter())
                         .into_diagnostic()?,
-                    url_or_path,
                     hash,
                     editable,
                 }

@@ -1,0 +1,18 @@
+[project]
+authors = ["Tim de Jager <tim@prefix.dev>"]
+channels = ["conda-forge"]
+description = "Add a short description here"
+name = "basic"
+platforms = ["osx-arm64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[tasks]
+
+[build-system]
+build-backend = "pixi-build-python"
+dependencies = []
+
+[host-dependencies]
+pip = "24.*"
+python = "3.12.*"

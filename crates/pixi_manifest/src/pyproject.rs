@@ -2,35 +2,39 @@ use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
 use indexmap::IndexMap;
 use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
-use pep440_rs::VersionSpecifiers;
+use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, Project};
+use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, DependencyGroups, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 use thiserror::Error;
-use toml_edit::DocumentMut;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    DependencyOverwriteBehavior, Feature, ParsedManifest, SpecType,
+    DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
-use crate::{error::DependencyError, FeatureName};
+use crate::{
+    error::DependencyError,
+    manifests::PackageManifest,
+    toml::{ExternalWorkspaceProperties, TomlManifest},
+    FeatureName,
+};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct PyProjectManifest {
     #[serde(flatten)]
     inner: pyproject_toml::PyProjectToml,
-    pub tool: Option<Tool>,
+    tool: Option<Tool>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct Tool {
-    pub pixi: Option<ParsedManifest>,
+    pub pixi: Option<TomlManifest>,
     pub poetry: Option<ToolPoetry>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Debug)]
 pub struct ToolPoetry {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -62,20 +66,46 @@ impl PyProjectManifest {
 
     /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
     /// and project name is defined
-    pub fn ensure_pixi(self, source: &str) -> Result<Self, TomlError> {
+    pub fn ensure_pixi(self) -> Result<Self, TomlError> {
         // Make sure the `[tool.pixi]` table exist
-        if !self.is_pixi() {
+        if !self.has_pixi_table() {
             return Err(TomlError::NoPixiTable);
         }
 
         // Make sure a 'name' is defined
         if self.name().is_none() {
-            let document = source.parse::<DocumentMut>().map_err(TomlError::from)?;
-            let span = document["tool"]["pixi"]["project"].span();
-            return Err(TomlError::NoProjectName(span));
+            let span = self
+                .pixi_manifest()
+                .and_then(|manifest| manifest.workspace.span());
+            return Err(TomlError::MissingField("name".into(), span));
         }
 
         Ok(self)
+    }
+
+    /// Returns the project name from, in order of priority
+    ///  - the `[tool.pixi.project]` table
+    ///  - the `[project]` table
+    ///  - the `[tool.poetry]` table
+    pub fn name(&self) -> Option<&str> {
+        if let Some(pixi_name) = self
+            .pixi_manifest()
+            .and_then(|p| p.workspace.value.name.as_deref())
+        {
+            return Some(pixi_name);
+        }
+        if let Some(pyproject) = &self.project {
+            return Some(pyproject.name.as_str());
+        }
+        if let Some(poetry_name) = self.poetry().and_then(|p| p.name.as_ref()) {
+            return Some(poetry_name.as_str());
+        }
+        None
+    }
+
+    /// Returns the project name as PEP508 name
+    fn package_name(&self) -> Option<pep508_rs::PackageName> {
+        pep508_rs::PackageName::new(self.name()?.to_string()).ok()
     }
 
     fn tool(&self) -> Option<&Tool> {
@@ -86,103 +116,20 @@ impl PyProjectManifest {
         self.project.as_ref()
     }
 
+    /// Returns a reference to the poetry section if it exists.
     pub fn poetry(&self) -> Option<&ToolPoetry> {
         self.tool().and_then(|t| t.poetry.as_ref())
     }
 
-    fn pixi(&self) -> Option<&ParsedManifest> {
+    /// Returns a reference to the pixi section if it exists.
+    fn pixi_manifest(&self) -> Option<&TomlManifest> {
         self.tool().and_then(|t| t.pixi.as_ref())
     }
 
     /// Checks whether a `pyproject.toml` is valid for use with pixi by
     /// checking it contains a `[tool.pixi]` table.
-    pub fn is_pixi(&self) -> bool {
-        self.pixi().is_some()
-    }
-
-    /// Returns the project name from, in order of priority
-    ///  - the `[tool.pixi.project]` table
-    ///  - the `[project]` table
-    ///  - the `[tool.poetry]` table
-    pub fn name(&self) -> Option<String> {
-        if let Some(pixi_name) = self.pixi().and_then(|p| p.project.name.as_ref()) {
-            return Some(pixi_name.clone());
-        }
-        if let Some(pyproject) = &self.project {
-            return Some(pyproject.name.clone());
-        }
-        if let Some(poetry_name) = self.poetry().and_then(|p| p.name.as_ref()) {
-            return Some(poetry_name.clone());
-        }
-        None
-    }
-
-    /// Returns the project description from, in order of priority
-    ///  - the `[tool.pixi.project]` table
-    ///  - the `[project]` table
-    ///  - the `[tool.poetry]` table
-    fn description(&self) -> Option<String> {
-        if let Some(pixi_description) = self.pixi().and_then(|p| p.project.description.as_ref()) {
-            return Some(pixi_description.to_string());
-        }
-        if let Some(pyproject_description) =
-            self.project.as_ref().and_then(|p| p.description.as_ref())
-        {
-            return Some(pyproject_description.to_string());
-        }
-        if let Some(poetry_description) = self.poetry().and_then(|p| p.description.as_ref()) {
-            return Some(poetry_description.clone());
-        }
-        None
-    }
-
-    /// Returns the project version from, in order of priority
-    ///  - the `[tool.pixi.project]` table
-    ///  - the `[project]` table
-    ///  - the `[tool.poetry]` table
-    fn version(&self) -> Option<String> {
-        if let Some(pixi_version) = self.pixi().and_then(|p| p.project.version.as_ref()) {
-            return Some(pixi_version.to_string());
-        }
-        if let Some(pyproject_version) = self.project.as_ref().and_then(|p| p.version.as_ref()) {
-            return Some(pyproject_version.to_string());
-        }
-        if let Some(poetry_version) = self.poetry().and_then(|p| p.version.as_ref()) {
-            return Some(poetry_version.clone());
-        }
-        None
-    }
-
-    /// Returns the project authors from, in order of priority
-    ///  - the `[tool.pixi.project]` table
-    ///  - the `[project]` table
-    ///  - the `[tool.poetry]` table
-    fn authors(&self) -> Option<Vec<String>> {
-        if let Some(pixi_authors) = self.pixi().and_then(|p| p.project.authors.as_ref()) {
-            return Some(pixi_authors.clone());
-        }
-        if let Some(pyproject_authors) = self.project.as_ref().and_then(|p| p.authors.as_ref()) {
-            return Some(
-                pyproject_authors
-                    .iter()
-                    .map(|contact| match contact {
-                        Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
-                        Contact::Name { name } => name.clone(),
-                        Contact::Email { email } => email.clone(),
-                    })
-                    .collect(),
-            );
-        }
-        if let Some(poetry_authors) = self.poetry().and_then(|p| p.authors.as_ref()) {
-            return Some(poetry_authors.clone());
-        }
-        None
-    }
-
-    /// Returns the project name as PEP508 name
-    fn package_name(&self) -> Option<pep508_rs::PackageName> {
-        self.name()
-            .and_then(|n| pep508_rs::PackageName::new(n).ok())
+    pub fn has_pixi_table(&self) -> bool {
+        self.pixi_manifest().is_some()
     }
 
     /// Returns optional dependencies from the `[project.optional-dependencies]`
@@ -201,8 +148,8 @@ impl PyProjectManifest {
     ///  - one environment is created per group with the same name
     ///  - each environment includes the feature of the same name
     ///  - it will also include other features inferred from any self references
-    ///    to other groups of optional dependencies (but won't for dependency groups,
-    ///    as recursion between groups is resolved upstream)
+    ///    to other groups of optional dependencies (but won't for dependency
+    ///    groups, as recursion between groups is resolved upstream)
     pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
         let mut environments = HashMap::new();
         if let Some(extras) = self.optional_dependencies() {
@@ -225,7 +172,8 @@ impl PyProjectManifest {
         if let Some(groups) = self.dependency_groups().transpose()? {
             for group in groups.into_keys() {
                 let normalised = group.replace('_', "-");
-                // Nothing to do if a group of optional dependencies has the same name as the dependency group
+                // Nothing to do if a group of optional dependencies has the same name as the
+                // dependency group
                 if !environments.contains_key(&normalised) {
                     environments.insert(normalised.clone(), vec![normalised]);
                 }
@@ -238,51 +186,107 @@ impl PyProjectManifest {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum PyProjectToManifestError {
+    #[error("The [tool.pixi] table is missing")]
+    MissingPixiTable,
     #[error("Unsupported pep508 requirement: '{0}'")]
     DependencyError(Requirement, #[source] DependencyError),
     #[error(transparent)]
     DependencyGroupError(#[from] Pep735Error),
+    #[error(transparent)]
+    TomlError(#[from] TomlError),
 }
 
-impl TryFrom<PyProjectManifest> for ParsedManifest {
-    type Error = PyProjectToManifestError;
+#[derive(Default)]
+pub struct PyProjectFields {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub version: Option<Version>,
+    pub authors: Option<Vec<Contact>>,
+    pub requires_python: Option<VersionSpecifiers>,
+    pub dependencies: Option<Vec<Requirement>>,
+    pub optional_dependencies: Option<IndexMap<String, Vec<Requirement>>>,
+}
 
-    fn try_from(item: PyProjectManifest) -> Result<Self, Self::Error> {
+impl From<pyproject_toml::Project> for PyProjectFields {
+    fn from(project: pyproject_toml::Project) -> Self {
+        Self {
+            name: Some(project.name),
+            description: project.description,
+            version: project.version,
+            authors: project.authors,
+            requires_python: project.requires_python,
+            dependencies: project.dependencies,
+            optional_dependencies: project.optional_dependencies,
+        }
+    }
+}
+
+impl PyProjectManifest {
+    #[allow(clippy::result_large_err)]
+    pub fn into_manifests(
+        self,
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), PyProjectToManifestError> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
-        let mut manifest = item
-            .pixi()
-            .expect("The [tool.pixi] table should exist")
-            .clone();
+        let Some(Tool {
+            pixi: Some(pixi),
+            poetry,
+        }) = self.tool
+        else {
+            return Err(PyProjectToManifestError::MissingPixiTable);
+        };
 
-        // Set pixi project name, version, description and authors (if they are not set)
-        // with the ones from the `[project]` or `[tool.poetry]` tables of the
-        // `pyproject.toml`.
-        manifest.project.name = item.name();
-        manifest.project.description = item.description();
-        manifest.project.version = item.version().and_then(|v| v.parse().ok());
-        manifest.project.authors = item.authors();
+        // Extract the values we are interested in from the pyproject.toml
+        let pyproject_toml::PyProjectToml {
+            project,
+            dependency_groups,
+            ..
+        } = self.inner;
+        let project = project.map(PyProjectFields::from).unwrap_or_default();
 
+        // Extract some of the values we are interested in from the poetry table.
+        let poetry = poetry.unwrap_or_default();
+
+        // Convert the TOML document into a pixi manifest.
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
+        let (mut workspace_manifest, package_manifest) =
+            pixi.into_manifests(ExternalWorkspaceProperties {
+                name: project.name,
+                version: project
+                    .version
+                    .and_then(|v| v.to_string().parse().ok())
+                    .or(poetry.version.and_then(|v| v.parse().ok())),
+                description: project.description.or(poetry.description),
+                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+                license: None,
+                license_file: None,
+                readme: None,
+                homepage: None,
+                repository: None,
+                documentation: None,
+            })?;
 
         // Add python as dependency based on the `project.requires_python` property
-        let python_spec = item.project().and_then(|p| p.requires_python.clone());
+        let python_spec = project.requires_python;
 
-        let target = manifest.default_feature_mut().targets.default_mut();
+        let target = workspace_manifest
+            .default_feature_mut()
+            .targets
+            .default_mut();
         let python = PackageName::from_str("python").unwrap();
         // If the target doesn't have any python dependency, we add it from the
         // `requires-python`
-        if !target.has_dependency(&python, Some(SpecType::Run), None) {
+        if !target.has_dependency(&python, SpecType::Run, None) {
             target.add_dependency(
                 &python,
                 &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
-            if target.has_dependency(&python, Some(SpecType::Run), None) {
+            if target.has_dependency(&python, SpecType::Run, None) {
                 // TODO: implement some comparison or spec merging logic here
                 tracing::info!(
                     "Overriding the requires-python with the one defined in pixi dependencies"
@@ -291,7 +295,7 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
         }
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = item.project().and_then(|p| p.dependencies.clone()) {
+        if let Some(deps) = project.dependencies {
             for requirement in deps.iter() {
                 target
                     .try_add_pep508_dependency(
@@ -306,19 +310,26 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
         }
 
         // Define an iterator over both optional dependencies and dependency groups
-        let groups = item
-            .optional_dependencies()
+        let groups = project
+            .optional_dependencies
             .into_iter()
-            .chain(item.dependency_groups().transpose()?)
+            .chain(
+                dependency_groups
+                    .as_ref()
+                    .map(DependencyGroups::resolve)
+                    .transpose()?,
+            )
             .flat_map(|map| map.into_iter());
 
         // For each group of optional dependency or dependency group,
         // create a feature of the same name if it does not exist,
-        // and add pypi dependencies, filtering out self-references in optional dependencies
-        let project_name = item.package_name();
+        // and add pypi dependencies, filtering out self-references in optional
+        // dependencies
+        let project_name =
+            pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
         for (group, reqs) in groups {
             let feature_name = FeatureName::Named(group.to_string());
-            let target = manifest
+            let target = workspace_manifest
                 .features
                 .entry(feature_name.clone())
                 .or_insert_with(move || Feature::new(feature_name))
@@ -340,7 +351,7 @@ impl TryFrom<PyProjectManifest> for ParsedManifest {
             }
         }
 
-        Ok(manifest)
+        Ok((workspace_manifest, package_manifest))
     }
 }
 
@@ -362,6 +373,19 @@ fn version_or_url_to_spec(
     }
 }
 
+/// Converts [`Contact`] from pyproject.toml to a representation that is used in
+/// pixi.
+fn contacts_to_authors(contacts: Vec<Contact>) -> Vec<String> {
+    contacts
+        .into_iter()
+        .map(|contact| match contact {
+            Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
+            Contact::Name { name } => name.clone(),
+            Contact::Email { email } => email.clone(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::{path::Path, str::FromStr};
@@ -371,8 +395,7 @@ mod tests {
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        manifests::manifest::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior,
-        FeatureName,
+        manifests::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
     };
 
     const PYPROJECT_FULL: &str = r#"
