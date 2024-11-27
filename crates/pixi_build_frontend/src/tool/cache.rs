@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, path::PathBuf};
+use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 use dashmap::{DashMap, Entry};
 use miette::{miette, IntoDiagnostic, Result};
@@ -6,7 +6,7 @@ use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{EnvironmentHash, PrefixGuard};
 use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -27,6 +27,12 @@ pub struct ToolContextBuilder {
     client: ClientWithMiddleware,
     cache_dir: PathBuf,
     cache: ToolCache,
+}
+
+impl Default for ToolContextBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ToolContextBuilder {

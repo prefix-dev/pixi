@@ -8,9 +8,7 @@ use rattler_conda_types::ChannelConfig;
 use crate::{
     conda_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
-    rattler_build_protocol,
-    tool::ToolCache,
-    BackendOverride, BuildFrontendError, Protocol, ToolContext,
+    rattler_build_protocol, BackendOverride, BuildFrontendError, Protocol, ToolContext,
 };
 
 /// Configuration to enable or disable certain protocols discovery.

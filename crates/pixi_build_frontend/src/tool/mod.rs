@@ -3,7 +3,7 @@ mod spec;
 
 use std::{collections::HashMap, path::PathBuf};
 
-pub use cache::{ToolCache, ToolCacheError, ToolContext};
+pub use cache::{ToolCacheError, ToolContext};
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 
 use crate::InProcessBackend;

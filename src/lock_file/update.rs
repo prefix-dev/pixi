@@ -16,7 +16,7 @@ use futures::{
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{miette, Report};
+use miette::Report;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 
 use pixi_build_frontend::ToolContext;
@@ -385,13 +385,6 @@ impl<'p> LockFileDerivedData<'p> {
             .channel_urls(&self.project.channel_config())
             .into_diagnostic()?;
 
-        let build_dep_channel_urls = environment
-            .project()
-            .manifest()
-            .build_section()
-            .map(|section| section.channels(&self.project.channel_config()))
-            .transpose()
-            .into_diagnostic()?;
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
@@ -408,7 +401,6 @@ impl<'p> LockFileDerivedData<'p> {
                 .map(GenericVirtualPackage::from)
                 .collect(),
             channel_urls,
-            build_dep_channel_urls,
             platform,
             &format!(
                 "{} environment '{}'",
@@ -1039,28 +1031,6 @@ impl<'p> UpdateContextBuilder<'p> {
 
         let gateway = project.repodata_gateway().clone();
         let client = project.authenticated_client().clone();
-
-        let channel_config = project.channel_config();
-
-        let build_channels = project
-            .manifest()
-            .package
-            .clone()
-            .unwrap()
-            .build_system
-            .channels
-            .into_iter()
-            .map(|channel| channel.into_channel(&channel_config))
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?;
-
-        // let build_channels = project.
-        // .project()
-        // .manifest()
-        // .build_section()
-        // .map(|section| section.channels(&channel_config))
-        // .transpose()
-        // .into_diagnostic()?;
 
         // tool context
         let tool_context = ToolContext::builder()
@@ -2265,14 +2235,6 @@ async fn spawn_create_prefix_task(
         .channel_urls(&group.project().channel_config())
         .into_diagnostic()?;
 
-    let build_channels = group
-        .project()
-        .manifest()
-        .build_section()
-        .map(|section| section.channels(&group.project().channel_config()))
-        .transpose()
-        .into_diagnostic()?;
-
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
         let prefix = prefix.clone();
@@ -2308,7 +2270,6 @@ async fn spawn_create_prefix_task(
                 pixi_records.records.clone(),
                 build_virtual_packages,
                 channels,
-                build_channels,
                 Platform::current(),
                 &format!(
                     "{} python environment to solve pypi packages for '{}'",

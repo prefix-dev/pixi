@@ -2,13 +2,12 @@
 use std::{path::PathBuf, sync::Arc};
 
 use miette::Diagnostic;
-use pixi_manifest::pyproject::Tool;
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
     protocol,
     protocol_builder::{EnabledProtocols, ProtocolBuilder},
-    tool::{ToolCache, ToolContext},
+    tool::ToolContext,
     Protocol, SetupRequest,
 };
 
@@ -88,7 +87,7 @@ impl BuildFrontend {
         // };
 
         Self {
-            tool_context: context.into(),
+            tool_context: context,
             ..self
         }
     }

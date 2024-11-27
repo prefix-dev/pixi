@@ -14,7 +14,7 @@ use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
 
 use crate::{
     protocols::{InitializeError, JsonRPCBuildProtocol},
-    tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
+    tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
     BackendOverride, ToolContext,
 };
 

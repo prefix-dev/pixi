@@ -1,20 +1,7 @@
-use miette::IntoDiagnostic;
-use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_manifest::BuildSystem;
-use pixi_progress::wrap_in_progress;
-use pixi_utils::{EnvironmentHash, PrefixGuard};
-use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, Platform};
-use rattler_shell::{
-    activation::{ActivationVariables, Activator},
-    shell::ShellEnum,
-};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 
 use crate::{BackendOverride, InProcessBackend};
-
-use super::{IsolatedTool, ToolContext};
 
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.

@@ -12,7 +12,7 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
 use thiserror::Error;
 
 use crate::{
-    tool::{IsolatedToolSpec, ToolCache, ToolCacheError, ToolSpec},
+    tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
     BackendOverride, ToolContext,
 };
 

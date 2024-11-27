@@ -27,8 +27,7 @@ use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
-    Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform,
-    RepoDataRecord,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
 use rattler_repodata_gateway::Gateway;
@@ -499,12 +498,6 @@ impl BuildContext {
                 ));
             }
         }
-
-        // // tool context
-        // let tool_config = ToolContext::builder(build_channels)
-        //     .with_gateway(gateway)
-        //     .with_client(client)
-        //     .build();
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
