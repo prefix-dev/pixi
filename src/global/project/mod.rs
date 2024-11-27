@@ -1,3 +1,20 @@
+use super::common::{get_install_changes, EnvironmentUpdate};
+use super::install::find_binary_by_name;
+use super::trampoline::GlobalBin;
+use super::{BinDir, EnvRoot, StateChange, StateChanges};
+use crate::global::common::{
+    channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
+};
+use crate::global::find_executables_for_many_records;
+use crate::global::install::{create_executable_trampolines, script_exec_mapping};
+use crate::global::project::environment::environment_specs_in_sync;
+use crate::prefix::Executable;
+use crate::repodata::Repodata;
+use crate::rlimit::try_increase_rlimit_to_sensible;
+use crate::{
+    global::{find_executables, EnvDir},
+    prefix::Prefix,
+};
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -35,28 +52,6 @@ use std::{
     sync::OnceLock,
 };
 use toml_edit::DocumentMut;
-
-use super::{
-    common::{get_install_changes, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::GlobalBin,
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, find_package_records,
-            get_expose_scripts_sync_status,
-        },
-        find_executables,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
 
 mod environment;
 mod manifest;
@@ -681,9 +676,9 @@ impl Project {
             .filter_map(|mapping| {
                 // If the executable is still requested, do not remove the mapping
                 if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_name()
+                    executable_from_path(&executable.path) == mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_name());
+                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
                     return None;
                 }
                 // Else do remove the mapping
@@ -835,7 +830,7 @@ impl Project {
 
         let prefix_records = &prefix.find_installed_packages(None).await?;
 
-        let all_executables = &prefix.find_executables(prefix_records.as_slice());
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed
