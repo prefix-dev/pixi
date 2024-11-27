@@ -275,7 +275,7 @@ pub fn to_uv_trusted_host(
         TrustedHost::Host { scheme, host, port } => Ok(uv_configuration::TrustedHost::Host {
             scheme: scheme.clone(),
             host: host.to_string(),
-            port: port.clone(),
+            port: *port,
         }),
     }
 }
