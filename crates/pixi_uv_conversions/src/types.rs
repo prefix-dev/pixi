@@ -1,6 +1,7 @@
 // use uv_normalize::PackageName;
 // use pep508_rs::PackageName;
 
+use pixi_config::TrustedHost;
 use std::error::Error;
 use std::{
     fmt::{Debug, Display},
@@ -263,4 +264,18 @@ pub fn to_version_specifiers(
         pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
             .map_err(VersionSpecifiersError::PepVersionError)?,
     )
+}
+
+/// Converts `TrustedHost` to `uv_configuration::TrustedHost`
+pub fn to_uv_trusted_host(
+    trusted_host: &TrustedHost,
+) -> Result<uv_configuration::TrustedHost, ConversionError> {
+    match trusted_host {
+        TrustedHost::Wildcard => Ok(uv_configuration::TrustedHost::Wildcard),
+        TrustedHost::Host { scheme, host, port } => Ok(uv_configuration::TrustedHost::Host {
+            scheme: scheme.clone(),
+            host: host.to_string(),
+            port: port.clone(),
+        }),
+    }
 }

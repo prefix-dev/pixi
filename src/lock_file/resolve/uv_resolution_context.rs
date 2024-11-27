@@ -9,6 +9,7 @@ use uv_types::{HashStrategy, InFlight};
 use crate::Project;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
+use pixi_uv_conversions::to_uv_trusted_host;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -58,7 +59,13 @@ impl UvResolutionContext {
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,
             capabilities: IndexCapabilities::default(),
-            allow_insecure_host: project.config().pypi_config.allow_insecure_host.clone(),
+            allow_insecure_host: project
+                .config()
+                .pypi_config
+                .allow_insecure_host
+                .iter()
+                .map(|host| to_uv_trusted_host(host).unwrap())
+                .collect(),
         })
     }
 }

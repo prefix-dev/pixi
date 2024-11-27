@@ -15,6 +15,7 @@ dunce = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_config = { workspace = true }
 rattler_lock = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

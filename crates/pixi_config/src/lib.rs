@@ -19,7 +19,6 @@ use rattler_repodata_gateway::{Gateway, SourceConfig};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
-use uv_configuration::TrustedHost;
 
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
@@ -225,6 +224,16 @@ impl From<RepodataChannelConfig> for SourceConfig {
 pub enum KeyringProvider {
     Disabled,
     Subprocess,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum TrustedHost {
+    Wildcard,
+    Host {
+        scheme: Option<String>,
+        host: String,
+        port: Option<u16>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
