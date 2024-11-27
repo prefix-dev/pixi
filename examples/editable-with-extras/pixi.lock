@@ -753,7 +753,7 @@ packages:
   name: package-with-extras
   version: 0.0.2
   path: ./package_with_extras
-  sha256: c2160511f4d81f291503314dccd8ef5c739ec3f57e0e4e570b2e08da77ba36fc
+  sha256: 41880f3aa3e04bee7863021efb45246f65be05fcfac9462763edc48423bdac37
   requires_dist:
   - boltons
   - rich ; extra == 'color'
