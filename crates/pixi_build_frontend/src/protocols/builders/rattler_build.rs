@@ -97,7 +97,9 @@ impl ProtocolBuilder {
             None
         };
 
-        let channel_config = ChannelConfig::default_with_root_dir(manifest.path.clone());
+        let channel_config = ChannelConfig::default_with_root_dir(
+            manifest.clone().map(|m| m.path).unwrap_or_default(),
+        );
 
         Self {
             source_dir: source_dir.to_path_buf(),
