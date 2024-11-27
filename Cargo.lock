@@ -3479,7 +3479,6 @@ dependencies = [
  "dunce",
  "pep440_rs",
  "pep508_rs",
- "pixi_config",
  "pixi_manifest",
  "rattler_lock",
  "serde_json",

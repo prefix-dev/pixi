@@ -259,16 +259,6 @@ pub enum KeyringProvider {
     Subprocess,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub enum TrustedHost {
-    Wildcard,
-    Host {
-        scheme: Option<String>,
-        host: String,
-        port: Option<u16>,
-    },
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct PyPIConfig {
@@ -287,7 +277,7 @@ pub struct PyPIConfig {
     /// Allow insecure connections to a host
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub allow_insecure_host: Vec<TrustedHost>,
+    pub allow_insecure_host: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

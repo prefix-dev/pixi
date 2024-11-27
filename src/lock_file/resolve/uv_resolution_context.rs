@@ -9,7 +9,7 @@ use uv_types::{HashStrategy, InFlight};
 use crate::Project;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
-use pixi_uv_conversions::to_uv_trusted_host;
+use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -49,6 +49,21 @@ impl UvResolutionContext {
         };
 
         let in_flight = Arc::new(InFlight::default());
+        let allow_insecure_host = project
+            .config()
+            .pypi_config
+            .allow_insecure_host
+            .iter()
+            .try_fold(
+                Vec::new(),
+                |mut hosts, host| -> Result<Vec<TrustedHost>, ConversionError> {
+                    let parsed = to_uv_trusted_host(host)?;
+                    hosts.push(parsed);
+                    Ok(hosts)
+                },
+            )
+            .into_diagnostic()
+            .context("failed to parse trusted host")?;
         Ok(Self {
             cache,
             in_flight,
@@ -59,13 +74,7 @@ impl UvResolutionContext {
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,
             capabilities: IndexCapabilities::default(),
-            allow_insecure_host: project
-                .config()
-                .pypi_config
-                .allow_insecure_host
-                .iter()
-                .map(|host| to_uv_trusted_host(host).unwrap())
-                .collect(),
+            allow_insecure_host,
         })
     }
 }
