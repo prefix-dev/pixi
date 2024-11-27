@@ -100,17 +100,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_client(project.authenticated_client().clone())
         .build();
 
-    // let build_section = project
-    //     .manifest()
-    //     .build_section()
-    //     .ok_or_else(|| miette::miette!("no build section found in the manifest"))?;
-
-    // let backend_override = if args.with_system {
-    //     Some(BackendOverride::System(build_section.build_backend.clone()))
-    // } else {
-    //     None
-    // };
-
     let enabled_protocols = EnabledProtocols {
         enable_rattler_build: !args.ignore_recipe,
         ..Default::default()

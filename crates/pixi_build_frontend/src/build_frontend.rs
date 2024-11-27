@@ -81,11 +81,6 @@ impl BuildFrontend {
 
     /// Sets the tool context
     pub fn with_tool_context(self, context: Arc<ToolContext>) -> Self {
-        // let tool_cache = ToolCache {
-        //     // cache: self.tool_cache.cache.clone(),
-        //     context,
-        // };
-
         Self {
             tool_context: context,
             ..self
