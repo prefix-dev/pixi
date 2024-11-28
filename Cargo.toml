@@ -394,6 +394,9 @@ allow-dirty = ["msi"]
 # Whether to sign macOS executables
 macos-sign = true
 
+[dist.dependencies.apt]
+musl-tools = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
+
 # Package config for `dist`
 [package.metadata.dist]
 features = ["self_update"]
