@@ -151,6 +151,7 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
+        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
         let source = self.fetch_source(source_spec).await?;
         let records = self
             .extract_records(
@@ -183,6 +184,8 @@ impl BuildContext {
         authenticated_client: ClientWithMiddleware,
         gateway: Gateway,
     ) -> Result<RepoDataRecord, BuildError> {
+        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
+
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
             pinned: source_spec.source.clone(),
@@ -255,8 +258,6 @@ impl BuildContext {
                 return Ok(build.record);
             }
         }
-
-        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
 
         let tool_context = ToolContext::builder()
             .with_gateway(gateway.clone())
