@@ -824,14 +824,6 @@ impl<'p> UpdateContextBuilder<'p> {
         }
     }
 
-    /// Sets the maximum number of solves that are allowed to run concurrently.
-    pub(crate) fn with_max_concurrent_solves(self, max_concurrent_solves: usize) -> Self {
-        Self {
-            max_concurrent_solves,
-            ..self
-        }
-    }
-
     /// Sets the io concurrency semaphore to use when updating environments.
     #[allow(unused)]
     pub fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {

@@ -28,10 +28,10 @@ pinning-strategy = "no-pin"
 # disable fetching of jlap, bz2 or zstd repodata files.
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
-disable-jlap = true  # don't try to download repodata.jlap
-disable-bzip2 = true # don't try to download repodata.json.bz2
-disable-zstd = true  # don't try to download repodata.json.zst
-disable-sharded = true  # don't try to download sharded repodata
+disable-bzip2 = true   # don't try to download repodata.json.bz2
+disable-jlap = true    # don't try to download repodata.jlap
+disable-sharded = true # don't try to download sharded repodata
+disable-zstd = true    # don't try to download repodata.json.zst
 # --8<-- [end:repodata-config]
 # --8<-- [start:prefix-repodata-config]
 [repodata-config."https://prefix.dev"]
@@ -54,7 +54,7 @@ keyring-provider = "subprocess"
 # Defaults to 50 as that was found to be a good balance between speed and stability
 downloads = 5
 
-# The maximum number of concurrent dependecy resolves
+# The maximum number of concurrent dependency resolves
 # Defaults to a heuristic based on the number of cores on the system
 solves = 2
 # --8<-- [end:concurrency]
@@ -68,16 +68,14 @@ use-environment-activation-cache = true
 #  --8<-- [start:mirrors]
 [mirrors]
 # redirect all requests for conda-forge to the prefix.dev mirror
-"https://conda.anaconda.org/conda-forge" = [
-    "https://prefix.dev/conda-forge"
-]
+"https://conda.anaconda.org/conda-forge" = ["https://prefix.dev/conda-forge"]
 
 # redirect all requests for bioconda to one of the three listed mirrors
 # Note: for repodata we try the first mirror first.
 "https://conda.anaconda.org/bioconda" = [
-    "https://conda.anaconda.org/bioconda",
-    # OCI registries are also supported
-    "oci://ghcr.io/channel-mirrors/bioconda",
-    "https://prefix.dev/bioconda",
+  "https://conda.anaconda.org/bioconda",
+  # OCI registries are also supported
+  "oci://ghcr.io/channel-mirrors/bioconda",
+  "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]
