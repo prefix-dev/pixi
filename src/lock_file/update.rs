@@ -697,7 +697,8 @@ pub async fn update_lock_file(
                 project.pixi_dir(),
                 project.channel_config(),
                 Arc::new(ToolContext::default()),
-            ),
+            )
+            .into_diagnostic()?,
             glob_hash_cache,
         });
     }
@@ -726,7 +727,8 @@ pub async fn update_lock_file(
                 project.pixi_dir(),
                 project.channel_config(),
                 Arc::new(ToolContext::default()),
-            ),
+            )
+            .into_diagnostic()?,
             glob_hash_cache,
         });
     }
@@ -1043,7 +1045,8 @@ impl<'p> UpdateContextBuilder<'p> {
             project.pixi_dir(),
             project.channel_config(),
             tool_context.into(),
-        );
+        )
+        .into_diagnostic()?;
 
         Ok(UpdateContext {
             project,
