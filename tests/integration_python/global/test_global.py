@@ -215,6 +215,41 @@ exposed = {{ dummy-1 = "dummy-b" }}
     )
 
 
+def test_sync_failures_are_collected(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+version = {MANIFEST_VERSION}
+
+[envs.one]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ invalid-package = "*" }}
+exposed = {{ }}
+
+[envs.two]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ another-invalid-package = "*" }}
+exposed = {{ }}
+
+[envs.three]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+    """
+    manifest.write_text(toml)
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["invalid-package", "another-invalid-package"],
+    )
+    assert dummy_a.is_file()
+
+
 def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
