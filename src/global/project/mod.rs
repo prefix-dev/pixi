@@ -25,32 +25,31 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
-pub(crate) use parsed_manifest::ExposedName;
-pub(crate) use parsed_manifest::ParsedEnvironment;
 use parsed_manifest::ParsedManifest;
-use pixi_config::{default_channel_config, home_path, Config};
+pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
+use pixi_config::{default_channel_config, pixi_home, Config};
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::executable_from_path;
-use pixi_utils::reqwest::build_reqwest_clients;
-use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
-use rattler::package_cache::PackageCache;
+use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
+use rattler::{
+    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
+    package_cache::PackageCache,
+};
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_solve::resolvo::Solver;
-use rattler_solve::{SolverImpl, SolverTask};
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
-use std::sync::OnceLock;
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
+    sync::OnceLock,
 };
 use toml_edit::DocumentMut;
 
@@ -106,11 +105,12 @@ struct ExposedData {
 }
 
 impl ExposedData {
-    /// Constructs an `ExposedData` instance from a exposed `script` or `trampoline` path.
+    /// Constructs an `ExposedData` instance from a exposed `script` or
+    /// `trampoline` path.
     ///
-    /// This function extracts metadata from the exposed script path, including the
-    /// environment name, platform, channel, and package information, by reading
-    /// the associated `conda-meta` directory.
+    /// This function extracts metadata from the exposed script path, including
+    /// the environment name, platform, channel, and package information, by
+    /// reading the associated `conda-meta` directory.
     /// or it looks into the trampoline manifest to extract the metadata.
     pub async fn from_exposed_path(
         bin: &GlobalBin,
@@ -149,7 +149,7 @@ impl ExposedData {
             .iter()
             .map(|prefix_record| prefix_record.repodata_record.channel.clone())
             .collect::<HashSet<_>>();
-        for channel in all_channels {
+        for channel in all_channels.into_iter().flatten() {
             tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
             channels.push(channel_url_to_prioritized_channel(
                 &channel,
@@ -185,7 +185,8 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
     )
 }
 
-/// Converts a `PrefixRecord` into package metadata, including platform, channel, and package name.
+/// Converts a `PrefixRecord` into package metadata, including platform,
+/// channel, and package name.
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
     channel_config: &ChannelConfig,
@@ -199,17 +200,24 @@ fn convert_record_to_metadata(
 
     let package_name = prefix_record.repodata_record.package_record.name.clone();
 
-    let channel =
-        channel_url_to_prioritized_channel(&prefix_record.repodata_record.channel, channel_config)?;
+    let Some(channel_str) = prefix_record.repodata_record.channel.as_deref() else {
+        miette::bail!(
+            "missing channel in prefix record for {}",
+            package_name.as_source()
+        )
+    };
+
+    let channel = channel_url_to_prioritized_channel(channel_str, channel_config)?;
 
     Ok((platform, channel, package_name))
 }
 
-/// Extracts package metadata from the `conda-meta` directory for a given executable.
+/// Extracts package metadata from the `conda-meta` directory for a given
+/// executable.
 ///
 /// This function reads the `conda-meta` directory to find the package metadata
-/// associated with the specified executable. It returns the platform, channel, and
-/// package name of the executable.
+/// associated with the specified executable. It returns the platform, channel,
+/// and package name of the executable.
 async fn package_from_conda_meta(
     conda_meta: &Path,
     executable: &str,
@@ -361,9 +369,25 @@ impl Project {
 
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
-        home_path()
+        // Potential directories, with the highest priority coming first
+        let potential_dirs = [pixi_home(), dirs::config_dir().map(|dir| dir.join("pixi"))]
+            .into_iter()
+            .flatten()
             .map(|dir| dir.join(MANIFESTS_DIR))
-            .ok_or_else(|| miette::miette!("Couldn't get home directory"))
+            .collect_vec();
+
+        // First, check if a `pixi-global.toml` already exists
+        for dir in &potential_dirs {
+            if dir.join(MANIFEST_DEFAULT_NAME).is_file() {
+                return Ok(dir.clone());
+            }
+        }
+
+        // If not, return the first option
+        potential_dirs
+            .first()
+            .cloned()
+            .ok_or_else(|| miette::miette!("Couldn't obtain global manifest directory"))
     }
 
     /// Get the default path to the global manifest file
@@ -450,8 +474,7 @@ impl Project {
 
         let (match_specs, dependencies_names) = environment
             .dependencies
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, spec)| {
                 if let Some(nameless_spec) = spec
                     .clone()
@@ -460,7 +483,7 @@ impl Project {
                 {
                     Ok((
                         MatchSpec::from_nameless(nameless_spec, Some(name.clone())),
-                        name,
+                        name.clone(),
                     ))
                 } else {
                     Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
@@ -555,7 +578,8 @@ impl Project {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-        // Remove the environment from the manifest, if it exists, otherwise ignore error.
+        // Remove the environment from the manifest, if it exists, otherwise ignore
+        // error.
         self.manifest.remove_environment(env_name)?;
 
         // Remove the environment
@@ -581,7 +605,8 @@ impl Project {
         Ok(state_changes)
     }
 
-    /// Find all binaries related to the environment and remove those that are not listed as exposed.
+    /// Find all binaries related to the environment and remove those that are
+    /// not listed as exposed.
     pub async fn prune_exposed(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         let environment = self
@@ -639,14 +664,14 @@ impl Project {
         Ok(executables_for_package)
     }
 
-    /// Sync the `exposed` field in manifest based on the executables in the environment and the expose type.
-    /// Expose type can be either:
-    /// * If the user initially chooses to auto-exposed everything,
-    ///   we will add new binaries that are not exposed in the `exposed` field.
+    /// Sync the `exposed` field in manifest based on the executables in the
+    /// environment and the expose type. Expose type can be either:
+    /// * If the user initially chooses to auto-exposed everything, we will add
+    ///   new binaries that are not exposed in the `exposed` field.
     ///
-    /// * If the use chose to expose only a subset of binaries,
-    ///   we will remove the binaries that are not anymore present in the environment
-    ///   and will not expose the new ones
+    /// * If the use chose to expose only a subset of binaries, we will remove
+    ///   the binaries that are not anymore present in the environment and will
+    ///   not expose the new ones
     pub async fn sync_exposed_names(
         &mut self,
         env_name: &EnvironmentName,
@@ -699,7 +724,8 @@ impl Project {
                 }
             }
             ExposedType::Filter(filter) => {
-                // Add new binaries that are not yet exposed and that don't come from one of the packages we filter on
+                // Add new binaries that are not yet exposed and that don't come from one of the
+                // packages we filter on
                 let executable_names = env_executables
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
@@ -743,8 +769,7 @@ impl Project {
 
         let specs = environment
             .dependencies
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
                     spec.clone()
@@ -800,8 +825,9 @@ impl Project {
     }
     /// Expose executables from the environment to the global bin directory.
     ///
-    /// This function will first remove all binaries that are not listed as exposed.
-    /// It will then create an activation script for the shell and create the scripts.
+    /// This function will first remove all binaries that are not listed as
+    /// exposed. It will then create an activation script for the shell and
+    /// create the scripts.
     pub async fn expose_executables_from_environment(
         &self,
         env_name: &EnvironmentName,
@@ -1027,9 +1053,6 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use crate::global::trampoline::{Configuration, Trampoline};
-
-    use super::*;
     use fake::{faker::filesystem::zh_tw::FilePath, Fake};
     use itertools::Itertools;
     use rattler_conda_types::{
@@ -1037,6 +1060,9 @@ mod tests {
     };
     use tempfile::tempdir;
     use url::Url;
+
+    use super::*;
+    use crate::global::trampoline::{Configuration, Trampoline};
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]
@@ -1239,7 +1265,8 @@ mod tests {
             BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
         );
 
-        // Call the prune method with a list of environments to keep (env1 and env3) but not env4
+        // Call the prune method with a list of environments to keep (env1 and env3) but
+        // not env4
         let state_changes = project.prune_old_environments().await.unwrap();
         assert_eq!(
             state_changes.changes(),
@@ -1278,7 +1305,11 @@ mod tests {
             package_record: package_record.clone(),
             file_name: "doesnt_matter.conda".to_string(),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
-            channel: format!("{}{}", channel_config.channel_alias.clone(), "test-channel"),
+            channel: Some(format!(
+                "{}{}",
+                channel_config.channel_alias.clone(),
+                "test-channel"
+            )),
         };
         let prefix_record = PrefixRecord::from_repodata_record(
             repodata_record,
@@ -1304,7 +1335,7 @@ mod tests {
             package_record: package_record.clone(),
             file_name: "doesnt_matter.conda".to_string(),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
-            channel: "https://test-channel.com/idk".to_string(),
+            channel: Some("https://test-channel.com/idk".to_string()),
         };
         let prefix_record = PrefixRecord::from_repodata_record(
             repodata_record,

@@ -64,7 +64,7 @@ packages:
   name: has-extras
   version: 0.1.0
   path: has-extras
-  sha256: 87db81cf86f2a54190b0965b12ead65a4b7310265c2f451449b4e5b9c5f51ec9
+  sha256: a3ced8eac37c7eae6ed05e9e836e5fe188f211e11df2c3db62bc146a1761e300
   requires_dist:
   - pinject ; extra == 'pinject'
 - kind: conda
@@ -238,7 +238,7 @@ packages:
   name: use-with-extras
   version: 0.1.0
   path: use-with-extras
-  sha256: 534a6eeb01c299cf7c3a940c01dda3d1df9f69c4bba81899c82892b79289f2dc
+  sha256: 9a29a7aeb7cde4c15e4f500c2c2f5a1476ec3361420e6e333b2f3e172a55e818
   requires_dist:
   - has-extras[pinject]
 - kind: conda

@@ -13,12 +13,13 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pixi_consts::consts;
 use pixi_manifest::{pyproject::PyProjectManifest, SystemRequirements};
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    isolated_names_to_packages, locked_indexes_to_index_locations, to_uv_normalize, to_uv_version,
-    to_uv_version_specifiers, ConversionError,
+    isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
+    to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_conda_types::Platform;
 use rattler_lock::{
     PackageHashes, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
 };
@@ -44,8 +45,6 @@ use uv_pypi_types::{
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
 use uv_types::HashStrategy;
-
-use pixi_uv_conversions::names_to_build_isolation;
 
 use crate::{
     conda_pypi_clobber::PypiCondaClobberRegistry,
@@ -188,7 +187,7 @@ fn convert_to_dist(
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
-    let dist = match &pkg.url_or_path {
+    let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
@@ -260,10 +259,11 @@ fn convert_to_dist(
             }
         }
         UrlOrPath::Path(path) => {
+            let native_path = Path::new(path.as_str());
             let abs_path = if path.is_absolute() {
-                path.clone()
+                native_path.to_path_buf()
             } else {
-                lock_file_dir.join(path)
+                lock_file_dir.join(native_path)
             };
 
             let absolute_url = VerbatimUrl::from_absolute_path(&abs_path)?;
@@ -364,7 +364,7 @@ fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Check if the urls are different
-                            if Some(&url) == locked.url_or_path.as_url() {
+                            if Some(&url) == locked.location.as_url() {
                                 // Check cache freshness
                                 if !check_url_freshness(&url, installed)? {
                                     return Ok(ValidateInstall::Reinstall);
@@ -388,7 +388,7 @@ fn need_reinstall(
                     // Subdirectory is either in the url or not supported
                     subdirectory: _,
                 } => {
-                    let locked_url = match &locked.url_or_path {
+                    let locked_url = match &locked.location {
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url),
@@ -422,7 +422,7 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = match &locked.url_or_path {
+                    let git_url = match &locked.location {
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
@@ -616,7 +616,7 @@ fn whats_the_plan<'a>(
 pub async fn update_python_distributions(
     lock_file_dir: &Path,
     prefix: &Prefix,
-    conda_package: &[RepoDataRecord],
+    pixi_records: &[PixiRecord],
     python_packages: &[CombinedPypiPackageData],
     python_interpreter_path: &Path,
     system_requirements: &SystemRequirements,
@@ -627,13 +627,17 @@ pub async fn update_python_distributions(
     non_isolated_packages: Option<Vec<String>>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
-    use pixi_consts::consts::PROJECT_MANIFEST;
+
     // Determine the current environment markers.
-    let python_record = conda_package
+    let python_record = pixi_records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
-    let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::PROJECT_MANIFEST))?;
+    let tags = get_pypi_tags(
+        platform,
+        system_requirements,
+        python_record.package_record(),
+    )?;
 
     let index_locations = pypi_indexes
         .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
@@ -1030,7 +1034,7 @@ mod tests {
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
             version: Version::from_str("2.3.0+cu121").unwrap(),
-            url_or_path: UrlOrPath::Url(url),
+            location: UrlOrPath::Url(url),
             hash: None,
             requires_dist: vec![],
             requires_python: None,

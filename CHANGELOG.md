@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.38.0] - 2024-11-26
+#### ✨ Highlights
+
+- Specify `pypi-index` per pypi-dependency
+```toml
+[pypi-dependencies]
+pytorch ={ version = "*", index = "https://download.pytorch.org/whl/cu118" }
+```
+- `[dependency-groups]` (PEP735) support in `pyproject.toml`
+```toml
+[dependency-groups]
+test = ["pytest"]
+docs = ["sphinx"]
+dev = [{include-group = "test"}, {include-group = "docs"}]
+
+[tool.pixi.environments]
+dev = ["dev"]
+```
+- Much improved `pixi search` output!
+
+#### Added
+- Add pypi index by @nichmor in [#2416](https://github.com/prefix-dev/pixi/pull/2416)
+- Implement PEP735 support by @olivier-lacroix in [#2448](https://github.com/prefix-dev/pixi/pull/2448)
+- Extends manifest to allow for `preview` features by @tdejager in [#2489](https://github.com/prefix-dev/pixi/pull/2489)
+- Add versions/build list to `pixi search` output by @delsner in [#2440](https://github.com/prefix-dev/pixi/pull/2440)
+- Expose nested executables in `pixi global` by @bahugo in [#2362](https://github.com/prefix-dev/pixi/pull/2362)
+
+#### Fixed
+
+- Always print a warning when config is invalid by @Hofer-Julian in [#2508](https://github.com/prefix-dev/pixi/pull/2508)
+- Incorrectly saving absolute base as path component by @tdejager in [#2501](https://github.com/prefix-dev/pixi/pull/2501)
+- Keep the case when getting the executable in `pixi global` by @wolfv in [#2528](https://github.com/prefix-dev/pixi/pull/2528)
+- Install script on `win-arm64` by @baszalmstra in [#2538](https://github.com/prefix-dev/pixi/pull/2538)
+- Trampoline installation on `pixi global update` by @nichmor in [#2530](https://github.com/prefix-dev/pixi/pull/2530)
+- Update the `PATH` env var with dynamic elements on `pixi global` by @wolfv in [#2541](https://github.com/prefix-dev/pixi/pull/2541)
+- Correct `ppc64le` arch by @wolfv in [#2540](https://github.com/prefix-dev/pixi/pull/2540)
+
+#### Performance
+
+- Experimental environment activation cache by @ruben-arts in [#2367](https://github.com/prefix-dev/pixi/pull/2367)
+
+#### Documentation
+- Update project structure in Python tutorial by @LiamConnors in [#2506](https://github.com/prefix-dev/pixi/pull/2506)
+- Fix typo in `pixi project export conda-environment` by @nmarticorena in [#2533](https://github.com/prefix-dev/pixi/pull/2533)
+- Fix wrong use of underscores in `pixi project export` by @traversaro in [#2539](https://github.com/prefix-dev/pixi/pull/2539)
+- Adapt completion instructions by @Hofer-Julian in [#2561](https://github.com/prefix-dev/pixi/pull/2561)
+
+#### New Contributors
+* @nmarticorena made their first contribution in [#2533](https://github.com/prefix-dev/pixi/pull/2533)
+* @delsner made their first contribution in [#2440](https://github.com/prefix-dev/pixi/pull/2440)
+
 ### [0.37.0] - 2024-11-18
 #### ✨ Highlights
 

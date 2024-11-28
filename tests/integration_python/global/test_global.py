@@ -1164,6 +1164,26 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
 
 
+def test_list_env_no_dependencies(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    dependencies = {{}}
+    """
+    manifest.write_text(toml)
+
+    # Verify empty list
+    verify_cli_command(
+        [pixi, "global", "list"],
+        env=env,
+        stderr_contains="Environment test doesn't contain dependencies",
+    )
+
+
 def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")

@@ -1,10 +1,10 @@
 use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
-
-use super::{Environment, HasProjectRef, Project};
 use pixi_manifest as manifest;
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements};
+
+use super::{Environment, HasProjectRef, Project};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ impl<'p> SolveGroup<'p> {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
-                &self.project.manifest.parsed.environments[*env_idx],
+                &self.project.manifest.workspace.environments[*env_idx],
             )
         })
     }
@@ -96,10 +96,10 @@ mod tests {
     use std::{collections::HashSet, path::Path};
 
     use itertools::Itertools;
+    use pixi_manifest::FeaturesExt;
     use rattler_conda_types::PackageName;
 
     use crate::Project;
-    use pixi_manifest::FeaturesExt;
 
     #[test]
     fn test_solve_group() {
@@ -172,7 +172,7 @@ mod tests {
         // Check that the solve group 'group1' contains all the dependencies of its
         // environments
         let package_names: HashSet<_> = solve_group
-            .dependencies(None, None)
+            .combined_dependencies(None)
             .names()
             .cloned()
             .collect();
@@ -189,7 +189,7 @@ mod tests {
         // default environment
         let solve_group = solve_groups[1].clone();
         let package_names: HashSet<_> = solve_group
-            .dependencies(None, None)
+            .combined_dependencies(None)
             .names()
             .cloned()
             .collect();

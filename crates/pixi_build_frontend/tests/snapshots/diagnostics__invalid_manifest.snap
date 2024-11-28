@@ -1,0 +1,12 @@
+---
+source: crates/pixi_build_frontend/tests/diagnostics.rs
+expression: snapshot
+---
+  × failed to setup a build backend, the pixi.toml could not be parsed
+  ╰─▶   × missing field `channels`
+         ╭─[pixi.toml:1:1]
+       1 │ [workspace]
+         · ───────────
+         ╰────
+      
+  help: Ensure that the manifest at '[SOURCE_DIR]/pixi.toml' is a valid pixi project manifest

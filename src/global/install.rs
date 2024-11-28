@@ -320,7 +320,7 @@ mod tests {
             .unwrap()
             .default_environment()
             .unwrap()
-            .conda_repodata_records_for_platform(Platform::Linux64)
+            .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
     }
@@ -339,7 +339,7 @@ mod tests {
             .unwrap()
             .default_environment()
             .unwrap()
-            .conda_repodata_records_for_platform(Platform::Linux64)
+            .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
     }

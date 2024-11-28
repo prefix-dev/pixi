@@ -5,13 +5,17 @@ use std::path::Path;
 use std::str::FromStr;
 
 use super::environment::EnvironmentName;
+use super::ExposedData;
+use crate::global::Mapping;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
+use pixi_manifest::utils::package_map::UniquePackageMap;
 use pixi_manifest::PrioritizedChannel;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::SerializeMap;
@@ -19,10 +23,6 @@ use serde::{Serialize, Serializer};
 use serde_with::{serde_as, serde_derive::Deserialize};
 use thiserror::Error;
 use toml_edit::TomlError;
-
-use super::ExposedData;
-use crate::global::Mapping;
-use pixi_spec::PixiSpec;
 
 pub const GLOBAL_MANIFEST_VERSION: u32 = 1;
 
@@ -252,12 +252,12 @@ where
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    #[serde_as(as = "IndexSet<pixi_manifest::TomlPrioritizedChannelStrOrMap>")]
+    #[serde_as(as = "IndexSet<pixi_manifest::toml::TomlPrioritizedChannel>")]
     pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
     // Platform used by the environment.
     pub platform: Option<Platform>,
-    #[serde(default, deserialize_with = "pixi_manifest::deserialize_package_map")]
-    pub(crate) dependencies: IndexMap<PackageName, PixiSpec>,
+    #[serde(default)]
+    pub(crate) dependencies: UniquePackageMap,
     #[serde(
         default,
         deserialize_with = "deserialize_expose_mappings",
