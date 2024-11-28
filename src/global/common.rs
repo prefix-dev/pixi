@@ -58,7 +58,7 @@ impl BinDir {
     ///
     /// This function reads the directory specified by `self.0` and try to collect all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of `GlobalBin`or an error if the directory can't be read.
+    /// vector of `GlobalExecutable`or an error if the directory can't be read.
     pub(crate) async fn executables(&self) -> miette::Result<Vec<GlobalExecutable>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;

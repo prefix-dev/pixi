@@ -483,7 +483,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_without_quote).unwrap();
-        let script_global_bin = GlobalBin::Script(script_path);
+        let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
