@@ -6,9 +6,9 @@ use std::{
 
 use miette::Diagnostic;
 use pixi_consts::consts;
-use pixi_manifest::Manifest;
+use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
 // pub use protocol::Protocol;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
 use which::Error;
 
@@ -24,19 +24,24 @@ use crate::{
 #[derive(Debug)]
 pub struct ProtocolBuilder {
     source_dir: PathBuf,
-    manifest: Manifest,
-    backend_spec: Option<ToolSpec>,
-    channel_config: ChannelConfig,
+    manifest_path: PathBuf,
+    workspace_manifest: WorkspaceManifest,
+    package_manifest: PackageManifest,
+    override_backend_spec: Option<ToolSpec>,
+    channel_config: Option<ChannelConfig>,
     cache_dir: Option<PathBuf>,
 }
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
-    #[error("failed to setup a build backend, the {} could not be parsed", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest"))]
-    #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()))]
+    #[error("failed to setup a build backend, the {} could not be parsed", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest")
+    )]
+    #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()
+    ))]
     FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
 
-    #[error("the {} does not describe a package", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest"))]
+    #[error("the {} does not describe a package", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest")
+    )]
     #[diagnostic(help("A [package] section is missing in the manifest"))]
     NotAPackage(PathBuf),
 }
@@ -48,6 +53,7 @@ pub enum FinishError {
     Init(#[from] InitializeError),
     NoBuildSection(PathBuf),
     Tool(ToolCacheError),
+    SpecConversionError(pixi_spec::SpecConversionError),
 }
 
 impl Display for FinishError {
@@ -56,29 +62,31 @@ impl Display for FinishError {
             FinishError::Init(init) => write!(f, "{init}"),
             FinishError::NoBuildSection(_) => write!(f, "failed to setup a build backend, the project manifest does not contain a [build-system] section"),
             FinishError::Tool(ToolCacheError::Instantiate(tool, err)) => match err {
-                Error::CannotGetCurrentDirAndPathListEmpty|Error::CannotFindBinaryPath => write!(f, "failed to setup a build backend, the backend tool '{}' could not be found", tool.display()),
+                Error::CannotGetCurrentDirAndPathListEmpty | Error::CannotFindBinaryPath => write!(f, "failed to setup a build backend, the backend tool '{}' could not be found", tool.display()),
                 Error::CannotCanonicalize => write!(f, "failed to setup a build backend, although the backend tool  '{}' can be resolved it could not be canonicalized", tool.display()),
             },
             FinishError::Tool(ToolCacheError::Install(report)) => write!(f, "failed to setup a build backend, the backend tool could not be installed: {}", report),
             FinishError::Tool(ToolCacheError::CacheDir(report)) => write!(f, "failed to setup a build backend, the cache dir could not be discovered: {}", report),
+            FinishError::SpecConversionError(err) => write!(f, "failed to setup a build backend, the backend tool spec could not be converted: {}", err),
         }
     }
 }
 
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub(crate) fn new(source_dir: PathBuf, manifest: Manifest) -> Result<Self, ProtocolBuildError> {
-        let backend_spec = manifest
-            .build_section()
-            .map(IsolatedToolSpec::from_build_section);
-
-        let channel_config = ChannelConfig::default_with_root_dir(manifest.path.clone());
-
+    pub(crate) fn new(
+        source_dir: PathBuf,
+        manifest_path: PathBuf,
+        workspace_manifest: WorkspaceManifest,
+        package_manifest: PackageManifest,
+    ) -> Result<Self, ProtocolBuildError> {
         Ok(Self {
             source_dir,
-            manifest,
-            backend_spec: backend_spec.map(Into::into),
-            channel_config,
+            manifest_path,
+            workspace_manifest,
+            package_manifest,
+            override_backend_spec: None,
+            channel_config: None,
             cache_dir: None,
         })
     }
@@ -86,9 +94,9 @@ impl ProtocolBuilder {
     /// Sets an optional backend override.
     pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
         Self {
-            backend_spec: backend_override
+            override_backend_spec: backend_override
                 .map(BackendOverride::into_spec)
-                .or(self.backend_spec),
+                .or(self.override_backend_spec),
             ..self
         }
     }
@@ -96,7 +104,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by this instance.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         Self {
-            channel_config,
+            channel_config: Some(channel_config),
             ..self
         }
     }
@@ -112,11 +120,16 @@ impl ProtocolBuilder {
             match Manifest::from_path(&manifest_path) {
                 Ok(manifest) => {
                     // Make sure the manifest describes a package.
-                    if manifest.package.is_none() {
+                    let Some(package_manifest) = manifest.package else {
                         return Err(ProtocolBuildError::NotAPackage(manifest_path));
-                    }
+                    };
 
-                    let builder = Self::new(source_dir.to_path_buf(), manifest)?;
+                    let builder = Self::new(
+                        source_dir.to_path_buf(),
+                        manifest_path,
+                        manifest.workspace,
+                        package_manifest,
+                    )?;
                     return Ok(Some(builder));
                 }
                 Err(e) => {
@@ -135,28 +148,62 @@ impl ProtocolBuilder {
         tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let tool_spec = self
-            .backend_spec
-            .ok_or(FinishError::NoBuildSection(self.manifest.path.clone()))?;
+        let channel_config = self.channel_config.unwrap_or_else(|| {
+            ChannelConfig::default_with_root_dir(
+                self.manifest_path
+                    .parent()
+                    .expect("a manifest must always reside in a directory")
+                    .to_path_buf(),
+            )
+        });
+
+        let tool_spec = if let Some(backend_spec) = self.override_backend_spec {
+            backend_spec
+        } else {
+            let build_system = &self.package_manifest.build_system;
+            let specs = [(
+                &build_system.build_backend.name,
+                &build_system.build_backend.spec,
+            )]
+            .into_iter()
+            .chain(build_system.additional_dependencies.iter())
+            .map(|(name, spec)| {
+                spec.clone()
+                    .try_into_nameless_match_spec(&channel_config)
+                    .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+            })
+            .collect::<Result<_, _>>()
+            .map_err(FinishError::SpecConversionError)?;
+
+            // Figure out the channels to use
+            let channels = build_system.channels.clone().unwrap_or_else(|| {
+                PrioritizedChannel::sort_channels_by_priority(
+                    self.workspace_manifest.workspace.channels.iter(),
+                )
+                .cloned()
+                .collect()
+            });
+
+            ToolSpec::Isolated(IsolatedToolSpec {
+                specs,
+                command: build_system.build_backend.name.as_source().to_string(),
+                channels,
+            })
+        };
 
         let tool = tool
-            .instantiate(tool_spec, &self.channel_config)
+            .instantiate(tool_spec, &channel_config)
             .await
             .map_err(FinishError::Tool)?;
 
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
-            self.manifest.path,
+            self.manifest_path,
             build_id,
             self.cache_dir,
             tool,
         )
         .await?)
-    }
-
-    /// Returns the pixi manifest
-    pub fn manifest(&self) -> &Manifest {
-        &self.manifest
     }
 }
 

@@ -147,6 +147,7 @@ impl Manifest {
                 miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
             })?
             .dependencies
+            .specs
             .insert(name.clone(), spec.clone());
 
         // Update self.document
@@ -184,6 +185,7 @@ impl Manifest {
                 miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
             })?
             .dependencies
+            .specs
             .swap_remove(&name)
             .ok_or(miette::miette!(
                 "Dependency {} not found in {}",

@@ -159,6 +159,7 @@ where
             parsed_environment.platform = platform;
             parsed_environment
                 .dependencies
+                .specs
                 .insert(package, PixiSpec::default());
             parsed_environment
                 .exposed
@@ -286,7 +287,7 @@ impl ParsedEnvironment {
 
     /// Returns the dependencies associated with this environment.
     pub(crate) fn dependencies(&self) -> &IndexMap<PackageName, PixiSpec> {
-        &self.dependencies
+        &self.dependencies.specs
     }
 
     /// Returns the exposed name mappings associated with this environment.

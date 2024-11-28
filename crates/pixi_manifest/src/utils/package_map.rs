@@ -3,15 +3,20 @@ use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
 use serde::{
     de::{DeserializeSeed, MapAccess, Visitor},
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
 };
 use std::ops::Range;
 use std::{fmt, marker::PhantomData};
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
+    #[serde(flatten)]
     pub specs: IndexMap<rattler_conda_types::PackageName, PixiSpec>,
+
+    #[serde(skip)]
     pub name_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
+
+    #[serde(skip)]
     pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
 }
 
