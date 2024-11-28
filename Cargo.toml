@@ -360,19 +360,6 @@ rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 
-#file_url = { path = "../rattler/crates/file_url" }
-#rattler = { path = "../rattler/crates/rattler" }
-#rattler_cache = { path = "../rattler/crates/rattler_cache" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
@@ -401,7 +388,6 @@ github-release = "announce"
 # Whether to auto-include files like READMEs, LICENSEs, and CHANGELOGs (default true)
 auto-includes = false
 # Which actions to run on pull requests
-# TODO: turn off after tests are completed
 pr-run-mode = "upload"
 # Skip checking whether the specified configuration files are up to date
 allow-dirty = ["msi"]
