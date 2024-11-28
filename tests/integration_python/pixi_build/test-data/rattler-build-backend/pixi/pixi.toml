@@ -1,0 +1,24 @@
+[project]
+authors = ["Wolf Vollprecht <w.vollprecht@gmail.com>"]
+channels = ["conda-forge"]
+description = "Add a short description here"
+name = "pyproject"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+preview = ["pixi-build"]
+
+[package]
+
+[build-system]
+build-backend = "pixi-build-rattler-build"
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-rattler-build"]
+
+[dependencies]
+smokey = { path = "." }
+
+[host-dependencies]
+hatchling = "*"
