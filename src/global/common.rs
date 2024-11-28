@@ -1,4 +1,4 @@
-use super::trampoline::{GlobalBin, Trampoline};
+use super::trampoline::{GlobalExecutable, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
 use crate::prefix::Executable;
 
@@ -22,6 +22,7 @@ use rattler_conda_types::{
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::iter::Peekable;
+use std::ops::Not;
 use std::str::FromStr;
 use std::{
     io::Read,
@@ -57,19 +58,18 @@ impl BinDir {
     ///
     /// This function reads the directory specified by `self.0` and try to collect all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of `GlobalBin`or an error if the directory can't be read.
-    pub(crate) async fn bins(&self) -> miette::Result<Vec<GlobalBin>> {
+    /// vector of `GlobalExecutable`or an error if the directory can't be read.
+    pub(crate) async fn executables(&self) -> miette::Result<Vec<GlobalExecutable>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
-                let trampoline = Trampoline::try_from(path).await?;
-                files.push(GlobalBin::Trampoline(trampoline));
-            } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
+            if let Ok(trampoline) = Trampoline::try_from(&path).await {
+                files.push(GlobalExecutable::Trampoline(trampoline));
+            } else if path.is_file() && path.is_executable() && is_binary(&path)?.not() {
                 // If the file is not a binary, it's a script
-                files.push(GlobalBin::Script(path));
+                files.push(GlobalExecutable::Script(path));
             }
         }
 
@@ -704,9 +704,9 @@ pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
-) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
+) -> miette::Result<(Vec<GlobalExecutable>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from trampolines or scripts in the bin directory.
-    let locally_exposed = bin_dir.bins().await?;
+    let locally_exposed = bin_dir.executables().await?;
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
         let global_bin = global_bin.clone();
         let path = global_bin.path().clone();
