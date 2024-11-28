@@ -1,33 +1,32 @@
+use crate::utils::PixiSpanned;
 use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
 use serde::{
     de::{DeserializeSeed, MapAccess, Visitor},
-    Deserialize, Deserializer, Serialize,
+    Deserialize, Deserializer,
 };
-use std::ops::DerefMut;
-use std::{fmt, marker::PhantomData, ops::Deref};
+use std::ops::Range;
+use std::{fmt, marker::PhantomData};
 
-#[derive(Clone, Default, Debug, Serialize)]
-#[serde(transparent)]
-pub struct UniquePackageMap(IndexMap<rattler_conda_types::PackageName, PixiSpec>);
+#[derive(Clone, Default, Debug)]
+pub struct UniquePackageMap {
+    pub specs: IndexMap<rattler_conda_types::PackageName, PixiSpec>,
+    pub name_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
+    pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
+}
 
 impl From<UniquePackageMap> for IndexMap<rattler_conda_types::PackageName, PixiSpec> {
     fn from(value: UniquePackageMap) -> Self {
-        value.0
+        value.specs
     }
 }
 
-impl Deref for UniquePackageMap {
-    type Target = IndexMap<rattler_conda_types::PackageName, PixiSpec>;
+impl IntoIterator for UniquePackageMap {
+    type Item = (rattler_conda_types::PackageName, PixiSpec);
+    type IntoIter = indexmap::map::IntoIter<rattler_conda_types::PackageName, PixiSpec>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for UniquePackageMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    fn into_iter(self) -> Self::IntoIter {
+        self.specs.into_iter()
     }
 }
 
@@ -39,7 +38,7 @@ impl<'de> Deserialize<'de> for UniquePackageMap {
         struct PackageMapVisitor(PhantomData<()>);
 
         impl<'de> Visitor<'de> for PackageMapVisitor {
-            type Value = IndexMap<rattler_conda_types::PackageName, PixiSpec>;
+            type Value = UniquePackageMap;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "a map")
@@ -49,34 +48,49 @@ impl<'de> Deserialize<'de> for UniquePackageMap {
             where
                 A: MapAccess<'de>,
             {
-                let mut result = IndexMap::new();
+                let mut result = UniquePackageMap::default();
                 while let Some((package_name, spec)) = map.next_entry_seed::<PackageMap, _>(
-                    PackageMap(&result),
-                    PhantomData::<PixiSpec>,
+                    PackageMap(&result.specs),
+                    PhantomData::<PixiSpanned<PixiSpec>>,
                 )? {
-                    result.insert(package_name, spec);
+                    let PixiSpanned {
+                        span: package_name_span,
+                        value: package_name,
+                    } = package_name;
+                    let PixiSpanned {
+                        span: spec_span,
+                        value: spec,
+                    } = spec;
+                    if let Some(package_name_span) = package_name_span {
+                        result
+                            .name_spans
+                            .insert(package_name.clone(), package_name_span);
+                    }
+                    if let Some(spec_span) = spec_span {
+                        result.value_spans.insert(package_name.clone(), spec_span);
+                    }
+                    result.specs.insert(package_name, spec);
                 }
 
                 Ok(result)
             }
         }
         let visitor = PackageMapVisitor(PhantomData);
-        let packages = deserializer.deserialize_map(visitor)?;
-        Ok(UniquePackageMap(packages))
+        deserializer.deserialize_map(visitor)
     }
 }
 
 struct PackageMap<'a>(&'a IndexMap<rattler_conda_types::PackageName, PixiSpec>);
 
 impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
-    type Value = rattler_conda_types::PackageName;
+    type Value = PixiSpanned<rattler_conda_types::PackageName>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let package_name = rattler_conda_types::PackageName::deserialize(deserializer)?;
-        match self.0.get_key_value(&package_name) {
+        let package_name = Self::Value::deserialize(deserializer)?;
+        match self.0.get_key_value(&package_name.value) {
             Some((package_name, _)) => {
                 Err(serde::de::Error::custom(
                     format!(
