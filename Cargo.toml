@@ -394,8 +394,11 @@ allow-dirty = ["msi"]
 # Whether to sign macOS executables
 macos-sign = true
 
-[dist.dependencies.apt]
-musl-tools = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
+[workspace.metadata.dist.dependencies.apt]
+gcc-aarch64-linux-gnu = { version = '*', targets = [
+  "aarch64-unknown-linux-gnu",
+  "aarch64-unknown-linux-musl",
+] }
 
 # Package config for `dist`
 [package.metadata.dist]
