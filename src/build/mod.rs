@@ -256,7 +256,7 @@ impl BuildContext {
             }
         }
 
-        fs::create_dir_all(&self.work_dir).map_err(|e| BuildError::BuildFolderNotWritable(e))?;
+        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
 
         let tool_context = ToolContext::builder()
             .with_gateway(gateway.clone())
