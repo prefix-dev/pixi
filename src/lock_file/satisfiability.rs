@@ -1461,7 +1461,7 @@ mod tests {
         Ok(())
     }
 
-    #[rstest::rstest]
+    #[rstest]
     #[tokio::test]
     async fn test_good_satisfiability(
         #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
