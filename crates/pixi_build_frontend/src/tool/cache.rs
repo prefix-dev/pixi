@@ -368,7 +368,7 @@ impl ToolCache {
         };
 
         // At this point we have exclusive write access to this specific entry. All
-        // other tasks will find a pending entry and will wait for the records
+        // other tasks will find a pending entry and will wait for the tool
         // to become available.
         //
         // Let's start by creating the subdir. If an error occurs we immediately return
