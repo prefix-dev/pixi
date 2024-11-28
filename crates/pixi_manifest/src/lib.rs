@@ -76,11 +76,13 @@ pub enum DependencyOverwriteBehavior {
 }
 
 pub enum PypiDependencyLocation {
-    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
-    Pixi,
-    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in pyproject.toml
+    PixiPypiDependencies,
+    /// [project.dependencies] in pyproject.toml
+    Dependencies,
+    /// [project.optional-dependencies] table in pyproject.toml
     OptionalDependencies,
-    // The [dependency-groups] table in a 'pyproject.toml' manifest
+    /// [dependency-groups] in pyproject.toml
     DependencyGroups,
 }
 

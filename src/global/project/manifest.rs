@@ -92,7 +92,7 @@ impl Manifest {
         // Update self.document
         let channels_array = self
             .document
-            .get_or_insert_toml_array(&format!("envs.{env_name}"), "channels")?;
+            .get_or_insert_mut_toml_array(&format!("envs.{env_name}"), "channels")?;
         for channel in channels {
             channels_array.push(channel.as_str());
         }

@@ -56,7 +56,14 @@ impl ManifestSource {
         }
     }
 
-    fn manifest(&mut self) -> &mut TomlDocument {
+    fn mut_manifest(&mut self) -> &mut TomlDocument {
+        match self {
+            ManifestSource::PyProjectToml(document) => document,
+            ManifestSource::PixiToml(document) => document,
+        }
+    }
+
+    fn manifest(&self) -> &TomlDocument {
         match self {
             ManifestSource::PyProjectToml(document) => document,
             ManifestSource::PixiToml(document) => document,
@@ -80,8 +87,8 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(table);
 
-        self.manifest()
-            .get_or_insert_toml_array(table_name.to_string().as_str(), array_name)
+        self.mut_manifest()
+            .get_or_insert_mut_toml_array(table_name.to_string().as_str(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -105,7 +112,9 @@ impl ManifestSource {
         // arrays
         let remove_requirement =
             |source: &mut ManifestSource, table, array_name| -> Result<(), TomlError> {
-                let array = source.manifest().get_toml_array(table, array_name)?;
+                let array = source
+                    .mut_manifest()
+                    .get_mut_toml_array(table, array_name)?;
                 if let Some(array) = array {
                     array.retain(|x| {
                         let req: pep508_rs::Requirement = x
@@ -118,7 +127,7 @@ impl ManifestSource {
                     });
                     if array.is_empty() {
                         source
-                            .manifest()
+                            .mut_manifest()
                             .get_or_insert_nested_table(table)?
                             .remove(array_name);
                     }
@@ -146,7 +155,7 @@ impl ManifestSource {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
@@ -169,7 +178,7 @@ impl ManifestSource {
             .with_platform(platform.as_ref())
             .with_table(Some(spec_type.name()));
 
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
@@ -195,7 +204,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(dependency_table.to_string().as_str())
             .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
 
@@ -234,7 +243,7 @@ impl ManifestSource {
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
         if matches!(self, ManifestSource::PixiToml(_))
-            || matches!(location, Some(PypiDependencyLocation::Pixi))
+            || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || platform.is_some()
             || editable.is_some_and(|e| e)
         {
@@ -250,7 +259,7 @@ impl ManifestSource {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            self.manifest()
+            self.mut_manifest()
                 .get_or_insert_nested_table(dependency_table.to_string().as_str())?
                 .insert(
                     requirement.name.as_ref(),
@@ -266,8 +275,8 @@ impl ManifestSource {
         let add_requirement =
             |source: &mut ManifestSource, table, array| -> Result<(), TomlError> {
                 source
-                    .manifest()
-                    .get_or_insert_toml_array(table, array)?
+                    .mut_manifest()
+                    .get_or_insert_mut_toml_array(table, array)?
                     .push(requirement.to_string());
                 Ok(())
             };
@@ -283,6 +292,60 @@ impl ManifestSource {
             add_requirement(self, "dependency-groups", &feature_name.to_string())?
         }
         Ok(())
+    }
+
+    pub fn pypi_dependency_location(
+        &self,
+        dep: &PyPiPackageName,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> PypiDependencyLocation {
+        // For both 'pyproject.toml' and 'pixi.toml' manifest,
+        // try and to get `pypi-dependency`
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name))
+            .with_platform(platform.as_ref())
+            .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+        let pypi_dependency_table = self
+            .manifest()
+            .get_nested_table(table_name.to_string().as_str())
+            .ok();
+
+        if pypi_dependency_table
+            .and_then(|table| table.get(dep.as_source()))
+            .is_some()
+        {
+            return PypiDependencyLocation::PixiPypiDependencies;
+        }
+
+        if self
+            .manifest()
+            .get_toml_array("project", "dependencies")
+            .is_ok()
+        {
+            return PypiDependencyLocation::Dependencies;
+        }
+        let name = feature_name.to_string();
+
+        if self
+            .manifest()
+            .get_toml_array("project.optional-dependencies", &name)
+            .is_ok()
+        {
+            return PypiDependencyLocation::OptionalDependencies;
+        }
+
+        if self
+            .manifest()
+            .get_toml_array("dependency-groups", &name)
+            .is_ok()
+        {
+            return PypiDependencyLocation::DependencyGroups;
+        }
+
+        todo!()
     }
 
     /// Removes a task from the TOML manifest
@@ -301,7 +364,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(task_table.to_string().as_str())?
             .remove(name);
 
@@ -323,7 +386,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(task_table.to_string().as_str())?
             .insert(name, task.into());
 
@@ -363,7 +426,7 @@ impl ManifestSource {
             .with_table(Some("environments"));
 
         // Get the environment table
-        self.manifest()
+        self.mut_manifest()
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .insert(&name.into(), item);
 
@@ -379,7 +442,7 @@ impl ManifestSource {
             .with_table(Some("environments"));
 
         Ok(self
-            .manifest()
+            .mut_manifest()
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .remove(name)
             .is_some())
