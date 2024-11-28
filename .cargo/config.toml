@@ -11,3 +11,10 @@ rustflags = [
   "-C",
   "link-arg=/STACK:8000000",
 ]
+
+# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
+[env]
+CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-gnu-gcc"
