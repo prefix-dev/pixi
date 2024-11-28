@@ -143,7 +143,7 @@ fn parse_valid_docs_configs() {
                 unused_keys,
                 BTreeSet::<String>::new(),
                 "{}",
-                format!("Unused keys in {:?}", path)
+                format_args!("Unused keys in {:?}", path)
             );
         }
     }
