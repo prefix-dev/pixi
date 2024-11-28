@@ -40,6 +40,7 @@ def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
     del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
+    print(manifest.read_text())
     verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
 
     # Remove python
