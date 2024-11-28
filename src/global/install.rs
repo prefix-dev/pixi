@@ -125,7 +125,7 @@ pub(crate) async fn create_executable_trampolines(
                 global_script_path.display()
             )
         })?;
-        let exposed_name = Trampoline::name(&global_script_path)?;
+        let exposed_name = Trampoline::name(global_script_path)?;
         let json_path = Configuration::path_from_trampoline(parent_dir, &exposed_name);
 
         // Check if an old bash script is present and remove it
